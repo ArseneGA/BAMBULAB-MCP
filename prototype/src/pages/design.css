@@ -1,0 +1,11 @@
+.specimens { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--sp-4); align-items: start; }
+.specimen { background: var(--bg); color: var(--text); border: 1px solid var(--line-strong); border-radius: var(--r-2); padding: var(--sp-5); display: grid; gap: var(--sp-6); min-width: 0; }
+.specimen section { display: grid; gap: var(--sp-3); }
+.specimen .row { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
+.specimen .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--sp-3); align-items: start; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--sp-2); }
+.swatch { display: grid; gap: 4px; font-size: var(--fs-xs); color: var(--text-2); }
+.swatch span { height: 28px; border: 1px solid var(--line-strong); border-radius: var(--r-1); }
+.sp { display: grid; gap: 4px; justify-items: start; font-size: var(--fs-xs); color: var(--text-2); }
+.sp i { display: block; background: var(--accent); }
+.sp i.rad { width: 36px; height: 36px; background: var(--surface-3); border: 1px solid var(--line-strong); }
