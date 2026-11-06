@@ -63,7 +63,30 @@ func (b *capBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// execWorker lance `uv run --project <dir> python -m bambu_geometry <commande>`
+// workerArgs : `uv run --frozen --no-dev` n'installe que ce que uv.lock fige, sans groupe de développement et
+// sans jamais réécrire uv.lock (le dossier du projet peut être en lecture seule).
+func workerArgs(dir, command string) []string {
+	return []string{"run", "--frozen", "--no-dev", "--project", dir, "python", "-m", "bambu_geometry", command}
+}
+
+// workerEnv : environnement du worker. UV_PROJECT_ENVIRONMENT fourni par l'opérateur est respecté tel quel.
+// Sinon, sans .venv existant dans le projet, l'environnement virtuel est placé dans le dossier de données
+// (<data>/venvs/geometry) : bambud ne fait jamais écrire uv dans le dossier du projet (BAMBU_GEOMETRY_DIR,
+// souvent en lecture seule). Aucun bytecode Python n'est écrit non plus dans le projet.
+func (s *Service) workerEnv(dir string) []string {
+	env := os.Environ()
+	if os.Getenv("UV_PROJECT_ENVIRONMENT") == "" && s.d.DataDir != "" {
+		if _, err := os.Stat(filepath.Join(dir, ".venv")); err != nil {
+			env = append(env, "UV_PROJECT_ENVIRONMENT="+filepath.Join(s.d.DataDir, "venvs", "geometry"))
+		}
+	}
+	if os.Getenv("PYTHONDONTWRITEBYTECODE") == "" {
+		env = append(env, "PYTHONDONTWRITEBYTECODE=1")
+	}
+	return env
+}
+
+// execWorker lance `uv run --frozen --no-dev --project <dir> python -m bambu_geometry <commande>`
 // (protocole : workers/geometry/PROTOCOL.md) : requête JSON sur stdin, une ligne
 // JSON sur stdout. Les arguments sont passés en tableau, sans shell.
 func (s *Service) execWorker(ctx context.Context, command string, req map[string]any) (json.RawMessage, error) {
@@ -77,7 +100,8 @@ func (s *Service) execWorker(ctx context.Context, command string, req map[string
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.StepTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, uv, "run", "--project", dir, "python", "-m", "bambu_geometry", command)
+	cmd := exec.CommandContext(ctx, uv, workerArgs(dir, command)...)
+	cmd.Env = s.workerEnv(dir)
 	cmd.Stdin = bytes.NewReader(body)
 	out, errb := &capBuffer{max: 16 << 20}, &capBuffer{max: 64 << 10}
 	cmd.Stdout, cmd.Stderr = out, errb

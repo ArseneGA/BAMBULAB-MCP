@@ -15,9 +15,9 @@ log = logging.getLogger("bambu_geometry")
 
 
 def _commands() -> dict[str, Callable[[dict[str, Any]], dict[str, Any]]]:
-    from . import parametric, step_import  # noqa: PLC0415
+    from . import cad, parametric, step_import  # noqa: PLC0415
 
-    return {"step_import": step_import.run, "parametric": parametric.run}
+    return {"step_import": step_import.run, "parametric": parametric.run, "ping": cad.ping}
 
 
 _real_out: Any = None

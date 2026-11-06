@@ -131,7 +131,8 @@ type Service struct {
 	mu      sync.RWMutex
 	roots   []string // canoniques
 	baseURL string
-	key     []byte // clé HMAC des URL signées
+	key     []byte    // clé HMAC des URL signées
+	cad     cadHealth // vérification réelle du backend CAO (ping)
 
 	// testHook est appelé après chaque fichier d'un import (tests d'interruption).
 	testHook func(done int)
@@ -145,6 +146,9 @@ func New(d Deps, cfg Config) (*Service, error) {
 	}
 	s := &Service{d: d, cfg: cfg, baseURL: strings.TrimRight(cfg.BaseURL, "/")}
 	for _, r := range cfg.ImportRoots {
+		if err := checkRootAgainstDataDir(r, d.DataDir); err != nil {
+			return nil, fmt.Errorf("racine d'import %q : %w", r, err)
+		}
 		if err := s.AddRoot(r); err != nil {
 			return nil, fmt.Errorf("racine d'import %q : %w", r, err)
 		}

@@ -22,6 +22,14 @@ def require_cadquery(code: str) -> Any:
     return cq
 
 
+def ping(_req: dict[str, Any]) -> dict[str, Any]:
+    """Vérification de santé : importe réellement CadQuery/OCP (sinon cad_unavailable) et rend les versions."""
+    import platform  # noqa: PLC0415
+
+    cq = require_cadquery("cad_unavailable")
+    return {"cadquery": str(getattr(cq, "__version__", "inconnue")), "python": platform.python_version()}
+
+
 def tessellate(shape: Any, tolerance: float, angular_tolerance: float) -> MeshData:
     verts, tris = shape.tessellate(tolerance, angular_tolerance)
     v = np.array([(p.x, p.y, p.z) for p in verts], dtype=float).reshape(-1, 3)
