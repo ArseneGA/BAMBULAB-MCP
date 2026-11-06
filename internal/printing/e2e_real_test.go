@@ -1,6 +1,7 @@
 package printing_test
 
 import (
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,12 @@ func TestRealStudioFullChain(t *testing.T) {
 		t.Fatal("commande reçue après un simple dépôt")
 	}
 	cf := r.call("request_print_confirmation", map[string]any{"print_job_id": jobID})
+	// Un client sans cookie (le modèle, un autre processus) ne peut pas confirmer : redirigé vers /enroll.
+	anon := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	if res, err := anon.Get(str(cf, "confirm_url")); err != nil || res.StatusCode != http.StatusSeeOther {
+		t.Fatalf("page de confirmation sans navigateur enregistré : %v %v", res, err)
+	}
+	// L'humain, lui, utilise le navigateur enregistré par le flux enroll (code affiché par `bambud enroll`, cookie de session).
 	if st, _ := r.humanConfirm(str(cf, "confirm_url"), true); st != 200 {
 		t.Fatal("confirmation humaine")
 	}

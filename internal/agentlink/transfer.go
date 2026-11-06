@@ -671,23 +671,39 @@ func (r *Registry) SelectForUpload(ctx context.Context, agentID string, in Selec
 	return SelectResult{Task: t, Files: len(ents), Bytes: total}, nil
 }
 
-// onTaskFinished : après un envoi de fichiers, import catalogue en arrière-plan, avec le contexte d'arrêt
-// du registre (Shutdown l'annule et l'attend).
-func (r *Registry) onTaskFinished(t TaskInfo, _ TaskResult) {
+// reserveImport réserve l'import de réception AVANT que l'état final du travail ne devienne visible : sans
+// cela, un observateur qui voit « succeeded » puis appelle WaitImports pourrait passer entre l'écriture de
+// l'état et le démarrage de l'import. Renvoie faux si aucun import n'est à prévoir (ou si le registre est
+// arrêté) ; sinon l'appelant DOIT appeler startImport ou cancelImport.
+func (r *Registry) reserveImport(t TaskInfo) bool {
 	if t.Kind != KindUploadFiles || r.d.Catalog == nil {
-		return
+		return false
 	}
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.closed {
-		r.mu.Unlock()
-		return
+		return false
 	}
 	r.wg.Add(1)
-	r.mu.Unlock()
+	return true
+}
+
+func (r *Registry) cancelImport() { r.wg.Done() }
+
+// startImport lance l'import catalogue en arrière-plan, avec le contexte d'arrêt du registre (Shutdown
+// l'annule et l'attend).
+func (r *Registry) startImport(t TaskInfo) {
 	go func() {
 		defer r.wg.Done()
 		r.importInbox(r.bgCtx, t.AgentID)
 	}()
+}
+
+// onTaskFinished : après un envoi de fichiers, import catalogue en arrière-plan (réservation + démarrage).
+func (r *Registry) onTaskFinished(t TaskInfo, _ TaskResult) {
+	if r.reserveImport(t) {
+		r.startImport(t)
+	}
 }
 
 // WaitImports attend la fin des imports en arrière-plan (tests, arrêt propre).

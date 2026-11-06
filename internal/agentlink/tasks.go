@@ -375,15 +375,22 @@ func (r *Registry) Complete(ctx context.Context, a Agent, id string, res TaskRes
 		note = "réconcilié : l'agent a rapporté l'issue après sa reconnexion"
 	}
 	now := store.FormatTime(r.now())
+	reserved := r.reserveImport(t) // avant l'écriture de l'état final : WaitImports ne peut pas passer entre les deux
 	// Garde d'état : seul un travail non terminé et déjà remis à l'agent peut recevoir son rapport. Un
 	// changement concurrent (annulation, remplacement) est détecté par RowsAffected.
 	up, err := r.db().ExecContext(ctx, `UPDATE agent_tasks SET state=?, result=?, error=?, note=CASE WHEN ?='' THEN note ELSE ? END,
 		progress=CASE WHEN ?='succeeded' THEN 1 ELSE progress END, finished_at=?, updated_at=? WHERE id=? AND state IN ('assigned','running','unknown')`,
 		res.State, rj, ej, note, note, res.State, now, now, id)
 	if err != nil {
+		if reserved {
+			r.cancelImport()
+		}
 		return t, err
 	}
 	if n, _ := up.RowsAffected(); n != 1 {
+		if reserved {
+			r.cancelImport()
+		}
 		cur, gerr := r.GetTask(ctx, id)
 		if gerr == nil && cur.State == res.State && cur.State != StateCancelled {
 			return cur, nil // rapport identique déjà enregistré en parallèle
@@ -392,7 +399,9 @@ func (r *Registry) Complete(ctx context.Context, a Agent, id string, res TaskRes
 	}
 	_ = r.d.Store.Audit(ctx, "agent", "agent_task.finish", "agent_task", id, map[string]any{"state": res.State})
 	r.dropParts(ctx, a.ID, id)
-	r.onTaskFinished(t, res)
+	if reserved {
+		r.startImport(t)
+	}
 	return r.GetTask(ctx, id)
 }
 
