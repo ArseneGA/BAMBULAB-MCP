@@ -70,6 +70,7 @@ func New(c *core.Core) *mcp.Server {
 		Annotations: roAnn,
 		Meta:        AppToolMeta(AtelierURI),
 	}, h.showAtelier)
+	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
 	return s
 }
 

@@ -41,7 +41,13 @@ func main() {
 	heavy := fs.Int("heavy-workers", envInt("BAMBU_HEAVY_WORKERS", 1), "travaux lourds simultanés")
 	light := fs.Int("light-workers", envInt("BAMBU_LIGHT_WORKERS", 4), "travaux légers simultanés")
 	level := fs.String("log-level", envOr("BAMBU_LOG_LEVEL", "info"), "debug|info|warn|error")
+	roots := fs.String("import-root", os.Getenv("BAMBU_IMPORT_ROOTS"), "racines d'import autorisées, séparées par '"+string(os.PathListSeparator)+"' (env BAMBU_IMPORT_ROOTS) ; vide = tout import refusé")
+	uvPath := fs.String("uv-path", os.Getenv("BAMBU_UV_PATH"), "exécutable uv du worker CAO (env BAMBU_UV_PATH ; défaut : PATH)")
+	geomDir := fs.String("geometry-dir", os.Getenv("BAMBU_GEOMETRY_DIR"), "projet Python du worker géométrie (env BAMBU_GEOMETRY_DIR ; défaut workers/geometry)")
 	version := fs.Bool("version", false, "affiche la version")
+	if len(os.Args) > 1 && os.Args[1] == "seed-demo" {
+		os.Exit(seedDemoMain(os.Args[2:]))
+	}
 	_ = fs.Parse(os.Args[1:])
 	if *version {
 		fmt.Println("bambud", core.Version)
@@ -56,7 +62,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log}, nil); err != nil {
+	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log,
+		Catalog: catalogConfig(*roots, *uvPath, *geomDir)}, nil); err != nil {
 		log.Error("arrêt sur erreur", "err", err)
 		os.Exit(1)
 	}
@@ -86,6 +93,7 @@ func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, re
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
+	c.Catalog.SetBaseURL("http://" + ln.Addr().String())
 	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version)
 	if ready != nil {
 		ready <- ln.Addr().String()

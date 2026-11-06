@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -32,7 +33,7 @@ func TestEnvironmentAndCapabilities(t *testing.T) {
 			t.Fatal("slicing annoncé disponible alors qu'il n'existe pas")
 		}
 	}
-	if len(cp.JobKinds) == 0 || cp.JobKinds[0] != "system.selftest" {
+	if !slices.Contains(cp.JobKinds, "system.selftest") || !slices.Contains(cp.JobKinds, "mesh.analyze") {
 		t.Fatalf("kinds : %v", cp.JobKinds)
 	}
 }
