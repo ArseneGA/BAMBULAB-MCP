@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -167,6 +168,76 @@ func registerCatalog(mux *http.ServeMux, c *core.Core) {
 		res, err := svc.FindExactDuplicates(r.Context(), catalog.DuplicatesInput{SHA256: q.Get("sha256"), Path: q.Get("path"),
 			IncludeTrashed: truthy(q.Get("trashed")), Limit: atoi(q.Get("limit")), Offset: atoi(q.Get("offset"))})
 		reply(c, w, res, err, http.StatusOK)
+	})
+
+	// Analyse (analyze_geometry) : l'unité confirmée est mémorisée sur le fichier et force le recalcul.
+	mux.HandleFunc("POST /api/models/{id}/analyze", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			FileID    string `json:"file_id"`
+			Unit      string `json:"unit"`
+			Machine   string `json:"machine"`
+			Recompute bool   `json:"recompute"`
+			SkipFab   bool   `json:"skip_fabricability"`
+		}
+		if r.ContentLength != 0 && !decode(w, r, &in) {
+			return
+		}
+		res, err := svc.AnalyzeGeometry(r.Context(), catalog.AnalyzeInput{ModelID: r.PathValue("id"), FileID: in.FileID, Unit: in.Unit,
+			Machine: in.Machine, Recompute: in.Recompute, SkipFab: in.SkipFab})
+		reply(c, w, res, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/models/{id}/parts", func(w http.ResponseWriter, r *http.Request) {
+		res, err := svc.ModelParts(r.Context(), r.PathValue("id"))
+		reply(c, w, res, err, http.StatusOK)
+	})
+
+	// Export : seuls les originaux du stockage par empreintes sont servis, jamais un chemin du disque.
+	mux.HandleFunc("GET /api/files/{id}/download", func(w http.ResponseWriter, r *http.Request) {
+		o, err := svc.OpenOriginal(r.Context(), r.PathValue("id"))
+		if err != nil {
+			reply(c, w, nil, err, http.StatusOK)
+			return
+		}
+		defer o.Body.Close()
+		st, err := o.Body.Stat()
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "erreur interne", "code": "internal"})
+			return
+		}
+		h := w.Header()
+		h.Set("Content-Type", "application/octet-stream")
+		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": o.File.Name}))
+		h.Set("X-Content-SHA256", o.File.SHA256)
+		h.Set("ETag", `"`+o.File.SHA256+`"`)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Cache-Control", "private, no-store")
+		h.Set("Content-Security-Policy", "sandbox")
+		http.ServeContent(w, r, o.File.Name, st.ModTime(), o.Body)
+	})
+	mux.HandleFunc("POST /api/export", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			ModelIDs []string `json:"model_ids"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		plan, err := svc.PlanExport(r.Context(), in.ModelIDs)
+		if err != nil {
+			reply(c, w, nil, err, http.StatusOK)
+			return
+		}
+		h := w.Header()
+		h.Set("Content-Type", "application/zip")
+		h.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": "atelier-export.zip"}))
+		h.Set("X-Export-Files", strconv.Itoa(plan.Count()))
+		h.Set("X-Export-Skipped", strconv.Itoa(len(plan.Skipped())))
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+		if err := svc.WriteExport(r.Context(), w, plan); err != nil {
+			// L'en-tête est parti : l'archive est volontairement laissée incomplète (donc invalide).
+			c.Log.Error("export groupé interrompu", "err", err)
+		}
 	})
 }
 

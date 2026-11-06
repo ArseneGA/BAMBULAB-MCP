@@ -3,6 +3,8 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
@@ -16,6 +18,9 @@ import (
 //	GET  /api/goals/{id}                   objectif enregistré
 //	POST /api/experiments                  create_experiment
 //	GET  /api/experiments/{id}             état de l'expérience
+//	GET  /api/experiments?model_id=        expériences passées d'un modèle
+//	GET  /api/print-memory                 get_print_memory
+//	GET  /api/profiles/filaments?machine=  presets filament compatibles
 //	GET  /api/experiments/{id}/compare     compare_variants
 //	POST /api/variants/apply               apply_variant
 //	POST /api/profiles/modify              modify_slicing_profile
@@ -44,6 +49,36 @@ func registerGoals(mux *http.ServeMux, c *core.Core) {
 		}
 		x, err := svc.CreateExperiment(r.Context(), in)
 		goalsReply(c, w, x, err, http.StatusCreated)
+	})
+	mux.HandleFunc("GET /api/experiments", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		list, err := svc.ListExperiments(r.Context(), q.Get("model_id"), atoi(q.Get("limit")))
+		goalsReply(c, w, map[string]any{"experiments": list}, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/print-memory", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		req := goals.MemoryRequest{ExperimentID: q.Get("experiment_id"), MaterialFamily: q.Get("material_family"), Machine: q.Get("machine"),
+			Filament: q.Get("filament"), ModelID: q.Get("model_id")}
+		if s := q.Get("size_mm"); s != "" {
+			for _, p := range strings.Split(s, ",") {
+				f, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
+				if err != nil {
+					writeJSON(w, http.StatusBadRequest, map[string]string{"error": "size_mm : trois nombres séparés par des virgules", "code": "invalid"})
+					return
+				}
+				req.SizeMM = append(req.SizeMM, f)
+			}
+			if len(req.SizeMM) != 3 {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "size_mm : trois nombres séparés par des virgules", "code": "invalid"})
+				return
+			}
+		}
+		o, err := svc.MemoryFor(r.Context(), req, 20)
+		goalsReply(c, w, o, err, http.StatusOK)
+	})
+	mux.HandleFunc("GET /api/profiles/filaments", func(w http.ResponseWriter, r *http.Request) {
+		names, err := svc.FilamentPresets(r.URL.Query().Get("machine"))
+		goalsReply(c, w, map[string]any{"filaments": names}, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/experiments/{id}", func(w http.ResponseWriter, r *http.Request) {
 		x, err := svc.GetExperiment(r.Context(), r.PathValue("id"))
