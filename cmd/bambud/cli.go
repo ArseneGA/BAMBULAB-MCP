@@ -25,8 +25,8 @@ import (
 // publicBase déduit l'URL que l'humain ouvre : --public-url s'il est fourni, sinon l'adresse d'écoute
 // (un hôte non spécifié 0.0.0.0 / [::] devient 127.0.0.1 : jamais « http://[::]:7878 »).
 func publicBase(publicURL, addr string) string {
-	if p := strings.TrimRight(strings.TrimSpace(publicURL), "/"); p != "" {
-		return p
+	if l := splitPublicURLs(publicURL); len(l) > 0 {
+		return l[0] // la première URL sert aux liens générés
 	}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -39,10 +39,31 @@ func publicBase(publicURL, addr string) string {
 }
 
 // validatePublicURL refuse une URL publique inutilisable (schéma, hôte, chemin).
-func validatePublicURL(p string) error {
-	if p == "" {
-		return nil
+func validatePublicURL(list string) error {
+	for _, p := range splitPublicURLs(list) {
+		if err := validateOnePublicURL(p); err != nil {
+			return err
+		}
 	}
+	if strings.TrimSpace(list) != "" && len(splitPublicURLs(list)) == 0 {
+		return fmt.Errorf("--public-url %q invalide", list)
+	}
+	return nil
+}
+
+// splitPublicURLs découpe une liste d'URL publiques séparées par des virgules (sans "/" final ni vides).
+// La première sert aux liens générés ; toutes autorisent leur nom d'hôte.
+func splitPublicURLs(list string) []string {
+	var out []string
+	for _, p := range strings.Split(list, ",") {
+		if p = strings.TrimRight(strings.TrimSpace(p), "/"); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func validateOnePublicURL(p string) error {
 	u, err := url.Parse(p)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
 		return fmt.Errorf("--public-url %q invalide : attendu http(s)://hôte[:port]", p)

@@ -220,9 +220,13 @@ func TestHumanPagesNeedCookieAPINeedsBearer(t *testing.T) {
 	if res, _ := b.get(srv.URL+"/confirm/cf_inconnue", nil); res.StatusCode != 410 {
 		t.Fatalf("page de confirmation inconnue, navigateur enregistré : %d", res.StatusCode)
 	}
-	// Le cookie ne remplace pas le Bearer pour l'API.
-	if res, _ := b.get(srv.URL+"/api/printers", nil); res.StatusCode != 401 {
-		t.Fatalf("cookie utilisé comme Bearer : %d", res.StatusCode)
+	// Le cookie d'un navigateur enregistré vaut authentification pour l'API en lecture (webauth_test.go
+	// couvre l'écriture/CSRF) ; il ne vaut jamais pour /mcp.
+	if res, _ := b.get(srv.URL+"/api/printers", nil); res.StatusCode != 200 {
+		t.Fatalf("cookie d'un navigateur enregistré refusé par l'API : %d", res.StatusCode)
+	}
+	if res, _ := b.get(srv.URL+"/mcp", nil); res.StatusCode != 401 {
+		t.Fatalf("cookie utilisé pour /mcp : %d", res.StatusCode)
 	}
 }
 

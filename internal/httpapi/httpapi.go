@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -68,9 +67,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 
 	// Navigateurs « humains » enregistrés (docs/SECURITY.md) : pages /enroll et GET /api/session ; les pages
 	// /confirm, /stop, /setup et /agents/pair exigent leur cookie.
-	human := humanauth.New(c.Store, humanauth.Options{Secure: func(r *http.Request) bool {
-		return r.TLS != nil || strings.HasPrefix(strings.ToLower(opts.PublicURL), "https://")
-	}})
+	human := humanauth.New(c.Store, humanauth.Options{Secure: opts.requestHTTPS, ClientKey: opts.clientAddr})
 	human.RegisterPages(mux)
 
 	registerCatalog(mux, c)
@@ -82,10 +79,13 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	server := mcpserver.New(c)
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Logger: c.Log,
+		// Le SDK refuse tout Host non loopback quand la connexion arrive sur le loopback (proxy local :
+		// Funnel, tailscale serve, nginx). Notre garde contrôle déjà Host (loopback ou liste blanche) en amont.
+		DisableLocalhostProtection: true,
 	}))
 	// Interface web embarquée (repli SPA), derrière le garde de sécurité : en dernier, ne masque ni /api ni /mcp.
 	mux.Handle("/", webui.Handler())
-	return guard(opts, mux) // unique point de branchement du middleware de sécurité
+	return guard(opts, func(r *http.Request) bool { _, err := human.SessionFromRequest(r); return err == nil }, mux) // unique point de branchement du middleware de sécurité
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

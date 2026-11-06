@@ -28,6 +28,32 @@ func envOr(key, def string) string {
 	return def
 }
 
+// envBool : "1", "true", "yes" ou "on" (insensible à la casse).
+func envBool(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// resolveStudioPath retient le chemin de Bambu Studio explicitement demandé (--studio-bin, sinon
+// BAMBU_STUDIO_BIN). Un chemin donné mais inexistant (ou dossier) est une erreur de démarrage : jamais de
+// repli silencieux sur une autre installation. Vide : détection automatique.
+func resolveStudioPath(flagValue, envValue string) (string, error) {
+	src, p := "--studio-bin", strings.TrimSpace(flagValue)
+	if p == "" {
+		src, p = "BAMBU_STUDIO_BIN", strings.TrimSpace(envValue)
+	}
+	if p == "" {
+		return "", nil
+	}
+	if fi, err := os.Stat(p); err != nil || fi.IsDir() {
+		return "", fmt.Errorf("%s=%q : Bambu Studio introuvable (fichier exécutable attendu)", src, p)
+	}
+	return p, nil
+}
+
 func envInt(key string, def int) int {
 	if v, err := strconv.Atoi(os.Getenv(key)); err == nil && v > 0 {
 		return v
@@ -55,10 +81,12 @@ func main() {
 	roots := fs.String("import-root", os.Getenv("BAMBU_IMPORT_ROOTS"), "racines d'import autorisées, séparées par '"+string(os.PathListSeparator)+"' (env BAMBU_IMPORT_ROOTS) ; vide = tout import refusé")
 	uvPath := fs.String("uv-path", os.Getenv("BAMBU_UV_PATH"), "exécutable uv du worker CAO (env BAMBU_UV_PATH ; défaut : PATH)")
 	geomDir := fs.String("geometry-dir", os.Getenv("BAMBU_GEOMETRY_DIR"), "projet Python du worker géométrie (env BAMBU_GEOMETRY_DIR ; défaut workers/geometry)")
-	publicURL := fs.String("public-url", os.Getenv("BAMBU_PUBLIC_URL"), "URL sous laquelle l'humain atteint le service (liens /confirm, /stop, /setup ; https => cookie Secure) (env BAMBU_PUBLIC_URL)")
+	publicURL := fs.String("public-url", os.Getenv("BAMBU_PUBLIC_URL"), "URL(s) sous lesquelles l'humain atteint le service, séparées par des virgules ; la première sert aux liens /confirm, /stop, /setup ; l'attribut Secure du cookie suit celle dont l'hôte correspond à la requête (env BAMBU_PUBLIC_URL)")
+	requireToken := fs.Bool("require-token", envBool("BAMBU_REQUIRE_TOKEN"), "exige un jeton d'API même en écoute loopback (derrière un proxy : toujours) (env BAMBU_REQUIRE_TOKEN)")
+	trustedProxies := fs.String("trusted-proxies", os.Getenv("BAMBU_TRUSTED_PROXIES"), "adresses/réseaux CIDR dont X-Forwarded-For/-Proto sont crus, séparés par des virgules ; défaut : loopback ; \"none\" : aucun (env BAMBU_TRUSTED_PROXIES)")
 	anyHost := fs.Bool("allow-any-printer-host", os.Getenv("BAMBU_ALLOW_ANY_PRINTER_HOST") == "1", "lève la restriction des hôtes d'imprimante aux adresses privées / lien local / .local")
-	studioBin := fs.String("studio-bin", "", "exécutable ou AppImage de Bambu Studio (défaut : env BAMBU_STUDIO_BIN, puis détection)")
-	studioWrap := fs.String("studio-wrapper", os.Getenv("BAMBU_STUDIO_WRAPPER"), "commande préfixe du slicer, ex. \"xvfb-run -a\" ; \"none\" la désactive (env BAMBU_STUDIO_WRAPPER ; défaut sous Linux sans écran : xvfb-run -a s'il est installé)")
+	studioBin := fs.String("studio-bin", "", "exécutable ou AppImage de Bambu Studio (défaut : env BAMBU_STUDIO_BIN, puis détection) ; un chemin donné mais introuvable est une erreur de démarrage")
+	studioWrap := fs.String("studio-wrapper", os.Getenv("BAMBU_STUDIO_WRAPPER"), "commande préfixe du slicer, ex. \"xvfb-run -a\" (jamais activée implicitement) ; \"none\" ou vide : aucune (env BAMBU_STUDIO_WRAPPER)")
 	version := fs.Bool("version", false, "affiche la version")
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -100,10 +128,26 @@ func main() {
 		log.Error("configuration invalide", "err", err)
 		os.Exit(2)
 	}
-	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: strings.TrimRight(*publicURL, "/")}, DrainTimeout: *drain}
+	proxies, err := httpapi.ParseTrustedProxies(*trustedProxies)
+	if err != nil {
+		log.Error("configuration invalide", "err", err)
+		os.Exit(2)
+	}
+	studioPath, err := resolveStudioPath(*studioBin, os.Getenv("BAMBU_STUDIO_BIN"))
+	if err != nil {
+		log.Error("configuration invalide", "err", err)
+		os.Exit(2)
+	}
+	urls := splitPublicURLs(*publicURL)
+	first := ""
+	if len(urls) > 0 {
+		first = urls[0]
+	}
+	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: first, PublicURLs: urls, TrustedProxies: proxies},
+		RequireToken: *requireToken, DrainTimeout: *drain}
 	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log,
 		Catalog: catalogConfig(*roots, *uvPath, *geomDir), AllowAnyPrinterHost: *anyHost,
-		StudioPath: *studioBin, StudioWrapper: studioWrapper(*studioWrap)}, sc, nil); err != nil {
+		StudioPath: studioPath, StudioWrapper: parseWrapper(*studioWrap)}, sc, nil); err != nil {
 		log.Error("arrêt sur erreur", "err", err)
 		os.Exit(1)
 	}
@@ -117,12 +161,14 @@ var errDrainTimeout = errors.New("drain des travaux non terminé dans le délai 
 type serveConfig struct {
 	HTTP         httpapi.Options
 	DrainTimeout time.Duration // attente max. des travaux après l'arrêt (défaut 30 s)
+	RequireToken bool          // --require-token : jeton obligatoire même en écoute loopback
 }
 
 // run démarre le service et bloque jusqu'à l'annulation de ctx. Si ready n'est
 // pas nil, l'adresse réelle d'écoute y est envoyée (utile aux tests, port 0).
 func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, sc serveConfig, ready chan<- string) error {
-	if err := httpapi.ValidateListen(addr, sc.HTTP.APIToken); err != nil {
+	if err := httpapi.ValidateServe(addr, sc.HTTP.APIToken, httpapi.Exposure{
+		PublicURLs: sc.HTTP.PublicURLs, AllowedHosts: sc.HTTP.AllowedHosts, RequireToken: sc.RequireToken}); err != nil {
 		return err
 	}
 	c, err := core.Open(ctx, cfg)

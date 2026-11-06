@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 )
@@ -19,14 +20,22 @@ type Options struct {
 	// TrustedOrigins : origines (schéma://hôte[:port]) autorisées pour les requêtes
 	// navigateur d'une autre origine. Vide = aucune.
 	TrustedOrigins []string
-	// APIToken : si non vide, toute requête (sauf GET /health) doit porter
-	// « Authorization: Bearer <jeton> ». Obligatoire quand l'écoute n'est pas
-	// sur loopback (voir ValidateListen).
+	// APIToken : si non vide, l'API (/api/*) et /mcp exigent « Authorization: Bearer <jeton> » ; /api/* accepte
+	// aussi la session d'un navigateur enregistré (cookie humanauth, voir apiAuth). /mcp reste Bearer seulement.
+	// GET/HEAD /health, la SPA et ses fichiers statiques, les pages humaines et /agent/v1/* ont leur propre régime.
+	// Obligatoire quand l'écoute n'est pas sur loopback ou que le service est exposé (voir ValidateServe).
 	APIToken string
 	// PublicURL : URL sous laquelle l'humain atteint le service (ex. https://bambu.lan:7878). Sert aux liens
 	// affichés au modèle (/confirm, /stop, /setup), autorise automatiquement son nom d'hôte et décide de
 	// l'attribut Secure du cookie de session (https). Vide : adresse d'écoute (jamais « [::] »).
 	PublicURL string
+	// PublicURLs : toutes les URL publiques (LAN en http, Funnel en https…). Leurs noms d'hôte sont autorisés ;
+	// l'attribut Secure du cookie suit le schéma de celle dont l'hôte correspond au Host de la requête.
+	// Si vide, PublicURL seule compte. PublicURL (la première) sert aux liens générés.
+	PublicURLs []string
+	// TrustedProxies : adresses/réseaux dont X-Forwarded-For et X-Forwarded-Proto sont crus. nil : loopback
+	// seulement ; liste vide non nil : aucun. Voir ParseTrustedProxies.
+	TrustedProxies []netip.Prefix
 }
 
 // isHumanPath : pages HTML du canal humain et leur état de session. Elles ne passent PAS par le jeton
@@ -40,6 +49,38 @@ func isHumanPath(p string) bool {
 		return true
 	}
 	return false
+}
+
+// isPublicStatic : la SPA (index.html, repli de routage client) et ses fichiers /assets/*. Ils ne contiennent
+// aucune donnée de l'utilisateur ; toutes les données passent par /api/*, protégé. Lecture seule, hors API,
+// /mcp, /health et /agent, et sans segment « . », « .. » ou « // » (que le routeur redirige de toute façon).
+func isPublicStatic(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p := r.URL.Path
+	for _, pre := range []string{"/api", "/mcp", "/health", "/agent"} {
+		if p == pre || strings.HasPrefix(p, pre+"/") {
+			return false
+		}
+	}
+	for _, seg := range strings.Split(p, "/")[1:] {
+		if seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return !strings.Contains(p, "//")
+}
+
+// isSignedAsset : GET /api/assets/<sha>.glb?exp=…&sig=… est une capacité signée (HMAC, expiration) que le
+// handler vérifie lui-même ; elle doit rester lisible sans Bearer (iframe d'un hôte MCP Apps).
+func isSignedAsset(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p, ok := strings.CutPrefix(r.URL.Path, "/api/assets/")
+	q := r.URL.Query()
+	return ok && strings.HasSuffix(p, ".glb") && !strings.Contains(p, "/") && q.Get("sig") != "" && q.Get("exp") != ""
 }
 
 // MinTokenLen : longueur minimale d'un jeton d'API.
@@ -64,30 +105,96 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// ValidateListen refuse une configuration dangereuse : écoute hors loopback sans
-// jeton d'API (ou avec un jeton trop court).
-func ValidateListen(addr, token string) error {
+// Exposure décrit comment le service est joignable au-delà de son adresse d'écoute.
+type Exposure struct {
+	PublicURLs   []string // --public-url
+	AllowedHosts []string // --allowed-hosts
+	// RequireToken force le jeton même sur loopback (--require-token) : à utiliser derrière un proxy.
+	RequireToken bool
+}
+
+// TokenRequiredReason dit pourquoi un jeton d'API est obligatoire ("" si ce n'est pas le cas) : écoute hors
+// loopback, --require-token, URL publique non loopback, ou nom d'hôte autorisé non loopback (proxy local).
+func TokenRequiredReason(addr string, ex Exposure) string {
+	if !IsLoopbackAddr(addr) {
+		return "écoute hors loopback (" + addr + ")"
+	}
+	if ex.RequireToken {
+		return "--require-token / BAMBU_REQUIRE_TOKEN"
+	}
+	for _, p := range ex.PublicURLs {
+		if u, err := url.Parse(p); err == nil && u.Hostname() != "" && !isLoopbackHost(u.Hostname()) {
+			return "URL publique non loopback (" + p + ")"
+		}
+	}
+	for _, h := range ex.AllowedHosts {
+		if h = strings.TrimSpace(h); h != "" && !isLoopbackHost(h) {
+			return "hôte autorisé non loopback (" + h + ")"
+		}
+	}
+	return ""
+}
+
+// ValidateServe refuse une configuration dangereuse : jeton trop court, ou jeton absent alors que
+// TokenRequiredReason en exige un.
+func ValidateServe(addr, token string, ex Exposure) error {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		return fmt.Errorf("adresse d'écoute invalide %q : %w", addr, err)
 	}
 	if token != "" && len(token) < MinTokenLen {
 		return fmt.Errorf("le jeton d'API doit faire au moins %d caractères", MinTokenLen)
 	}
-	if !IsLoopbackAddr(addr) && token == "" {
-		return errors.New("écoute hors loopback (" + addr + ") refusée sans jeton d'API : définir --api-token / BAMBU_API_TOKEN, ou écouter sur 127.0.0.1")
+	if reason := TokenRequiredReason(addr, ex); reason != "" && token == "" {
+		return errors.New("jeton d'API obligatoire (" + reason + ") : définir --api-token / BAMBU_API_TOKEN (derrière un proxy, toujours un jeton) ; sans exposition, écouter sur 127.0.0.1 sans --public-url ni --allowed-hosts publics")
 	}
 	return nil
 }
 
+// ValidateListen est ValidateServe sans information d'exposition (écoute seule).
+func ValidateListen(addr, token string) error { return ValidateServe(addr, token, Exposure{}) }
+
+// authFail écrit un refus JSON.
+func authFail(w http.ResponseWriter, status int, code, msg string) {
+	if status == http.StatusUnauthorized {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="bambud"`)
+	}
+	writeJSON(w, status, map[string]string{"error": msg, "code": code, "enroll_url": "/enroll"})
+}
+
+// csrfHeader est l'en-tête personnalisé que la SPA ajoute à chaque appel (un site tiers ne peut pas
+// l'envoyer sans préliminaire CORS, que bambud ne donne jamais).
+const csrfHeader = "X-Atelier-Request"
+
+// browserWriteOK : une écriture authentifiée par cookie doit venir de la SPA elle-même : en-tête
+// X-Atelier-Request: 1 ET même origine (Sec-Fetch-Site: same-origin ; à défaut d'en-têtes Sec-Fetch, que les
+// navigateurs n'envoient pas en http hors localhost, un Origin identique au Host de la requête).
+func browserWriteOK(r *http.Request) bool {
+	if r.Header.Get(csrfHeader) != "1" {
+		return false
+	}
+	if sfs := r.Header.Get("Sec-Fetch-Site"); sfs != "" {
+		return sfs == "same-origin"
+	}
+	o := r.Header.Get("Origin")
+	if o == "" {
+		return false
+	}
+	u, err := url.Parse(o)
+	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
+}
+
 // guard enveloppe next : (1) en-tête Host loopback ou liste blanche, (2) protection
-// cross-origin du navigateur (Sec-Fetch-Site / Origin), (3) jeton d'API.
-func guard(opts Options, next http.Handler) http.Handler {
+// cross-origin du navigateur (Sec-Fetch-Site / Origin), (3) authentification : jeton d'API, ou, pour
+// /api/*, session d'un navigateur enregistré (isSession).
+func guard(opts Options, isSession func(*http.Request) bool, next http.Handler) http.Handler {
 	allowed := map[string]bool{}
 	for _, h := range opts.AllowedHosts {
 		allowed[strings.Trim(strings.ToLower(strings.TrimSpace(h)), "[]")] = true
 	}
-	if u, err := url.Parse(opts.PublicURL); err == nil && u.Hostname() != "" {
-		allowed[strings.ToLower(u.Hostname())] = true
+	for _, p := range opts.publicURLs() {
+		if u, err := url.Parse(p); err == nil && u.Hostname() != "" {
+			allowed[strings.ToLower(u.Hostname())] = true
+		}
 	}
 	cop := http.NewCrossOriginProtection()
 	for _, o := range opts.TrustedOrigins {
@@ -96,6 +203,14 @@ func guard(opts Options, next http.Handler) http.Handler {
 	var tokenSum [32]byte
 	if opts.APIToken != "" {
 		tokenSum = sha256.Sum256([]byte(opts.APIToken))
+	}
+	bearerOK := func(r *http.Request) bool {
+		h := r.Header.Get("Authorization")
+		if !strings.HasPrefix(h, "Bearer ") {
+			return false
+		}
+		sum := sha256.Sum256([]byte(strings.TrimPrefix(h, "Bearer ")))
+		return subtle.ConstantTimeCompare(sum[:], tokenSum[:]) == 1
 	}
 	inner := cop.Handler(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,13 +230,21 @@ func guard(opts Options, next http.Handler) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "hôte non autorisé"})
 			return
 		}
-		if opts.APIToken != "" && !(r.Method == http.MethodGet && r.URL.Path == "/health") && !isHumanPath(r.URL.Path) {
-			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			sum := sha256.Sum256([]byte(got))
-			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare(sum[:], tokenSum[:]) != 1 {
-				w.Header().Set("WWW-Authenticate", `Bearer realm="bambud"`)
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "jeton d'API requis"})
-				return
+		if opts.APIToken != "" {
+			p := r.URL.Path
+			open := ((r.Method == http.MethodGet || r.Method == http.MethodHead) && p == "/health") ||
+				isHumanPath(p) || isPublicStatic(r) || isSignedAsset(r)
+			if !open && !bearerOK(r) {
+				// Session d'un navigateur enregistré : valable pour /api/* seulement (jamais /mcp).
+				if strings.HasPrefix(p, "/api/") && isSession != nil && isSession(r) {
+					if r.Method != http.MethodGet && r.Method != http.MethodHead && !browserWriteOK(r) {
+						authFail(w, http.StatusForbidden, "csrf", "écriture refusée : l'interface web doit envoyer "+csrfHeader+": 1 depuis la même origine")
+						return
+					}
+				} else {
+					authFail(w, http.StatusUnauthorized, "unauthorized", "jeton d'API requis, ou navigateur enregistré (/enroll) pour l'interface web")
+					return
+				}
 			}
 		}
 		inner.ServeHTTP(w, r)
