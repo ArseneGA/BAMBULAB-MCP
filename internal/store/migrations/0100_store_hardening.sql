@@ -19,8 +19,8 @@ CREATE TRIGGER print_confirmations_used_no_delete BEFORE DELETE ON print_confirm
 WHEN OLD.used_at IS NOT NULL
 BEGIN SELECT RAISE(ABORT, 'confirmation déjà utilisée : immuable'); END;
 
--- Les fichiers sources sont immuables (comme les versions).
-CREATE TRIGGER source_files_no_update BEFORE UPDATE ON source_files
+-- Le contenu d'un fichier source est immuable (id, format, taille, empreinte, date) ; nom, modèle, unité et disponibilité restent modifiables (catalogue).
+CREATE TRIGGER source_files_no_update BEFORE UPDATE OF id, format, size_bytes, sha256, created_at ON source_files
 BEGIN SELECT RAISE(ABORT, 'source_files est immuable'); END;
 CREATE TRIGGER source_files_no_delete BEFORE DELETE ON source_files
 BEGIN SELECT RAISE(ABORT, 'source_files est immuable'); END;

@@ -15,6 +15,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
@@ -29,6 +30,8 @@ type Config struct {
 	HeavyWorkers int // défaut 1
 	LightWorkers int // défaut 4
 	Logger       *slog.Logger
+	// Catalog : racines d'import autorisées, backend CAO (voir catalog.Config).
+	Catalog catalog.Config
 	// Intervalles du runner (tests).
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
@@ -46,6 +49,8 @@ type Core struct {
 	Recovery jobs.RecoveryReport
 
 	lock *instanceLock
+	// Catalog : catalogue documentaire (jalon 2).
+	Catalog *catalog.Service
 }
 
 // Open prépare le dossier de données, migre la base, enregistre les handlers
@@ -88,7 +93,13 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	}})
 	reg := jobs.NewRegistry()
 	registerBuiltins(reg)
-	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, lock: lock}
+	cat, err := catalog.New(catalog.Deps{Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, DataDir: cfg.DataDir}, cfg.Catalog)
+	if err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("catalogue : %w", err)
+	}
+	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, lock: lock}
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
 	})
@@ -152,6 +163,10 @@ func registerBuiltins(reg *jobs.Registry) {
 
 // Capabilities décrit ce que le service sait réellement faire à cet instant.
 func (c *Core) Capabilities() contracts.Capabilities {
+	cadOK, cadNote := c.Catalog.CADStatus()
+	if !cadOK {
+		cadNote = "backend CAO absent : " + cadNote
+	}
 	kinds := c.Registry.Kinds()
 	sort.Strings(kinds)
 	return contracts.Capabilities{
@@ -159,16 +174,17 @@ func (c *Core) Capabilities() contracts.Capabilities {
 		Version: Version,
 		Mode:    "linux_seul",
 		Features: []contracts.Feature{
-			{ID: "catalog_store", Available: true, Note: "stockage, versions immuables, audit ; outils MCP de catalogue à venir"},
+			{ID: "catalog_store", Available: true, Note: "catalogue : import non destructif, collections, versions immuables, doublons, corbeille, audit"},
+			{ID: "catalog_import", Available: len(c.Catalog.Roots()) > 0, Note: catalogImportNote(len(c.Catalog.Roots()))},
 			{ID: "blob_store", Available: true, Note: "adressage par contenu, écriture atomique"},
 			{ID: "job_queue", Available: true, Note: "persistante, reprise au démarrage, annulation"},
 			{ID: "mcp_streamable_http", Available: true},
 			{ID: "mcp_stdio_bridge", Available: true},
 			{ID: "mcp_apps_ui", Available: true, Note: "page de démonstration uniquement (jalon 1)"},
-			{ID: "mesh_import", Available: false, Note: "non implémenté dans ce jalon"},
+			{ID: "mesh_import", Available: true, Note: "STL, OBJ, 3MF : analyse et aperçu GLB dérivé (Go)"},
 			{ID: "slicing", Available: false, Note: "non implémenté dans ce jalon"},
 			{ID: "printer_lan", Available: false, Note: "non implémenté dans ce jalon"},
-			{ID: "cad_worker", Available: false, Note: "non implémenté dans ce jalon"},
+			{ID: "cad_worker", Available: cadOK, Note: cadNote},
 			{ID: "windows_agent", Available: false, Note: "aucun agent connecté"},
 		},
 		JobKinds: kinds,
@@ -177,6 +193,13 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			string(contracts.ClassLight): c.Queue.Limit(contracts.ClassLight),
 		},
 	}
+}
+
+func catalogImportNote(roots int) string {
+	if roots == 0 {
+		return "aucune racine d'import autorisée (BAMBU_IMPORT_ROOTS ou --import-root) : tout import est refusé"
+	}
+	return fmt.Sprintf("%d racine(s) d'import autorisée(s)", roots)
 }
 
 func writable(dir string) bool {

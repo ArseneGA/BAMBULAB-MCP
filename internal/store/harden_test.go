@@ -248,7 +248,7 @@ func TestSourceFilesAndVersionsImmutable(t *testing.T) {
 	f, _ := s.AddSourceFile(ctx, "t", contracts.SourceFile{ModelID: m.ID, Name: "a.stl", Format: contracts.FormatSTL, SHA256: strings.Repeat("ab", 32), Availability: contracts.AvailableLinux})
 	v, _ := s.CreateVersion(ctx, "t", contracts.ModelVersion{ModelID: m.ID, Label: "v1"})
 	for _, q := range []string{
-		`UPDATE source_files SET name='x' WHERE id='` + f.ID + `'`,
+		`UPDATE source_files SET sha256='cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc' WHERE id='` + f.ID + `'`,
 		`DELETE FROM source_files WHERE id='` + f.ID + `'`,
 		// INSERT OR REPLACE supprime l'ancienne ligne : sans recursive_triggers, le déclencheur de suppression ne se déclenche pas.
 		`INSERT OR REPLACE INTO source_files(id,model_id,name,format,size_bytes,sha256,availability,created_at) VALUES('` + f.ID + `','` + m.ID + `','y','stl',0,'` + strings.Repeat("ab", 32) + `','linux','2020-01-01T00:00:00Z')`,

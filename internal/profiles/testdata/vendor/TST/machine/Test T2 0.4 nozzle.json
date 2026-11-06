@@ -1,0 +1,1 @@
+{"type":"machine","name":"Test T2 0.4 nozzle","inherits":"fdm_common","from":"system","instantiation":"true","printer_model":"Test T2","nozzle_diameter":["0.4","0.4"]}
