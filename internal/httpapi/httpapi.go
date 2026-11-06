@@ -45,7 +45,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "erreur interne"})
 			return
 		}
-		writeJSON(w, http.StatusOK, j)
+		writeJSON(w, http.StatusOK, j.Redacted())
 	})
 	mux.HandleFunc("POST /api/jobs/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")

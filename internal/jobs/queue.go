@@ -21,6 +21,7 @@ import (
 var (
 	ErrNotFound            = errors.New("travail introuvable")
 	ErrNotRunning          = errors.New("le travail n'est plus en cours d'exécution")
+	ErrSecretInParams      = errors.New("params contient un champ secret (secret_*, password, access_code)")
 	ErrIdempotencyRequired = errors.New("clé d'idempotence obligatoire pour un travail à effet physique")
 	ErrKindMismatch        = errors.New("clé d'idempotence déjà utilisée par un autre type de travail")
 )
@@ -186,6 +187,9 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (job contracts.Job
 	}
 	if len(p.Params) > 0 && !json.Valid(p.Params) {
 		return job, false, errors.New("params n'est pas un JSON valide")
+	}
+	if contracts.ContainsSecret(p.Params) {
+		return job, false, fmt.Errorf("%w : le handler doit lire les secrets dans la configuration, pas dans params", ErrSecretInParams)
 	}
 	if physicalKind(p.Kind) && p.IdempotencyKey == "" {
 		return job, false, fmt.Errorf("%s : %w", p.Kind, ErrIdempotencyRequired)
