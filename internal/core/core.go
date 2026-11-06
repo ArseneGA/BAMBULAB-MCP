@@ -44,6 +44,8 @@ type Core struct {
 	Runner   *jobs.Runner
 	Log      *slog.Logger
 	Recovery jobs.RecoveryReport
+
+	lock *instanceLock
 }
 
 // Open prépare le dossier de données, migre la base, enregistre les handlers
@@ -64,13 +66,20 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("dossier de données : %w", err)
 	}
+	// Verrou d'instance AVANT migrations et reprise : un seul service par dossier.
+	lock, err := acquireInstanceLock(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
 	st, err := store.Open(filepath.Join(cfg.DataDir, "bambu.db"), store.Options{})
 	if err != nil {
+		lock.release()
 		return nil, err
 	}
 	blobs, err := store.NewBlobStore(filepath.Join(cfg.DataDir, "blobs"))
 	if err != nil {
 		st.Close()
+		lock.release()
 		return nil, err
 	}
 	q := jobs.NewQueue(st, jobs.QueueConfig{Limits: map[contracts.JobClass]int{
@@ -78,13 +87,14 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	}})
 	reg := jobs.NewRegistry()
 	registerBuiltins(reg)
-	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger}
+	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, lock: lock}
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
 	})
 	rep, err := q.Recover(ctx, reg.Replayable)
 	if err != nil {
 		st.Close()
+		lock.release()
 		return nil, fmt.Errorf("reprise des travaux : %w", err)
 	}
 	c.Recovery = rep
@@ -98,8 +108,14 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 // Run démarre les workers et bloque jusqu'à l'annulation de ctx (puis drain).
 func (c *Core) Run(ctx context.Context) error { return c.Runner.Run(ctx) }
 
-// Close ferme la base. À appeler après la fin de Run.
-func (c *Core) Close() error { return c.Store.Close() }
+// Close ferme la base puis libère le verrou d'instance. À appeler après la fin de Run.
+func (c *Core) Close() error {
+	err := c.Store.Close()
+	if lerr := c.lock.release(); err == nil {
+		err = lerr
+	}
+	return err
+}
 
 // registerBuiltins : handlers fournis d'office.
 func registerBuiltins(reg *jobs.Registry) {

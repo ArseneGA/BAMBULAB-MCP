@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"testing"
@@ -61,4 +62,24 @@ func TestOpenAppliesRecovery(t *testing.T) {
 	if j, _ := c2.Queue.Get(ctx, b.ID); j.State != contracts.JobUnknown {
 		t.Fatalf("start_print : %s", j.State)
 	}
+}
+
+func TestInstanceLock(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	c1, err := Open(ctx, Config{DataDir: dir, Logger: quiet()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(ctx, Config{DataDir: dir, Logger: quiet()}); !errors.Is(err, ErrDataDirLocked) {
+		t.Fatalf("second Open : attendu ErrDataDirLocked, obtenu %v", err)
+	}
+	if err := c1.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := Open(ctx, Config{DataDir: dir, Logger: quiet()})
+	if err != nil {
+		t.Fatalf("réouverture après Close : %v", err)
+	}
+	c2.Close()
 }
