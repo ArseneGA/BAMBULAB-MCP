@@ -12,11 +12,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 )
@@ -84,7 +86,13 @@ func runBridge(ctx context.Context, log *slog.Logger, url string, tr mcp.Transpo
 }
 
 func runEmbedded(ctx context.Context, log *slog.Logger, dataDir string, tr mcp.Transport) error {
-	c, err := core.Open(ctx, core.Config{DataDir: dataDir, Logger: log})
+	cat := catalog.Config{UVPath: os.Getenv("BAMBU_UV_PATH"), WorkerDir: os.Getenv("BAMBU_GEOMETRY_DIR")}
+	for _, r := range filepath.SplitList(os.Getenv("BAMBU_IMPORT_ROOTS")) {
+		if r = strings.TrimSpace(r); r != "" {
+			cat.ImportRoots = append(cat.ImportRoots, r)
+		}
+	}
+	c, err := core.Open(ctx, core.Config{DataDir: dataDir, Logger: log, Catalog: cat})
 	if err != nil {
 		return err
 	}

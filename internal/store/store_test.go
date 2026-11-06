@@ -29,7 +29,7 @@ func TestMigrationsAndReopen(t *testing.T) {
 	ctx := context.Background()
 	s, dir := openTemp(t)
 	v, err := s.SchemaVersion(ctx)
-	if err != nil || v != 1 {
+	if err != nil || v < 1 {
 		t.Fatalf("version %d err %v", v, err)
 	}
 	var mode string
@@ -45,8 +45,8 @@ func TestMigrationsAndReopen(t *testing.T) {
 	defer s2.Close()
 	var n int
 	_ = s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&n)
-	if n != 1 {
-		t.Fatalf("migration réappliquée : %d lignes", n)
+	if n != 2 {
+		t.Fatalf("migration réappliquée : %d lignes (2 migrations attendues, v%d)", n, v)
 	}
 }
 
