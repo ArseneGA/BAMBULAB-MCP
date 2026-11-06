@@ -55,6 +55,32 @@ await page.waitForTimeout(800);
 assert.equal((await (await fetch(`${web}/api/trash`)).json()).total, 0);
 step('corbeille puis restauration');
 
+// Objectif -> expérience -> comparaison réelle -> application d'une variante (Bambu Studio requis).
+const caps = await (await fetch(`${web}/api/capabilities`)).json();
+if (caps.features.find((f) => f.id === 'slicing')?.available) {
+  const cale = (await (await fetch(`${web}/api/models?q=cale`)).json()).models[0];
+  await page.goto(`${web}/modele/${cale.id}`);
+  await page.getByRole('button', { name: 'Préparer' }).click();
+  await page.waitForURL(/preparation\?model=/);
+  await page.getByPlaceholder(/solide mais rapide/).fill('rapide à imprimer');
+  await page.getByLabel('Ajouter un critère').selectOption('speed');
+  await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await page.getByRole('button', { name: "Valider l'objectif" }).click();
+  await page.getByText('Objectif validé').waitFor();
+  step('objectif validé par le serveur');
+  await page.getByLabel(/Nombre de variantes/).selectOption('2');
+  await page.getByRole('button', { name: /Créer l'expérience/ }).click();
+  await page.waitForURL(/comparaison\?experiment=/);
+  await page.getByRole('table', { name: 'Variantes comparées' }).waitFor();
+  await page.getByText('terminée').first().waitFor({ timeout: 120000 });
+  await page.waitForFunction(() => document.querySelectorAll('.cmp thead .tag-ok').length >= 3, null, { timeout: 120000 });
+  step('comparaison réelle : 3 découpes terminées');
+  await page.locator('.cmp tbody tr:last-child button').nth(1).click();
+  await page.getByRole('button', { name: 'Appliquer', exact: true }).last().click();
+  await page.getByText(/appliquée/).waitFor();
+  step('variante appliquée');
+}
+
 await browser.close();
 assert.deepEqual(errs, [], `erreurs de page : ${errs.join(' | ')}`);
 console.log('E2E OK');

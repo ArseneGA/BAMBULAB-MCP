@@ -2,6 +2,7 @@ import type {
   ApplyResult, Capabilities, CollectionInfo, DuplicatesResult, Health, ImportInput, ImportStarted, Job, ModelDetails,
   OpPreview, Operation, RestoreResult, ScanReport, SearchParams, SearchResult,
 } from './types';
+import type { ApplyOutput, CompareOutput, CreateExperimentInput, Experiment, Goal, GoalCriteriaCatalog, GoalInput } from './goalTypes';
 
 /**
  * Client de l'API HTTP de bambud. Les erreurs sont normalisées :
@@ -9,7 +10,7 @@ import type {
  *  - `status`/`code` : réponse d'erreur du serveur (not_allowed, not_found, invalid, conflict, backend_missing...).
  */
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly code: string, readonly offline = false) {
+  constructor(message: string, readonly status: number, readonly code: string, readonly offline = false, readonly body?: Record<string, unknown>) {
     super(message);
     this.name = 'ApiError';
   }
@@ -36,7 +37,7 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
     const d = data as { error?: string; code?: string } | undefined;
     // Un proxy ou un serveur arrêté répond parfois 502/503/504 sans corps JSON : c'est de l'indisponibilité.
     const gateway = d?.error === undefined && [502, 503, 504].includes(res.status);
-    throw new ApiError(d?.error ?? `Erreur HTTP ${res.status}`, res.status, d?.code ?? (gateway ? 'offline' : 'http'), gateway);
+    throw new ApiError(d?.error ?? `Erreur HTTP ${res.status}`, res.status, d?.code ?? (gateway ? 'offline' : 'http'), gateway, (data as Record<string, unknown> | undefined) ?? undefined);
   }
   return data as T;
 }
@@ -77,6 +78,12 @@ export const api = {
   applyOps: (token: string) => request<ApplyResult>('POST', '/api/operations/apply', { token }),
   tag: (model_ids: string[], add: string[], remove: string[]) => request<unknown>('POST', '/api/tags', { model_ids, add, remove }),
   duplicates: (limit = 50, signal?: AbortSignal) => request<DuplicatesResult>('GET', '/api/duplicates' + qs({ limit }), undefined, signal),
+  goalCriteria: (signal?: AbortSignal) => request<GoalCriteriaCatalog>('GET', '/api/goal-criteria', undefined, signal),
+  setGoal: (g: GoalInput) => request<Goal>('POST', '/api/goals', g),
+  createExperiment: (x: CreateExperimentInput) => request<Experiment>('POST', '/api/experiments', x),
+  experiment: (id: string, signal?: AbortSignal) => request<Experiment>('GET', `/api/experiments/${encodeURIComponent(id)}`, undefined, signal),
+  compare: (id: string, signal?: AbortSignal) => request<CompareOutput>('GET', `/api/experiments/${encodeURIComponent(id)}/compare`, undefined, signal),
+  applyVariant: (experiment_id: string, candidate_id: string, expected_revision: string) => request<ApplyOutput>('POST', '/api/variants/apply', { experiment_id, candidate_id, expected_revision }),
   /** Télécharge le GLB d'aperçu (URL signée de la fiche). */
   async glb(signedUrl: string, signal?: AbortSignal): Promise<ArrayBuffer> {
     let res: Response;
@@ -109,6 +116,8 @@ export function describeError(e: unknown): string {
     if (e.offline) return 'bambud est injoignable. Vérifiez que le service tourne puis réessayez.';
     switch (e.code) {
       case 'not_allowed': return `Refusé : ${e.message}`;
+      case 'slicer_missing': return 'Bambu Studio est introuvable sur le serveur : la découpe des variantes est indisponible.';
+      case 'stale_revision': return `Révision périmée : ${e.message}`;
       case 'backend_missing': return `Backend indisponible : ${e.message}`;
       default: return e.message;
     }

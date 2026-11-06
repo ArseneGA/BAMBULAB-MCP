@@ -1,24 +1,10 @@
-.pr { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--sp-4); align-items: start; }
-.pr-main, .pr-side { display: grid; gap: var(--sp-3); min-width: 0; }
-.pr-view { height: clamp(300px, 50vh, 560px); }
-.pr-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); align-items: start; }
-.pr-notice { margin-bottom: var(--sp-3); }
-.pr-node { display: inline-flex; gap: var(--sp-2); align-items: center; flex-wrap: wrap; min-width: 0; }
-.pr-sub { color: var(--text-3); font-size: var(--fs-xs); }
-.pr-empty { color: var(--text-2); font-size: var(--fs-sm); }
-.pr-diffs { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); font-size: var(--fs-sm); }
-.pr-diffs li { display: grid; gap: 2px; padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); }
-.pr-diffs li:last-child { border-bottom: 0; padding-bottom: 0; }
-.pr-diff-h { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: baseline; }
-.pr-diff-v { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: var(--fs-xs); overflow-wrap: anywhere; }
-.pr-rev { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.pr-sel { display: grid; gap: 4px; justify-items: start; padding: var(--sp-3); margin-bottom: var(--sp-3); border: 1px solid var(--accent); border-left-width: 3px; border-radius: var(--r-2); background: var(--accent-soft); }
-.pr-sel strong { font-size: var(--fs-md); overflow-wrap: anywhere; }
-.pr-row { display: grid; gap: var(--sp-2); padding: var(--sp-3) 0; border-top: 1px solid var(--line); }
-.pr-lbl { font-size: var(--fs-sm); }
-.pr-mods { display: grid; gap: var(--sp-2); }
-.pr-prov { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: space-between; color: var(--text-3); font-size: var(--fs-xs); }
-.pr-reset { border: 0; background: none; color: var(--accent); font-size: var(--fs-xs); text-decoration: underline; cursor: pointer; padding: 2px; }
-.pr-goal textarea { width: 100%; resize: vertical; height: auto; padding: var(--sp-2); font: inherit; }
-@media (max-width: 1000px) { .pr { grid-template-columns: minmax(0, 1fr); } .pr-view { height: clamp(260px, 44vh, 440px); } }
-@media (max-width: 700px) { .pr-pair { grid-template-columns: minmax(0, 1fr); } }
+.prep-form { display: grid; gap: var(--sp-3); }
+.prep-text { height: auto; min-height: 72px; padding: var(--sp-2) var(--sp-3); resize: vertical; font: inherit; line-height: 1.4; }
+.prep-rows { display: grid; gap: var(--sp-2); }
+.prep-row { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--line); border-left: 2px solid var(--accent); border-radius: var(--r-2); background: var(--surface-2); }
+.prep-row-head { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.prep-row-head > button { margin-left: auto; }
+.prep-row-grid { display: grid; grid-template-columns: 1fr auto; gap: var(--sp-3); align-items: end; }
+.prep-add { display: flex; gap: var(--sp-2); }
+.prep-add .select { flex: 1; }
+.prep-opts { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }

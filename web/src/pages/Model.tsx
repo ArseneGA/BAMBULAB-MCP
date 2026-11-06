@@ -119,8 +119,8 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
           </div>
         </div>
         <div className="mdl-actions">
-          <Button icon={<GitCompare size={15} />} onClick={() => nav('/comparaison')} title="Écran de démonstration : le serveur n'expose pas encore les variantes">Comparer <Tag tone="warn">bientôt</Tag></Button>
-          <Button variant="primary" icon={<SlidersHorizontal size={15} />} disabled={winOnly || trashed} onClick={() => nav('/preparation')} title={winOnly ? 'Fichier à copier sur Linux avant préparation' : "Écran de démonstration : le serveur n'expose pas encore la préparation"}>Préparer <Tag tone="warn">bientôt</Tag></Button>
+          <Button icon={<GitCompare size={15} />} onClick={() => nav('/comparaison')} title="Ouvre la dernière expérience de comparaison">Comparer</Button>
+          <Button variant="primary" icon={<SlidersHorizontal size={15} />} disabled={winOnly || trashed} onClick={() => nav(`/preparation?model=${id}`)} title={winOnly ? 'Fichier à copier sur Linux avant préparation' : 'Objectif de finition et variantes'}>Préparer</Button>
         </div>
       </div>
 

@@ -9,8 +9,8 @@ import './shell.css';
 
 export const spaces = [
   { path: 'bibliotheque', label: 'Bibliothèque', icon: Boxes, live: true },
-  { path: 'preparation', label: 'Préparation', icon: SlidersHorizontal, live: false },
-  { path: 'comparaison', label: 'Comparaison', icon: GitCompare, live: false },
+  { path: 'preparation', label: 'Préparation', icon: SlidersHorizontal, live: true },
+  { path: 'comparaison', label: 'Comparaison', icon: GitCompare, live: true },
   { path: 'materiaux', label: 'Matériaux', icon: Layers, live: false },
   { path: 'impression', label: 'Impression', icon: Printer, live: false },
 ] as const;

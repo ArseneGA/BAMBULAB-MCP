@@ -40,7 +40,27 @@ for (const [w, h] of [[1440, 900], [800, 700]]) {
     await page.waitForTimeout(300); await shot(page, 'import-dialogue-1440-light');
     await page.keyboard.press('Escape');
     await page.goto(`${base}/corbeille`); await page.waitForTimeout(500); await shot(page, 'corbeille-1440-light');
-    await page.goto(`${base}/preparation`); await page.waitForTimeout(800); await shot(page, 'preparation-bientot-1440-light');
+    await page.goto(`${base}/materiaux`); await page.waitForTimeout(800); await shot(page, 'materiaux-bientot-1440-light');
+    await page.goto(`${base}/impression`); await page.waitForTimeout(800); await shot(page, 'impression-bientot-1440-light');
+  }
+  // Préparation et comparaison réelles (objectif -> critères validés -> expérience -> découpes Bambu Studio).
+  if ((await (await fetch(`${base}/api/capabilities`)).json()).features.find((f) => f.id === 'slicing')?.available) {
+    const cale = list.models.find((m) => m.name.includes('cale')) ?? list.models[0];
+    await page.goto(`${base}/preparation?model=${cale.id}`); await theme(page, 'light');
+    await page.waitForSelector('.prep-text');
+    await page.getByPlaceholder(/solide mais rapide/).fill('solide mais rapide à imprimer');
+    for (const c of ['strength', 'speed']) { await page.getByLabel('Ajouter un critère').selectOption(c); await page.getByRole('button', { name: 'Ajouter', exact: true }).click(); }
+    await page.locator('.prep-row').first().getByLabel(/^load_direction/).selectOption('xy');
+    await page.getByRole('button', { name: "Valider l'objectif" }).click();
+    await page.getByText('Objectif validé').waitFor();
+    await page.evaluate(() => document.querySelector('.main').scrollTo(0, 0)); await page.waitForTimeout(400); await shot(page, `preparation-${w}-light`);
+    await page.getByText('Objectif validé').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot(page, `preparation-objectif-${w}-light`);
+    await page.evaluate(() => document.querySelector('.main').scrollTo(0, 0));
+    await page.getByLabel(/Nombre de variantes/).selectOption('3');
+    await page.getByRole('button', { name: /Créer l'expérience/ }).click();
+    await page.waitForURL(/comparaison/);
+    await page.waitForFunction(() => document.querySelectorAll('.cmp thead .tag-ok').length >= 4, null, { timeout: 180000 });
+    for (const t of ['light', 'dark']) { await theme(page, t); await page.waitForTimeout(300); await shot(page, `comparaison-${w}-${t}`); }
   }
   await ctx.close();
 }

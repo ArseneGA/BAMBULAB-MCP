@@ -1,26 +1,28 @@
 /**
  * Fonctions de l'interface qui n'ont PAS encore d'endpoint HTTP côté bambud.
  *
- * Règle du jalon 3 : on n'invente aucun endpoint. Chaque besoin est déclaré ici
- * avec ce que l'écran attend, et l'écran correspondant reste alimenté par les
- * données de démonstration (`data/demo.ts`) avec un bandeau « Bientôt branché ».
- * Quand le serveur expose l'endpoint, on remplace l'entrée par un vrai appel dans
- * `client.ts` et on retire l'entrée de cette liste.
+ * Règle : on n'invente aucun endpoint. Chaque besoin est déclaré ici avec ce que
+ * l'écran attend. Les écrans concernés restent alimentés par les données de
+ * démonstration (`data/demo.ts`) sous un bandeau « Bientôt branché » ; quand le
+ * serveur expose l'endpoint, on remplace l'entrée par un vrai appel dans
+ * `client.ts` et on la retire d'ici.
  *
- * Ce fichier est la liste de travail du branchement : un besoin = une ligne.
+ * Branché depuis le jalon 3 (retiré de cette liste) : objectifs (/api/goal-criteria,
+ * /api/goals), expériences et comparaison (/api/experiments, /compare), application
+ * de variante (/api/variants/apply), découpe réelle par Bambu Studio.
  */
 
 export type PendingId =
-  | 'goals' | 'variants' | 'slicing' | 'materials' | 'printer_status' | 'printer_upload' | 'print_start' | 'print_progress'
-  | 'windows_agent' | 'project_state' | 'preview_capture' | 'analyze' | 'export_files';
+  | 'materials' | 'printer_status' | 'printer_upload' | 'print_start' | 'print_progress'
+  | 'windows_agent' | 'zone_overrides' | 'experiments_list' | 'analyze' | 'export_files' | 'record_result_ui';
 
 export interface PendingNeed {
   id: PendingId;
   /** Écran concerné. */
   screen: 'Préparation' | 'Comparaison' | 'Matériaux' | 'Impression' | 'Barre du haut' | 'Fiche modèle';
-  /** Ce que l'écran affiche ou déclenche aujourd'hui en démonstration. */
+  /** Ce que l'écran affiche ou déclenche aujourd'hui. */
   today: string;
-  /** Besoin côté serveur : outil MCP du dossier §6 / endpoint HTTP à exposer, avec forme attendue. */
+  /** Besoin côté serveur : outil MCP / endpoint HTTP à exposer, avec forme attendue. */
   needs: string;
   /** Jalon qui doit le fournir. */
   milestone: string;
@@ -28,28 +30,22 @@ export interface PendingNeed {
 
 export const PENDING: PendingNeed[] = [
   {
-    id: 'goals', screen: 'Préparation',
-    today: 'Objectif de finition en texte libre et réglages par objet/zone, conservés en sessionStorage.',
-    needs: "MCP set_manufacturing_goals ; HTTP GET/PUT /api/projects/{id}/goals -> { goal_text, criteria[], ambiguities[], revision } ; GET /api/projects/{id} (révision, objets, zones, réglages effectifs avec provenance profil/objet/zone).",
-    milestone: 'objectifs et variantes (internal/goals)',
+    id: 'zone_overrides', screen: 'Préparation',
+    today: "Objectif et variantes sont réels, mais les réglages restent globaux à la pièce : pas de sélection d'objet ou de zone, pas d'édition manuelle des réglages effectifs avec leur provenance.",
+    needs: "GET /api/models/{id}/parts (sous-parties stables : nœuds du GLB, id + libellé) ; POST /api/profiles/modify existe côté serveur mais n'est pas encore utilisé par l'interface (édition de profil : réglages effectifs, provenance profil/objet/zone, base_revision) ; variantes par zone côté goals.",
+    milestone: 'objectifs (suite) : zones et édition de profil',
   },
   {
-    id: 'project_state', screen: 'Préparation',
-    today: "Arbre objet/zones issu d'une forme de démonstration, pas du fichier réel.",
-    needs: "GET /api/models/{id}/parts -> sous-parties stables (nœuds du GLB : id + libellé) et GET/PUT /api/projects/{id}/overrides avec expected_revision (conflit 409 si révision concurrente).",
-    milestone: 'objectifs et variantes (internal/goals)',
+    id: 'experiments_list', screen: 'Comparaison',
+    today: "L'écran s'ouvre sur ?experiment=<id> ou sur la dernière expérience créée dans ce navigateur (localStorage).",
+    needs: 'GET /api/experiments?model_id=... -> liste { id, goal_id, model_version_id, created_at, état global } pour retrouver une expérience passée.',
+    milestone: 'objectifs (suite)',
   },
   {
-    id: 'variants', screen: 'Comparaison',
-    today: 'Trois variantes fictives, mesures calculées par une formule de démonstration.',
-    needs: "MCP create_experiment / compare_variants / apply_variant ; HTTP POST /api/experiments, GET /api/experiments/{id} -> variantes { id, label, overrides, job_id, metrics{time_s, filament_g, layers, support_volume_mm3}, estimated:true } ; POST /api/variants/{id}/apply { expected_project_revision }.",
-    milestone: 'objectifs et variantes (internal/goals)',
-  },
-  {
-    id: 'slicing', screen: 'Comparaison',
-    today: "Estimations de temps/matière/supports de démonstration, étiquetées « démo ».",
-    needs: "POST /api/slice { model_id, version_id, machine, process, filament, overrides } -> { job_id } (Bambu Studio CLI, J5) ; résultat du job : métriques réelles du 3MF slicé + artifact_id + avertissements ; GET /api/artifacts/{id}.",
-    milestone: 'branchement du slicing (internal/slicer + agent Windows)',
+    id: 'record_result_ui', screen: 'Comparaison',
+    today: "Le retour d'expérience après impression (record_print_result, mémoire des essais) n'a pas d'écran.",
+    needs: "Écran de saisie branché sur POST /api/print-results (déjà exposé) ; lecture de la mémoire : GET /api/print-memory?model_id=... (équivalent de get_print_memory, non exposé en HTTP).",
+    milestone: 'objectifs (suite) / impression',
   },
   {
     id: 'materials', screen: 'Matériaux',
@@ -65,13 +61,13 @@ export const PENDING: PendingNeed[] = [
   },
   {
     id: 'printer_upload', screen: 'Impression',
-    today: "Envoi simulé avec minuterie.",
-    needs: "POST /api/printers/{id}/upload { artifact_id, idempotency_key } -> { job_id } ; validation préalable POST /api/artifacts/{id}/validate { printer_id } -> rapport et compatibilité.",
+    today: 'Envoi simulé avec minuterie.',
+    needs: "POST /api/printers/{id}/upload { artifact_id, idempotency_key } -> { job_id } ; validation préalable POST /api/artifacts/{id}/validate { printer_id } -> rapport et compatibilité ; artefact slicé : GET /api/artifacts/{sha} (le candidat expose artifact_sha256).",
     milestone: 'imprimante LAN (internal/printer, J7)',
   },
   {
     id: 'print_start', screen: 'Impression',
-    today: "Confirmation « plateau vide » + lancement simulés ; aucune commande envoyée.",
+    today: 'Confirmation « plateau vide » + lancement simulés ; aucune commande envoyée.',
     needs: "POST /api/printers/{id}/start { remote_ref, plate, material, confirmation_token } : le jeton de confirmation vient de contracts.confirmation (usage unique, lié à l'empreinte du fichier, de l'imprimante, du plateau et de la matière).",
     milestone: 'imprimante LAN (internal/printer, J7)',
   },
@@ -86,12 +82,6 @@ export const PENDING: PendingNeed[] = [
     today: "Pastille « Windows » : affichée hors ligne tant que /api/capabilities annonce windows_agent indisponible.",
     needs: "GET /api/agents -> { id, name, online, last_seen, indexed_files, pending_copies } ; POST /api/agents/{id}/copy { file_ids[] } pour demander la copie d'un fichier windows_only.",
     milestone: 'agent Windows (cmd/bambu-agent)',
-  },
-  {
-    id: 'preview_capture', screen: 'Fiche modèle',
-    today: "Bouton « Préparer » mène à l'écran de démonstration.",
-    needs: "POST /api/models/{id}/prepare { version_id } -> project_id (crée le projet de préparation lié à la version immuable).",
-    milestone: 'objectifs et variantes (internal/goals)',
   },
   {
     id: 'analyze', screen: 'Fiche modèle',
