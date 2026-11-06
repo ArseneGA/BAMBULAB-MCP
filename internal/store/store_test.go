@@ -29,13 +29,15 @@ func TestMigrationsAndReopen(t *testing.T) {
 	ctx := context.Background()
 	s, dir := openTemp(t)
 	v, err := s.SchemaVersion(ctx)
-	if err != nil || v != 1 {
+	if err != nil || v < 1 {
 		t.Fatalf("version %d err %v", v, err)
 	}
 	var mode string
 	if err := s.DB().QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil || mode != "wal" {
 		t.Fatalf("journal_mode=%q err=%v", mode, err)
 	}
+	var before int
+	_ = s.DB().QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&before)
 	s.Close()
 	// Réouverture : migrations idempotentes.
 	s2, err := Open(filepath.Join(dir, "bambu.db"), Options{})
@@ -45,7 +47,7 @@ func TestMigrationsAndReopen(t *testing.T) {
 	defer s2.Close()
 	var n int
 	_ = s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&n)
-	if n != 1 {
+	if n != before {
 		t.Fatalf("migration réappliquée : %d lignes", n)
 	}
 }

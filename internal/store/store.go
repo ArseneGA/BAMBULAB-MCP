@@ -58,7 +58,10 @@ func Open(path string, opts Options) (*Store, error) {
 	q.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", opts.BusyTimeout.Milliseconds()))
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "foreign_keys(1)")
-	q.Add("_pragma", "synchronous(NORMAL)")
+	q.Add("_pragma", "synchronous(FULL)")
+	q.Add("_pragma", "recursive_triggers(1)")
+	// BEGIN IMMEDIATE pour toute transaction : verrou d'écriture pris d'emblée.
+	q.Set("_txlock", "immediate")
 	dsn := path + "?" + q.Encode()
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

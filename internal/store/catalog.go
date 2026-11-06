@@ -263,39 +263,3 @@ var docTables = map[string]bool{
 	"materials": true, "printer_models": true, "printers": true,
 	"print_jobs": true, "print_confirmations": true, "manufacturing_goals": true,
 }
-
-// PutDoc insère ou remplace un document JSON ; v est sérialisé en JSON.
-func (s *Store) PutDoc(ctx context.Context, actor, table, id string, v any) error {
-	if !docTables[table] {
-		return fmt.Errorf("table de documents inconnue %q", table)
-	}
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return s.Tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO `+table+`(id,doc,updated_at) VALUES(?,?,?)
-			 ON CONFLICT(id) DO UPDATE SET doc=excluded.doc, updated_at=excluded.updated_at`,
-			id, string(raw), FormatTime(s.now())); err != nil {
-			return err
-		}
-		return s.AuditTx(ctx, tx, actor, table+".put", table, id, nil)
-	})
-}
-
-// GetDoc décode un document dans out.
-func (s *Store) GetDoc(ctx context.Context, table, id string, out any) error {
-	if !docTables[table] {
-		return fmt.Errorf("table de documents inconnue %q", table)
-	}
-	var doc string
-	err := s.db.QueryRowContext(ctx, `SELECT doc FROM `+table+` WHERE id=?`, id).Scan(&doc)
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%s %s : %w", table, id, ErrNotFound)
-	}
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal([]byte(doc), out)
-}
