@@ -38,7 +38,7 @@ func TestAppViewResources(t *testing.T) {
 	for _, r := range lr.Resources {
 		found[r.URI] = r
 	}
-	for _, uri := range []string{mcpserver.SearchViewURI, mcpserver.ModelViewURI} {
+	for _, uri := range []string{mcpserver.SearchViewURI, mcpserver.ModelViewURI, mcpserver.PrintConfirmViewURI} {
 		r := found[uri]
 		if r == nil {
 			t.Fatalf("ressource %s non déclarée : %v", uri, lr.Resources)
@@ -98,7 +98,7 @@ func TestAppToolLinks(t *testing.T) {
 	for _, tt := range tl.Tools {
 		tools[tt.Name] = tt
 	}
-	for name, uri := range map[string]string{"search_models": mcpserver.SearchViewURI, "get_model_details": mcpserver.ModelViewURI} {
+	for name, uri := range map[string]string{"search_models": mcpserver.SearchViewURI, "get_model_details": mcpserver.ModelViewURI, "request_print_confirmation": mcpserver.PrintConfirmViewURI} {
 		tt := tools[name]
 		if tt == nil {
 			t.Fatalf("outil %s absent", name)

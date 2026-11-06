@@ -1,314 +1,291 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PendingBanner } from './common';
-import type { ReactNode } from 'react';
-import { AlertTriangle, Check, Info } from 'lucide-react';
-import { Button, Field, Panel, Select, Tag, Toggle } from '../components';
-import { demoAvailability, demoMaterials, demoPrinter } from '../data/demo';
-import './materials.css';
+import { ExternalLink, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Button, EmptyState, Field, Input, List, Panel, Select, StatusDot, Tag, useToast } from '../components';
+import { api, assetUrl, describeError } from '../api/client';
+import { useAsync } from '../api/hooks';
+import type { ConfirmationView, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
+import { Async, Dialog, Notice, PendingBanner, fmtDate } from './common';
 import './print.css';
 
-/* Machine d'états métier (dossier §10). Tout est SIMULÉ : aucun réseau. */
-type St =
-  | 'DRAFT' | 'PREPARED' | 'SLICING' | 'VALIDATED' | 'UPLOADING' | 'UPLOADED'
-  | 'AWAITING_PRINT_CONFIRMATION' | 'START_REQUESTED' | 'PRINTING' | 'COMPLETED'
-  | 'FAILED' | 'CANCELLED' | 'START_UNKNOWN';
-const MAIN: St[] = ['DRAFT', 'PREPARED', 'SLICING', 'VALIDATED', 'UPLOADING', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION', 'START_REQUESTED', 'PRINTING', 'COMPLETED'];
-const stLabel: Record<St, string> = {
-  DRAFT: 'Brouillon', PREPARED: 'Préparé', SLICING: 'Slicing', VALIDATED: 'Validé', UPLOADING: 'Envoi', UPLOADED: 'Envoyé',
-  AWAITING_PRINT_CONFIRMATION: 'Attente de confirmation', START_REQUESTED: 'Démarrage demandé', PRINTING: 'Impression', COMPLETED: 'Terminé',
-  FAILED: 'Échec', CANCELLED: 'Annulé', START_UNKNOWN: 'Démarrage incertain',
+const STATE_LABEL: Record<PrintState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
+  DRAFT: { label: 'brouillon' }, PREPARED: { label: 'préparée' }, SLICING: { label: 'découpe en cours', tone: 'warn' }, VALIDATED: { label: 'découpée' },
+  UPLOADING: { label: 'envoi en cours', tone: 'warn' }, UPLOADED: { label: 'déposée sur l\'imprimante' }, AWAITING_PRINT_CONFIRMATION: { label: 'attend votre confirmation', tone: 'warn' },
+  START_REQUESTED: { label: 'lancement demandé', tone: 'warn' }, PRINTING: { label: 'en cours d\'impression', tone: 'ok' }, COMPLETED: { label: 'terminée', tone: 'ok' },
+  FAILED: { label: 'échec', tone: 'err' }, CANCELLED: { label: 'annulée' }, START_UNKNOWN: { label: 'lancement incertain', tone: 'err' },
 };
-
-const FILE = { name: 'pince_25_v3.3mf', sha: '9f2c1a7e04b8d3516c2e90a47f1b6d28e5c3a0974d1f8b62ae07c3d95b41e6f0', sizeMB: 2.2, dims: '48 × 32 × 20 mm' };
-const TOTAL_LAYERS = 120;
-const MIN_PER_LAYER = 1.1; // minutes simulées par couche
-const plates = [{ value: 'textured-pei', label: 'Plateau PEI texturé (démo)' }, { value: 'smooth-pei', label: 'Plateau PEI lisse (démo)' }];
-const plateLabel = (v: string) => plates.find((p) => p.value === v)?.label ?? v;
-
-interface LogEntry { t: string; text: string }
-interface S {
-  status: St; plate: string; materialId: string; fileOnLinux: boolean; printerOk: boolean;
-  armNetLoss: boolean; armFail: boolean;
-  progress: number; layer: number;
-  confirmation: { key: string; token: string } | null; emptyChecked: boolean;
-  notice: { tone: 'warn' | 'err' | 'info'; text: string } | null; log: LogEntry[];
-}
-const initial: S = {
-  status: 'DRAFT', plate: 'textured-pei', materialId: '', fileOnLinux: true, printerOk: true, armNetLoss: false, armFail: false,
-  progress: 0, layer: 0, confirmation: null, emptyChecked: false, notice: null, log: [],
+const STEPS = ['Découpe', 'Validation', 'Envoi', 'Confirmation', 'Lancement'];
+const stepIndex = (j: PrintJob): number => {
+  if (['DRAFT', 'PREPARED', 'SLICING'].includes(j.state)) return 0;
+  if (j.state === 'VALIDATED') return j.validation?.ok ? 2 : 1;
+  if (j.state === 'UPLOADING') return 2;
+  if (['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(j.state)) return 3;
+  return 4;
 };
-const clock = () => new Date().toLocaleTimeString('fr-FR');
-const withLog = (s: S, text: string): LogEntry[] => [{ t: clock(), text }, ...s.log].slice(0, 40);
-const to = (s: S, status: St, extra: Partial<S> = {}, note?: string): S => ({ ...s, ...extra, status, log: withLog(s, note ?? `${s.status} → ${status}`) });
-
-interface Check { tone: 'ok' | 'warn' | 'err'; label: string; why: string }
-function buildReport(s: S): Check[] {
-  const m = demoMaterials.find((x) => x.id === s.materialId);
-  const out: Check[] = [];
-  out.push(s.fileOnLinux
-    ? { tone: 'ok', label: 'Fichier présent sur le serveur Linux', why: 'Copie vérifiée par empreinte (démo).' }
-    : { tone: 'err', label: 'Fichier disponible uniquement sur Windows', why: "Le PC Windows est éteint et le fichier n'est pas copié sur Linux. Rallume le PC ou importe le fichier avant de continuer." });
-  out.push({ tone: 'ok', label: 'Géométrie fermée et lisible (démo)', why: 'Contrôle simulé, aucune analyse réelle n\'a eu lieu.' });
-  out.push({ tone: 'ok', label: `Encombrement ${FILE.dims}`, why: 'Tient sur le plateau (cote de démonstration).' });
-  if (!m) out.push({ tone: 'err', label: 'Aucune matière affectée', why: 'Choisis une matière dans « Paramètres de lancement ». Aucune n\'est prise par défaut.' });
-  else if (m.p1sCompatibility !== 'compatible déclaré') out.push({ tone: 'warn', label: `Compatibilité P1S de ${m.family} : ${m.p1sCompatibility}`, why: 'Non démontrée. Tu peux continuer, la responsabilité du choix reste à toi.' });
-  else out.push({ tone: 'ok', label: `Matière ${m.family} : compatibilité déclarée par le fabricant`, why: 'Déclaration, pas une vérification sur ta machine.' });
-  out.push({ tone: 'warn', label: 'Firmware de la P1S inconnu', why: 'La voie d\'envoi et de commande ne peut pas être qualifiée tant qu\'il n\'est pas relevé.' });
-  out.push({ tone: 'warn', label: 'Plateau vide : non vérifiable à distance', why: 'Une imprimante au repos ne prouve pas que le plateau est vide. Tu le confirmeras avant le lancement.' });
-  return out;
-}
+const transient = (s: PrintState) => ['SLICING', 'UPLOADING', 'START_REQUESTED', 'PRINTING'].includes(s);
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : `k-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 export function PrintPage() {
-  const [s, setS] = useState<S>(initial);
-  const mat = demoMaterials.find((x) => x.id === s.materialId);
-  const report = useMemo(() => buildReport(s), [s.materialId, s.fileOnLinux]); // eslint-disable-line react-hooks/exhaustive-deps
-  const blockers = report.filter((c) => c.tone === 'err');
-  const key = `${demoPrinter.id}|${FILE.sha}|${s.plate}|${s.materialId}`;
-  const sRef = useRef(s); sRef.current = s;
+  const [pid, setPid] = useState<string>('');
+  const [jid, setJid] = useState<string>('');
+  const printers = useAsync((s) => api.printers(s), []);
+  const jobs = useAsync((s) => api.printJobs(s), []);
+  const reloadJobs = useRef(jobs.reload); reloadJobs.current = jobs.reload;
+  const busy = jobs.data?.print_jobs.some((j) => transient(j.state));
+  useEffect(() => { if (!busy) return; const t = window.setInterval(() => reloadJobs.current(), 3000); return () => window.clearInterval(t); }, [busy]);
+  const [addOpen, setAddOpen] = useState(false);
 
-  /* Simulation temporelle, pilotée par l'état. */
-  useEffect(() => {
-    const st = s.status;
-    if (st === 'SLICING') {
-      const id = window.setInterval(() => setS((p) => {
-        if (p.status !== 'SLICING') return p;
-        const n = Math.min(100, p.progress + 10);
-        if (n < 100) return { ...p, progress: n };
-        const errs = buildReport(p).filter((c) => c.tone === 'err');
-        return errs.length
-          ? to(p, 'PREPARED', { progress: 0, notice: { tone: 'err', text: `Validation refusée : ${errs.map((e) => e.label).join(' ; ')}.` } }, 'Slicing terminé, validation refusée')
-          : to(p, 'VALIDATED', { progress: 100, notice: null }, 'Slicing terminé, rapport sans erreur bloquante');
-      }), 160);
-      return () => window.clearInterval(id);
-    }
-    if (st === 'UPLOADING') {
-      const id = window.setInterval(() => setS((p) => {
-        if (p.status !== 'UPLOADING') return p;
-        if (!p.printerOk) return to(p, 'VALIDATED', { progress: 0, notice: { tone: 'err', text: 'Envoi interrompu : imprimante indisponible. Rien n\'a été lancé ; relance l\'envoi quand elle est joignable.' } }, 'Envoi interrompu, imprimante injoignable');
-        const n = Math.min(100, p.progress + 8);
-        if (n < 100) return { ...p, progress: n };
-        return to(p, 'UPLOADED', { progress: 100 }, 'Fichier reçu par la P1S (aucun chauffage, aucun mouvement)');
-      }), 180);
-      return () => window.clearInterval(id);
-    }
-    if (st === 'START_REQUESTED') {
-      const id = window.setTimeout(() => setS((p) => {
-        if (p.status !== 'START_REQUESTED') return p;
-        return p.armNetLoss
-          ? to(p, 'START_UNKNOWN', { armNetLoss: false, notice: null }, 'Commande envoyée, puis perte réseau : aucun accusé')
-          : to(p, 'PRINTING', { layer: 0 }, 'Commande acceptée, état PRINTING observé');
-      }), 1400);
-      return () => window.clearTimeout(id);
-    }
-    if (st === 'PRINTING') {
-      const id = window.setInterval(() => setS((p) => {
-        if (p.status !== 'PRINTING') return p;
-        const n = p.layer + 1;
-        if (p.armFail && n >= 38) return to(p, 'FAILED', { layer: n, armFail: false }, `Échec simulé à la couche ${n} (démo)`);
-        if (n >= TOTAL_LAYERS) return to(p, 'COMPLETED', { layer: TOTAL_LAYERS, confirmation: null, emptyChecked: false }, 'Impression terminée');
-        return { ...p, layer: n };
-      }), 260);
-      return () => window.clearInterval(id);
-    }
-  }, [s.status]);
-
-  /* Changer un élément lié invalide la confirmation. */
-  const change = (patch: Partial<Pick<S, 'plate' | 'materialId'>>, what: string) => setS((p) => {
-    if (['START_REQUESTED', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN', 'UPLOADING'].includes(p.status)) return p;
-    const next = { ...p, ...patch };
-    const log = withLog(p, `${what} modifié`);
-    if (p.status === 'AWAITING_PRINT_CONFIRMATION' || p.status === 'UPLOADED') {
-      return { ...next, status: 'UPLOADED', confirmation: null, emptyChecked: false, log: [{ t: clock(), text: 'Confirmation invalidée' }, ...log].slice(0, 40), notice: { tone: 'warn', text: `Confirmation invalidée : ${what} a changé. Redemande la confirmation pour le lancer.` } };
-    }
-    if (p.status === 'SLICING' || p.status === 'VALIDATED') return { ...next, status: 'PREPARED', progress: 0, log, notice: { tone: 'warn', text: `${what} a changé : le slicing et la validation sont à refaire.` } };
-    return { ...next, log };
-  });
-
-  const reset = () => setS({ ...initial, fileOnLinux: s.fileOnLinux, printerOk: s.printerOk, armNetLoss: s.armNetLoss, armFail: s.armFail, log: withLog(s, 'Nouveau brouillon : aucune autorisation précédente n\'est reprise') });
-  const idx = MAIN.indexOf(s.status);
-  const locked = ['UPLOADING', 'START_REQUESTED', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN'].includes(s.status);
-  const confirmValid = s.confirmation?.key === key;
-  const canStart = s.status === 'AWAITING_PRINT_CONFIRMATION' && s.emptyChecked && s.printerOk && !!mat;
-
-  const startPrint = () => {
-    if (!canStart) return;
-    setS((p) => to(p, 'START_REQUESTED', { confirmation: { key, token: `cf-${FILE.sha.slice(0, 6)}-${Date.now().toString(36)}` } }, 'Confirmation explicite reçue, commande de démarrage envoyée (simulé)'));
-  };
-
-  const remaining = Math.round((TOTAL_LAYERS - s.layer) * MIN_PER_LAYER);
-  const elapsed = Math.round(s.layer * MIN_PER_LAYER);
-  const fmt = (m: number) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+  const plist = printers.data?.printers ?? [];
+  const printer = plist.find((p) => p.id === pid) ?? plist[0];
+  const job = jobs.data?.print_jobs.find((j) => j.id === jid);
 
   return (
     <>
-      <PendingBanner screen="Impression" />
-      <div className="page-head"><span className="eyebrow">Espace</span><h1>Impression</h1><p>Parcours de lancement simulé : validation, envoi, confirmation explicite, suivi. Rien ne contacte l'imprimante ni le réseau.</p></div>
-      <div className="pr-col">
-        <nav aria-label="Étapes de l'impression">
-          <ol className="pr-steps">
-            {MAIN.map((m, i) => (
-              <li key={m} data-s={idx > i ? 'done' : undefined} aria-current={s.status === m ? 'step' : undefined} title={stLabel[m]}>
-                {idx > i && <Check size={11} aria-hidden />}{m}
-              </li>
-            ))}
-          </ol>
-          <p className="src-note" style={{ marginTop: 'var(--sp-2)' }}>
-            État actuel : <strong className="mono">{s.status}</strong> ({stLabel[s.status]}){['FAILED', 'CANCELLED', 'START_UNKNOWN'].includes(s.status) && <> — sortie hors parcours nominal</>}
-          </p>
-        </nav>
-
-        {s.notice && <div className={`notice notice-${s.notice.tone === 'warn' ? '' : s.notice.tone}`.trim()} role="status"><AlertTriangle size={16} aria-hidden style={{ flex: 'none' }} /><span>{s.notice.text}</span></div>}
-        {!s.printerOk && !['PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN', 'START_REQUESTED'].includes(s.status) && (
-          <div className="notice notice-err" role="alert"><AlertTriangle size={16} aria-hidden style={{ flex: 'none' }} /><span><strong>Imprimante indisponible.</strong> L'envoi et le lancement sont bloqués. Vérifie qu'elle est allumée et sur le réseau, puis rétablis l'état dans les cas de démonstration.</span></div>
-        )}
-        {!s.fileOnLinux && <div className="notice notice-info"><Info size={16} aria-hidden style={{ flex: 'none' }} /><span>Agent Windows {demoAvailability.windowsAgent === 'offline' ? 'hors ligne' : 'éteint'} : le fichier n'existe que sur Windows et ne fait pas partie des capacités hors ligne.</span></div>}
-
-        {s.status === 'AWAITING_PRINT_CONFIRMATION' && (
-          <section className="confirm" role="dialog" aria-modal="false" aria-labelledby="confirm-title">
-            <h2 id="confirm-title">Le fichier {FILE.name} est envoyé sur la P1S. Veux-tu lancer cette impression ?</h2>
-            <dl className="kv">
-              <dt>Imprimante</dt><dd>{demoPrinter.name}</dd>
-              <dt>Empreinte du fichier</dt><dd className="mono">sha256 {FILE.sha.slice(0, 16)}…{FILE.sha.slice(-8)}</dd>
-              <dt>Plateau</dt><dd>{plateLabel(s.plate)}</dd>
-              <dt>Affectation matière</dt><dd>{mat ? `${mat.family} — ${mat.reference ?? 'référence inconnue'}` : <span className="unknown">aucune</span>}</dd>
-            </dl>
-            <p className="sim-note">Cette autorisation vaut pour cette impression uniquement. Si l'un de ces éléments change, elle est invalidée.</p>
-            <label className="check">
-              <input type="checkbox" checked={s.emptyChecked} onChange={(e) => setS((p) => ({ ...p, emptyChecked: e.target.checked }))} />
-              <span>J'ai vérifié que le plateau est vide. L'imprimante au repos ne le prouve pas.</span>
-            </label>
-            {!s.printerOk && <p className="notice notice-err" role="alert">Imprimante indisponible : lancement impossible pour l'instant.</p>}
-            <div className="row-wrap">
-              <Button variant="primary" disabled={!canStart || !confirmValid && !!s.confirmation} onClick={startPrint}>Oui, lancer l'impression</Button>
-              <Button variant="secondary" onClick={() => setS((p) => to(p, 'UPLOADED', { emptyChecked: false, notice: { tone: 'info', text: 'Lancement refusé. Le fichier reste sur la P1S ; rien n\'est démarré.' } }, 'Lancement refusé par l\'utilisateur'))}>Non, ne pas lancer</Button>
-            </div>
-          </section>
-        )}
-
-        {s.status === 'START_UNKNOWN' && (
-          <section className="confirm" aria-labelledby="unk-title" style={{ borderColor: 'var(--warn)' }}>
-            <h2 id="unk-title">Le démarrage est incertain</h2>
-            <p>La commande a été émise, puis la liaison a été perdue avant tout accusé. L'impression a peut-être démarré. <strong>Ne relance pas</strong> avant d'avoir interrogé l'état de l'imprimante : le protocole ne garantit pas un envoi unique.</p>
-            <p className="sim-note">Les deux boutons ci-dessous simulent le résultat de l'interrogation.</p>
-            <div className="row-wrap">
-              <Button variant="primary" onClick={() => setS((p) => to(p, 'PRINTING', { layer: 3, notice: { tone: 'info', text: 'Réconciliation : la P1S imprime déjà. Suivi repris.' } }, 'Réconciliation : état PRINTING observé'))}>Simuler : la P1S imprime</Button>
-              <Button variant="secondary" onClick={() => setS((p) => to(p, 'UPLOADED', { confirmation: null, emptyChecked: false, notice: { tone: 'info', text: 'Réconciliation : la P1S est au repos, rien n\'a démarré. Une nouvelle confirmation est nécessaire.' } }, 'Réconciliation : imprimante au repos, confirmation à refaire'))}>Simuler : la P1S est au repos</Button>
-            </div>
-          </section>
-        )}
-
-        <div className="pr-layout">
-          <div className="pr-col">
-            <Panel title="Parcours" actions={<Tag>simulé</Tag>}>
-              <div className="pr-col">
-                <dl className="kv">
-                  <dt>Fichier</dt><dd className="mono">{FILE.name}</dd>
-                  <dt>Empreinte</dt><dd className="mono">{FILE.sha.slice(0, 12)}…</dd>
-                  <dt>Taille</dt><dd className="mono">{FILE.sizeMB} Mo</dd>
-                </dl>
-
-                {s.status === 'DRAFT' && <div><Button variant="primary" onClick={() => setS((p) => to(p, 'PREPARED', { notice: null }, 'Projet préparé'))}>Préparer le fichier</Button></div>}
-                {s.status === 'PREPARED' && <div className="row-wrap"><Button variant="primary" onClick={() => setS((p) => to(p, 'SLICING', { progress: 0, notice: null }))}>Lancer le slicing et la validation</Button><span className="src-note">Simulé, durée réelle inconnue.</span></div>}
-                {s.status === 'SLICING' && <Progress label="Slicing et validation" value={s.progress} />}
-
-                {['VALIDATED', 'UPLOADING', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION', 'START_REQUESTED', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN'].includes(s.status) && (
-                  <Report items={report} />
-                )}
-                {s.status === 'VALIDATED' && (
-                  <div className="row-wrap">
-                    <Button variant="primary" disabled={!s.printerOk || blockers.length > 0} onClick={() => setS((p) => to(p, 'UPLOADING', { progress: 0, notice: null }, 'Envoi vers la P1S (simulé)'))}>Envoyer sur la P1S</Button>
-                    <span className="src-note">L'envoi ne déclenche ni chauffage ni mouvement.</span>
-                  </div>
-                )}
-                {s.status === 'UPLOADING' && <Progress label={`Transfert vers la P1S (simulé) — ${(FILE.sizeMB * s.progress / 100).toFixed(2)} / ${FILE.sizeMB} Mo`} value={s.progress} />}
-                {s.status === 'UPLOADED' && (
-                  <div className="row-wrap">
-                    <Button variant="primary" disabled={!s.printerOk} onClick={() => setS((p) => to(p, 'AWAITING_PRINT_CONFIRMATION', { notice: null, emptyChecked: false }, 'Confirmation demandée à l\'utilisateur'))}>Demander la confirmation de lancement</Button>
-                    <span className="src-note">Fichier présent sur la P1S, rien ne tourne.</span>
-                  </div>
-                )}
-                {s.status === 'START_REQUESTED' && <div role="status" className="row-wrap"><span className="spinner" aria-hidden /> Commande de démarrage envoyée, en attente de l'accusé et de l'état PRINTING…</div>}
-                {s.status === 'COMPLETED' && <div className="row-wrap"><Tag tone="ok">terminé</Tag> Pense à retirer la pièce avant la prochaine impression.</div>}
-                {s.status === 'FAILED' && <div className="row-wrap"><Tag tone="err">échec</Tag> L'impression s'est arrêtée à la couche {s.layer}. Inspecte la pièce et le plateau avant de relancer.</div>}
-                {s.status === 'CANCELLED' && <div className="row-wrap"><Tag tone="warn">annulé</Tag> Annulation demandée par toi à la couche {s.layer}.</div>}
-                {['COMPLETED', 'FAILED', 'CANCELLED'].includes(s.status) && <div><Button variant="secondary" onClick={reset}>Nouveau brouillon</Button></div>}
-              </div>
-            </Panel>
-
-            {['PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(s.status) && (
-              <Panel title="Suivi d'impression" actions={<Tag>valeurs simulées (démo)</Tag>}>
-                <div className="pr-col">
-                  <div className="tele">
-                    <div><span className="n">{s.layer} / {TOTAL_LAYERS}</span><span className="l">couche</span></div>
-                    <div><span className="n">{fmt(elapsed)}</span><span className="l">écoulé (démo)</span></div>
-                    <div><span className="n">{fmt(remaining)}</span><span className="l">restant (démo)</span></div>
-                    <div><span className="n">{s.status === 'PRINTING' ? '220 °C' : '—'}</span><span className="l">buse (démo)</span></div>
-                    <div><span className="n">{s.status === 'PRINTING' ? '60 °C' : '—'}</span><span className="l">plateau (démo)</span></div>
-                  </div>
-                  <Progress label="Avancement par couches" value={Math.round(s.layer / TOTAL_LAYERS * 100)} />
-                  {s.status === 'PRINTING' && <div><Button variant="danger" onClick={() => setS((p) => to(p, 'CANCELLED', { confirmation: null, emptyChecked: false }, `Annulation à la couche ${p.layer}`))}>Annuler l'impression</Button></div>}
-                </div>
-              </Panel>
-            )}
-          </div>
-
-          <div className="pr-col">
-            <Panel title="Paramètres de lancement">
-              <div className="pr-col">
-                <Field label="Imprimante"><Select disabled value={demoPrinter.id} onChange={() => {}} options={[{ value: demoPrinter.id, label: demoPrinter.name }]} /></Field>
-                <Field label="Plateau"><Select disabled={locked} value={s.plate} onChange={(e) => change({ plate: e.target.value }, 'le plateau')} options={plates} /></Field>
-                <Field label="Affectation matière">
-                  <Select disabled={locked} value={s.materialId} onChange={(e) => change({ materialId: e.target.value }, 'l\'affectation matière')}
-                    options={[{ value: '', label: 'Non affectée' }, ...demoMaterials.map((m) => ({ value: m.id, label: `${m.family} — ${m.reference ?? 'référence inconnue'}` }))]} />
-                </Field>
-                <p className="src-note">{locked ? 'Verrouillé : une impression est en cours ou terminée.' : 'Modifier un de ces éléments invalide la confirmation déjà donnée.'}</p>
-              </div>
-            </Panel>
-
-            <Panel title="Cas de démonstration" actions={<Tag>démo</Tag>}>
-              <div className="pr-col">
-                <Toggle label="Imprimante indisponible" checked={!s.printerOk} disabled={['START_REQUESTED', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN'].includes(s.status)}
-                  onChange={(v) => setS((p) => ({ ...p, printerOk: !v, log: withLog(p, v ? 'Imprimante indisponible (démo)' : 'Imprimante de nouveau joignable') }))} />
-                <Toggle label="Windows éteint (fichier seulement sur Windows)" checked={!s.fileOnLinux} disabled={locked || s.status === 'VALIDATED' || s.status === 'UPLOADED' || s.status === 'AWAITING_PRINT_CONFIRMATION'}
-                  onChange={(v) => setS((p) => ({ ...p, fileOnLinux: !v, log: withLog(p, v ? 'Windows éteint (démo)' : 'Fichier copié sur Linux') }))} />
-                <Toggle label="Perte réseau juste après le démarrage" checked={s.armNetLoss} disabled={['START_REQUESTED', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN'].includes(s.status)}
-                  onChange={(v) => setS((p) => ({ ...p, armNetLoss: v }))} />
-                <Toggle label="Échec en cours d'impression" checked={s.armFail} disabled={['COMPLETED', 'FAILED', 'CANCELLED'].includes(s.status)} onChange={(v) => setS((p) => ({ ...p, armFail: v }))} />
-                <div><Button size="sm" variant="ghost" onClick={() => setS({ ...initial, log: [{ t: clock(), text: 'Prototype réinitialisé' }] })}>Tout réinitialiser</Button></div>
-              </div>
-            </Panel>
-
-            <Panel title="Journal (simulé)">
-              {s.log.length === 0 ? <p className="unknown">Aucun événement.</p> : <ul className="log">{s.log.map((l, i) => <li key={i}><span>{l.t}</span><span>{l.text}</span></li>)}</ul>}
-            </Panel>
-          </div>
+      <div className="page-head"><span className="eyebrow">Espace</span><h1>Impression</h1><p>Registre des imprimantes, découpe, validation, dépôt du fichier puis demande de confirmation. Le lancement exige votre accord sur la page de confirmation du serveur : rien ne démarre sans elle.</p></div>
+      <PendingBanner screen="Impression" partial />
+      <div className="prt">
+        <div className="prt-col">
+          <Panel title="Imprimantes" actions={<Button size="sm" icon={<Plus size={13} />} onClick={() => setAddOpen(true)}>Ajouter</Button>}>
+            <Async state={printers} label="Chargement du registre" empty={(d) => d.printers.length === 0 ? <EmptyState title="Aucune imprimante enregistrée" text="Ajoutez votre imprimante (modèle, adresse sur le LAN, numéro de série) ; le code d'accès se saisit ensuite sur une page locale, jamais ici." action={<Button size="sm" variant="primary" icon={<Plus size={13} />} onClick={() => setAddOpen(true)}>Ajouter une imprimante</Button>} /> : null}>
+              {(d) => (
+                <>
+                  <List label="Imprimantes" items={d.printers} getKey={(p) => p.id} selectedKey={printer?.id} onSelect={(p) => setPid(p.id)}
+                    render={(p) => <span className="mat-list-item"><strong>{p.name}</strong><span>{p.model_name} · {p.host}</span></span>} />
+                  {printer && <PrinterCard key={printer.id} p={printer} />}
+                </>
+              )}
+            </Async>
+          </Panel>
+        </div>
+        <div className="prt-col prt-wide">
+          <NewJob printers={plist} defaultPrinter={printer?.id} onCreated={(j) => { setJid(j.id); jobs.reload(); }} />
+          <Panel title="Impressions" actions={<Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={jobs.reload}>Actualiser</Button>}>
+            <Async state={jobs} label="Chargement des impressions" empty={(d) => d.print_jobs.length === 0 ? <p className="hint" style={{ margin: 0 }}>Aucune impression. Découpez un modèle pour une imprimante ci-dessus.</p> : null}>
+              {(d) => <List label="Impressions" items={d.print_jobs} getKey={(j) => j.id} selectedKey={jid} onSelect={(j) => setJid(j.id)}
+                render={(j) => <span className="prt-job"><strong>{j.name ?? j.id}</strong><Tag tone={STATE_LABEL[j.state]?.tone}>{STATE_LABEL[j.state]?.label ?? j.state}</Tag><span className="mono dim">{fmtDate(j.updated_at)}</span></span>} />}
+            </Async>
+          </Panel>
+          {job && <JobDetail key={job.id} job={job} printer={plist.find((p) => p.id === job.printer_id)} onChange={jobs.reload} />}
         </div>
       </div>
+      <AddPrinter open={addOpen} onClose={() => setAddOpen(false)} onAdded={(p) => { setAddOpen(false); setPid(p.id); printers.reload(); }} />
     </>
   );
 }
 
-function Progress({ label, value }: { label: string; value: number }) {
+function PrinterCard({ p }: { p: PrinterView }) {
+  const st = useAsync((s) => api.printerStatus(p.id, s), [p.id]);
+  const reload = useRef(st.reload); reload.current = st.reload;
+  useEffect(() => { const t = window.setInterval(() => reload.current(), 5000); return () => window.clearInterval(t); }, []);
+  const d = st.data;
   return (
-    <div className="pr-col" style={{ gap: 'var(--sp-1)' }}>
-      <span className="src-note">{label} — {value} %</span>
-      <div className="bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}><span style={{ width: `${value}%` }} /></div>
+    <div className="prt-card">
+      <dl className="kv">
+        <dt>Modèle</dt><dd>{p.model_name}</dd>
+        <dt>Adresse</dt><dd className="mono">{p.host}</dd>
+        <dt>Série</dt><dd className="mono">{p.serial}</dd>
+        <dt>Buse / AMS</dt><dd className="mono">{p.nozzle_mm} mm · {p.ams_units} AMS</dd>
+        <dt>Code d'accès</dt><dd>{p.access_code_set ? <Tag tone="ok">enregistré</Tag> : <Tag tone="warn">à saisir</Tag>}</dd>
+      </dl>
+      {!p.access_code_set && p.setup_url && <Notice title="Code d'accès non saisi" actions={<a className="btn btn-secondary btn-sm" href={assetUrl(p.setup_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page de saisie</a>}>Le code se saisit sur une page locale du serveur ; il n'est jamais renvoyé ni affiché dans cette interface.</Notice>}
+      <div className="prt-status" role="status">
+        {st.error && !d ? <StatusDot status="offline" label="Statut indisponible" /> : !d ? <span className="hint">Lecture de l'état…</span> : (
+          <>
+            <StatusDot status={d.reachable ? 'online' : 'offline'} label={d.reachable ? `Joignable · ${d.state}` : 'Injoignable'} />
+            {d.error && <p className="hint" style={{ margin: 0 }}>{d.error}</p>}
+            {d.reachable && <p className="hint mono" style={{ margin: 0 }}>buse {Math.round(d.temps.nozzle)}/{Math.round(d.temps.nozzle_target)} °C · plateau {Math.round(d.temps.bed)}/{Math.round(d.temps.bed_target)} °C{d.total_layers > 0 && ` · couche ${d.layer}/${d.total_layers}`}{d.hms_count > 0 && ` · ${d.hms_count} alerte(s) HMS`}</p>}
+            {d.updated_at && <p className="hint" style={{ margin: 0 }}>Relevé à {fmtDate(d.updated_at)} : un état ancien n'autorise jamais un lancement.</p>}
+          </>
+        )}
+      </div>
     </div>
   );
 }
 
-function Report({ items }: { items: Check[] }): ReactNode {
+function AddPrinter({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (p: PrinterView) => void }) {
+  const models = useAsync((s) => api.printerModels(s), []);
+  const [f, setF] = useState({ name: '', model_id: '', host: '', serial: '', nozzle: '0.4', ams: '0', pin: '' });
+  const [err, setErr] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const ok = f.name.trim() && f.model_id && f.host.trim() && f.serial.trim();
+  const submit = async () => {
+    setBusy(true); setErr(undefined);
+    try { onAdded(await api.addPrinter({ name: f.name.trim(), model_id: f.model_id, host: f.host.trim(), serial: f.serial.trim(), nozzle_mm: Number(f.nozzle) || undefined, ams_units: Number(f.ams) || 0, pinned_sha256: f.pin.trim() || undefined })); }
+    catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open={open} onClose={onClose} title="Ajouter une imprimante" footer={<><Button onClick={onClose}>Annuler</Button><Button variant="primary" disabled={!ok || busy} onClick={submit}>{busy ? 'Ajout…' : 'Ajouter'}</Button></>}>
+      {err && <Notice tone="err" title="Ajout refusé">{err}</Notice>}
+      <Field label="Nom d'usage"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Atelier" /></Field>
+      <Field label="Modèle"><Select value={f.model_id} onChange={(e) => setF({ ...f, model_id: e.target.value })} options={[{ value: '', label: 'Choisir…' }, ...(models.data?.models ?? []).map((m) => ({ value: m.id, label: m.name }))]} /></Field>
+      <Field label="Adresse sur le réseau local (IP ou nom)"><Input value={f.host} onChange={(e) => setF({ ...f, host: e.target.value })} spellCheck={false} /></Field>
+      <Field label="Numéro de série"><Input value={f.serial} onChange={(e) => setF({ ...f, serial: e.target.value })} spellCheck={false} /></Field>
+      <Field label="Buse installée (mm)"><Input value={f.nozzle} onChange={(e) => setF({ ...f, nozzle: e.target.value })} inputMode="decimal" /></Field>
+      <Field label="Nombre d'AMS raccordés"><Select value={f.ams} onChange={(e) => setF({ ...f, ams: e.target.value })} options={[0, 1, 2, 3, 4].map((n) => ({ value: String(n), label: String(n) }))} /></Field>
+      <Field label="Empreinte SHA-256 du certificat de l'imprimante (relevée hors bande)"><Input value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value })} spellCheck={false} placeholder="64 caractères hexadécimaux" /></Field>
+      <p className="hint" style={{ margin: 0 }}>Sans empreinte, le service refuse de se connecter : la vérification du certificat n'est jamais désactivée silencieusement.</p>
+      <p className="hint" style={{ margin: 0 }}>Le code d'accès LAN n'est pas demandé ici : après l'ajout, une page locale du serveur le recueille.</p>
+    </Dialog>
+  );
+}
+
+function NewJob({ printers, defaultPrinter, onCreated }: { printers: PrinterView[]; defaultPrinter?: string; onCreated: (j: PrintJob) => void }) {
+  const toast = useToast();
+  const models = useAsync((s) => api.models({ limit: 100, sort: 'name' }, s), []);
+  const [model, setModel] = useState('');
+  const [printer, setPrinter] = useState('');
+  const [busy, setBusy] = useState(false);
+  const pr = printer || defaultPrinter || '';
+  const go = async () => {
+    setBusy(true);
+    try { const j = await api.createPrintJob({ model_id: model, printer_id: pr, plate: 1, idempotency_key: uuid() }); toast('ok', 'Découpe lancée.'); onCreated(j); }
+    catch (e) { toast('err', describeError(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Panel title="Nouvelle impression">
+      <div className="prt-new">
+        <Field label="Modèle (dernière version, profil appliqué le cas échéant)"><Select value={model} onChange={(e) => setModel(e.target.value)} options={[{ value: '', label: 'Choisir…' }, ...(models.data?.models ?? []).filter((m) => m.formats.some((f) => ['stl', 'obj', '3mf'].includes(f))).map((m) => ({ value: m.id, label: m.name }))]} /></Field>
+        <Field label="Imprimante"><Select value={pr} onChange={(e) => setPrinter(e.target.value)} options={[{ value: '', label: 'Choisir…' }, ...printers.map((p) => ({ value: p.id, label: `${p.name} (${p.model_name})` }))]} /></Field>
+        <Button variant="primary" disabled={!model || !pr || busy} onClick={go}>{busy ? 'Création…' : 'Découper pour cette imprimante'}</Button>
+      </div>
+    </Panel>
+  );
+}
+
+function trays(ams: number): string[] { return ['ext', ...Array.from({ length: ams * 4 }, (_, i) => `ams${Math.floor(i / 4) + 1}:${(i % 4) + 1}`)]; }
+
+function JobDetail({ job, printer, onChange }: { job: PrintJob; printer?: PrinterView; onChange: () => void }) {
+  const toast = useToast();
+  const step = stepIndex(job);
+  const filaments = job.summary?.filament_presets ?? [];
+  const [assign, setAssign] = useState<FilamentAssignment[]>(() => (job.assignments?.length ? job.assignments : (filaments.length ? filaments : ['']).map((_, i) => ({ filament_slot: i + 1, tray: 'ext', material_id: '' }))));
+  const [report, setReport] = useState<ValidationReport | undefined>(job.validation);
+  const [upload, setUpload] = useState<UploadOutput>();
+  const [conf, setConf] = useState<ConfirmationView>();
+  const [start, setStart] = useState<StartOutput>();
+  const [busy, setBusy] = useState<string | null>(null);
+  const upKey = useRef(uuid()), startKey = useRef(uuid());
+  const complete = assign.every((a) => a.material_id.trim() !== '');
+  const wrap = async (name: string, fn: () => Promise<void>) => { setBusy(name); try { await fn(); } catch (e) { toast('err', describeError(e)); } finally { setBusy(null); } };
+
+  // Confirmation déjà demandée : relecture régulière jusqu'à l'approbation humaine.
+  const cid = conf?.confirmation_id ?? job.confirmation_id;
+  useEffect(() => {
+    if (!cid || start || !['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job.state)) return;
+    let alive = true;
+    const tick = () => api.confirmation(cid).then((c) => alive && setConf(c), () => undefined);
+    void tick(); const t = window.setInterval(tick, 2500);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [cid, job.state, start]);
+
+  const live = useAsync((s) => api.printStatus(job.id, s), [job.id, job.state]);
+  const liveReload = useRef(live.reload); liveReload.current = live.reload;
+  useEffect(() => { if (!['PRINTING', 'START_REQUESTED'].includes(job.state)) return; const t = window.setInterval(() => liveReload.current(), 4000); return () => window.clearInterval(t); }, [job.state]);
+  const pg = live.data?.printer;
+  const trayOpts = useMemo(() => trays(printer?.ams_units ?? 0).map((t) => ({ value: t, label: t === 'ext' ? 'bobine externe' : t.replace('ams', 'AMS ').replace(':', ' · bobine ') })), [printer?.ams_units]);
+  const setA = (i: number, p: Partial<FilamentAssignment>) => setAssign((l) => l.map((a, k) => (k === i ? { ...a, ...p } : a)));
+
+  return (
+    <Panel title={`Impression : ${job.name ?? job.id}`} actions={<Tag tone={STATE_LABEL[job.state]?.tone}>{STATE_LABEL[job.state]?.label ?? job.state}</Tag>}>
+      <div className="prt-detail">
+        <ol className="prt-steps" aria-label="Étapes">{STEPS.map((s, i) => <li key={s} aria-current={i === step ? 'step' : undefined} data-done={i < step}>{s}</li>)}</ol>
+        <p className="hint mono" style={{ margin: 0 }}>{job.id} · {printer?.name ?? job.printer_id} · plaque {job.plate ?? 1}{job.artifact_sha256 && ` · sha256 ${job.artifact_sha256.slice(0, 12)}…`}</p>
+        {job.last_error && <Notice tone="err" title="Dernière erreur">{job.last_error}</Notice>}
+
+        {job.state === 'SLICING' && <p role="status"><span className="spinner" aria-hidden /> Bambu Studio découpe le modèle…</p>}
+
+        {job.state === 'VALIDATED' && (
+          <>
+            <fieldset className="prt-fs"><legend className="eyebrow">Matières chargées</legend>
+              {assign.map((a, i) => (
+                <div key={i} className="prt-assign">
+                  <span className="mono">filament {a.filament_slot}{filaments[i] ? ` : ${filaments[i]}` : ''}</span>
+                  <Select aria-label={`Emplacement du filament ${a.filament_slot}`} value={a.tray} onChange={(e) => setA(i, { tray: e.target.value })} options={trayOpts} />
+                  <Input aria-label={`Matière du filament ${a.filament_slot}`} placeholder="Matière réellement chargée (ex. PLA Basic gris)" value={a.material_id} onChange={(e) => setA(i, { material_id: e.target.value })} />
+                </div>
+              ))}
+            </fieldset>
+            <div className="prt-acts">
+              <Button icon={<ShieldCheck size={14} />} disabled={!complete || busy !== null} onClick={() => wrap('validate', async () => { const r = await api.validatePrint({ print_job_id: job.id, printer_id: job.printer_id, assignments: assign }); setReport(r.report); onChange(); })}>{busy === 'validate' ? 'Validation…' : "Valider pour l'imprimante"}</Button>
+              <Button variant="primary" disabled={!report?.ok || busy !== null} onClick={() => wrap('upload', async () => { setUpload(await api.uploadPrint({ print_job_id: job.id, printer_id: job.printer_id, idempotency_key: upKey.current, assignments: assign })); onChange(); })}>{busy === 'upload' ? 'Envoi…' : "Envoyer sur l'imprimante"}</Button>
+            </div>
+            {!complete && <p className="hint" style={{ margin: 0 }}>Indiquez la matière de chaque filament : la liaison filament, emplacement et matière fait partie de ce que vous approuverez.</p>}
+            {report && <Report r={report} />}
+          </>
+        )}
+        {job.state === 'UPLOADING' && <p role="status"><span className="spinner" aria-hidden /> Transfert vers l'imprimante…</p>}
+        {upload?.question && <Notice title="À vérifier avant de continuer">{upload.question}</Notice>}
+
+        {['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job.state) && !start && (
+          <>
+            {!conf && !job.confirmation_id && (
+              <div className="prt-acts">
+                <Button variant="primary" disabled={busy !== null} onClick={() => wrap('conf', async () => { setConf(await api.requestConfirmation(job.id)); onChange(); })}>{busy === 'conf' ? 'Demande…' : 'Demander la confirmation de lancement'}</Button>
+                <span className="hint">Demander n'est pas lancer : la page de confirmation vous montre ce qui sera imprimé.</span>
+              </div>
+            )}
+            {conf && <ConfirmBox c={conf} onStart={() => wrap('start', async () => { const o = await api.startPrint({ print_job_id: job.id, confirmation_id: conf.confirmation_id, idempotency_key: startKey.current }); setStart(o); onChange(); })} starting={busy === 'start'} />}
+          </>
+        )}
+        {start && <Notice tone={start.outcome === 'start_unknown' || start.outcome === 'rejected' ? 'err' : 'info'} title={`Lancement : ${start.outcome}`}>{start.note}</Notice>}
+
+        {['START_REQUESTED', 'PRINTING'].includes(job.state) && (
+          <div role="status">
+            <div className="progress" role="progressbar" aria-valuenow={pg?.progress_percent ?? job.print?.percent ?? 0} aria-valuemin={0} aria-valuemax={100} aria-label="Avancement de l'impression"><span style={{ width: `${pg?.progress_percent ?? job.print?.percent ?? 0}%` }} /></div>
+            <p className="hint mono" style={{ margin: 'var(--sp-1) 0 0' }}>{pg?.progress_percent ?? job.print?.percent ?? 0} % · couche {pg?.layer ?? job.print?.layer ?? 0}/{pg?.total_layers ?? job.print?.total_layers ?? 0} · reste {pg?.remaining_minutes ?? job.print?.remaining_minutes ?? '?'} min</p>
+            {live.data?.note && <p className="hint">{live.data.note}</p>}
+          </div>
+        )}
+        {job.state === 'START_UNKNOWN' && <Notice tone="err" title="Lancement incertain : ne pas relancer">Le service ne sait pas si l'imprimante a démarré. Vérifiez sur la machine, puis faites réconcilier par l'assistant (outil <span className="mono">reconcile_print</span>) : l'interface ne relance jamais.</Notice>}
+        {job.state === 'COMPLETED' && <Notice tone="info" title="Impression terminée">Enregistrez le résultat réel (retour d'expérience) pour nourrir la mémoire des essais.</Notice>}
+        {job.next && !['VALIDATED', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job.state) && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(job.state) && <p className="hint" style={{ margin: 0 }}>Étape suivante : {job.next}</p>}
+        {job.events && job.events.length > 0 && <details><summary>Historique ({job.events.length})</summary><ul className="audit">{job.events.slice().reverse().slice(0, 10).map((e, i) => <li key={i}><span className="mono">{fmtDate(e.at)}</span><span>{e.from} → {e.to}</span><span className="sub">{e.note ?? e.event}</span></li>)}</ul></details>}
+      </div>
+    </Panel>
+  );
+}
+
+function Report({ r }: { r: ValidationReport }) {
+  const all = [...r.archive_checks, ...r.compatibility_checks];
   return (
     <div>
-      <h3 style={{ fontSize: 'var(--fs-md)', marginBottom: 'var(--sp-2)' }}>Rapport de validation du fichier</h3>
-      <ul className="report">
-        {items.map((c) => (
-          <li key={c.label}>
-            <span className={`mk mk-${c.tone}`} aria-hidden />
-            <span><strong>{c.tone === 'ok' ? 'OK' : c.tone === 'warn' ? 'Attention' : 'Bloquant'} — {c.label}</strong><br /><span className="why">{c.why}</span></span>
-          </li>
-        ))}
-      </ul>
+      <p style={{ margin: '0 0 var(--sp-2)' }}><Tag tone={r.ok ? 'ok' : 'err'}>{r.ok ? 'validé' : 'refusé'}</Tag> <span className="hint">{r.validator}</span></p>
+      {r.blocking && r.blocking.length > 0 && <Notice tone="err" title="Contrôles bloquants">{r.blocking.join(' ; ')}</Notice>}
+      <ul className="prt-checks">{all.map((c, i) => <li key={i}><Tag tone={c.ok ? 'ok' : c.level === 'error' ? 'err' : 'warn'}>{c.ok ? 'ok' : c.level === 'error' ? 'bloquant' : 'avis'}</Tag> {c.name}{c.detail && <span className="hint"> — {c.detail}</span>}</li>)}</ul>
+      {r.warnings?.map((w) => <p key={w} className="hint" style={{ margin: 0 }}>{w}</p>)}
+    </div>
+  );
+}
+
+/**
+ * Le seul chemin vers « Lancer » : la page de confirmation du serveur. Le bouton de lancement ci-dessous
+ * n'apparaît actif qu'APRÈS l'approbation humaine enregistrée par cette page (confirmation.approved) ;
+ * le serveur le refuse de toute façon sans confirmation approuvée, liée à cette impression, à usage unique.
+ */
+function ConfirmBox({ c, onStart, starting }: { c: ConfirmationView; onStart: () => void; starting: boolean }) {
+  const b = c.binding;
+  return (
+    <div className="prt-confirm">
+      <h3>Confirmation de lancement</h3>
+      <dl className="kv">
+        <dt>Fichier</dt><dd className="mono">{b.file}</dd>
+        <dt>Imprimante</dt><dd>{b.printer_name} ({b.printer_model})</dd>
+        <dt>Empreinte</dt><dd className="mono">{b.sha256.slice(0, 16)}…</dd>
+        <dt>Plaque</dt><dd className="mono">{b.plate}</dd>
+        <dt>Matières</dt><dd>{b.materials.map((m) => `f${m.filament_slot} → ${m.tray} : ${m.material_id}`).join(' ; ')}</dd>
+        <dt>Valable jusqu'à</dt><dd className="mono">{fmtDate(c.expires_at)}</dd>
+      </dl>
+      {!c.approved ? (
+        <>
+          <p style={{ margin: 0 }}>{c.instructions}</p>
+          <a className="btn btn-primary" href={assetUrl(c.confirm_url)} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Ouvrir la page de confirmation</a>
+          <p className="hint" style={{ margin: 0 }} role="status"><span className="spinner" aria-hidden /> En attente de votre accord sur cette page (vérification toutes les 2,5 s)…</p>
+        </>
+      ) : (
+        <>
+          <Notice tone="info" icon={<ShieldCheck size={16} aria-hidden />} title="Accord enregistré par vous, pour cette impression seulement">Vous pouvez maintenant lancer ; l'autorisation est à usage unique.</Notice>
+          <Button variant="primary" disabled={starting} onClick={onStart}>{starting ? 'Lancement…' : "Lancer l'impression (autorisée)"}</Button>
+        </>
+      )}
     </div>
   );
 }

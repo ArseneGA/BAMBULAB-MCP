@@ -13,8 +13,7 @@
  */
 
 export type PendingId =
-  | 'materials' | 'printer_status' | 'printer_upload' | 'print_start' | 'print_progress'
-  | 'windows_agent' | 'zone_overrides' | 'experiments_list' | 'analyze' | 'export_files' | 'record_result_ui';
+  | 'materials' | 'print_cancel_reconcile' | 'windows_agent_ui' | 'zone_overrides' | 'experiments_list' | 'analyze' | 'export_files' | 'record_result_ui';
 
 export interface PendingNeed {
   id: PendingId;
@@ -49,39 +48,21 @@ export const PENDING: PendingNeed[] = [
   },
   {
     id: 'materials', screen: 'Matériaux',
-    today: 'Cinq fiches matériau fictives ; toute valeur absente reste « inconnu ».',
-    needs: "GET/POST/PUT /api/materials (fiche : famille, fabricant, référence, température buse/plateau, enceinte, buse durcie, compatibilité machine, état de bobine, calibrations) ; GET /api/machines (fiche machine P1S/A1/X1C...).",
-    milestone: 'matériaux (internal/contracts/material.go à exposer)',
+    today: "Modèles d'imprimantes réels (/api/printer-models) ; aucune fiche matériau : la base internal/engineering (matériaux, retrait, propriétés) n'est pas publiée en HTTP.",
+    needs: "GET /api/materials, GET /api/materials/{id} (famille, propriétés, retrait, sources et niveau de confiance de internal/engineering) ; fiches de bobines et calibrations (état de bobine, historique) non modélisées côté serveur ; presets filament de Bambu Studio : GET /api/profiles/filaments.",
+    milestone: "matériaux (exposer internal/engineering)",
   },
   {
-    id: 'printer_status', screen: 'Impression',
-    today: 'Imprimante P1S simulée (état constant).',
-    needs: "GET /api/printers, GET /api/printers/{id}/status -> état, fraîcheur (updated_at), température, progression, AMS, erreurs HMS ; flux SSE GET /api/printers/{id}/events (MQTT LAN, J7).",
-    milestone: 'imprimante LAN (internal/printer, J7)',
+    id: 'print_cancel_reconcile', screen: 'Impression',
+    today: "L'interface suit, valide, envoie et demande la confirmation ; elle ne propose ni annulation d'une impression en cours ni réconciliation d'un lancement incertain.",
+    needs: "Écrans pour POST /api/print-jobs/{id}/cancel (une impression en cours exige un stop_confirmation_id approuvé par l'humain, donc une page /confirm dédiée à l'arrêt) et POST /api/print-jobs/{id}/reconcile ; aujourd'hui seulement via les outils MCP cancel_print et reconcile_print.",
+    milestone: "impression (suite)",
   },
   {
-    id: 'printer_upload', screen: 'Impression',
-    today: 'Envoi simulé avec minuterie.',
-    needs: "POST /api/printers/{id}/upload { artifact_id, idempotency_key } -> { job_id } ; validation préalable POST /api/artifacts/{id}/validate { printer_id } -> rapport et compatibilité ; artefact slicé : GET /api/artifacts/{sha} (le candidat expose artifact_sha256).",
-    milestone: 'imprimante LAN (internal/printer, J7)',
-  },
-  {
-    id: 'print_start', screen: 'Impression',
-    today: 'Confirmation « plateau vide » + lancement simulés ; aucune commande envoyée.',
-    needs: "POST /api/printers/{id}/start { remote_ref, plate, material, confirmation_token } : le jeton de confirmation vient de contracts.confirmation (usage unique, lié à l'empreinte du fichier, de l'imprimante, du plateau et de la matière).",
-    milestone: 'imprimante LAN (internal/printer, J7)',
-  },
-  {
-    id: 'print_progress', screen: 'Impression',
-    today: 'Suivi simulé (couches, températures, perte réseau, échec).',
-    needs: "GET /api/prints/{id} -> machine d'états contracts/print.go (état, couche, ETA, erreurs) + POST /api/prints/{id}/cancel.",
-    milestone: 'imprimante LAN (internal/printer, J7)',
-  },
-  {
-    id: 'windows_agent', screen: 'Barre du haut',
-    today: "Pastille « Windows » : affichée hors ligne tant que /api/capabilities annonce windows_agent indisponible.",
-    needs: "GET /api/agents -> { id, name, online, last_seen, indexed_files, pending_copies } ; POST /api/agents/{id}/copy { file_ids[] } pour demander la copie d'un fichier windows_only.",
-    milestone: 'agent Windows (cmd/bambu-agent)',
+    id: 'windows_agent_ui', screen: 'Barre du haut',
+    today: "La pastille Windows reflète capabilities.agents (en ligne, Bambu Studio ouvert ou installé) ; pas d'écran d'appairage, d'inventaire ni de demande de copie.",
+    needs: "UI pour POST /api/agents/pairing, GET /api/agents/{id}/inventory et POST /api/agents/{id}/inventory/select (copie des fichiers windows_only vers le stockage Linux), et GET /api/agent/tasks pour suivre les copies.",
+    milestone: "agent Windows (suite)",
   },
   {
     id: 'analyze', screen: 'Fiche modèle',

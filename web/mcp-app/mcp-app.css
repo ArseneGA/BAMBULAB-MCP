@@ -36,3 +36,10 @@ body { margin: 0; }
 .parts button:focus-visible, .result:focus-visible, .back:focus-visible { outline: none; box-shadow: var(--focus); }
 .context { padding: var(--sp-2) var(--sp-3); background: var(--surface-2); border-left: 2px solid var(--accent); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 @media (max-width: 520px) { .sheet { grid-template-columns: 1fr; } }
+.confirm div { flex-wrap: wrap; gap: var(--sp-3); }
+.confirm dd { text-align: right; overflow-wrap: anywhere; }
+.check { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-sm); }
+.acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.primary { height: var(--control-h); padding: 0 var(--sp-3); background: var(--accent); color: var(--on-accent); border: 0; border-radius: var(--r-2); font-weight: 500; cursor: pointer; }
+.primary:disabled { opacity: .45; cursor: not-allowed; }
+.primary:focus-visible { outline: none; box-shadow: var(--focus); }

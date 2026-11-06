@@ -2,6 +2,7 @@ import type {
   ApplyResult, Capabilities, CollectionInfo, DuplicatesResult, Health, ImportInput, ImportStarted, Job, ModelDetails,
   OpPreview, Operation, RestoreResult, ScanReport, SearchParams, SearchResult,
 } from './types';
+import type { AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
 import type { ApplyOutput, CompareOutput, CreateExperimentInput, Experiment, Goal, GoalCriteriaCatalog, GoalInput } from './goalTypes';
 
 /**
@@ -84,6 +85,20 @@ export const api = {
   experiment: (id: string, signal?: AbortSignal) => request<Experiment>('GET', `/api/experiments/${encodeURIComponent(id)}`, undefined, signal),
   compare: (id: string, signal?: AbortSignal) => request<CompareOutput>('GET', `/api/experiments/${encodeURIComponent(id)}/compare`, undefined, signal),
   applyVariant: (experiment_id: string, candidate_id: string, expected_revision: string) => request<ApplyOutput>('POST', '/api/variants/apply', { experiment_id, candidate_id, expected_revision }),
+  printerModels: (signal?: AbortSignal) => request<{ models: PrinterModel[] }>('GET', '/api/printer-models', undefined, signal),
+  printers: (signal?: AbortSignal) => request<{ printers: PrinterView[] }>('GET', '/api/printers', undefined, signal),
+  addPrinter: (p: AddPrinterInput) => request<PrinterView>('POST', '/api/printers', p),
+  printerStatus: (id: string, signal?: AbortSignal) => request<PrinterStatus>('GET', `/api/printers/${encodeURIComponent(id)}/status`, undefined, signal),
+  printJobs: (signal?: AbortSignal) => request<{ print_jobs: PrintJob[] }>('GET', '/api/print-jobs?limit=50', undefined, signal),
+  printStatus: (id: string, signal?: AbortSignal) => request<PrintStatus>('GET', `/api/print-jobs/${encodeURIComponent(id)}`, undefined, signal),
+  createPrintJob: (b: { model_id: string; printer_id: string; plate?: number; idempotency_key: string }) => request<PrintJob>('POST', '/api/print-jobs', b),
+  validatePrint: (b: { print_job_id: string; printer_id: string; assignments: FilamentAssignment[] }) => request<{ report: ValidationReport; job: PrintJob }>('POST', '/api/print-jobs/validate', b),
+  uploadPrint: (b: { print_job_id: string; printer_id: string; idempotency_key: string; assignments: FilamentAssignment[] }) => request<UploadOutput>('POST', '/api/print-jobs/upload', b),
+  requestConfirmation: (jobId: string) => request<ConfirmationView>('POST', `/api/print-jobs/${encodeURIComponent(jobId)}/confirmation`),
+  confirmation: (id: string, signal?: AbortSignal) => request<ConfirmationView>('GET', `/api/confirmations/${encodeURIComponent(id)}`, undefined, signal),
+  /** Ne part que si l'humain a approuvé la confirmation sur la page /confirm/{id} : le serveur refuse sinon. */
+  startPrint: (b: { print_job_id: string; confirmation_id: string; idempotency_key: string }) => request<StartOutput>('POST', '/api/print-jobs/start', b),
+  agents: (signal?: AbortSignal) => request<{ agents: AgentStatus[] }>('GET', '/api/agents', undefined, signal),
   /** Télécharge le GLB d'aperçu (URL signée de la fiche). */
   async glb(signedUrl: string, signal?: AbortSignal): Promise<ArrayBuffer> {
     let res: Response;

@@ -196,7 +196,7 @@ export interface RestoreResult { restored: Array<{ id: string; name: string; tag
 
 /* ---- capacités ---- */
 export interface Feature { id: string; available: boolean; note?: string }
-export interface Capabilities { service: string; version: string; mode: string; features: Feature[]; job_kinds: string[]; concurrency: Record<string, number> }
+export interface Capabilities { service: string; version: string; mode: string; features: Feature[]; agents?: Array<{ id: string; name: string; online: boolean; last_seen?: string; studio_installed: boolean; studio_running: boolean; local_slicer: boolean }>; job_kinds: string[]; concurrency: Record<string, number> }
 export interface Health { status: string; version: string; schema_version: number }
 
 /* ---- doublons ---- */

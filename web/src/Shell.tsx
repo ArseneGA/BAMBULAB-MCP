@@ -11,8 +11,8 @@ export const spaces = [
   { path: 'bibliotheque', label: 'Bibliothèque', icon: Boxes, live: true },
   { path: 'preparation', label: 'Préparation', icon: SlidersHorizontal, live: true },
   { path: 'comparaison', label: 'Comparaison', icon: GitCompare, live: true },
-  { path: 'materiaux', label: 'Matériaux', icon: Layers, live: false },
-  { path: 'impression', label: 'Impression', icon: Printer, live: false },
+  { path: 'materiaux', label: 'Matériaux', icon: Layers, live: true },
+  { path: 'impression', label: 'Impression', icon: Printer, live: true },
 ] as const;
 
 function Pills() {
@@ -23,7 +23,8 @@ function Pills() {
   return (
     <>
       <span className="pill" title={c.server === 'online' ? `Service bambud ${c.health?.version ?? ''}` : 'Service bambud'}><StatusDot status={server} label={c.server === 'checking' ? 'Connexion' : 'Linux'} /></span>
-      <span className="pill" title={c.windows === 'online' ? 'Agent Windows en ligne' : 'Agent Windows hors ligne ou non connecté'}><StatusDot status={win} label="Windows" /></span>
+      {c.browserEnrolled === false && <a className="pill enroll" href="/enroll" title="Les pages de confirmation d'impression exigent un navigateur enregistré (code à usage unique)">Enregistrer ce navigateur</a>}
+      <span className="pill" title={c.agents.length === 0 ? 'Aucun agent Windows appairé' : c.agents.map((a) => `${a.name} : ${a.online ? 'en ligne' : 'hors ligne'}${a.studio_running ? ', Bambu Studio ouvert' : a.studio_installed ? ', Bambu Studio installé' : ''}`).join(' ; ')}><StatusDot status={win} label={c.agents.length === 0 ? 'Windows' : c.agents.length === 1 ? `Windows : ${c.agents[0].name}` : `Windows ×${c.agents.length}`} /></span>
       <span className="pill" title={c.cad === 'online' ? 'Backend CAO (STEP) disponible' : (c.cadNote ?? 'Backend CAO absent : les fichiers STEP ne sont pas convertis')}><StatusDot status={cad} label="CAO" /></span>
     </>
   );

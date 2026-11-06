@@ -97,5 +97,52 @@ try {
   await ctx.close();
 } catch (e) { console.warn('MCP App non capturée :', e.message); }
 
+// Impression : registre, état, étapes, confirmation (simulateur d'imprimante requis) puis vue MCP App de confirmation.
+try {
+  const prs = (await (await fetch(`${base}/api/printers`)).json()).printers;
+  if (prs.length === 0) throw new Error('aucune imprimante enregistrée (lancer le simulateur puis e2e.mjs avec SIM_PIN)');
+  const pr = prs[0];
+  const j = async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return r.json(); };
+  // Imprimante au repos (le simulateur imprime pendant quelques secondes après un lancement).
+  for (let i = 0; i < 40; i++) { const s = await j('GET', `/api/printers/${pr.id}/status`); if (s.reachable && !['RUNNING', 'PREPARE', 'PAUSE'].includes(s.gcode_state ?? '')) break; await new Promise((r) => setTimeout(r, 3000)); }
+  const cale = list.models.find((m) => m.name.includes('cale')) ?? list.models[0];
+  let job = await j('POST', '/api/print-jobs', { model_id: cale.id, printer_id: pr.id, plate: 1, idempotency_key: `cap-${Date.now()}` });
+  for (let i = 0; i < 90 && job.state !== 'VALIDATED'; i++) { await new Promise((r) => setTimeout(r, 2000)); job = (await j('GET', `/api/print-jobs/${job.id}`)).job; }
+  const assignments = [{ filament_slot: 1, tray: 'ext', material_id: 'PLA Basic gris' }];
+  await j('POST', '/api/print-jobs/validate', { print_job_id: job.id, printer_id: pr.id, assignments });
+  const up = await j('POST', '/api/print-jobs/upload', { print_job_id: job.id, printer_id: pr.id, idempotency_key: `cap-up-${Date.now()}`, assignments });
+  for (let i = 0; i < 60; i++) { job = (await j('GET', `/api/print-jobs/${job.id}`)).job; if (['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job.state)) break; await new Promise((r) => setTimeout(r, 2000)); }
+  void up;
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await ctx.newPage();
+  await page.goto(`${base}/impression`); await theme(page, 'light');
+  await page.getByText('Joignable').waitFor({ timeout: 20000 });
+  await page.getByRole('listbox', { name: 'Impressions' }).getByRole('option').first().click();
+  await page.getByRole('button', { name: /Demander la confirmation/ }).waitFor();
+  await page.waitForTimeout(400); await shot(page, 'impression-1440-light');
+  await page.getByRole('button', { name: /Demander la confirmation/ }).click();
+  await page.getByRole('link', { name: /Ouvrir la page de confirmation/ }).waitFor();
+  await page.waitForTimeout(400); await theme(page, 'dark'); await shot(page, 'impression-confirmation-1440-dark');
+  await page.goto(`${base}/materiaux`); await theme(page, 'light'); await page.waitForTimeout(800); await shot(page, 'materiaux-machines-1440-light');
+  await ctx.close();
+  // Vue MCP App : nouvelle impression déposée, demande de confirmation par l'outil, puis accord depuis la vue.
+  const j2 = await j('POST', '/api/print-jobs', { model_id: cale.id, printer_id: pr.id, plate: 1, idempotency_key: `cap2-${Date.now()}` });
+  let job2 = j2;
+  for (let i = 0; i < 90 && job2.state !== 'VALIDATED'; i++) { await new Promise((r) => setTimeout(r, 2000)); job2 = (await j('GET', `/api/print-jobs/${j2.id}`)).job; }
+  await j('POST', '/api/print-jobs/validate', { print_job_id: job2.id, printer_id: pr.id, assignments });
+  await j('POST', '/api/print-jobs/upload', { print_job_id: job2.id, printer_id: pr.id, idempotency_key: `cap2-up-${Date.now()}`, assignments });
+  for (let i = 0; i < 60; i++) { job2 = (await j('GET', `/api/print-jobs/${j2.id}`)).job; if (['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job2.state)) break; await new Promise((r) => setTimeout(r, 2000)); }
+  const hctx = await browser.newContext({ viewport: { width: 1100, height: 760 } });
+  const hp = await hctx.newPage();
+  await hp.goto(`${host}/dev-host.html`);
+  await hp.waitForFunction(() => window.__host);
+  await hp.evaluate((id) => window.__host.run('request_print_confirmation', { print_job_id: id }), job2.id);
+  const fr = hp.frameLocator('iframe');
+  await fr.getByRole('heading', { name: 'Confirmation de lancement' }).waitFor({ timeout: 15000 });
+  await hp.waitForTimeout(500); await shot(hp, 'mcp-app-confirmation-light');
+  await hp.click('#theme'); await hp.waitForTimeout(600); await shot(hp, 'mcp-app-confirmation-lecture-seule-dark');
+  await hctx.close();
+} catch (e) { console.warn('Captures impression ignorées :', e.message); }
+
 await browser.close();
 console.log(errors.length ? `Erreurs console :\n${errors.join('\n')}` : 'Aucune erreur console.');

@@ -30,6 +30,9 @@ var viewsFS embed.FS
 const (
 	SearchViewURI = "ui://bambu/search.html"
 	ModelViewURI  = "ui://bambu/model.html"
+	// PrintConfirmViewURI : confirmation de lancement (liée à request_print_confirmation) ; l'humain y coche « plateau vide »
+	// puis confirme via l'outil réservé confirm_print_from_app. La vue ne lance JAMAIS l'impression.
+	PrintConfirmViewURI = "ui://bambu/print-confirm.html"
 )
 
 // MeshChunkBytes : octets bruts par tranche. En base64, 72 000 octets donnent
@@ -42,8 +45,9 @@ const MaxMeshBytes = 16 << 20
 
 // toolViewMeta lie les outils du catalogue à leur vue (appliqué par addTool).
 var toolViewMeta = map[string]mcp.Meta{
-	"search_models":     AppToolMeta(SearchViewURI),
-	"get_model_details": AppToolMeta(ModelViewURI),
+	"search_models":              AppToolMeta(SearchViewURI),
+	"get_model_details":          AppToolMeta(ModelViewURI),
+	"request_print_confirmation": AppToolMeta(PrintConfirmViewURI),
 }
 
 const fallbackViewHTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Atelier</title>
@@ -91,6 +95,9 @@ func registerAppViews(s *mcp.Server, svc *catalog.Service) {
 		"Liste interactive des modèles trouvés (search_models) ; choisir un modèle ouvre sa fiche.", html)
 	addViewResource(s, ModelViewURI, "model_view", "Fiche modèle",
 		"Fiche compacte d'un modèle (get_model_details) avec viewer 3D, sélection d'une sous-partie et dimensions.", html)
+
+	addViewResource(s, PrintConfirmViewURI, "print_confirm_view", "Confirmation de lancement",
+		"Éléments liés d'une demande de confirmation d'impression (fichier, imprimante, empreinte, plateau, matières) ; l'humain coche « plateau vide » puis confirme. Ne lance rien.", html)
 
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 	addTool(s, &mcp.Tool{

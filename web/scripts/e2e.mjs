@@ -81,6 +81,57 @@ if (caps.features.find((f) => f.id === 'slicing')?.available) {
   step('variante appliquée');
 }
 
+// Impression contre le simulateur (go run ./cmd/printer-sim) : SIM_PIN = empreinte du certificat affichée par le simulateur.
+if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.available) {
+  const sim = process.env.SIM_CODE ?? '12345678'; // code d'accès par défaut du simulateur local (valeur de test du dépôt)
+  await page.goto(`${web}/impression`);
+  if ((await (await fetch(`${web}/api/printers`)).json()).printers.length === 0) {
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).first().click();
+    await page.getByLabel("Nom d'usage").fill('Simulateur');
+    await page.getByRole('dialog').locator('select').first().selectOption('p1s');
+    await page.getByLabel(/Adresse sur le réseau/).fill('127.0.0.1');
+    await page.getByLabel('Numéro de série').fill('01P00A000000001');
+    await page.getByLabel(/Empreinte SHA-256/).fill(process.env.SIM_PIN);
+    await page.getByRole('dialog').getByRole('button', { name: 'Ajouter', exact: true }).click();
+  }
+  const link = page.getByRole('link', { name: /Ouvrir la page de saisie/ });
+  if (await link.count()) {
+    const setup = await (await browser.newContext()).newPage();
+    await setup.goto(new URL(await link.getAttribute('href'), web).toString().replace(web, process.env.BAMBU_URL ?? 'http://127.0.0.1:7878'));
+    await setup.getByLabel(/Code d'accès/).fill(sim);
+    await setup.getByRole('button', { name: 'Enregistrer' }).click();
+    await setup.getByText(/enregistré dans le coffre/).waitFor();
+    step("code d'accès saisi sur la page locale");
+  }
+  await page.reload();
+  await page.getByText('Joignable').waitFor({ timeout: 20000 });
+  step('imprimante joignable (état lu)');
+  const cale = (await (await fetch(`${web}/api/models?q=cale`)).json()).models[0];
+  await page.getByLabel(/^Modèle \(dernière/).selectOption(cale.id);
+  await page.locator('.prt-new select').nth(1).selectOption({ index: 1 });
+  await page.getByRole('button', { name: /Découper pour cette imprimante/ }).click();
+  await page.getByText(/Valider pour l'imprimante/).waitFor({ timeout: 180000 });
+  await page.getByLabel(/^Matière du filament 1/).fill('PLA Basic gris');
+  await page.getByRole('button', { name: "Valider pour l'imprimante" }).click();
+  await page.getByText('validé', { exact: true }).waitFor({ timeout: 60000 });
+  await page.getByRole('button', { name: "Envoyer sur l'imprimante" }).click();
+  await page.getByRole('button', { name: /Demander la confirmation/ }).waitFor({ timeout: 90000 });
+  step('fichier déposé sur le simulateur');
+  await page.getByRole('button', { name: /Demander la confirmation/ }).click();
+  const href = await page.getByRole('link', { name: /Ouvrir la page de confirmation/ }).getAttribute('href');
+  assert(!(await page.getByRole('button', { name: /Lancer l'impression/ }).count()), "aucun bouton de lancement avant l'accord humain");
+  step('confirmation demandée : pas de bouton de lancement tant que la page serveur n\'a pas été validée');
+  const conf = await (await browser.newContext()).newPage();
+  await conf.goto(new URL(href, process.env.BAMBU_URL ?? 'http://127.0.0.1:7878').toString());
+  await conf.getByLabel(/plateau est vide/).check();
+  await conf.getByRole('button', { name: "Lancer l'impression" }).click();
+  await conf.getByText(/Lancement autorisé/).waitFor();
+  await page.getByRole('button', { name: /Lancer l'impression \(autorisée\)/ }).waitFor({ timeout: 15000 });
+  await page.getByRole('button', { name: /Lancer l'impression \(autorisée\)/ }).click();
+  await page.getByText(/Lancement :/).waitFor({ timeout: 30000 });
+  step('impression lancée après accord sur la page de confirmation');
+}
+
 await browser.close();
 assert.deepEqual(errs, [], `erreurs de page : ${errs.join(' | ')}`);
 console.log('E2E OK');

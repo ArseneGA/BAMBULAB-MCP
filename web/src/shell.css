@@ -32,3 +32,4 @@
 .topbar { position: relative; z-index: 5; }
 .nav a { position: relative; }
 .nav-soon { width: 6px; height: 6px; background: var(--warn); transform: rotate(45deg); margin-left: 2px; flex: none; }
+.enroll { color: var(--warn); font-size: var(--fs-sm); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
