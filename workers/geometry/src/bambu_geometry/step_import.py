@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,24 @@ from typing import Any
 from .cad import mesh_stats, require_cadquery, tessellate
 from .errors import GeometryError
 from .meshio import sha256_file, write_3mf, write_binary_stl
+
+TOL_MIN, TOL_MAX = 0.001, 10.0  # mm
+ANG_MIN, ANG_MAX = 0.01, 1.6  # rad
+MAX_TRIANGLES = 5_000_000
+
+
+def _bounded(req: dict[str, Any], key: str, default: float, lo: float, hi: float) -> float:
+    raw = req.get(key, default)
+    if isinstance(raw, bool):
+        raise GeometryError("invalid_params", f"{key} doit être un nombre.")
+    try:
+        v = float(raw)
+    except (TypeError, ValueError) as e:
+        raise GeometryError("invalid_params", f"{key} doit être un nombre.", {"value": repr(raw)}) from e
+    if not math.isfinite(v) or v < lo or v > hi:
+        raise GeometryError("invalid_params", f"{key} doit être fini et compris entre {lo:g} et {hi:g}.", {"value": repr(raw)})
+    return v
+
 
 _UNIT_RE = re.compile(rb"CONVERSION_BASED_UNIT\s*\(\s*'([^']+)'|SI_UNIT\s*\(\s*(\.\w+\.)\s*,\s*\.METRE\.")
 
@@ -36,10 +55,8 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
     out_dir = req.get("out_dir")
     if not isinstance(path, str) or not isinstance(out_dir, str):
         raise GeometryError("invalid_params", "`path` et `out_dir` (chaînes) sont requis.")
-    tol = float(req.get("tolerance_mm", 0.05))
-    ang = float(req.get("angular_tolerance_rad", 0.2))
-    if tol <= 0 or ang <= 0:
-        raise GeometryError("invalid_params", "tolerance_mm et angular_tolerance_rad doivent être > 0.")
+    tol = _bounded(req, "tolerance_mm", 0.05, TOL_MIN, TOL_MAX)
+    ang = _bounded(req, "angular_tolerance_rad", 0.2, ANG_MIN, ANG_MAX)
     src = Path(path)
     if not src.is_file():
         raise GeometryError("file_not_found", f"Fichier introuvable : {path}")
@@ -58,8 +75,14 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
     stem = src.stem
     objects = []
     meshes = []
+    total_tris = 0
     for i, s in enumerate(shapes):
         mesh = tessellate(s, tol, ang)
+        total_tris += len(mesh[1])
+        if total_tris > MAX_TRIANGLES:
+            raise GeometryError(
+                "too_complex", f"Plus de {MAX_TRIANGLES} triangles : augmenter la tolérance.", {"triangles": total_tris}
+            )
         meshes.append((f"{stem}_{i + 1}", mesh))
         bb = s.BoundingBox()
         objects.append(
