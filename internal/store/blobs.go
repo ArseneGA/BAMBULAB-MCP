@@ -8,13 +8,45 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 )
+
+// DefaultMaxBlobBytes : taille maximale d'un blob (1 Gio) sauf réglage contraire.
+const DefaultMaxBlobBytes int64 = 1 << 30
+
+// ErrBlobTooLarge : le contenu dépasse la taille maximale d'un blob.
+var ErrBlobTooLarge = errors.New("blob trop volumineux")
 
 // BlobStore stocke des fichiers adressés par contenu :
 // <root>/ab/cd/<sha256>. Les originaux sont immuables : écriture atomique
 // (fichier temporaire + rename), jamais de remplacement d'un blob existant.
 type BlobStore struct {
-	root string
+	root     string
+	maxBytes int64
+}
+
+// SetMaxBytes règle la taille maximale d'un blob (≤ 0 : valeur par défaut).
+func (b *BlobStore) SetMaxBytes(n int64) {
+	if n <= 0 {
+		n = DefaultMaxBlobBytes
+	}
+	b.maxBytes = n
+}
+
+// Size renvoie la taille d'un blob stocké.
+func (b *BlobStore) Size(sha string) (int64, error) {
+	p, err := b.Path(sha)
+	if err != nil {
+		return 0, err
+	}
+	st, err := os.Stat(p)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("blob %s : %w", sha, ErrNotFound)
+	}
+	if err != nil {
+		return 0, err
+	}
+	return st.Size(), nil
 }
 
 // ErrBlobCorrupt : l'empreinte du contenu ne correspond pas à son adresse.
@@ -28,7 +60,7 @@ func NewBlobStore(root string) (*BlobStore, error) {
 	if err := os.MkdirAll(filepath.Join(root, "tmp"), 0o755); err != nil {
 		return nil, err
 	}
-	return &BlobStore{root: root}, nil
+	return &BlobStore{root: root, maxBytes: DefaultMaxBlobBytes}, nil
 }
 
 func validSHA256(s string) bool {
@@ -74,10 +106,14 @@ func (b *BlobStore) Put(r io.Reader, wantSHA string) (sha string, size int64, er
 	tmpName := tmp.Name()
 	cleanup := func() { tmp.Close(); os.Remove(tmpName) }
 	h := sha256.New()
-	size, err = io.Copy(io.MultiWriter(tmp, h), r)
+	size, err = io.Copy(io.MultiWriter(tmp, h), io.LimitReader(r, b.maxBytes+1))
 	if err != nil {
 		cleanup()
 		return "", 0, err
+	}
+	if size > b.maxBytes {
+		cleanup()
+		return "", 0, fmt.Errorf("%w : plus de %d octets", ErrBlobTooLarge, b.maxBytes)
 	}
 	sha = hex.EncodeToString(h.Sum(nil))
 	if wantSHA != "" && sha != wantSHA {
@@ -102,11 +138,29 @@ func (b *BlobStore) Put(r io.Reader, wantSHA string) (sha string, size int64, er
 		return "", 0, err
 	}
 	if err := os.Rename(tmpName, dst); err != nil {
+		// Écriture concurrente du même contenu : sous Windows, renommer sur un fichier
+		// existant (en lecture seule) échoue. Même adresse = même contenu : succès.
+		if b.Has(sha) {
+			os.Remove(tmpName)
+			return sha, size, nil
+		}
 		os.Remove(tmpName)
 		return "", 0, err
 	}
 	_ = os.Chmod(dst, 0o444) // meilleur effort : lecture seule
+	syncDir(filepath.Dir(dst))
 	return sha, size, nil
+}
+
+// syncDir fait un fsync du dossier pour rendre le rename durable (sans objet sous Windows).
+func syncDir(dir string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
 }
 
 // Open ouvre un blob en lecture.

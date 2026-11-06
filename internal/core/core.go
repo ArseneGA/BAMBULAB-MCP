@@ -82,6 +82,7 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		lock.release()
 		return nil, err
 	}
+	st.AttachBlobs(blobs)
 	q := jobs.NewQueue(st, jobs.QueueConfig{Limits: map[contracts.JobClass]int{
 		contracts.ClassHeavy: cfg.HeavyWorkers, contracts.ClassLight: cfg.LightWorkers,
 	}})

@@ -29,9 +29,14 @@ var ErrNotFound = errors.New("introuvable")
 
 // Store encapsule la base SQLite.
 type Store struct {
-	db  *sql.DB
-	now func() time.Time
+	db    *sql.DB
+	now   func() time.Time
+	blobs *BlobStore
 }
+
+// AttachBlobs relie le magasin de blobs : AddSourceFile vérifie alors que le
+// blob d'un fichier « linux » existe avec la taille déclarée.
+func (s *Store) AttachBlobs(b *BlobStore) { s.blobs = b }
 
 // Options d'ouverture.
 type Options struct {
