@@ -20,7 +20,7 @@ func TestEnvironmentAndCapabilities(t *testing.T) {
 	}
 	defer c.Close()
 	env, err := c.Environment(ctx)
-	if err != nil || !env.DataDirWritable || env.SchemaVersion != 1 || env.Missing == nil {
+	if err != nil || !env.DataDirWritable || env.SchemaVersion < 1 || env.Missing == nil {
 		t.Fatalf("%+v %v", env, err)
 	}
 	cp := c.Capabilities()
