@@ -11,12 +11,31 @@ Date : 2026-11-06 (fin du jalon 9). Rédigé pour ne rien promettre de plus que 
 
 > Un test passé contre le simulateur prouve que notre code fait ce que **nous avons compris** du protocole, pas que la P1S se comporte ainsi. C'est le rôle de `docs/BRANCHEMENT.md`.
 
+## 0. Interface web : écrans branchés (passe « écrans sans endpoint », 2026-11-06)
+
+Les huit besoins que `web/src/api/pending.ts` déclarait ont été traités ; l'interface n'affiche plus **aucune** donnée de démonstration (`data/demo.ts` supprimé ; la page « Système de design » porte un bandeau « valeurs fictives »).
+
+| Besoin | Serveur (HTTP) | Test Go | Écran |
+|---|---|---|---|
+| `materials` | `GET /api/materials`, `GET /api/materials/{id}` (internal/engineering : valeur, unité, tolérance, source, date, niveau, domaine ; inconnu = `null`) ; `GET /api/profiles/filaments?machine=` (presets de Bambu Studio) | `TestMaterialsAPI`, `TestListExperimentsMemoryForAndFilamentPresets` | Matériaux > Matériaux |
+| `experiments_list` | `GET /api/experiments?model_id=` | `TestListExperimentsMemoryForAndFilamentPresets`, `TestExperimentsListMemoryAndFilaments` | Comparaison sans expérience ouverte |
+| `record_result_ui` | `GET /api/print-memory` (+ `POST /api/print-results` déjà exposé) | idem, `TestRecordPrintResultAndComparableMemory` | Comparaison : « Enregistrer l'essai réel », mémoire ; lien depuis l'impression terminée |
+| `analyze` | `POST /api/models/{id}/analyze` (unité confirmée, machine) | `TestDownloadExportPartsAndAnalyze` | Fiche modèle : « Unité et fabricabilité » |
+| `export_files` | `GET /api/files/{id}/download`, `POST /api/export` (zip en flux) | `TestDownloadExportPartsAndAnalyze`, `TestSafeNameNeverEscapesTheArchive` | Fiche modèle, bibliothèque (sélection) |
+| `print_cancel_reconcile` | routes existantes : `POST /api/print-jobs/{id}/cancel` (renvoie `stop_url`, rien n'est arrêté), `POST .../reconcile` (lecture seule) | `TestPrintAndAgentRoutesUsedByTheWebApp` (+ tests d'impression existants) | Impression : « Demander l'arrêt », « Vérifier l'état réel » |
+| `windows_agent_ui` | routes existantes : `GET /api/agents`, `/inventory`, `/inventory/select`, `/api/agent/tasks` (liste vide désormais `[]` et non `null`) | `TestPrintAndAgentRoutesUsedByTheWebApp` (+ tests agentlink existants) | écran `/agents` (pastille « Windows ») ; l'appairage reste la page serveur `/agents/pair` |
+| `zone_overrides` | `GET /api/models/{id}/parts` (sous-parties stables), `POST /api/profiles/modify` (déjà exposé) | `TestDownloadExportPartsAndAnalyze` (stabilité), `TestModifyProfileValidationDiffAndRevisions` | Préparation : choix de l'objet, réglages manuels avec ancien / nouveau réglage et profil d'origine ; l'expérience part de la révision |
+
+**Ce qui reste dans `pending.ts`** : `zone_overrides`, sous-point « variantes par zone » seulement. Un profil de découpe (machine, process, filament) est global ; Bambu Studio porte les réglages par objet dans le projet 3MF, que ni `modify_slicing_profile` ni la génération de variantes n'écrivent. La sélection d'un objet est donc consignée dans la note de la révision et les réglages valent pour la pièce entière (l'écran le dit).
+
+**Parcours vérifié dans le navigateur** (`web/scripts/e2e.mjs`, Edge via Playwright, vrai `bambud` sur un dossier de données temporaire, vrai Bambu Studio, `printer-sim` en loopback) : import (inventaire puis import), étiquettes avec aperçu, corbeille et restauration, objectif, sous-parties et réglage manuel (un réglage invalide est refusé par le serveur), comparaison de 3 découpes réelles, application d'une variante, matériaux, agent Windows (état vide réel), unité confirmée et fabricabilité, téléchargement d'un original (sha256 vérifié) et export zip, liste des expériences, navigateur enregistré par `bambud enroll`, ajout du simulateur et saisie du code d'accès sur la page locale, découpe, validation, dépôt, page `/confirm` (aucun bouton de lancement avant l'accord), lancement, suivi jusqu'à la fin, retour d'expérience retrouvé dans la mémoire. **23 étapes, `E2E OK`.** Captures : `docs/J3/captures/` (matrice 800 / 1440 px × clair / sombre pour les écrans principaux, et `parcours-*.png`). **Limites** : simulateur seulement, aucune imprimante réelle ; l'arrêt via `/stop` n'est pas rejoué par l'e2e (couvert côté serveur) ; les captures de la vue MCP App n'ont pas été régénérées (aucune modification de cette vue) ; pas d'accès depuis un autre appareil.
+
 ## 1. Vérifications de ce jalon (résultats)
 
 | Vérification | Résultat |
 |---|---|
 | `go vet ./...` | propre |
-| `go test -short ./... -count=1` | **vert**, 20 paquets avec tests, 358 fonctions de test Go (dont 11 nouvelles : 7 dans `internal/backup`, 2 dans `cmd/bambud` pour sauvegarde et wrapper, 2 dans `cmd/bambu-mcp` pour le jeton ; plus des tests « réels » qui utilisent le Bambu Studio installé sur le poste) |
+| `go test -short ./... -count=1` | **vert** (passe « écrans sans endpoint », rejoué le 2026-11-06), 20 paquets avec tests, 370 fonctions de test Go (dont 4 nouvelles dans `internal/httpapi`, 1 dans `internal/goals`, 1 dans `internal/catalog` pour cette passe ; J9 : 7 dans `internal/backup`, 2 dans `cmd/bambud`, 2 dans `cmd/bambu-mcp` ; plus des tests « réels » qui utilisent le Bambu Studio installé sur le poste) |
 | Compilation croisée `go build ./...` | OK `linux/amd64`, `linux/arm64`, `windows/amd64` (SQLite pur Go, `CGO_ENABLED=0`) |
 | `scripts/release.sh --skip-web --skip-tests` | OK : `bambud`, `bambu-mcp`, `printer-sim` linux amd64+arm64 ; `bambu-mcp.exe`, `bambu-agent.exe` windows/amd64 ; archive du worker CAO (sans `.venv`) ; archive de déploiement ; `SHA256SUMS` au format `sha256sum` |
 | `scripts/release.ps1` | **exécuté** (`-SkipWeb -SkipTests`, PowerShell 5.1) : mêmes 10 artefacts que le `.sh`, `SHA256SUMS` généré, archive CAO sans `.venv` |

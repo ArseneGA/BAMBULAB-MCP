@@ -61,6 +61,8 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 - **Idempotence** : clés composées `printJobID:kind:clé` (dépôt, lancement) ; rejeu avec d'autres paramètres refusé (`clé d'idempotence déjà utilisée avec d'autres paramètres`).
 - **Réconciliation** : `not_started` seulement si l'imprimante est idle (ou finie sur un autre travail) dans un rapport **complet** postérieur à la publication + délai de stabilisation (10 s), sans commande acceptée depuis ; sinon `unknown`. Correspondance de fichier **exacte** (plus de `Contains`).
 - `/api/previews/{sha}` ne sert que des blobs enregistrés comme aperçus PNG.
+- `GET /api/files/{id}/download` et `POST /api/export` ne servent que des originaux du stockage par empreintes (fichiers copiés, modèle hors corbeille) : aucun chemin du disque n'est lisible par cette voie, les noms d'entrée de l'archive sont assainis, le sha256 est recalculé à l'écriture (une divergence laisse une archive invalide plutôt que fausse). Elles restent derrière le jeton d'API et le garde Host / cross-origin comme tout `/api`.
+- L'interface web n'ajoute aucune route d'approbation : lancement et arrêt passent toujours par `/confirm` et `/stop` (navigateur enregistré) ; la réconciliation d'un lancement incertain est en lecture seule et n'envoie jamais de commande de lancement.
 - `EnsureModels` ne fige plus un échec (pas de `sync.Once`).
 - `get_print_status` n'est plus annoncé en lecture seule (il met l'impression à jour).
 
