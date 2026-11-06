@@ -1,5 +1,8 @@
 // Parcours fonctionnel de la web app contre un vrai bambud (import -> opérations avec aperçu -> corbeille -> restauration).
 // Usage : IMPORT_PATH=<dossier sous une racine d'import> node scripts/e2e.mjs   (web : WEB_URL, défaut http://localhost:5174)
+// Serveur protégé par un jeton d'API : API_TOKEN=<jeton> (sondes Node en Bearer) et WEB_ENROLL_CODE=<code `bambud enroll`>
+// (le navigateur de test s'enregistre, puis l'interface web travaille par cookie de session). Vérifie aussi l'écran
+// « Enregistrer ce navigateur » d'un navigateur inconnu.
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 
@@ -8,14 +11,31 @@ const importPath = process.env.IMPORT_PATH;
 assert(importPath, 'IMPORT_PATH requis');
 const browser = await chromium.launch({ channel: process.env.CHANNEL ?? 'msedge' });
 const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
-const errs = []; page.on('pageerror', (e) => errs.push(e.message));
-const total = async () => (await (await fetch(`${web}/api/models?limit=1`)).json()).total;
-const TAG = `e2e${Date.now()}`;
 const step = (m) => console.log('•', m);
+const afetch = (u, o = {}) => fetch(u, process.env.API_TOKEN ? { ...o, headers: { ...o.headers, Authorization: `Bearer ${process.env.API_TOKEN}` } } : o);
+if (process.env.API_TOKEN) {
+  const anon = await (await browser.newContext()).newPage();
+  await anon.goto(`${web}/bibliotheque`);
+  await anon.getByRole('heading', { name: 'Enregistrer ce navigateur' }).waitFor({ timeout: 15000 });
+  const sans = await fetch(`${web}/api/models?limit=1`);
+  assert.equal(sans.status, 401, "l'API doit refuser un client sans jeton ni cookie");
+  assert((await fetch(`${web}/`)).ok, 'la SPA doit rester servie sans authentification');
+  step('navigateur inconnu : écran « Enregistrer ce navigateur » (API fermée, SPA servie)');
+  await anon.close();
+  assert(process.env.WEB_ENROLL_CODE, 'WEB_ENROLL_CODE requis avec API_TOKEN');
+  await page.goto(`${web}/enroll`);
+  await page.locator('input[name=code]').fill(process.env.WEB_ENROLL_CODE);
+  await page.getByRole('button', { name: 'Enregistrer' }).click();
+  await page.getByText(/enregistré/i).first().waitFor();
+  step("navigateur de test enregistré (cookie de session) : l'interface travaille sans jeton");
+}
+const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+const total = async () => (await (await afetch(`${web}/api/models?limit=1`)).json()).total;
+const TAG = `e2e${Date.now()}`;
 // CAPTURE_DIR : enregistre des captures du parcours (docs/J3/captures/parcours-*.png).
 const snap = async (p, n) => { if (process.env.CAPTURE_DIR) await p.screenshot({ path: `${process.env.CAPTURE_DIR}/parcours-${n}.png` }); };
 
-await fetch(`${web}/api/trash`); const before = await total();
+await afetch(`${web}/api/trash`); const before = await total();
 await page.goto(`${web}/bibliotheque`);
 await page.getByRole('button', { name: 'Importer' }).first().click();
 await page.getByLabel(/Dossier ou fichier/).fill(importPath);
@@ -36,10 +56,10 @@ await page.getByRole('button', { name: /Ajouter une étiquette/ }).click();
 await page.getByRole('textbox', { name: 'Étiquette' }).fill(TAG);
 await page.getByRole('button', { name: 'Prévisualiser' }).click();
 await page.getByText('Aperçu uniquement').waitFor();
-assert.equal((await (await fetch(`${web}/api/models?tag=${TAG}`)).json()).total, 0, "l'aperçu ne doit rien modifier");
+assert.equal((await (await afetch(`${web}/api/models?tag=${TAG}`)).json()).total, 0, "l'aperçu ne doit rien modifier");
 await page.getByRole('button', { name: /^Appliquer 1 changement/ }).click();
 await page.getByText(/changement.* appliqué/).waitFor();
-assert.equal((await (await fetch(`${web}/api/models?tag=${TAG}`)).json()).total, 1);
+assert.equal((await (await afetch(`${web}/api/models?tag=${TAG}`)).json()).total, 1);
 step('aperçu puis application des étiquettes');
 await page.getByRole('button', { name: 'Fermer' }).last().click();
 
@@ -49,18 +69,18 @@ await page.getByRole('button', { name: /Corbeille…/ }).click();
 await page.getByRole('button', { name: /^Appliquer/ }).click();
 await page.getByText(/appliqué/).waitFor();
 await page.getByRole('button', { name: 'Fermer' }).last().click();
-const trash = await (await fetch(`${web}/api/trash`)).json();
+const trash = await (await afetch(`${web}/api/trash`)).json();
 assert.equal(trash.total, 1, 'exactement un modèle doit être en corbeille');
 await page.goto(`${web}/corbeille`);
 await page.locator('.lib-row').getByRole('button', { name: 'Restaurer' }).first().click();
 await page.waitForTimeout(800);
-assert.equal((await (await fetch(`${web}/api/trash`)).json()).total, 0);
+assert.equal((await (await afetch(`${web}/api/trash`)).json()).total, 0);
 step('corbeille puis restauration');
 
 // Objectif -> expérience -> comparaison réelle -> application d'une variante (Bambu Studio requis).
-const caps = await (await fetch(`${web}/api/capabilities`)).json();
+const caps = await (await afetch(`${web}/api/capabilities`)).json();
 if (caps.features.find((f) => f.id === 'slicing')?.available) {
-  const cale = (await (await fetch(`${web}/api/models?q=cale`)).json()).models[0];
+  const cale = (await (await afetch(`${web}/api/models?q=cale`)).json()).models[0];
   await page.goto(`${web}/modele/${cale.id}`);
   await page.getByRole('button', { name: 'Préparer' }).click();
   await page.waitForURL(/preparation\?model=/);
@@ -114,11 +134,11 @@ if (caps.features.find((f) => f.id === 'slicing')?.available) {
 
   await page.goto(`${web}/agents`);
   await page.getByRole('heading', { name: 'Agent Windows', exact: true }).waitFor();
-  const agentsApi = await (await fetch(`${web}/api/agents`)).json();
+  const agentsApi = await (await afetch(`${web}/api/agents`)).json();
   if (agentsApi.agents.length === 0) await page.getByText('Aucun agent Windows appairé').waitFor();
   step('écran agent Windows (état réel)');
 
-  const cale = (await (await fetch(`${web}/api/models?q=cale`)).json()).models[0];
+  const cale = (await (await afetch(`${web}/api/models?q=cale`)).json()).models[0];
   await page.goto(`${web}/modele/${cale.id}`);
   await page.getByRole('button', { name: /Confirmer l'unité/ }).waitFor({ timeout: 20000 });
   await page.getByRole('button', { name: /Confirmer l'unité/ }).click();
@@ -128,8 +148,8 @@ if (caps.features.find((f) => f.id === 'slicing')?.available) {
   step('unité confirmée (nouvelle analyse) et fabricabilité par machine');
   const link = page.getByRole('link', { name: /Télécharger l'original/ }).first();
   const href = new URL(await link.getAttribute('href'), web).toString();
-  const orig = Buffer.from(await (await fetch(href)).arrayBuffer());
-  const detail = await (await fetch(`${web}/api/models/${cale.id}`)).json();
+  const orig = Buffer.from(await (await afetch(href)).arrayBuffer());
+  const detail = await (await afetch(`${web}/api/models/${cale.id}`)).json();
   const { createHash } = await import('node:crypto');
   assert.equal(createHash('sha256').update(orig).digest('hex'), detail.files[0].sha256, "l'original téléchargé doit avoir l'empreinte du catalogue");
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Exporter (zip)' }).first().click()]);
@@ -157,7 +177,7 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   step('navigateur enregistré par code à usage unique');
   const sim = process.env.SIM_CODE ?? '12345678'; // code d'accès par défaut du simulateur local (valeur de test du dépôt)
   await page.goto(`${web}/impression`);
-  const known = () => fetch(`${web}/api/printers`).then((r) => r.json()).then((d) => d.printers.find((p) => p.serial === (process.env.SIM_SERIAL ?? '01P00A000000001')));
+  const known = () => afetch(`${web}/api/printers`).then((r) => r.json()).then((d) => d.printers.find((p) => p.serial === (process.env.SIM_SERIAL ?? '01P00A000000001')));
   if (!(await known())) { // empreinte inconnue (simulateur relancé : nouveau certificat) : nouvelle imprimante
     await page.reload();
     await page.getByRole('button', { name: 'Ajouter', exact: true }).first().click();
@@ -183,7 +203,7 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   await page.reload();
   await page.getByText('Joignable').waitFor({ timeout: 20000 });
   step('imprimante joignable (état lu)');
-  const cale = (await (await fetch(`${web}/api/models?q=cale`)).json()).models[0];
+  const cale = (await (await afetch(`${web}/api/models?q=cale`)).json()).models[0];
   await page.getByLabel(/^Modèle \(dernière/).selectOption(cale.id);
   await page.locator('.prt-new select').nth(1).selectOption(simPrinter.id);
   await page.getByRole('button', { name: /Découper pour cette imprimante/ }).click();
@@ -227,7 +247,7 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   await page.getByLabel('Unité de la mesure 1').fill('mm');
   await page.getByRole('dialog').getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await page.getByText('Essai enregistré').waitFor({ timeout: 15000 });
-  const mem = await (await fetch(`${web}/api/print-memory?experiment_id=${expId}`)).json();
+  const mem = await (await afetch(`${web}/api/print-memory?experiment_id=${expId}`)).json();
   assert(mem.hits.length >= 1 && mem.hits[0].outcome === 'success', "l'essai enregistré doit apparaître dans la mémoire");
   await page.getByText(/Aucun écart de réglage|Écarts de réglage consignés/).first().waitFor();
   await page.getByText('Essai enregistré').scrollIntoViewIfNeeded();

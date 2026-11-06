@@ -49,12 +49,14 @@ export interface Connection {
   cadNote?: string;
   /** Navigateur enregistré auprès du serveur (GET /api/session) ; undefined tant que la route n'existe pas ou n'a pas répondu. */
   browserEnrolled?: boolean;
+  /** L'API répond 401 : un jeton d'API est configuré et ce navigateur n'est pas enregistré (voir EnrollGate). */
+  authRequired: boolean;
   importEnabled: boolean;
   importNote?: string;
   recheck: () => void;
 }
 
-const Ctx = createContext<Connection>({ server: 'checking', windows: 'unavailable', agents: [], cad: 'unavailable', importEnabled: false, recheck: () => {} });
+const Ctx = createContext<Connection>({ server: 'checking', windows: 'unavailable', agents: [], cad: 'unavailable', authRequired: false, importEnabled: false, recheck: () => {} });
 export const useConnection = () => useContext(Ctx);
 
 export function ConnectionProvider({ children }: { children: ReactNode }) {
@@ -62,6 +64,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [health, setHealth] = useState<Health>();
   const [caps, setCaps] = useState<Capabilities>();
   const [enrolled, setEnrolled] = useState<boolean>();
+  const [authRequired, setAuthRequired] = useState(false);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -70,13 +73,14 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     const poll = async () => {
       try {
         const h = await api.health(ac.signal);
-        const c = await api.capabilities(ac.signal).catch(() => undefined);
+        const c = await api.capabilities(ac.signal).catch((e: unknown) => e as Error);
         if (!alive) return;
-        const sess = await fetch(BASE + '/api/session', { signal: ac.signal }).then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : undefined)).catch(() => undefined);
+        setAuthRequired(c instanceof ApiError && c.status === 401);
+        const sess = await fetch(BASE + '/api/session', { signal: ac.signal, credentials: 'same-origin' }).then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : undefined)).catch(() => undefined);
         if (!alive) return;
         const e = sess?.enrolled ?? sess?.registered;
         setEnrolled(typeof e === 'boolean' ? e : undefined);
-        setHealth(h); setCaps(c ?? undefined); setServer('online');
+        setHealth(h); setCaps(c instanceof Error ? undefined : c); setServer('online');
       } catch (e) {
         if (!alive || (e as Error).name === 'AbortError') return;
         setServer('offline');
@@ -96,10 +100,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       agents: caps?.agents ?? [],
       cad: server !== 'online' ? 'unavailable' : cad?.available ? 'online' : 'unavailable',
       cadNote: cad?.note,
-      browserEnrolled: enrolled,
+      browserEnrolled: enrolled, authRequired,
       importEnabled: !!imp?.available, importNote: imp?.note,
       recheck: () => setTick((t) => t + 1),
     };
-  }, [server, health, caps, enrolled]);
+  }, [server, health, caps, enrolled, authRequired]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

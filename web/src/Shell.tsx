@@ -4,7 +4,7 @@ import { IconButton, StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
 import { useTheme } from './design/theme';
 import { ConnectionProvider, useConnection } from './api/hooks';
-import { ServerBanner } from './pages/common';
+import { EnrollGate, ServerBanner } from './pages/common';
 import './shell.css';
 
 export const spaces = [
@@ -30,6 +30,12 @@ function Pills() {
   );
 }
 
+/** Sans session de navigateur ni jeton, l'API répond 401 : l'écran d'enregistrement remplace les pages. */
+function Main() {
+  const c = useConnection();
+  return <main className="main">{c.authRequired ? <EnrollGate /> : <Outlet />}</main>;
+}
+
 export function Shell() {
   const { theme, toggle } = useTheme();
   return (
@@ -53,7 +59,7 @@ export function Shell() {
               <IconButton label={theme === 'light' ? 'Thème sombre' : 'Thème clair'} onClick={toggle}>{theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}</IconButton>
             </div>
           </header>
-          <main className="main"><Outlet /></main>
+          <Main />
         </div>
       </ConnectionProvider>
     </ToastProvider>

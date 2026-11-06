@@ -20,12 +20,19 @@ export class ApiError extends Error {
 
 export const BASE = (import.meta.env?.VITE_API_BASE as string | undefined) ?? '';
 
+/**
+ * Les appels d'API portent la session du navigateur enregistré (cookie, `credentials: 'same-origin'`) et un
+ * en-tête personnalisé : avec un jeton d'API configuré, le serveur n'accepte les écritures par cookie que
+ * si cet en-tête est présent et que la requête vient de la même origine (protection CSRF).
+ */
+export const CSRF_HEADER = { 'X-Atelier-Request': '1' } as const;
+
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   let res: Response;
   try {
     res = await fetch(BASE + path, {
-      method, signal,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      method, signal, credentials: 'same-origin',
+      headers: { ...CSRF_HEADER, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (e) {
@@ -120,7 +127,7 @@ export const api = {
   /** Export groupé : archive zip des originaux, lue en entier puis proposée au téléchargement. */
   async exportZip(modelIds: string[]): Promise<{ blob: Blob; files: number; skipped: number }> {
     let res: Response;
-    try { res = await fetch(BASE + '/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_ids: modelIds }) }); }
+    try { res = await fetch(BASE + '/api/export', { method: 'POST', credentials: 'same-origin', headers: { ...CSRF_HEADER, 'Content-Type': 'application/json' }, body: JSON.stringify({ model_ids: modelIds }) }); }
     catch { throw new ApiError('bambud est injoignable', 0, 'offline', true); }
     if (!res.ok) {
       let d: { error?: string; code?: string } | undefined; try { d = await res.json() as { error?: string; code?: string }; } catch { /* corps non JSON */ }
@@ -132,7 +139,7 @@ export const api = {
   /** Télécharge le GLB d'aperçu (URL signée de la fiche). */
   async glb(signedUrl: string, signal?: AbortSignal): Promise<ArrayBuffer> {
     let res: Response;
-    try { res = await fetch(assetUrl(signedUrl), { signal }); } catch (e) {
+    try { res = await fetch(assetUrl(signedUrl), { signal, credentials: 'same-origin' }); } catch (e) {
       if ((e as Error).name === 'AbortError') throw e;
       throw new ApiError('bambud est injoignable', 0, 'offline', true);
     }
