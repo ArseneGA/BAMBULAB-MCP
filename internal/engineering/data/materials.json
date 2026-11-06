@@ -1,0 +1,1900 @@
+{
+ "version": "2026-11-06",
+ "note": "Valeurs fabricant = fiches techniques Bambu Lab (copies CDN), lues le 2026-11-06 ; a reverifier contre la fiche de la bobine reelle. Inconnu = value null. Ne remplace pas un essai.",
+ "sources": {
+  "bambu_pla_basic": {
+   "title": "Bambu Lab Technical Data Sheet PLA Basic",
+   "version": "V2.0",
+   "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_petg_basic": {
+   "title": "Bambu Lab Technical Data Sheet PETG Basic",
+   "version": "V2.0",
+   "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PETG_Basic_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_petg_hf": {
+   "title": "Bambu Lab Technical Data Sheet PETG HF",
+   "version": "V1.0",
+   "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PETG_HF_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_abs": {
+   "title": "Bambu Lab Technical Data Sheet ABS",
+   "version": "V2.0",
+   "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_ABS_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_asa": {
+   "title": "Bambu Lab Technical Data Sheet ASA",
+   "version": "V3.0",
+   "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_ASA_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_tpu_95a": {
+   "title": "Bambu Lab Technical Data Sheet TPU 95A",
+   "version": "V3.0",
+   "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_TPU_95A_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_pc": {
+   "title": "Bambu Lab Technical Data Sheet PC",
+   "version": "V3.0",
+   "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_PC_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_pa6_cf": {
+   "title": "Bambu Lab Technical Data Sheet PA6-CF",
+   "version": "V3.0",
+   "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PA6-CF_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_pla_cf": {
+   "title": "Bambu Lab Technical Data Sheet PLA-CF",
+   "version": "V2.0",
+   "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA-CF_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_petg_cf": {
+   "title": "Bambu Lab Technical Data Sheet PETG-CF",
+   "version": "V2.0",
+   "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PETG-CF_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "bambu_pva": {
+   "title": "Bambu Lab Technical Data Sheet PVA",
+   "version": "V1.0",
+   "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PVA_Technical_Data_Sheet.pdf",
+   "accessed": "2026-11-06"
+  },
+  "lit_indicative": {
+   "title": "Ordres de grandeur de la litterature / pratique courante (retrait, deformation admissible en clipsage, PA non charge). Aucune fiche fabricant verifiee ligne a ligne.",
+   "version": "",
+   "url": "",
+   "accessed": "2026-11-06"
+  }
+ },
+ "materials": {
+  "PLA": {
+   "name": "PLA Basic",
+   "family": "PLA",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_pla_basic",
+   "properties": {
+    "density": {
+     "value": 1.24,
+     "unit": "g/cm3",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 2680,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 130
+    },
+    "modulus_z": {
+     "value": 2160,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 90
+    },
+    "tensile_xy": {
+     "value": 39,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 2
+    },
+    "tensile_z": {
+     "value": 35,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "elongation_xy": {
+     "value": 12.2,
+     "unit": "%",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 7.5,
+     "unit": "%",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 2750,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 60
+    },
+    "bending_modulus_z": {
+     "value": 2370,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 50
+    },
+    "bending_strength_xy": {
+     "value": 76,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "bending_strength_z": {
+     "value": 68,
+     "unit": "MPa",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 2
+    },
+    "hdt_1_8mpa": {
+     "value": 54,
+     "unit": "degC",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 57,
+     "unit": "degC",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 55,
+     "unit": "deg",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 30,
+     "unit": "mm",
+     "source": "bambu_pla_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.3,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.02,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PETG": {
+   "name": "PETG Basic",
+   "family": "PETG",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_petg_basic",
+   "properties": {
+    "density": {
+     "value": 1.25,
+     "unit": "g/cm3",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 1460,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 190
+    },
+    "modulus_z": {
+     "value": 1120,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 130
+    },
+    "tensile_xy": {
+     "value": 48,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 5
+    },
+    "tensile_z": {
+     "value": 39,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "elongation_xy": {
+     "value": 11.2,
+     "unit": "%",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 5.7,
+     "unit": "%",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 1790,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 120
+    },
+    "bending_modulus_z": {
+     "value": 1580,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 130
+    },
+    "bending_strength_xy": {
+     "value": 81,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "bending_strength_z": {
+     "value": 64,
+     "unit": "MPa",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG Basic, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "hdt_1_8mpa": {
+     "value": 65,
+     "unit": "degC",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 69,
+     "unit": "degC",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 30,
+     "unit": "mm",
+     "source": "bambu_petg_basic",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.4,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.03,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PETG-HF": {
+   "name": "PETG HF",
+   "family": "PETG",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_petg_hf",
+   "properties": {
+    "density": {
+     "value": 1.28,
+     "unit": "g/cm3",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 1810,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 190
+    },
+    "modulus_z": {
+     "value": 1540,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 130
+    },
+    "tensile_xy": {
+     "value": 34,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "tensile_z": {
+     "value": 23,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "elongation_xy": {
+     "value": 8.6,
+     "unit": "%",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 5.1,
+     "unit": "%",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 2050,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 120
+    },
+    "bending_modulus_z": {
+     "value": 1810,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 140
+    },
+    "bending_strength_xy": {
+     "value": 64,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "bending_strength_z": {
+     "value": 48,
+     "unit": "MPa",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG HF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "hdt_1_8mpa": {
+     "value": 62,
+     "unit": "degC",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 69,
+     "unit": "degC",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 30,
+     "unit": "mm",
+     "source": "bambu_petg_hf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.4,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.03,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "ABS": {
+   "name": "ABS",
+   "family": "ABS",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_abs",
+   "properties": {
+    "density": {
+     "value": 1.05,
+     "unit": "g/cm3",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 2200,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 190
+    },
+    "modulus_z": {
+     "value": 1960,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 110
+    },
+    "tensile_xy": {
+     "value": 41,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 1
+    },
+    "tensile_z": {
+     "value": 32,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 2
+    },
+    "elongation_xy": {
+     "value": 10.5,
+     "unit": "%",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 4.7,
+     "unit": "%",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 1880,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 110
+    },
+    "bending_modulus_z": {
+     "value": 1590,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 100
+    },
+    "bending_strength_xy": {
+     "value": 68,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "bending_strength_z": {
+     "value": 45,
+     "unit": "MPa",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ABS, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "hdt_1_8mpa": {
+     "value": 84,
+     "unit": "degC",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 87,
+     "unit": "degC",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 40,
+     "unit": "mm",
+     "source": "bambu_abs",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.8,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.025,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "ASA": {
+   "name": "ASA",
+   "family": "ASA",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_asa",
+   "properties": {
+    "density": {
+     "value": 1.05,
+     "unit": "g/cm3",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 2450,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 270
+    },
+    "modulus_z": {
+     "value": 2120,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 260
+    },
+    "tensile_xy": {
+     "value": 37,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "tensile_z": {
+     "value": 31,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "elongation_xy": {
+     "value": 9.2,
+     "unit": "%",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 4.6,
+     "unit": "%",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 1920,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 130
+    },
+    "bending_modulus_z": {
+     "value": 1650,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 120
+    },
+    "bending_strength_xy": {
+     "value": 65,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 5
+    },
+    "bending_strength_z": {
+     "value": 40,
+     "unit": "MPa",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, ASA, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "hdt_1_8mpa": {
+     "value": 92,
+     "unit": "degC",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 100,
+     "unit": "degC",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 40,
+     "unit": "mm",
+     "source": "bambu_asa",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.6,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.025,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "TPU-95A": {
+   "name": "TPU 95A",
+   "family": "TPU",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_tpu_95a",
+   "properties": {
+    "density": {
+     "value": 1.2,
+     "unit": "g/cm3",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 9.2,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 0.4
+    },
+    "modulus_z": {
+     "value": 7.8,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 0.5
+    },
+    "tensile_xy": {
+     "value": 29.6,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 0.6
+    },
+    "tensile_z": {
+     "value": 23.2,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 0.5
+    },
+    "elongation_xy": {
+     "value": 700,
+     "unit": "%",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "fiche: > 700 % (borne basse)"
+    },
+    "elongation_z": {
+     "value": 500,
+     "unit": "%",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "fiche: > 500 % (borne basse)"
+    },
+    "bending_modulus_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_modulus_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_strength_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_strength_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, TPU 95A, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "hdt_1_8mpa": {
+     "value": null,
+     "unit": "degC",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": null,
+     "unit": "degC",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 20,
+     "unit": "mm",
+     "source": "bambu_tpu_95a",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.8,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.1,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PC": {
+   "name": "PC",
+   "family": "PC",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_pc",
+   "properties": {
+    "density": {
+     "value": 1.2,
+     "unit": "g/cm3",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 2110,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 40
+    },
+    "modulus_z": {
+     "value": 1450,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 60
+    },
+    "tensile_xy": {
+     "value": 55,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "tensile_z": {
+     "value": 34,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "elongation_xy": {
+     "value": 3.8,
+     "unit": "%",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 2.1,
+     "unit": "%",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 2310,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 70
+    },
+    "bending_modulus_z": {
+     "value": 1620,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 80
+    },
+    "bending_strength_xy": {
+     "value": 108,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "bending_strength_z": {
+     "value": 55,
+     "unit": "MPa",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PC, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 2
+    },
+    "hdt_1_8mpa": {
+     "value": 117,
+     "unit": "degC",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 112,
+     "unit": "degC",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 40,
+     "unit": "mm",
+     "source": "bambu_pc",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.7,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.03,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PA-CF": {
+   "name": "PA6-CF",
+   "family": "PA-CF",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_pa6_cf",
+   "properties": {
+    "density": {
+     "value": 1.09,
+     "unit": "g/cm3",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 4430,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 310
+    },
+    "modulus_z": {
+     "value": 2170,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 230
+    },
+    "tensile_xy": {
+     "value": 102,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 7
+    },
+    "tensile_z": {
+     "value": 48,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 6
+    },
+    "elongation_xy": {
+     "value": 5.8,
+     "unit": "%",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 3.7,
+     "unit": "%",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 5460,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 280
+    },
+    "bending_modulus_z": {
+     "value": 2240,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 220
+    },
+    "bending_strength_xy": {
+     "value": 151,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 8
+    },
+    "bending_strength_z": {
+     "value": 80,
+     "unit": "MPa",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PA6-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 7
+    },
+    "hdt_1_8mpa": {
+     "value": 164,
+     "unit": "degC",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 186,
+     "unit": "degC",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 40,
+     "unit": "mm",
+     "source": "bambu_pa6_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.5,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.015,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PLA-CF": {
+   "name": "PLA-CF",
+   "family": "PLA-CF",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_pla_cf",
+   "properties": {
+    "density": {
+     "value": 1.22,
+     "unit": "g/cm3",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 2790,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 120
+    },
+    "modulus_z": {
+     "value": 2160,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 90
+    },
+    "tensile_xy": {
+     "value": 38,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "tensile_z": {
+     "value": 26,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 2
+    },
+    "elongation_xy": {
+     "value": 12.7,
+     "unit": "%",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 3.6,
+     "unit": "%",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 3700,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 220
+    },
+    "bending_modulus_z": {
+     "value": 2260,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 180
+    },
+    "bending_strength_xy": {
+     "value": 96,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "bending_strength_z": {
+     "value": 49,
+     "unit": "MPa",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PLA-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 2
+    },
+    "hdt_1_8mpa": {
+     "value": 54,
+     "unit": "degC",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 55,
+     "unit": "degC",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 55,
+     "unit": "deg",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 30,
+     "unit": "mm",
+     "source": "bambu_pla_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.15,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.01,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PETG-CF": {
+   "name": "PETG-CF",
+   "family": "PETG-CF",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_petg_cf",
+   "properties": {
+    "density": {
+     "value": 1.25,
+     "unit": "g/cm3",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": 2460,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 230
+    },
+    "modulus_z": {
+     "value": 1340,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 150
+    },
+    "tensile_xy": {
+     "value": 59,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "tensile_z": {
+     "value": 38,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "elongation_xy": {
+     "value": 10.4,
+     "unit": "%",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "elongation_z": {
+     "value": 4.7,
+     "unit": "%",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres"
+    },
+    "bending_modulus_xy": {
+     "value": 2890,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 130
+    },
+    "bending_modulus_z": {
+     "value": 1680,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 90
+    },
+    "bending_strength_xy": {
+     "value": 83,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 4
+    },
+    "bending_strength_z": {
+     "value": 62,
+     "unit": "MPa",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PETG-CF, etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "tol": 3
+    },
+    "hdt_1_8mpa": {
+     "value": 68,
+     "unit": "degC",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": 74,
+     "unit": "degC",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 70,
+     "unit": "deg",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 30,
+     "unit": "mm",
+     "source": "bambu_petg_cf",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": 0.3,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": 0.012,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PVA": {
+   "name": "PVA (support soluble)",
+   "family": "PVA/support",
+   "vendor": "Bambu Lab",
+   "tds_source": "bambu_pva",
+   "properties": {
+    "density": {
+     "value": 1.27,
+     "unit": "g/cm3",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 1183"
+    },
+    "modulus_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "modulus_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "tensile_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "tensile_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "elongation_xy": {
+     "value": null,
+     "unit": "%",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "elongation_z": {
+     "value": null,
+     "unit": "%",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_modulus_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_modulus_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_strength_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "bending_strength_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Eprouvettes imprimees (ISO 527/178/75), valeurs typiques du fabricant, PVA (support soluble), etat sec; non transferable a une autre bobine ou a d'autres parametres",
+     "note": "N/A dans la fiche"
+    },
+    "hdt_1_8mpa": {
+     "value": null,
+     "unit": "degC",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 1.8 MPa"
+    },
+    "hdt_0_45mpa": {
+     "value": null,
+     "unit": "degC",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "ISO 75, 0.45 MPa"
+    },
+    "max_overhang_deg": {
+     "value": 55,
+     "unit": "deg",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+    },
+    "max_bridge_mm": {
+     "value": 30,
+     "unit": "mm",
+     "source": "bambu_pva",
+     "date": "2026-11-06",
+     "level": "measured",
+     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+    },
+    "shrinkage_pct": {
+     "value": null,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Ordre de grandeur, depend fortement de la geometrie, de la chambre et des parametres"
+    },
+    "snap_strain_allow": {
+     "value": null,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Deformation admissible indicative pour un clip en flexion, avant facteur d'orientation"
+    }
+   }
+  },
+  "PA": {
+   "name": "PA (non charge, generique)",
+   "family": "PA",
+   "vendor": "generique",
+   "tds_source": "lit_indicative",
+   "properties": {
+    "density": {
+     "value": 1.1,
+     "unit": "g/cm3",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "modulus_xy": {
+     "value": null,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "modulus_z": {
+     "value": null,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "tensile_xy": {
+     "value": 45,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "tensile_z": {
+     "value": 28,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "elongation_xy": {
+     "value": null,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "elongation_z": {
+     "value": null,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "bending_modulus_xy": {
+     "value": 1500,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "bending_modulus_z": {
+     "value": 1100,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "bending_strength_xy": {
+     "value": 60,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "bending_strength_z": {
+     "value": 36,
+     "unit": "MPa",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "hdt_1_8mpa": {
+     "value": 60,
+     "unit": "degC",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "hdt_0_45mpa": {
+     "value": null,
+     "unit": "degC",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "max_overhang_deg": {
+     "value": 45,
+     "unit": "deg",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "max_bridge_mm": {
+     "value": 25,
+     "unit": "mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "shrinkage_pct": {
+     "value": 1.5,
+     "unit": "%",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    },
+    "snap_strain_allow": {
+     "value": 0.04,
+     "unit": "mm/mm",
+     "source": "lit_indicative",
+     "date": "2026-11-06",
+     "level": "indicative",
+     "domain": "Valeurs indicatives de la litterature pour un PA (nylon) non charge, humidite et grade tres variables; aucune fiche Bambu utilisee"
+    }
+   }
+  }
+ }
+}
