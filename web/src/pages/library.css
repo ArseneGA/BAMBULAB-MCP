@@ -1,0 +1,45 @@
+.lib { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+.lib-side { position: sticky; top: 0; }
+.lib-count { margin-left: auto; font: 500 var(--fs-xs)/1 var(--font-mono); color: var(--text-3); }
+.lib-main { display: grid; gap: var(--sp-3); min-width: 0; }
+.lib-bar { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.lib-bar .input-wrap { flex: 1 1 220px; min-width: 0; }
+.lib-bar .select { width: auto; min-width: 120px; }
+.lib-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.lib-tags .tag { cursor: pointer; height: 24px; }
+.lib-tags .tag.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.lib-meta { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); color: var(--text-2); font-size: var(--fs-sm); }
+.thumb { display: inline-grid; place-items: center; flex: none; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface-2); color: var(--text-2); }
+.rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); }
+.rows > li + li { border-top: 1px solid var(--line); }
+.row-link { display: grid; grid-template-columns: 40px minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.1fr) 112px 150px; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); text-decoration: none; color: inherit; border-left: 2px solid transparent; }
+.row-link:hover { background: var(--surface-2); border-left-color: var(--accent); }
+.row-link .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-link .sub { color: var(--text-3); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-link .fm { display: flex; gap: 4px; flex-wrap: wrap; }
+.row-link .dm { font: 400 var(--fs-sm)/1.2 var(--font-mono); color: var(--text-2); }
+.row-win { background: repeating-linear-gradient(135deg, transparent 0 8px, color-mix(in srgb, var(--warn) 8%, transparent) 8px 9px); }
+.tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; }
+.tile { display: grid; gap: var(--sp-2); align-content: start; height: 100%; padding: var(--sp-3); background: var(--surface); text-decoration: none; color: inherit; }
+.tile:hover { background: var(--surface-2); }
+.tile .thumb { width: 100%; height: 84px; }
+.tile .nm { font-weight: 600; line-height: 1.25; }
+.tile .sub { color: var(--text-3); font-size: var(--fs-sm); }
+.tile.row-win { background-color: var(--surface); }
+@media (max-width: 1100px) { .row-link { grid-template-columns: 40px minmax(0, 2fr) minmax(0, 1.1fr) 150px; } .row-link .col-coll, .row-link .col-dim { display: none; } }
+@media (max-width: 900px) {
+  .lib { grid-template-columns: minmax(0, 1fr); }
+  .lib-side { position: static; }
+  .lib-side .tree, .lib-side .tree-children { display: flex; flex-wrap: wrap; margin: 0; padding: 0; border: 0; }
+  .lib-side .tree > li > .list-item { width: auto; }
+}
+@media (max-width: 640px) { .row-link { grid-template-columns: 40px minmax(0, 1fr); } .row-link .col-fmt, .row-link .col-sync { grid-column: 2; } }
+.lib-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: var(--sp-3); }
+.lib-head-acts { display: flex; gap: var(--sp-2); align-items: center; }
+.lib-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: stretch; }
+.row-check { margin: 0 0 0 var(--sp-3); align-self: center; accent-color: var(--accent); width: 15px; height: 15px; }
+.lib-bulk { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; padding: var(--sp-2) var(--sp-3); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-2); font-size: var(--fs-sm); }
+.lib-pager { display: flex; gap: var(--sp-3); align-items: center; justify-content: center; font-size: var(--fs-sm); color: var(--text-2); }
+.lib-row .row-link { grid-template-columns: 40px minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1.2fr) 150px 150px; }
+@media (max-width: 1100px) { .lib-row .row-link { grid-template-columns: 40px minmax(0, 2fr) minmax(0, 1.1fr) 150px; } }
+@media (max-width: 640px) { .lib-row .row-link { grid-template-columns: 40px minmax(0, 1fr); } }

@@ -1,0 +1,20 @@
+.home-steps { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); }
+.home-steps li + li { border-top: 1px solid var(--line); }
+.home-step { display: grid; grid-template-columns: 32px 1fr 16px; gap: var(--sp-3); align-items: start; padding: var(--sp-3) var(--sp-4); color: var(--text); text-decoration: none; transition: background var(--dur-fast); }
+.home-step:hover { background: var(--surface-2); }
+.home-step:focus-visible { outline: none; box-shadow: var(--focus); }
+.home-n { color: var(--accent); font-weight: 600; padding-top: 1px; }
+.home-t { display: grid; gap: 2px; }
+.home-t span { color: var(--text-2); font-size: var(--fs-sm); }
+.home-more { display: flex; gap: var(--sp-2); margin-top: var(--sp-4); font-size: var(--fs-sm); color: var(--text-3); }
+.home-more a { color: var(--text-2); text-decoration: underline; }
+.home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--sp-4); align-items: start; max-width: 1120px; }
+.home-side { display: grid; gap: var(--sp-3); }
+.home-status { display: grid; gap: var(--sp-2); }
+.home-recent { list-style: none; margin: 0; padding: 0; }
+.home-recent li + li { border-top: 1px solid var(--line); }
+.home-recent a { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--sp-3); align-items: center; padding: var(--sp-2) var(--sp-3); color: inherit; text-decoration: none; }
+.home-recent a:hover { background: var(--surface-2); }
+.home-recent strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-recent .sub { display: block; color: var(--text-3); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 960px) { .home-grid { grid-template-columns: minmax(0, 1fr); } }

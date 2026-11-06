@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build, tests et compilation croisée. Usage : scripts/build.sh [all|build|test|test-race|vet|cross|clean]
+# Build, tests et compilation croisée. Usage : scripts/build.sh [all|build|web|release|test|test-race|vet|cross|clean]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export CGO_ENABLED=0   # SQLite pur Go : pas de cgo
@@ -9,6 +9,10 @@ CMDS=(bambud bambu-mcp)
 build() {
   mkdir -p bin
   for c in "${CMDS[@]}"; do go build -ldflags "$LDFLAGS" -o "bin/$c" "./cmd/$c"; done
+}
+
+web() {
+  (cd web && { [ -d node_modules ] || npm install; } && node scripts/embed.mjs)
 }
 
 cross() {
@@ -27,6 +31,8 @@ case "${1:-all}" in
   test)      go test ./... -count=1 ;;
   test-race) CGO_ENABLED=1 go test ./... -race -count=1 ;;  # exige cgo + compilateur C
   build)     build ;;
+  web)       web ;;
+  release)   web && go vet ./... && go test ./... -count=1 && build ;;
   cross)     cross ;;
   clean)     rm -rf bin data ;;
   all)       go vet ./... && go test ./... -count=1 && build ;;

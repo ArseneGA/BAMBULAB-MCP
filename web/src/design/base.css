@@ -1,0 +1,14 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 var(--fs-md)/var(--lh-body) var(--font-sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4, p { margin: 0; }
+h1 { font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: var(--fs-xl); line-height: var(--lh-tight); font-weight: 600; }
+h3 { font-size: var(--fs-lg); font-weight: 600; }
+.mono, code { font-family: var(--font-mono); font-feature-settings: 'zero' 1; }
+.eyebrow { font: 600 var(--fs-xs)/1 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: none; box-shadow: var(--focus); }
+::selection { background: var(--accent-soft); color: var(--text); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

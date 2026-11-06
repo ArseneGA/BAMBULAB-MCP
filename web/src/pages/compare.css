@@ -1,0 +1,12 @@
+.cmp-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); }
+.cmp { width: 100%; min-width: 640px; border-collapse: collapse; font-size: var(--fs-sm); }
+.cmp th, .cmp td { text-align: left; vertical-align: top; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); font-weight: 400; }
+.cmp thead th { background: var(--surface-2); font-weight: 600; }
+.cmp tbody th { color: var(--text-2); font-weight: 500; width: 22%; }
+.cmp-title { display: block; font-size: var(--fs-md); margin-bottom: 4px; }
+.cmp-state { display: flex; gap: 4px; flex-wrap: wrap; }
+.cmp-list { margin: 0; padding-left: var(--sp-3); display: grid; gap: 2px; }
+.cmp-delta { color: var(--text-3); font-size: var(--fs-xs); }
+.cmp-rank { padding: var(--sp-2) 0; border-top: 1px solid var(--line); }
+.cmp-rank:first-child { border-top: 0; padding-top: 0; }
+.cmp-order { margin: var(--sp-1) 0 0; padding-left: var(--sp-4); display: grid; gap: 2px; }

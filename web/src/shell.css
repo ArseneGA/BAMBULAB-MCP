@@ -1,0 +1,35 @@
+.app { display: flex; flex-direction: column; height: 100%; }
+.app > .main { flex: 1; }
+.demo-banner { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); height: 22px; background: var(--surface-3); color: var(--text-2); font: 500 var(--fs-xs)/1 var(--font-mono); letter-spacing: 0.02em; border-bottom: 1px solid var(--line); }
+.topbar { display: flex; align-items: center; gap: var(--sp-4); height: 44px; padding: 0 var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: var(--sp-2); font-weight: 700; letter-spacing: -0.01em; text-decoration: none; }
+.brand-mark { width: 14px; height: 14px; background: var(--accent); clip-path: polygon(0 0, 100% 0, 100% 60%, 60% 100%, 0 100%); }
+.nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; }
+.nav a { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 var(--sp-3); color: var(--text-2); text-decoration: none; font-weight: 500; border-bottom: 2px solid transparent; white-space: nowrap; transition: color var(--dur-fast), background var(--dur-fast); }
+.nav a:hover { color: var(--text); background: var(--surface-2); }
+.nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+.topbar-end { display: flex; align-items: center; gap: var(--sp-3); flex: none; }
+.nav { min-width: 0; }
+.nav a { flex: none; }
+.pill { white-space: nowrap; }
+.pill-long { display: none; }
+@media (max-width: 1180px) {
+  .nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .nav a { width: 40px; justify-content: center; padding: 0; }
+  .topbar { gap: var(--sp-3); }
+}
+@media (max-width: 860px) {
+  .topbar { padding: 0 var(--sp-2); gap: var(--sp-2); }
+  .topbar-end { gap: var(--sp-2); }
+  .nav a { width: 34px; }
+  .main { padding: var(--sp-4); }
+}
+.main { min-height: 0; overflow: auto; padding: var(--sp-6); }
+.page-head { display: grid; gap: var(--sp-1); margin-bottom: var(--sp-6); }
+.page-head p { color: var(--text-2); max-width: 70ch; }
+.placeholder-note { max-width: 70ch; }
+.topbar-end .tip-bubble { left: auto; right: 0; bottom: auto; top: calc(100% + 6px); transform: none; }
+.topbar { position: relative; z-index: 5; }
+.nav a { position: relative; }
+.nav-soon { width: 6px; height: 6px; background: var(--warn); transform: rotate(45deg); margin-left: 2px; flex: none; }
+.enroll { color: var(--warn); font-size: var(--fs-sm); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }

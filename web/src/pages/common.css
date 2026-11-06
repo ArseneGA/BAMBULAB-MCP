@@ -1,0 +1,37 @@
+.fmt-badge { font: 600 var(--fs-xs)/1 var(--font-mono); letter-spacing: 0.02em; }
+.pending { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3); margin-bottom: var(--sp-4); border: 1px dashed var(--warn); border-left: 3px solid var(--warn); border-radius: var(--r-2); background: var(--warn-soft); font-size: var(--fs-sm); }
+.pending > svg { flex: none; margin-top: 2px; color: var(--warn); }
+.pending details { margin-top: var(--sp-2); color: var(--text-2); }
+.pending summary { cursor: pointer; width: fit-content; border-radius: var(--r-1); }
+.pending ul { margin: var(--sp-2) 0 0; padding-left: var(--sp-4); display: grid; gap: var(--sp-1); }
+.server-banner { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--sp-2); padding: 4px var(--sp-3); background: var(--err-soft); color: var(--err); border-bottom: 1px solid var(--err); font-size: var(--fs-sm); font-weight: 500; }
+.notice { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3); border: 1px solid var(--line-strong); border-left-width: 3px; border-radius: var(--r-2); background: var(--surface); font-size: var(--fs-sm); }
+.notice > svg { flex: none; margin-top: 2px; }
+.notice h3 { font-size: var(--fs-md); margin-bottom: 2px; }
+.notice p { color: var(--text-2); }
+.notice .acts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.notice-warn { border-color: var(--warn); background: var(--warn-soft); }
+.notice-warn > svg { color: var(--warn); }
+.notice-err { border-color: var(--err); background: var(--err-soft); }
+.notice-err > svg { color: var(--err); }
+
+.dlg { padding: 0; border: 1px solid var(--line-strong); border-radius: var(--r-3); background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.dlg-wide { width: min(860px, calc(100vw - 32px)); }
+.dlg::backdrop { background: rgb(18 18 17 / 0.55); }
+.dlg-box { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: calc(100vh - 50px); }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--line); }
+.dlg-head h2 { font-size: var(--fs-lg); }
+.dlg-body { padding: var(--sp-4); overflow: auto; display: grid; gap: var(--sp-3); align-content: start; }
+.dlg-foot { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--line); background: var(--surface-2); }
+.progress { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--accent); transition: width var(--dur) var(--ease); }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-2); overflow: hidden; }
+.kv > div { background: var(--surface); padding: var(--sp-2) var(--sp-3); display: grid; gap: 2px; }
+.kv dt, .kv .k { font: 600 var(--fs-xs)/1 var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+.kv dd, .kv .v { margin: 0; font: 500 var(--fs-lg)/1.1 var(--font-mono); }
+.difftable { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.difftable th, .difftable td { text-align: left; padding: 6px var(--sp-2); border-bottom: 1px solid var(--line); vertical-align: top; }
+.difftable th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); font-weight: 600; }
+.difftable .before { color: var(--text-3); text-decoration: line-through; text-decoration-color: var(--err); overflow-wrap: anywhere; }
+.difftable .after { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.logbox { margin: 0; max-height: 160px; overflow: auto; padding: var(--sp-2) var(--sp-3); background: var(--surface-2); border-radius: var(--r-2); font: 400 var(--fs-xs)/1.5 var(--font-mono); white-space: pre-wrap; }

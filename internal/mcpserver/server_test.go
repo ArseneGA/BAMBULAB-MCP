@@ -151,7 +151,7 @@ func TestIntegrationToolsAndResource(t *testing.T) {
 		t.Fatalf("CSP absente du _meta : %v", rr.Contents[0].Meta)
 	}
 	lr, _ := cs.ListResources(ctx, nil)
-	if len(lr.Resources) != 1 || lr.Resources[0].URI != mcpserver.AtelierURI || lr.Resources[0].MIMEType != mcpserver.AppMIMEType {
+	if len(lr.Resources) != 4 || lr.Resources[0].URI != mcpserver.AtelierURI || lr.Resources[0].MIMEType != mcpserver.AppMIMEType { // atelier + search + model + print-confirm
 		t.Fatalf("liste des ressources : %+v", lr.Resources)
 	}
 	if _, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "ui://inconnu"}); err == nil {

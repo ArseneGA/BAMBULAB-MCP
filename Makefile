@@ -5,13 +5,20 @@ export CGO_ENABLED=0
 LDFLAGS := -s -w
 CMDS := bambud bambu-mcp
 
-.PHONY: all build test test-race vet cross clean
+.PHONY: all build web release test test-race vet cross clean
 
 all: vet test build
 
 build:
 	@mkdir -p bin
 	@for c in $(CMDS); do go build -ldflags "$(LDFLAGS)" -o bin/$$c ./cmd/$$c; done
+
+# Interface web et vue MCP App : construites puis embarquees dans le binaire (go:embed).
+web:
+	cd web && (test -d node_modules || npm install) && node scripts/embed.mjs
+
+# Construit web puis Go : interface + verifications + binaires.
+release: web vet test build
 
 vet:
 	go vet ./...
