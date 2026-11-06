@@ -66,6 +66,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerCatalog(mux, c)
 	registerAgent(mux, c)
 	registerGoals(mux, c)
+	registerPrinting(mux, c) // chaîne d'impression + pages /setup /confirm (printing.go)
 
 	server := mcpserver.New(c)
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{

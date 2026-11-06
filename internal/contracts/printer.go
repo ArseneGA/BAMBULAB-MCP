@@ -46,10 +46,9 @@ type Printer struct {
 
 // SeedPrinterModels renvoie les profils machine livrés d'office : VIDE volontairement.
 //
-// TODO(internal/profiles) : le catalogue des modèles Bambu Lab (toute la gamme FDM :
-// volume, buses, plateaux, caisson, AMS, températures max.) sera produit à partir des
-// profils BBL du slicer par le package internal/profiles, livré par un autre chantier.
-// Tant qu'il n'est pas branché, aucun modèle n'est semé : ni la seule P1S « à confirmer »,
-// ni aucune valeur inventée ; un champ inconnu reste nil. Brancher ici (ou à l'ouverture
-// du core) le chargement de internal/profiles quand il existe.
+// Le catalogue des modèles Bambu Lab n'est pas figé dans le code : il est semé à
+// l'exécution depuis les profils de Bambu Studio par printing.SeedPrinterModels
+// (internal/printing, volume d'impression, buses, plateaux ; tout le reste reste nil =
+// inconnu). Ce paquet ne peut pas importer internal/profiles : cette fonction reste donc
+// vide, ne sème ni la seule P1S ni aucune valeur inventée.
 func SeedPrinterModels() []PrinterModel { return nil }
