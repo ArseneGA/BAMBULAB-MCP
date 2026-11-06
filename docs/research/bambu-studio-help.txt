@@ -1,0 +1,6 @@
+[Consulte le 2026-11-06] `bambu-studio.exe --help` (v02.08.02.61, Windows) n'ecrit RIEN sur stdout/stderr :
+l'exe est lie en sous-systeme GUI (pas de console attachee). Test avec redirection bash (> fichier 2>&1)
+et PowerShell Start-Process -RedirectStandardOutput : fichier de 0 octet, code retour 0.
+Le texte d'aide existe dans le source (BambuStudio.cpp::CLI::print_help, "Usage: bambu-studio [ OPTIONS ] [ file.3mf/file.stl ... ]")
+mais n'est visible que sur un build console (Linux AppImage, ou terminal avec console attachee).
+Voir bambu-studio-cli.md pour la liste d'options reconstituee depuis le wiki officiel et le source.
