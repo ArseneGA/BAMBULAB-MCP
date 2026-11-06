@@ -178,9 +178,9 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	if txt := r.callErr("start_print", map[string]any{"print_job_id": jobID, "confirmation_id": confID, "idempotency_key": "cle-start-non-approuve"}); !strings.Contains(txt, "confirm") {
 		t.Fatalf("approbation manquante : %s", txt)
 	}
-	// Les outils réservés à l'application ne sont pas un moyen de confirmer pour le modèle sans plateau vide.
-	if r.callErr("confirm_print_from_app", map[string]any{"confirmation_id": confID, "plate_clear": false}) == "" {
-		t.Fatal("confirmation sans attestation plateau vide")
+	// Aucun outil MCP ne confirme : l'ancien outil d'application n'existe plus.
+	if txt := r.callErr("confirm_print_from_app", map[string]any{"confirmation_id": confID, "plate_clear": true}); txt == "" {
+		t.Fatal("confirm_print_from_app ne doit plus exister")
 	}
 	// Formulaire forgé sans nonce : refusé. Sans case « plateau vide » : refusé.
 	if st, _ := r.humanPost(confURL, url.Values{"plate_clear": {"yes"}}); st != 403 {
@@ -427,19 +427,22 @@ func TestPrintToolsGuardsAndPreview(t *testing.T) {
 	if img == nil || img.MIMEType != "image/png" || len(img.Data) < 1000 || string(img.Data[1:4]) != "PNG" {
 		t.Fatalf("image : %+v", img)
 	}
-	// Les outils d'application sont marqués invisibles pour le modèle.
+	// L'outil de vue est en lecture seule, invisible pour le modèle ; aucun outil d'approbation n'existe.
 	tools, _ := r.cs.ListTools(t.Context(), nil)
 	seen := 0
 	for _, tl := range tools.Tools {
-		if tl.Name == "confirm_print_from_app" || tl.Name == "get_print_confirmation_view" {
+		if tl.Name == "confirm_print_from_app" {
+			t.Fatal("confirm_print_from_app ne doit plus exister")
+		}
+		if tl.Name == "get_print_confirmation_view" {
 			seen++
 			if !strings.Contains(fmt.Sprint(tl.Meta), "app") {
 				t.Fatalf("%s : visibility app attendue : %v", tl.Name, tl.Meta)
 			}
 		}
 	}
-	if seen != 2 {
-		t.Fatal("outils d'application absents")
+	if seen != 1 {
+		t.Fatal("outil de vue absent")
 	}
 	// start_print sur une impression inexistante / mauvaise entrée.
 	if r.callErr("start_print", map[string]any{"print_job_id": "pj_x", "confirmation_id": "cf_x", "idempotency_key": "court"}) == "" {

@@ -45,12 +45,6 @@ type PrintJobIDInput struct {
 	PrintJobID string `json:"print_job_id"`
 }
 
-// AppConfirmInput : confirmation depuis la vue MCP App.
-type AppConfirmInput struct {
-	ConfirmationID string `json:"confirmation_id"`
-	PlateClear     bool   `json:"plate_clear" jsonschema:"attestation de l'humain : le plateau est vide et dégagé"`
-}
-
 // ConfirmationIDInput identifie une confirmation.
 type ConfirmationIDInput struct {
 	ConfirmationID string `json:"confirmation_id"`
@@ -308,10 +302,10 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			o.VersionID, o.ParentVersionID, len(o.Applied), a[0], a[1], a[2], o.Diff.VolumeRatio, len(o.Warnings))), *o, nil
 	})
 
-	// ---- outils réservés à l'application MCP (cachés au modèle par l'hôte) ----
+	// ---- vue de l'application MCP : LECTURE SEULE. Aucun outil MCP n'approuve un lancement ni un arrêt : l'accord humain ne passe que par les pages web (cookie de navigateur enregistré). ----
 	addTool(s, &mcp.Tool{
 		Name: "get_print_confirmation_view", Title: "Confirmation (vue application)",
-		Description: "Réservé à l'application : éléments liés d'une confirmation à afficher à l'humain.",
+		Description: "Réservé à l'application, lecture seule : éléments liés d'une confirmation à afficher à l'humain (ni jeton, ni nonce, aucun moyen d'approuver).",
 		Annotations: ro, Meta: appOnlyMeta(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ConfirmationIDInput) (*mcp.CallToolResult, printing.ConfirmationView, error) {
 		v, err := p.GetConfirmation(ctx, in.ConfirmationID)
@@ -319,17 +313,6 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			return nil, printing.ConfirmationView{}, err
 		}
 		return textResult("Confirmation " + v.ConfirmationID), *v, nil
-	})
-	addTool(s, &mcp.Tool{
-		Name: "confirm_print_from_app", Title: "Confirmer le lancement (application)",
-		Description: "Réservé à l'application (visibility app) : enregistre l'accord de l'humain qui a coché « plateau vide » dans la vue. N'est pas destiné au modèle ; la page web locale reste le canal de référence.",
-		Annotations: write, Meta: appOnlyMeta(),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in AppConfirmInput) (*mcp.CallToolResult, printing.ConfirmationView, error) {
-		v, err := p.Approve(ctx, in.ConfirmationID, in.PlateClear, "app")
-		if err != nil {
-			return nil, printing.ConfirmationView{}, err
-		}
-		return textResult("Accord enregistré pour la confirmation " + v.ConfirmationID), *v, nil
 	})
 }
 
