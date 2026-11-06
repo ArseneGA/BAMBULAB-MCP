@@ -46,6 +46,7 @@ func run(ctx context.Context, args []string, in io.ReadCloser, out io.WriteClose
 	embedded := fs.Bool("embedded", false, "ouvre le cœur local au lieu de relayer vers bambud")
 	dataDir := fs.String("data-dir", envOr("BAMBU_DATA_DIR", core.DefaultDataDir()), "dossier de données absolu (mode --embedded ; env BAMBU_DATA_DIR ; défaut %LOCALAPPDATA%\\BambuAtelier ou $XDG_DATA_HOME/bambu-atelier)")
 	apiToken := fs.String("api-token", os.Getenv("BAMBU_API_TOKEN"), "jeton d'API de bambud (Bearer ; env BAMBU_API_TOKEN)")
+	tokenFile := fs.String("api-token-file", os.Getenv("BAMBU_API_TOKEN_FILE"), "fichier contenant le jeton d'API (évite de l'écrire dans la configuration de Claude Desktop ; env BAMBU_API_TOKEN_FILE)")
 	attempts := fs.Int("connect-attempts", 4, "tentatives de connexion initiale à bambud (backoff exponentiel)")
 	level := fs.String("log-level", envOr("BAMBU_LOG_LEVEL", "info"), "debug|info|warn|error")
 	version := fs.Bool("version", false, "affiche la version (sur stderr)")
@@ -61,19 +62,42 @@ func run(ctx context.Context, args []string, in io.ReadCloser, out io.WriteClose
 		lvl = slog.LevelInfo
 	}
 	log := slog.New(slog.NewTextHandler(errw, &slog.HandlerOptions{Level: lvl}))
+	token, err := resolveToken(*apiToken, *tokenFile)
+	if err != nil {
+		log.Error("configuration invalide", "err", err)
+		return 2
+	}
 	tr := &mcp.IOTransport{Reader: in, Writer: out}
 
-	var err error
 	if *embedded {
 		err = runEmbedded(ctx, log, *dataDir, tr)
 	} else {
-		err = runBridge(ctx, log, *url, *apiToken, *attempts, tr)
+		err = runBridge(ctx, log, *url, token, *attempts, tr)
 	}
 	if err != nil && ctx.Err() == nil {
 		log.Error("arrêt sur erreur", "err", err)
 		return 1
 	}
 	return 0
+}
+
+// resolveToken renvoie le jeton d'API : celui de --api-token / BAMBU_API_TOKEN, sinon le contenu du fichier
+// --api-token-file / BAMBU_API_TOKEN_FILE (première ligne, espaces retirés). Le fichier permet de ne pas écrire le
+// jeton en clair dans claude_desktop_config.json ; son contenu n'est jamais journalisé.
+func resolveToken(token, file string) (string, error) {
+	if token != "" || file == "" {
+		return token, nil
+	}
+	b, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("fichier de jeton illisible : %w", err)
+	}
+	line, _, _ := strings.Cut(strings.TrimPrefix(string(b), "\xef\xbb\xbf"), "\n") // BOM éventuel (PowerShell 5.1)
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", fmt.Errorf("fichier de jeton %q vide", file)
+	}
+	return line, nil
 }
 
 // bearerTransport ajoute le jeton d'API à chaque requête vers bambud.

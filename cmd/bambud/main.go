@@ -57,6 +57,8 @@ func main() {
 	geomDir := fs.String("geometry-dir", os.Getenv("BAMBU_GEOMETRY_DIR"), "projet Python du worker géométrie (env BAMBU_GEOMETRY_DIR ; défaut workers/geometry)")
 	publicURL := fs.String("public-url", os.Getenv("BAMBU_PUBLIC_URL"), "URL sous laquelle l'humain atteint le service (liens /confirm, /stop, /setup ; https => cookie Secure) (env BAMBU_PUBLIC_URL)")
 	anyHost := fs.Bool("allow-any-printer-host", os.Getenv("BAMBU_ALLOW_ANY_PRINTER_HOST") == "1", "lève la restriction des hôtes d'imprimante aux adresses privées / lien local / .local")
+	studioBin := fs.String("studio-bin", "", "exécutable ou AppImage de Bambu Studio (défaut : env BAMBU_STUDIO_BIN, puis détection)")
+	studioWrap := fs.String("studio-wrapper", os.Getenv("BAMBU_STUDIO_WRAPPER"), "commande préfixe du slicer, ex. \"xvfb-run -a\" ; \"none\" la désactive (env BAMBU_STUDIO_WRAPPER ; défaut sous Linux sans écran : xvfb-run -a s'il est installé)")
 	version := fs.Bool("version", false, "affiche la version")
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -64,6 +66,12 @@ func main() {
 			os.Exit(seedDemoMain(os.Args[2:]))
 		case "enroll":
 			os.Exit(enrollMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "backup":
+			os.Exit(backupMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "restore":
+			os.Exit(restoreMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "verify":
+			os.Exit(verifyMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "agent":
 			os.Exit(agentMain(os.Args[2:], os.Stdout, os.Stderr))
 		}
@@ -94,7 +102,8 @@ func main() {
 	}
 	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: strings.TrimRight(*publicURL, "/")}, DrainTimeout: *drain}
 	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log,
-		Catalog: catalogConfig(*roots, *uvPath, *geomDir), AllowAnyPrinterHost: *anyHost}, sc, nil); err != nil {
+		Catalog: catalogConfig(*roots, *uvPath, *geomDir), AllowAnyPrinterHost: *anyHost,
+		StudioPath: *studioBin, StudioWrapper: studioWrapper(*studioWrap)}, sc, nil); err != nil {
 		log.Error("arrêt sur erreur", "err", err)
 		os.Exit(1)
 	}

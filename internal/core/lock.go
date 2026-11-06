@@ -34,6 +34,16 @@ func acquireInstanceLock(dir string) (*instanceLock, error) {
 	return &instanceLock{f: f}, nil
 }
 
+// LockDataDir prend le verrou d'instance d'un dossier de données (utilisé par `bambud restore` pour ne
+// jamais écraser les données d'un service en marche). La fonction renvoyée libère le verrou.
+func LockDataDir(dir string) (release func() error, err error) {
+	l, err := acquireInstanceLock(dir)
+	if err != nil {
+		return nil, err
+	}
+	return l.release, nil
+}
+
 func (l *instanceLock) release() error {
 	if l == nil || l.f == nil {
 		return nil
