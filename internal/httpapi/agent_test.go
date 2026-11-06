@@ -5,13 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/agentlink"
-	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
 )
 
 func getJSON(t *testing.T, url string, out any) int {
@@ -59,13 +57,15 @@ func TestAgentAvailabilityInCapabilities(t *testing.T) {
 		t.Fatalf("sans agent : %v", caps)
 	}
 
-	// Appairage : jeton généré par le serveur (requête locale), échangé une fois.
+	// Appairage : jeton créé par la CLI humaine (`bambud agent pair`), échangé une fois.
 	var pr struct {
-		Token string `json:"pairing_token"`
+		Token string
 	}
-	if st := postJSON(t, e.srv.URL+"/api/agents/pairing", map[string]any{}, &pr); st != 200 || !strings.HasPrefix(pr.Token, "pair-") {
-		t.Fatalf("pairing : %d %+v", st, pr)
+	tok, _, err := agentlink.CreatePairing(bg, e.c.Store, agentlink.DefaultPairingTTL)
+	if err != nil || !strings.HasPrefix(tok, "pair-") {
+		t.Fatalf("pairing : %v %q", err, tok)
 	}
+	pr.Token = tok
 	cl := agentlink.NewClient(e.srv.URL, "")
 	resp, err := cl.Pair(bg, agentlink.PairRequest{Token: pr.Token, Name: "PC-Bureau"})
 	if err != nil {
@@ -131,24 +131,5 @@ func TestAgentAvailabilityInCapabilities(t *testing.T) {
 	getJSON(t, e.srv.URL+"/api/capabilities", &caps)
 	if caps["mode"] != "linux_seul" || caps["agents"] != nil {
 		t.Fatalf("après révocation : %v", caps)
-	}
-}
-
-func TestPairingRefusedFromRemoteAddress(t *testing.T) {
-	e := setup(t)
-	h := httpapi.NewHandler(e.c)
-	req := httptest.NewRequest("POST", "/api/agents/pairing", strings.NewReader("{}"))
-	req.RemoteAddr = "192.168.1.50:51234"
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("appairage depuis le réseau : %d", rec.Code)
-	}
-	req.RemoteAddr = "127.0.0.1:51234"
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("POST", "/api/agents/pairing", strings.NewReader("{}")))
-	// httptest.NewRequest met 192.0.2.1 par défaut : refus aussi, ce n'est pas une boucle locale.
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("adresse de test non locale : %d", rec.Code)
 	}
 }

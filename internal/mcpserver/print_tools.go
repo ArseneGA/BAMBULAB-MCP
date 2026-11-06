@@ -97,8 +97,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 
 	addTool(s, &mcp.Tool{
 		Name: "add_printer", Title: "Ajouter une imprimante",
-		Description: "Enregistre une imprimante Bambu (modèle de list_printer_models, hôte, numéro de série, buse, AMS). Le code d'accès n'est PAS un paramètre : " +
-			"l'outil renvoie l'URL d'une page locale (/setup/printer/{id}) que l'utilisateur ouvre pour le saisir ; il est stocké chiffré hors base et n'est jamais renvoyé ni journalisé.",
+		Description: "Enregistre une imprimante Bambu (modèle de list_printer_models, hôte du réseau LOCAL — adresse privée, lien local ou nom .local —, numéro de série, buse, AMS). " +
+			"Ni le code d'accès, ni l'empreinte du certificat, ni aucune option de contournement TLS ne sont des paramètres : l'outil renvoie l'URL d'une page locale (/setup/printer/{id}) que " +
+			"l'utilisateur ouvre dans son navigateur enregistré ; le serveur y affiche l'empreinte du certificat de l'imprimante avec le numéro de série attendu, et l'utilisateur la valide en saisissant le code d'accès (stocké chiffré hors base, jamais renvoyé ni journalisé).",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.AddPrinterInput) (*mcp.CallToolResult, AddPrinterOut, error) {
 		v, err := p.AddPrinter(ctx, in)
@@ -106,7 +107,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			return nil, AddPrinterOut{}, err
 		}
 		out := AddPrinterOut{Printer: *v, SetupURL: v.SetupURL,
-			Note: "Demande à l'utilisateur d'ouvrir setup_url pour saisir le code d'accès affiché sur l'écran de l'imprimante. Ne lui demande jamais ce code dans la conversation."}
+			Note: "Demande à l'utilisateur d'ouvrir setup_url pour comparer l'empreinte du certificat et saisir le code d'accès affiché sur l'écran de l'imprimante. Ne lui demande jamais ce code dans la conversation. Tant que ce n'est pas fait, aucune connexion à l'imprimante n'est tentée."}
 		return textResult(fmt.Sprintf("Imprimante %s (%s) enregistrée sous %s. Page de saisie du code d'accès : %s", v.Name, v.ModelName, v.ID, v.SetupURL)), out, nil
 	})
 
@@ -207,8 +208,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 
 	addTool(s, &mcp.Tool{
 		Name: "get_print_status", Title: "Suivi d'une impression",
-		Description: "État de l'impression (machine d'états), historique, progression observée sur l'imprimante (couche, %, temps restant) et état de l'imprimante. Passe à COMPLETED/FAILED selon l'imprimante.",
-		Annotations: ro,
+		Description: "État de l'impression (machine d'états), historique, progression observée sur l'imprimante (couche, %, temps restant) et état de l'imprimante. Passe à COMPLETED/FAILED selon l'imprimante. " +
+			"Effet de bord local : relit l'imprimante et met à jour l'impression (pas en lecture seule au sens strict).",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in PrintJobIDInput) (*mcp.CallToolResult, printing.PrintStatus, error) {
 		st, err := p.GetPrintStatus(ctx, in.PrintJobID)
 		if err != nil {
@@ -229,8 +231,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 
 	addTool(s, &mcp.Tool{
 		Name: "cancel_print", Title: "Annuler une impression",
-		Description: "Annule selon la phase : avant lancement = annulation logique ; SLICING = annule aussi la découpe ; PRINTING = arrêt de l'imprimante après une confirmation séparée " +
-			"(premier appel -> stop_confirmation_id et question ; second appel avec stop_confirmation_id une fois l'utilisateur d'accord). START_REQUESTED / START_UNKNOWN : refus, utiliser reconcile_print.",
+		Description: "Annule selon la phase : avant lancement = annulation logique ; SLICING = annule aussi la découpe ; PRINTING = CRÉE une demande d'arrêt et renvoie stop_url : " +
+			"l'imprimante n'est arrêtée que si l'HUMAIN ouvre cette page dans son navigateur enregistré et la valide (tu ne peux pas le faire à sa place, aucun identifiant exécutable n'est renvoyé). " +
+			"START_REQUESTED / START_UNKNOWN : refus, utiliser reconcile_print.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &t},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.CancelInput) (*mcp.CallToolResult, printing.CancelOutput, error) {
 		o, err := p.CancelPrint(ctx, in)
@@ -239,7 +242,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		}
 		txt := fmt.Sprintf("Impression %s : %s. %s", o.PrintJobID, o.Outcome, o.Note)
 		if o.Question != "" {
-			txt += " QUESTION À POSER : « " + o.Question + " »"
+			txt += " QUESTION À POSER : « " + o.Question + " » Lien à donner à l'utilisateur : " + o.StopURL
 		}
 		return textResult(txt), *o, nil
 	})

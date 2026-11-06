@@ -160,7 +160,11 @@ func (s *Service) ExecuteHeadlessSlice(ctx context.Context, in SliceInput) (*Job
 		return nil, err
 	}
 	params, _ := json.Marshal(map[string]string{"print_job_id": j.ID})
-	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobSlice, Class: contracts.ClassHeavy, Params: params, IdempotencyKey: in.IdempotencyKey})
+	ikey := ""
+	if k := strings.TrimSpace(in.IdempotencyKey); k != "" {
+		ikey = in.ModelID + ":" + in.PrinterID + ":slice:" + k // l'impression n'existe pas encore : portée modèle + imprimante
+	}
+	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobSlice, Class: contracts.ClassHeavy, Params: params, IdempotencyKey: ikey})
 	if err != nil {
 		_, _ = s.transition(ctx, j.ID, contracts.EvCancel, "mise en file impossible : "+err.Error(), nil)
 		return nil, err
@@ -172,6 +176,9 @@ func (s *Service) ExecuteHeadlessSlice(ctx context.Context, in SliceInput) (*Job
 		}
 		_ = json.Unmarshal(qj.Params, &p)
 		orig, err := s.GetJob(ctx, p.ID)
+		if err == nil && (orig.ModelID != j.ModelID || orig.PrinterID != j.PrinterID || orig.VersionID != j.VersionID || orig.Plate != j.Plate || orig.ProfileRevision != j.ProfileRevision) {
+			return nil, fmt.Errorf("%w : execute_headless_slice avec cette clé a déjà été demandé avec d'autres paramètres", ErrReplayParams)
+		}
 		return &orig, err
 	}
 	out, err := s.update(ctx, j.ID, func(x *Job) error { x.SliceJobID = qj.ID; return nil })

@@ -160,13 +160,28 @@ func hashHex(s string) string {
 
 // ---- appairage ----
 
-// NewPairing génère un jeton d'appairage à usage unique (affiché une seule fois).
+// DefaultPairingTTL : validité d'un jeton d'appairage.
+const DefaultPairingTTL = 15 * time.Minute
+
+// NewPairing génère un jeton d'appairage à usage unique (affiché une seule fois). Il n'est exposé que par
+// la CLI humaine (`bambud agent pair`) et la page /agents/pair d'un navigateur enregistré.
 func (r *Registry) NewPairing(ctx context.Context) (token string, expires time.Time, err error) {
+	return createPairing(ctx, r.d.Store, r.now(), r.cfg.PairingTTL)
+}
+
+// CreatePairing crée un jeton d'appairage directement dans la base (CLI `bambud agent pair`, sans registre).
+func CreatePairing(ctx context.Context, st *store.Store, ttl time.Duration) (string, time.Time, error) {
+	return createPairing(ctx, st, st.Now(), ttl)
+}
+
+func createPairing(ctx context.Context, st *store.Store, now time.Time, ttl time.Duration) (token string, expires time.Time, err error) {
 	token = "pair-" + newToken(16)
-	now := r.now()
-	expires = now.Add(r.cfg.PairingTTL)
-	_, err = r.db().ExecContext(ctx, `INSERT INTO agent_pairings(token_hash,created_at,expires_at) VALUES(?,?,?)`,
+	expires = now.Add(ttl)
+	_, err = st.DB().ExecContext(ctx, `INSERT INTO agent_pairings(token_hash,created_at,expires_at) VALUES(?,?,?)`,
 		hashHex(token), store.FormatTime(now), store.FormatTime(expires))
+	if err == nil {
+		_ = st.Audit(ctx, "human", "agent.pairing_created", "agent_pairing", "", map[string]any{"expires": expires})
+	}
 	return token, expires, err
 }
 

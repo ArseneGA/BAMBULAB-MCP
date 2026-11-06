@@ -6,20 +6,18 @@ package printing
 //  1. request_print_confirmation crée une PrintConfirmation liée (imprimante,
 //     empreinte, plateau, matières) avec un jeton de 256 bits. Le jeton reste dans
 //     la MÉMOIRE du service : il n'est jamais renvoyé au modèle, ni stocké en clair.
-//  2. Seul un humain le « libère » : soit en ouvrant la page locale
-//     /confirm/{id} (il coche « plateau vide » puis clique « Lancer »), soit via
-//     l'outil réservé à l'application MCP (visibility ["app"]) appelé par la vue.
+//  2. Seul un humain le « libère » : en ouvrant la page /confirm/{id} depuis un
+//     NAVIGATEUR ENREGISTRÉ (cookie de session obtenu par `bambud enroll`, voir
+//     internal/humanauth) : il coche « plateau vide » puis clique « Lancer ». AUCUN outil MCP
+//     ni route JSON ne peut approuver (docs/SECURITY.md).
 //  3. start_print n'a qu'un identifiant de confirmation : il refuse tant que
 //     l'humain n'a pas approuvé, puis le jeton est consommé atomiquement par
 //     store.ConsumeConfirmation, à l'instant exact de l'envoi de la commande.
 //
-// Limite assumée : la page web est protégée par le garde HTTP (hôte loopback ou
-// liste blanche, anti-CSRF navigateur, jeton d'API hors loopback) et par un nonce
-// à usage unique, mais un agent qui disposerait lui-même d'un client HTTP local
-// pourrait la valider ; l'outil d'application dépend de la mise en œuvre de
-// `visibility:["app"]` par l'hôte. Ce n'est donc pas une preuve cryptographique
-// de présence humaine : c'est une barrière qui sort la décision du canal que
-// contrôle le modèle.
+// Limite assumée : un processus local qui aurait les droits de l'utilisateur (shell) pourrait
+// lire la base et se faire enregistrer ; c'est hors périmètre (le modèle n'a que MCP) mais
+// visible (journal d'audit) et plus difficile (code à usage unique affiché sur le terminal).
+// Ce n'est pas une preuve cryptographique de présence humaine.
 
 import (
 	"context"
@@ -45,10 +43,34 @@ type approval struct {
 	via        string
 }
 
+// pageNonce : nonce de formulaire à usage unique ; extra porte une donnée liée côté serveur
+// (ex. l'empreinte de certificat affichée à l'humain sur la page de saisie du code).
 type pageNonce struct {
 	confID  string
 	expires time.Time
+	extra   string
 }
+
+// stopReq : demande d'arrêt d'une impression en cours. Elle ne vaut RIEN sans validation humaine
+// sur /stop/{id} (navigateur enregistré) ; son identifiant n'est qu'un localisateur.
+type stopReq struct {
+	jobID   string
+	expires time.Time
+}
+
+// consumedEntry : lancement (travail de file) qui a consommé une confirmation.
+type consumedEntry struct {
+	queueJob string
+	at       time.Time
+}
+
+const (
+	nonceTTL    = 15 * time.Minute
+	stopTTL     = 10 * time.Minute
+	consumedTTL = time.Hour
+	// DefaultApprovalTTL : un accord humain n'est utilisable que 2 minutes après le clic.
+	DefaultApprovalTTL = 2 * time.Minute
+)
 
 // ConfirmationView est ce que reçoit le modèle : jamais le jeton.
 type ConfirmationView struct {
@@ -126,12 +148,12 @@ func (s *Service) confirmationView(j Job, conf contracts.PrintConfirmation) *Con
 	_, d := s.promptFor(j)
 	s.mu.Lock()
 	a := s.approv[conf.ID]
-	approved := a != nil && a.approved
+	approved := a != nil && a.approved && s.now().Before(a.approvedAt.Add(s.approvalTTL()))
 	s.mu.Unlock()
 	return &ConfirmationView{ConfirmationID: conf.ID, PrintJobID: j.ID, ExpiresAt: conf.ExpiresAt, ConfirmURL: s.BaseURL() + "/confirm/" + conf.ID,
 		Approved: approved, Binding: *d, State: j.State,
-		Instructions: "Demande à l'utilisateur d'ouvrir confirm_url dans son navigateur, de vérifier le résumé, de cocher « plateau vide » et de cliquer sur Lancer. " +
-			"Tu ne peux pas confirmer à sa place. Ensuite appelle start_print avec confirmation_id et une idempotency_key."}
+		Instructions: "Demande à l'utilisateur d'ouvrir confirm_url dans son navigateur enregistré (sinon bambud enroll puis /enroll), de vérifier le résumé, de cocher « plateau vide » et de cliquer sur Lancer. " +
+			"Tu ne peux pas confirmer à sa place. Son accord ne vaut que 2 minutes ; ensuite appelle start_print avec confirmation_id et une idempotency_key."}
 }
 
 // GetConfirmation relit une confirmation (sans jeton).
@@ -176,7 +198,8 @@ func (s *Service) confirmable(ctx context.Context, confID string) (contracts.Pri
 	return conf, j, nil
 }
 
-// Approve enregistre l'accord HUMAIN (page web ou application MCP). plateClear est
+// Approve enregistre l'accord HUMAIN (page web d'un navigateur enregistré UNIQUEMENT : aucun outil MCP,
+// aucune route JSON ne l'appelle ; test noapprove_test.go). plateClear est
 // l'attestation « le plateau est vide » : sans elle, refus.
 func (s *Service) Approve(ctx context.Context, confID string, plateClear bool, via string) (*ConfirmationView, error) {
 	if !plateClear {
@@ -207,13 +230,34 @@ func (s *Service) approvedFor(confID, jobID string) (*approval, error) {
 		return nil, fmt.Errorf("%w : aucune confirmation en attente pour cette impression", ErrNeedsApproval)
 	}
 	if !a.approved || !a.plateClear {
-		return nil, fmt.Errorf("%w : l'utilisateur n'a pas encore confirmé sur %s", ErrNeedsApproval, s.BaseURL()+"/confirm/"+confID)
+		return nil, fmt.Errorf("%w : l'utilisateur n'a pas encore confirmé (ou son accord a été invalidé) sur %s", ErrNeedsApproval, s.BaseURL()+"/confirm/"+confID)
 	}
 	if !s.now().Before(a.expires) {
 		return nil, contracts.ErrConfirmationExpired
 	}
+	if !s.now().Before(a.approvedAt.Add(s.approvalTTL())) {
+		a.approved, a.plateClear = false, false // périmé : l'humain doit recliquer
+		return nil, fmt.Errorf("%w : l'accord de l'utilisateur date de plus de %s ; il doit confirmer à nouveau sur %s", ErrNeedsApproval, s.approvalTTL(), s.BaseURL()+"/confirm/"+confID)
+	}
 	cp := *a
 	return &cp, nil
+}
+
+func (s *Service) approvalTTL() time.Duration {
+	if s.d.ApprovalTTL > 0 {
+		return s.d.ApprovalTTL
+	}
+	return DefaultApprovalTTL
+}
+
+// invalidateApproval retire l'accord humain d'une confirmation (après tout lancement « not_sent » :
+// le jeton n'est pas brûlé mais l'humain doit recliquer, pour que l'accord ne traîne pas).
+func (s *Service) invalidateApproval(confID string) {
+	s.mu.Lock()
+	if a := s.approv[confID]; a != nil {
+		a.approved, a.plateClear = false, false
+	}
+	s.mu.Unlock()
 }
 
 // proofToken encode « identifiant.jeton.travail » dans la preuve de l'adaptateur : le troisième
@@ -254,15 +298,27 @@ func (s *Service) verifyProof(ctx context.Context, p printer.ConfirmationProof) 
 	}
 	s.mu.Lock()
 	delete(s.approv, confID) // usage unique, y compris côté mémoire
-	s.consumedBy[confID] = queueJob
+	s.consumedBy[confID] = consumedEntry{queueJob: queueJob, at: s.now()}
 	s.mu.Unlock()
-	if _, err := s.transition(bg, j.ID, contracts.EvConfirm, "confirmation "+confID+" consommée ; commande de lancement envoyée à l'imprimante", func(x *Job) error {
-		x.LastError = ""
-		return nil
-	}); err != nil {
-		return fmt.Errorf("confirmation consommée mais l'impression n'a pas pu passer en START_REQUESTED : %w", err)
+	if err := s.confirmTransition(bg, j.ID, confID); err != nil {
+		// La confirmation est consommée mais l'impression n'a pas pu passer en START_REQUESTED : la
+		// commande ne sera PAS publiée (cette fonction renvoie une erreur avant l'envoi). État explicite,
+		// terminal et sûr : rien n'a été envoyé ; une nouvelle impression exige une nouvelle confirmation.
+		msg := "confirmation " + confID + " consommée mais START_REQUESTED non enregistré : " + err.Error() + " ; rien n'a été envoyé à l'imprimante"
+		if _, aerr := s.transition(bg, j.ID, contracts.EvAbortBeforeSend, msg, func(x *Job) error { x.LastError = msg; return nil }); aerr != nil {
+			s.log.Warn("START_ABORTED_BEFORE_SEND non enregistré", "print_job", j.ID, "err", aerr)
+		}
+		return fmt.Errorf("confirmation consommée mais l'impression n'a pas pu passer en START_REQUESTED (aucune commande envoyée) : %w", err)
 	}
 	return nil
+}
+
+func (s *Service) defaultConfirmTransition(ctx context.Context, jobID, confID string) error {
+	_, err := s.transition(ctx, jobID, contracts.EvConfirm, "confirmation "+confID+" consommée ; commande de lancement envoyée à l'imprimante", func(x *Job) error {
+		x.LastError = ""
+		return nil
+	})
+	return err
 }
 
 func randomNonce() string {
@@ -271,28 +327,66 @@ func randomNonce() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// issueNonce délivre un nonce à usage unique pour le formulaire de confirmation.
-func (s *Service) issueNonce(confID string) string {
+// issueNonce délivre un nonce à usage unique pour un formulaire (extra : donnée liée côté serveur).
+func (s *Service) issueNonce(key string, extra ...string) string {
 	n := randomNonce()
 	s.mu.Lock()
-	for k, v := range s.pages { // purge
-		if !s.now().Before(v.expires) {
-			delete(s.pages, k)
-		}
+	s.purgeLocked()
+	pn := pageNonce{confID: key, expires: s.now().Add(nonceTTL)}
+	if len(extra) > 0 {
+		pn.extra = extra[0]
 	}
-	s.pages[n] = pageNonce{confID: confID, expires: s.now().Add(15 * time.Minute)}
+	s.pages[n] = pn
 	s.mu.Unlock()
 	return n
 }
 
-// useNonce consomme le nonce ; faux s'il est inconnu, périmé ou d'une autre confirmation.
-func (s *Service) useNonce(n, confID string) bool {
+// useNonce consomme le nonce ; faux s'il est inconnu, périmé ou d'une autre clé.
+func (s *Service) useNonce(n, key string) bool {
+	_, ok := s.takeNonce(n, key)
+	return ok
+}
+
+// takeNonce consomme le nonce et rend sa donnée liée.
+func (s *Service) takeNonce(n, key string) (pageNonce, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v, ok := s.pages[n]
 	if !ok {
-		return false
+		return pageNonce{}, false
 	}
 	delete(s.pages, n)
-	return v.confID == confID && s.now().Before(v.expires)
+	return v, v.confID == key && s.now().Before(v.expires)
+}
+
+// purgeLocked supprime ce qui a expiré (nonces, demandes d'arrêt, approbations, traces de consommation).
+func (s *Service) purgeLocked() {
+	now := s.now()
+	for k, v := range s.pages {
+		if !now.Before(v.expires) {
+			delete(s.pages, k)
+		}
+	}
+	for k, v := range s.stops {
+		if !now.Before(v.expires) {
+			delete(s.stops, k)
+		}
+	}
+	for k, v := range s.approv {
+		if !now.Before(v.expires) {
+			delete(s.approv, k)
+		}
+	}
+	for k, v := range s.consumedBy {
+		if now.Sub(v.at) > consumedTTL {
+			delete(s.consumedBy, k)
+		}
+	}
+}
+
+// purge est appelé périodiquement (maintenance) et à chaque émission.
+func (s *Service) purge() {
+	s.mu.Lock()
+	s.purgeLocked()
+	s.mu.Unlock()
 }

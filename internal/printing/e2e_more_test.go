@@ -78,7 +78,7 @@ func TestHTTPRoutesAndPageSecurity(t *testing.T) {
 	r.c.Printing.SetValidator(fakeValidator("0.4"))
 	_, mp := splitAddr(r.sim.MQTTAddr())
 	_, fp := splitAddr(r.sim.FTPAddr())
-	body := fmt.Sprintf(`{"name":"HTTP","model_id":"p1s","host":"127.0.0.1","serial":%q,"mqtt_port":%d,"ftp_port":%d,"pinned_sha256":%q,"ams_units":1}`, r.sim.Serial(), mp, fp, r.sim.Fingerprint())
+	body := fmt.Sprintf(`{"name":"HTTP","model_id":"p1s","host":"127.0.0.1","serial":%q,"mqtt_port":%d,"ftp_port":%d,"ams_units":1}`, r.sim.Serial(), mp, fp)
 	st, pr, _ := r.httpJSON("POST", "/api/printers", body)
 	if st != 201 {
 		t.Fatalf("POST /api/printers : %d %v", st, pr)

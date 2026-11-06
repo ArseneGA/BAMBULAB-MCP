@@ -473,6 +473,7 @@ func TestConnectionLostAfterStartThenReconcile(t *testing.T) {
 func TestIgnoredStartReconcilesToNotStarted(t *testing.T) {
 	e := newEnv(t, sim.Config{Faults: []string{sim.FaultIgnoreStart}}, func(c *printer.BambuConfig) {
 		c.StartObserveTimeout = 700 * time.Millisecond
+		c.ReconcileSettle = 200 * time.Millisecond
 	})
 	ref := e.upload(newArtefact(5_000))
 	waitState(t, e.ad, printer.StateIdle, 3*time.Second)

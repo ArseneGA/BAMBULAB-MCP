@@ -13,6 +13,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
@@ -125,8 +126,18 @@ func (s *Service) CapturePreview(ctx context.Context, in PreviewInput) (*Preview
 	sha, _, perr := s.d.Blobs.Put(bytes.NewReader(out.PNG), "")
 	if perr == nil {
 		out.PNGSHA256 = sha
+		if _, err := s.d.Store.DB().ExecContext(ctx, `INSERT OR IGNORE INTO print_previews(sha256, created_at) VALUES(?,?)`, sha, s.now().Format(time.RFC3339Nano)); err != nil {
+			s.log.Warn("aperçu non enregistré", "sha", sha, "err", err)
+		}
 	}
 	return out, nil
+}
+
+// IsPreview dit si ce blob a été enregistré comme aperçu PNG (GET /api/previews/{sha} ne sert que ceux-là :
+// un autre blob du stockage — modèle, G-code, archive — n'est jamais exposé par cette route).
+func (s *Service) IsPreview(ctx context.Context, sha string) bool {
+	var n int
+	return s.d.Store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM print_previews WHERE sha256=?`, sha).Scan(&n) == nil && n > 0
 }
 
 // ---- rasterisation ----
