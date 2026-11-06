@@ -1,0 +1,60 @@
+import { NavLink, Outlet } from 'react-router-dom';
+import { Boxes, SlidersHorizontal, GitCompare, Layers, Printer, Moon, Sun, Palette, Trash2 } from 'lucide-react';
+import { IconButton, StatusDot, ToastProvider } from './components';
+import type { Status } from './components';
+import { useTheme } from './design/theme';
+import { ConnectionProvider, useConnection } from './api/hooks';
+import { ServerBanner } from './pages/common';
+import './shell.css';
+
+export const spaces = [
+  { path: 'bibliotheque', label: 'Bibliothèque', icon: Boxes, live: true },
+  { path: 'preparation', label: 'Préparation', icon: SlidersHorizontal, live: false },
+  { path: 'comparaison', label: 'Comparaison', icon: GitCompare, live: false },
+  { path: 'materiaux', label: 'Matériaux', icon: Layers, live: false },
+  { path: 'impression', label: 'Impression', icon: Printer, live: false },
+] as const;
+
+function Pills() {
+  const c = useConnection();
+  const server: Status = c.server === 'online' ? 'online' : c.server === 'checking' ? 'unavailable' : 'offline';
+  const win: Status = c.windows === 'online' ? 'online' : 'offline';
+  const cad: Status = c.cad === 'online' ? 'online' : 'unavailable';
+  return (
+    <>
+      <span className="pill" title={c.server === 'online' ? `Service bambud ${c.health?.version ?? ''}` : 'Service bambud'}><StatusDot status={server} label={c.server === 'checking' ? 'Connexion' : 'Linux'} /></span>
+      <span className="pill" title={c.windows === 'online' ? 'Agent Windows en ligne' : 'Agent Windows hors ligne ou non connecté'}><StatusDot status={win} label="Windows" /></span>
+      <span className="pill" title={c.cad === 'online' ? 'Backend CAO (STEP) disponible' : (c.cadNote ?? 'Backend CAO absent : les fichiers STEP ne sont pas convertis')}><StatusDot status={cad} label="CAO" /></span>
+    </>
+  );
+}
+
+export function Shell() {
+  const { theme, toggle } = useTheme();
+  return (
+    <ToastProvider>
+      <ConnectionProvider>
+        <div className="app">
+          <ServerBanner />
+          <header className="topbar">
+            <NavLink to="/" className="brand" end><span className="brand-mark" aria-hidden />Atelier</NavLink>
+            <nav className="nav" aria-label="Espaces de travail">
+              {spaces.map(({ path, label, icon: I, live }) => (
+                <NavLink key={path} to={`/${path}`} title={live ? label : `${label} (bientôt branché)`} aria-label={live ? label : `${label}, bientôt branché`}>
+                  <I size={15} aria-hidden /><span className="nav-label">{label}</span>{!live && <span className="nav-soon" aria-hidden />}
+                </NavLink>
+              ))}
+            </nav>
+            <div className="topbar-end">
+              <Pills />
+              <NavLink to="/corbeille" aria-label="Corbeille et doublons" title="Corbeille et doublons" className="icon-btn"><Trash2 size={16} /></NavLink>
+              <NavLink to="/design" aria-label="Système de design" title="Système de design" className="icon-btn"><Palette size={16} /></NavLink>
+              <IconButton label={theme === 'light' ? 'Thème sombre' : 'Thème clair'} onClick={toggle}>{theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}</IconButton>
+            </div>
+          </header>
+          <main className="main"><Outlet /></main>
+        </div>
+      </ConnectionProvider>
+    </ToastProvider>
+  );
+}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hôte MCP Apps simulé</title>
+    <style>
+      :root { color-scheme: light dark; --bg: #f4f3ef; --fg: #1a1916; --line: #c4c0b5; --panel: #fff; }
+      [data-theme='dark'] { --bg: #1b1a18; --fg: #ece9e2; --line: #3b3832; --panel: #262420; }
+      body { margin: 0; font: 14px/1.45 system-ui, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); }
+      header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+      header h1 { font-size: 15px; margin: 0 12px 0 0; }
+      select, input, button { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); }
+      input { min-width: 280px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+      button { cursor: pointer; }
+      main { display: grid; grid-template-columns: minmax(0, 700px) minmax(0, 1fr); gap: 16px; padding: 16px; align-items: start; }
+      .chat { border: 1px dashed var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 10px; }
+      .chat small { color: #888; font-family: ui-monospace, Consolas, monospace; }
+      .frame { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); overflow: hidden; }
+      .frame iframe { display: block; width: 100%; height: 120px; border: 0; background: transparent; }
+      #log { margin: 0; padding: 8px; max-height: 70vh; overflow: auto; font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+      .ok { color: #2f6f3e; } .err { color: #b3261e; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Hôte MCP Apps simulé (harnais de développement)</h1>
+      <select id="tool" aria-label="Outil">
+        <option value="search_models">search_models</option>
+        <option value="get_model_details">get_model_details</option>
+      </select>
+      <input id="args" aria-label="Arguments JSON" value='{"limit": 5}' />
+      <button id="run" type="button">Exécuter</button>
+      <button id="theme" type="button">Thème : clair</button>
+      <span id="status" role="status"></span>
+    </header>
+    <main>
+      <section class="chat" aria-label="Conversation simulée">
+        <small>Hôte de test : vrai client MCP vers /mcp, vraie ressource ui://, AppBridge de @modelcontextprotocol/ext-apps. Pas Claude.</small>
+        <div class="frame" id="frame"></div>
+      </section>
+      <pre id="log" aria-label="Évènements hôte"></pre>
+    </main>
+    <script type="module" src="./dev-host.ts"></script>
+  </body>
+</html>

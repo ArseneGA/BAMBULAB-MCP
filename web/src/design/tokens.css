@@ -1,0 +1,55 @@
+/* Tokens du système de design "Atelier". Variables CSS natives, 2 thèmes. */
+:root, [data-theme='light'] {
+  --bg: #ecebe6;          /* établi : papier gris chaud */
+  --surface: #f6f5f1;     /* panneaux */
+  --surface-2: #e3e1da;   /* zones enfoncées, survol */
+  --surface-3: #d6d3ca;
+  --line: #c4c0b5;
+  --line-strong: #8f8a7d;
+  --text: #1a1916;
+  --text-2: #55514a;
+  --text-3: #5e594f;      /* >= 4.5:1 sur --surface, --surface-2 et --viewer-bg */
+  --accent: #b83c08;      /* orange de sécurité, assombri pour le contraste */
+  --accent-hover: #9c3206;
+  --accent-soft: #f8e8de;
+  --on-accent: #ffffff;
+  --ok: #2f6f3e;  --warn: #8a5a00;  --err: #b3261e;  --off: #5e594f;
+  --ok-soft: #dcebdf; --warn-soft: #f1e3c2; --err-soft: #f4d9d6; --off-soft: #dedbd3;
+  --viewer-bg: #dcdad2;
+  --shadow-pop: 0 6px 20px rgb(26 25 22 / 0.16);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+[data-theme='dark'] {
+  --bg: #121211;
+  --surface: #1b1a18;
+  --surface-2: #262420;
+  --surface-3: #33312c;
+  --line: #3b3832;
+  --line-strong: #6b665b;
+  --text: #ece9e2;
+  --text-2: #b0aa9d;
+  --text-3: #a29b8e;
+  --accent: #ff8a4c;
+  --accent-hover: #ffa070;
+  --accent-soft: #3d2415;
+  --on-accent: #1a0c04;
+  --ok: #6fc283;  --warn: #e0b04a;  --err: #ff7a70;  --off: #a29b8e;
+  --ok-soft: #1d3324; --warn-soft: #3a2f12; --err-soft: #40201d; --off-soft: #2a2824;
+  --viewer-bg: #0d0d0c;
+  --shadow-pop: 0 6px 24px rgb(0 0 0 / 0.55);
+}
+:root {
+  --font-sans: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --fs-xs: 0.6875rem; --fs-sm: 0.8125rem; --fs-md: 0.875rem; --fs-lg: 1rem; --fs-xl: 1.25rem; --fs-2xl: 1.625rem;
+  --lh-tight: 1.2; --lh-body: 1.45;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+  --r-1: 2px; --r-2: 4px; --r-3: 6px;
+  --control-h: 32px; --control-h-sm: 26px;
+  --dur-fast: 90ms; --dur: 160ms; --dur-slow: 240ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; --dur-slow: 0ms; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
