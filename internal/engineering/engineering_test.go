@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -493,5 +497,76 @@ func TestHoleAndWallDomains(t *testing.T) {
 	h, err := HoleCompensation(HoleParams{Diameter: 10, Axis: "vertical", Nozzle: 0.4, Material: "PVA"})
 	if err != nil || !containsAny(h.Warnings, "inconnu") {
 		t.Errorf("avertissement retrait inconnu : %v %v", h.Warnings, err)
+	}
+}
+
+// Chaque valeur « measured » doit être retrouvable dans l'extrait exact de sa fiche
+// (docs/research/materials-tds), et les réglages recommandés ne sont jamais « measured ».
+func TestMeasuredValuesAreInTDSExtracts(t *testing.T) {
+	d, err := Materials()
+	if err != nil {
+		t.Fatal(err)
+	}
+	numRe := regexp.MustCompile(`[-+]?\d+(?:\.\d+)?`)
+	cache := map[string][]float64{}
+	extractNumbers := func(src string) []float64 {
+		if v, ok := cache[src]; ok {
+			return v
+		}
+		s, ok := d.Sources[src]
+		if !ok || s.Extract == "" {
+			t.Errorf("source %q sans fichier d'extrait", src)
+			return nil
+		}
+		raw, err := os.ReadFile(filepath.Join("..", "..", filepath.FromSlash(s.Extract)))
+		if err != nil {
+			t.Errorf("extrait %s illisible : %v", s.Extract, err)
+			return nil
+		}
+		if !strings.Contains(string(raw), s.URL) || !strings.Contains(string(raw), s.SHA256) || s.SHA256 == "" {
+			t.Errorf("%s : URL ou empreinte absentes de l'extrait", s.Extract)
+		}
+		var nums []float64
+		for _, m := range numRe.FindAllString(string(raw), -1) {
+			f, _ := strconv.ParseFloat(m, 64)
+			nums = append(nums, f)
+		}
+		cache[src] = nums
+		return nums
+	}
+	checked := 0
+	for id, m := range d.Materials {
+		for k, p := range m.Properties {
+			if (k == "max_overhang_deg" || k == "max_bridge_mm") && p.Level == LevelMeasured {
+				t.Errorf("%s.%s : une recommandation de réglage ne peut pas être « measured »", id, k)
+			}
+			if p.Level != LevelMeasured || p.Value == nil {
+				continue
+			}
+			found := false
+			for _, n := range extractNumbers(p.Source) {
+				if math.Abs(n-*p.Value) < 1e-9 {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("%s.%s = %v (measured) introuvable dans l'extrait de %s", id, k, *p.Value, p.Source)
+			}
+			checked++
+		}
+	}
+	if checked < 100 {
+		t.Errorf("seulement %d valeurs mesurées vérifiées", checked)
+	}
+}
+
+func TestOverhangBridgeResultIsHeuristic(t *testing.T) {
+	r, err := OverhangBridge(OverhangParams{AngleDeg: 60, BridgeLength: 10, Material: "PLA"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Level != LevelHeuristic {
+		t.Errorf("level = %s, attendu heuristic (recommandation fabricant)", r.Level)
 	}
 }

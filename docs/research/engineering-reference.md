@@ -48,7 +48,7 @@ T = K·F·d (K ≈ 0,2 par défaut, filetage lubrifié ou non à préciser). Tes
 
 ## Données matériaux (à versionner en Go, par valeur : source + date + domaine + niveau)
 
-Date de recherche : 2026-11-06. Sources lues via copies secondaires (retailers) : à re-vérifier contre les PDF officiels Bambu Lab.
+Date de recherche : 2026-11-06. Sources initialement lues via copies secondaires (retailers) ; **vérifiées depuis les PDF officiels le même jour** (voir la section « Vérification contre les PDF officiels » en fin de document).
 
 | Matériau | Propriété | Valeur | Niveau | Source |
 |---|---|---|---|---|
@@ -75,3 +75,77 @@ Valeurs **indicatives** (ordres de grandeur littérature, aucune source Bambu v�
 | PETG-CF | 1,3 | 50/28 | 80/45 | 3500/2000 | 0,3 | 75 | 0,012 | 30 | 50 |
 
 Ces lignes indicatives sont « valeur indicative » : elles ne remplacent ni la fiche de la bobine ni un essai. Une calibration par retour d'impression réelle les remplace par des valeurs `observé`.
+
+
+## Vérification contre les PDF officiels (2026-11-06) : écarts avec les anciennes valeurs indicatives
+
+Les 11 fiches techniques Bambu Lab citées ci-dessus ont été **re-téléchargées depuis leur URL officielle** (CDN Bambu Lab) puis relues avec `pdftotext -raw`. Pour chaque fiche, `docs/research/materials-tds/<id>.txt` contient l'URL, la date, l'empreinte SHA-256 du PDF et les lignes exactes des propriétés utilisées. Un test Go (`TestMeasuredValuesAreInTDSExtracts`) vérifie que **chaque valeur `measured`** de `internal/engineering/data/materials.json` se retrouve dans l'extrait de sa fiche.
+
+Résultat : les **147 valeurs `measured` non nulles** (masse volumique, modules, résistances, allongements, flexion, HDT, avec leurs tolérances `±`) sont toutes confirmées par les PDF ; aucune n'a été rétrogradée en `indicative`. Les cellules « N/A » des fiches (TPU : flexion et HDT ; PVA : propriétés mécaniques) restent `null`.
+
+Changements de niveau :
+- `max_overhang_deg` et `max_bridge_mm` passent de `measured` à **`heuristic`** : ce sont des *réglages recommandés* par le fabricant dans son profil d'impression, pas des mesures normées. `overhang_bridge` renvoie donc toujours un résultat `heuristique`.
+- `shrinkage_pct` et `snap_strain_allow` restent `indicative` (aucune fiche ne les donne).
+
+Écarts entre les **anciennes valeurs indicatives** du tableau ci-dessus (ordres de grandeur de la littérature) et les valeurs vérifiées des fiches Bambu Lab (les valeurs de la fiche font foi ; PA non chargé reste purement indicatif, aucune fiche Bambu n'est utilisée) :
+
+| Matériau | Propriété | Ancienne (indicative) | Fiche Bambu | Écart | Niveau actuel |
+|---|---|---|---|---|---|
+| PETG | ρ g/cm³ | 1.27 | 1.25 | -2 % | measured |
+| PETG | E flexion XY MPa | 1800 | 1790 | -1 % | measured |
+| PETG | E flexion Z MPa | 1500 | 1580 | +5 % | measured |
+| PETG | HDT 1,8 MPa °C | 70 | 65 | -7 % | measured |
+| PETG | pont max mm | 35 | 30 | -14 % | heuristic |
+| PETG | surplomb max ° | 50 | 70 | +40 % | heuristic |
+| ABS | traction XY MPa | 40 | 41 | +2 % | measured |
+| ABS | traction Z MPa | 28 | 32 | +14 % | measured |
+| ABS | flexion rés. XY MPa | 65 | 68 | +5 % | measured |
+| ABS | E flexion XY MPa | 2000 | 1880 | -6 % | measured |
+| ABS | E flexion Z MPa | 1700 | 1590 | -6 % | measured |
+| ABS | HDT 1,8 MPa °C | 90 | 84 | -7 % | measured |
+| ABS | pont max mm | 30 | 40 | +33 % | heuristic |
+| ABS | surplomb max ° | 50 | 70 | +40 % | heuristic |
+| ASA | ρ g/cm³ | 1.07 | 1.05 | -2 % | measured |
+| ASA | traction XY MPa | 40 | 37 | -8 % | measured |
+| ASA | traction Z MPa | 28 | 31 | +11 % | measured |
+| ASA | flexion rés. Z MPa | 45 | 40 | -11 % | measured |
+| ASA | E flexion XY MPa | 2000 | 1920 | -4 % | measured |
+| ASA | E flexion Z MPa | 1700 | 1650 | -3 % | measured |
+| ASA | HDT 1,8 MPa °C | 90 | 92 | +2 % | measured |
+| ASA | pont max mm | 30 | 40 | +33 % | heuristic |
+| ASA | surplomb max ° | 50 | 70 | +40 % | heuristic |
+| TPU-95A | traction XY MPa | 30 | 29.6 | -1 % | measured |
+| TPU-95A | traction Z MPa | 22 | 23.2 | +5 % | measured |
+| TPU-95A | E flexion XY MPa | 30 | n/d (fiche : N/A) | — | ancienne valeur retirée (la fiche ne la donne pas) |
+| TPU-95A | E flexion Z MPa | 25 | n/d (fiche : N/A) | — | ancienne valeur retirée (la fiche ne la donne pas) |
+| TPU-95A | surplomb max ° | 45 | 70 | +56 % | heuristic |
+| PC | traction XY MPa | 60 | 55 | -8 % | measured |
+| PC | traction Z MPa | 40 | 34 | -15 % | measured |
+| PC | flexion rés. XY MPa | 90 | 108 | +20 % | measured |
+| PC | flexion rés. Z MPa | 60 | 55 | -8 % | measured |
+| PC | E flexion XY MPa | 2200 | 2310 | +5 % | measured |
+| PC | E flexion Z MPa | 1800 | 1620 | -10 % | measured |
+| PC | HDT 1,8 MPa °C | 110 | 117 | +6 % | measured |
+| PC | pont max mm | 25 | 40 | +60 % | heuristic |
+| PC | surplomb max ° | 45 | 70 | +56 % | heuristic |
+| PLA-CF | ρ g/cm³ | 1.3 | 1.22 | -6 % | measured |
+| PLA-CF | traction XY MPa | 45 | 38 | -16 % | measured |
+| PLA-CF | traction Z MPa | 25 | 26 | +4 % | measured |
+| PLA-CF | flexion rés. XY MPa | 80 | 96 | +20 % | measured |
+| PLA-CF | flexion rés. Z MPa | 40 | 49 | +22 % | measured |
+| PLA-CF | E flexion XY MPa | 4500 | 3700 | -18 % | measured |
+| PLA-CF | E flexion Z MPa | 2500 | 2260 | -10 % | measured |
+| PLA-CF | HDT 1,8 MPa °C | 55 | 54 | -2 % | measured |
+| PLA-CF | pont max mm | 40 | 30 | -25 % | heuristic |
+| PETG-CF | ρ g/cm³ | 1.3 | 1.25 | -4 % | measured |
+| PETG-CF | traction XY MPa | 50 | 59 | +18 % | measured |
+| PETG-CF | traction Z MPa | 28 | 38 | +36 % | measured |
+| PETG-CF | flexion rés. XY MPa | 80 | 83 | +4 % | measured |
+| PETG-CF | flexion rés. Z MPa | 45 | 62 | +38 % | measured |
+| PETG-CF | E flexion XY MPa | 3500 | 2890 | -17 % | measured |
+| PETG-CF | E flexion Z MPa | 2000 | 1680 | -16 % | measured |
+| PETG-CF | HDT 1,8 MPa °C | 75 | 68 | -9 % | measured |
+| PETG-CF | surplomb max ° | 50 | 70 | +40 % | heuristic |
+| PLA | pont max mm | 50 | 30 | -40 % | heuristic |
+
+Lecture : les écarts les plus nets concernent les **réglages recommandés** (surplomb +40 à +56 % pour PETG, ABS, ASA, PC, TPU, PETG-CF ; pont : PLA 50 → 30 mm, PC 25 → 40 mm) et les variantes chargées en fibres (PETG-CF : traction Z +36 %, flexion Z +38 % ; PLA-CF et PETG-CF : module de flexion XY −17/−18 %). Pour les matériaux non chargés (PETG, ABS, ASA), les ordres de grandeur de la littérature tenaient à ±15 % près sur les propriétés mécaniques et la HDT. Les valeurs de la fiche font foi ; une valeur générique ne doit jamais remplacer la fiche du matériau réel.

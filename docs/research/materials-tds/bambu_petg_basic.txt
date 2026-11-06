@@ -1,0 +1,25 @@
+Extrait de la fiche technique Bambu Lab Technical Data Sheet PETG Basic (V2.0)
+URL            : https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PETG_Basic_Technical_Data_Sheet.pdf
+Date           : 2026-11-06 (re-téléchargement de vérification depuis l'URL ci-dessus)
+SHA-256 du PDF : a05a5f58069064ff2f1a1027a7a1dae48f1252a96524744a0e633a4031371ef4
+Taille du PDF  : 328662 octets
+Extraction     : pdftotext -raw -enc UTF-8 (poppler). Les lignes ci-dessous sont reprises telles quelles,
+                 seules les lignes portant les propriétés utilisées par internal/engineering sont conservées.
+                 Valeurs « Max Overhang Angle » / « Max Bridging Length » = réglages recommandés (recommandation).
+----------------------------------------------------------------------------------------------------
+Max Overhang Angle ~ 70 °
+Max Bridging Length ~30 mm
+Density ISO 1183 1.25 g/cm³
+Heat Deflection Temperature ISO 75 1.8 MPa 65 °C
+Heat Deflection Temperature ISO 75 0.45 MPa 69 °C
+Young's Modulus (X-Y) ISO 527, GB/T 1040 1460 ± 190 MPa
+Young's Modulus (Z) ISO 527, GB/T 1040 1120 ± 130 MPa
+Tensile Strength (X-Y) ISO 527, GB/T 1040 48 ± 5 MPa
+Tensile Strength (Z) ISO 527, GB/T 1040 39 ± 3 MPa
+Breaking Elongation Rate (X-Y) ISO 527, GB/T 1040 11.2 ± 0.8 %
+Breaking Elongation Rate (Z) ISO 527, GB/T 1040 5.7 ± 0.6 %
+Bending Modulus (X-Y) ISO 178, GB/T 9341 1790 ± 120 MPa
+Bending Modulus (Z) ISO 178, GB/T 9341 1580 ± 130 MPa
+Bending Strength (X-Y) ISO 178, GB/T 9341 81 ± 4 MPa
+Bending Strength (Z) ISO 178, GB/T 9341 64 ± 3 MPa
+----------------------------------------------------------------------------------------------------
