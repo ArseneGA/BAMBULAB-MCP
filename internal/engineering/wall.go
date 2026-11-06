@@ -26,6 +26,9 @@ func WallCheck(thickness, lineWidth float64) (*WallResult, error) {
 	if lineWidth < 0.1 || lineWidth > 2 {
 		return nil, invalid("largeur de ligne %.2f mm hors domaine 0,1–2 mm", lineWidth)
 	}
+	if thickness < 0.2 || thickness > 10 {
+		return nil, invalid("épaisseur %.2f mm hors du domaine 0,2–10 mm", thickness)
+	}
 	n := int(math.Floor(thickness/lineWidth + 1e-9))
 	rem := thickness - float64(n)*lineWidth
 	if rem < 1e-9 {
@@ -58,7 +61,7 @@ func WallCheck(thickness, lineWidth float64) (*WallResult, error) {
 			"Paroi droite d'épaisseur constante remplie uniquement de périmètres",
 			"Largeur de ligne effective supposée égale à la valeur fournie (réglage du slicer)",
 		},
-		Validity: "Parois 0,2–10 mm, buse 0,2–0,8 mm. " + Disclaimer,
+		Validity: "Parois 0,2–10 mm, largeur de ligne 0,1–2 mm. " + Disclaimer,
 		Level:    LevelCalculated, Warnings: warns,
 		Sources: []Source{{Title: "Géométrie des périmètres FDM (calcul direct) ; seuils Arachne d'après les tolérances usuelles de Bambu Studio / OrcaSlicer, heuristiques", Date: "2026-11-06"}},
 	}

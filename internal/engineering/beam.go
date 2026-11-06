@@ -123,6 +123,21 @@ func strengthModulus(m *Material, dir string, zFactor float64, u *propUsed) (sig
 	return sig, E, warns, nil
 }
 
+// isElastomer : matériau pour lequel l'élasticité linéaire en petites déformations n'a pas de sens
+// (TPU/TPE...), d'après la famille déclarée ou un allongement à la rupture très élevé.
+func isElastomer(m *Material) bool {
+	f := strings.ToUpper(m.Family + " " + m.ID)
+	for _, k := range []string{"TPU", "TPE", "ELASTOMER", "ÉLASTOMÈRE", "FLEX", "RUBBER"} {
+		if strings.Contains(f, k) {
+			return true
+		}
+	}
+	if p, ok := m.Prop("elongation_xy"); ok && p.Value != nil && *p.Value >= 150 {
+		return true
+	}
+	return false
+}
+
 // BeamStress calcule contrainte maximale, flèche et facteur de sécurité (poutre d'Euler-Bernoulli).
 func BeamStress(p BeamParams) (*BeamResult, error) {
 	if err := positive("longueur", p.Length); err != nil {
@@ -161,6 +176,9 @@ func BeamStress(p BeamParams) (*BeamResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	if isElastomer(m) {
+		return nil, notApplicable("%s est un élastomère : la poutre linéaire élastique en petites déformations ne s'applique pas (hyperélasticité, grandes flèches)", m.ID)
+	}
 	u := newUsed()
 	sig, E, warns, err := strengthModulus(m, dir, zf, u)
 	if err != nil {
@@ -181,6 +199,9 @@ func BeamStress(p BeamParams) (*BeamResult, error) {
 	default:
 		M = W * L * L / 8
 		defl = 5 * W * math.Pow(L, 4) / (384 * E * I)
+	}
+	if defl > L/10 {
+		return nil, notApplicable("flèche calculée %.3g mm > L/10 (%.3g mm) : hypothèse de petits déplacements invalide, le résultat linéaire serait trompeur (raidir la section ou réduire la charge)", defl, L/10)
 	}
 	stress := M * c / I
 	sf := sig / stress
@@ -223,7 +244,7 @@ func BeamStress(p BeamParams) (*BeamResult, error) {
 		warns = append(warns, "L/h < 5 : poutre courte, le cisaillement n'est pas négligeable et la théorie d'Euler-Bernoulli est optimiste.")
 	}
 	if defl > L/50 {
-		warns = append(warns, "Flèche > L/50 : l'hypothèse de petits déplacements est discutable.")
+		warns = append(warns, "Flèche > L/50 : l'hypothèse de petits déplacements est discutable (refus au-delà de L/10).")
 	}
 	level := u.level
 	if level == LevelIndicative {
@@ -238,7 +259,7 @@ func BeamStress(p BeamParams) (*BeamResult, error) {
 			"Résistance admissible = résistance en flexion du matériau (sinon traction) dans la direction " + dir + " ; E dans la même direction (valeurs typiques fabricant, éprouvettes pleines)",
 			"σ = M·c/I ; " + map[bool]string{true: "console", false: "appuis simples"}[sup == "cantilever"] + ", charge " + lt,
 		},
-		Validity: "L/h ≥ 5, SF < 1 échec, 1–2 insuffisant, ≥ 2 acceptable en statique (seuils heuristiques) ; pièce pleine à remplissage dense. " + Disclaimer,
+		Validity: "L/h ≥ 5, flèche ≤ L/10 (refus au-delà), matériau non élastomère, SF < 1 échec, 1–2 insuffisant, ≥ 2 acceptable en statique (seuils heuristiques) ; pièce pleine à remplissage dense. " + Disclaimer,
 		Level:    level, Sources: u.sources, Warnings: warns,
 	}
 	return res, nil

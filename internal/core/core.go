@@ -17,7 +17,9 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
 
@@ -32,6 +34,8 @@ type Config struct {
 	Logger       *slog.Logger
 	// Catalog : racines d'import autorisées, backend CAO (voir catalog.Config).
 	Catalog catalog.Config
+	// StudioPath : chemin de Bambu Studio (vide : détection BAMBU_STUDIO_BIN, installation, PATH).
+	StudioPath string
 	// Intervalles du runner (tests).
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
@@ -47,11 +51,18 @@ type Core struct {
 	Runner   *jobs.Runner
 	Log      *slog.Logger
 	Recovery jobs.RecoveryReport
+
+	lock *instanceLock
 	// Catalog : catalogue documentaire (jalon 2).
 	Catalog *catalog.Service
 	// CapabilityHooks complètent Capabilities() (jalon 8 : agents Windows). Posés
 	// avant que le service ne serve des requêtes.
 	CapabilityHooks []func(*contracts.Capabilities)
+	// Goals : objectifs, candidats, expériences (jalon 6). Disponible même sans
+	// Bambu Studio ; la découpe échoue alors avec slicer_missing.
+	Goals *goals.Service
+	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
+	StudioErr error
 }
 
 // Open prépare le dossier de données, migre la base, enregistre les handlers
@@ -72,15 +83,23 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("dossier de données : %w", err)
 	}
+	// Verrou d'instance AVANT migrations et reprise : un seul service par dossier.
+	lock, err := acquireInstanceLock(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
 	st, err := store.Open(filepath.Join(cfg.DataDir, "bambu.db"), store.Options{})
 	if err != nil {
+		lock.release()
 		return nil, err
 	}
 	blobs, err := store.NewBlobStore(filepath.Join(cfg.DataDir, "blobs"))
 	if err != nil {
 		st.Close()
+		lock.release()
 		return nil, err
 	}
+	st.AttachBlobs(blobs)
 	q := jobs.NewQueue(st, jobs.QueueConfig{Limits: map[contracts.JobClass]int{
 		contracts.ClassHeavy: cfg.HeavyWorkers, contracts.ClassLight: cfg.LightWorkers,
 	}})
@@ -89,15 +108,41 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	cat, err := catalog.New(catalog.Deps{Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, DataDir: cfg.DataDir}, cfg.Catalog)
 	if err != nil {
 		st.Close()
+		lock.release()
 		return nil, fmt.Errorf("catalogue : %w", err)
 	}
-	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat}
+	var studioErr error
+	if cfg.StudioPath != "" {
+		// un chemin explicite doit exister : pas de repli silencieux sur une autre installation
+		if _, err := os.Stat(cfg.StudioPath); err != nil {
+			studioErr = fmt.Errorf("Bambu Studio introuvable à %s", cfg.StudioPath)
+		}
+	}
+	if studioErr == nil {
+		_, studioErr = slicer.Locate(cfg.StudioPath)
+	}
+	gs, err := goals.New(goals.Config{
+		Store: st, Blobs: blobs, Queue: q, Registry: reg, WorkRoot: filepath.Join(cfg.DataDir, "work", "goals"),
+		SlicerFactory: func() (*slicer.Slicer, error) {
+			if studioErr != nil {
+				return nil, studioErr
+			}
+			return slicer.New(slicer.Config{BinaryPath: cfg.StudioPath, WorkRoot: filepath.Join(cfg.DataDir, "work", "slicer")})
+		},
+	})
+	if err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("objectifs : %w", err)
+	}
+	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, StudioErr: studioErr, lock: lock}
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
 	})
 	rep, err := q.Recover(ctx, reg.Replayable)
 	if err != nil {
 		st.Close()
+		lock.release()
 		return nil, fmt.Errorf("reprise des travaux : %w", err)
 	}
 	c.Recovery = rep
@@ -111,8 +156,14 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 // Run démarre les workers et bloque jusqu'à l'annulation de ctx (puis drain).
 func (c *Core) Run(ctx context.Context) error { return c.Runner.Run(ctx) }
 
-// Close ferme la base. À appeler après la fin de Run.
-func (c *Core) Close() error { return c.Store.Close() }
+// Close ferme la base puis libère le verrou d'instance. À appeler après la fin de Run.
+func (c *Core) Close() error {
+	err := c.Store.Close()
+	if lerr := c.lock.release(); err == nil {
+		err = lerr
+	}
+	return err
+}
 
 // registerBuiltins : handlers fournis d'office.
 func registerBuiltins(reg *jobs.Registry) {
@@ -167,7 +218,8 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			{ID: "mcp_stdio_bridge", Available: true},
 			{ID: "mcp_apps_ui", Available: true, Note: "page de démonstration uniquement (jalon 1)"},
 			{ID: "mesh_import", Available: true, Note: "STL, OBJ, 3MF : analyse et aperçu GLB dérivé (Go)"},
-			{ID: "slicing", Available: false, Note: "non implémenté dans ce jalon"},
+			{ID: "slicing", Available: c.StudioErr == nil, Note: slicingNote(c.StudioErr)},
+			{ID: "goals_experiments", Available: true, Note: "objectifs, candidats, expériences, comparaison ; la découpe exige Bambu Studio (sinon erreur slicer_missing)"},
 			{ID: "printer_lan", Available: false, Note: "non implémenté dans ce jalon"},
 			{ID: "cad_worker", Available: cadOK, Note: cadNote},
 			{ID: "windows_agent", Available: false, Note: "aucun agent connecté"},
@@ -225,4 +277,11 @@ func (c *Core) Environment(ctx context.Context) (contracts.EnvironmentReport, er
 		}
 	}
 	return rep, nil
+}
+
+func slicingNote(err error) string {
+	if err != nil {
+		return "slicer_missing : Bambu Studio introuvable (" + err.Error() + ") ; les expériences échouent à l'exécution"
+	}
+	return "Bambu Studio localisé ; profils chargés à la première utilisation"
 }

@@ -36,6 +36,8 @@ func TestMigrationsAndReopen(t *testing.T) {
 	if err := s.DB().QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil || mode != "wal" {
 		t.Fatalf("journal_mode=%q err=%v", mode, err)
 	}
+	var before int
+	_ = s.DB().QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&before)
 	s.Close()
 	// Réouverture : migrations idempotentes.
 	s2, err := Open(filepath.Join(dir, "bambu.db"), Options{})
@@ -45,9 +47,8 @@ func TestMigrationsAndReopen(t *testing.T) {
 	defer s2.Close()
 	var n int
 	_ = s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&n)
-	ms, _ := loadMigrations()
-	if n != len(ms) {
-		t.Fatalf("migration réappliquée : %d lignes (%d migrations attendues, v%d)", n, len(ms), v)
+	if n != before {
+		t.Fatalf("migration réappliquée : %d lignes", n)
 	}
 }
 
@@ -123,7 +124,7 @@ func TestMutationRollbackLeavesNoAudit(t *testing.T) {
 func TestDocs(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openTemp(t)
-	p := contracts.SeedPrinterModels()[0]
+	p := contracts.PrinterModel{ID: "fixture", Name: "Modèle de test", Vendor: "Bambu Lab"}
 	if err := s.PutDoc(ctx, "t", "printer_models", p.ID, p); err != nil {
 		t.Fatal(err)
 	}

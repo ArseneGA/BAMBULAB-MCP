@@ -509,6 +509,9 @@ func TestCapabilitiesAnnounced(t *testing.T) {
 // Slicing RÉEL par l'agent (Bambu Studio CLI local) : modèle téléchargé et vérifié, slicing,
 // artefact rapatrié sur le serveur et validé (archive Studio). Ignoré si Studio est absent.
 func TestSliceReinforcementReal(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slicing réel ignoré avec -short")
+	}
 	if _, err := slicer.Locate(""); err != nil {
 		t.Skip("Bambu Studio absent : " + err.Error())
 	}

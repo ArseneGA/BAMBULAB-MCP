@@ -7,7 +7,7 @@ Réponse : `{"ok":true,"result":{…}}` ou `{"ok":false,"error":{"code":"…","m
 ## step_import
 Requête : `{"path":"x.step","out_dir":"…","tolerance_mm":0.05,"angular_tolerance_rad":0.2}` (tolérances optionnelles).
 Résultat : `source{path,sha256,size_bytes}`, `units{output:"mm",source_declared,note}`, `tessellation{tolerance_mm,angular_tolerance_rad,triangles}`, `objects[]{index,name,volume_mm3,area_mm2,bbox_mm{min,max,size},tessellation{triangles,degenerate_triangles,open_edges,watertight}}`, `files{stl,3mf}`, `level:"calculé"`, `assumptions[]`.
-Erreurs : `invalid_params`, `file_not_found`, `step_backend_missing`, `corrupt_file`.
+Erreurs : `invalid_params`, `file_not_found`, `step_backend_missing`, `corrupt_file`, `too_complex`.
 
 ## parametric
 Requête : `{"template":"clamp|bracket|box|spacer|hook","params":{…},"out_dir":"…","name":"…","nozzle_diameter":0.4}`.
@@ -19,5 +19,9 @@ Paramètres (mm) :
 - hook : `width`(20), `plate_height`(40), `thickness`(4), `arm_length`(30), `tip_height`(12), `hole_diameter`(4.5), `holes`(2).
 Résultat : `template`, `params`, `parts[]{name,volume_mm3,solids,tessellation}`, `bbox_mm`, `derived`, `assumptions[]`, `warnings[]`, `files{stl,step,source}`, `level:"calculé"`, `validity`.
 Erreurs : `invalid_params`, `cad_backend_missing`, `cad_failure`.
+
+## Confinement des chemins
+Le worker n'est pas un bac à sable : l'appelant (bambud) DOIT confiner `path` (lecture) et `out_dir` (écriture) à des dossiers autorisés avant l'appel et ne jamais les tirer tels quels d'une entrée utilisateur. Côté worker : `name` doit respecter `^[A-Za-z0-9._-]{1,64}$` et les fichiers de sortie sont vérifiés (`resolve`) sous `out_dir`.
+Plafonds : `step_import` — `tolerance_mm` dans [0,001 ; 10], `angular_tolerance_rad` dans [0,01 ; 1,6], valeurs finies (sinon `invalid_params`), au plus 5 000 000 de triangles (sinon `too_complex`) ; `parametric` — `holes`/`holes_a`/`holes_b` entiers de 0 à 50.
 
 Erreurs communes : `invalid_json`, `unknown_command`, `internal_error`.

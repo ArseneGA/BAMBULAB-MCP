@@ -219,9 +219,16 @@ func TestGoalEvaluable(t *testing.T) {
 	}
 }
 
-func TestSeedPrinterUnknownsNil(t *testing.T) {
-	p := SeedPrinterModels()[0]
-	if p.MaxBedTempC != nil || p.AMSUnitsMax != nil || p.Camera != nil {
+// Aucun profil machine n'est semé en attendant internal/profiles : pas de P1S « à confirmer ».
+func TestSeedPrinterModelsEmptyUntilProfiles(t *testing.T) {
+	if got := SeedPrinterModels(); len(got) != 0 {
+		t.Fatalf("seed attendu vide (TODO internal/profiles), %d modèle(s) : %+v", len(got), got)
+	}
+}
+
+func TestPrinterModelUnknownsStayNil(t *testing.T) {
+	p := PrinterModel{ID: "fixture", Name: "Fixture", Vendor: "Bambu Lab"}
+	if p.MaxBedTempC != nil || p.AMSUnitsMax != nil || p.Camera != nil || p.BuildVolume != nil {
 		t.Fatal("les inconnus doivent rester nil")
 	}
 }
