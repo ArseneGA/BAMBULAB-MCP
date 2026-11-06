@@ -38,6 +38,8 @@ type Config struct {
 	Catalog catalog.Config
 	// StudioPath : chemin de Bambu Studio (vide : détection BAMBU_STUDIO_BIN, installation, PATH).
 	StudioPath string
+	// StudioWrapper : commande préfixe du slicer (ex. ["xvfb-run","-a"] sur un serveur sans écran).
+	StudioWrapper []string
 	// Intervalles du runner (tests).
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
@@ -145,7 +147,7 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 			return nil, studioErr
 		}
 		slOnce.Do(func() {
-			slInst, slErr = slicer.New(slicer.Config{BinaryPath: cfg.StudioPath, WorkRoot: filepath.Join(cfg.DataDir, "work", "slicer")})
+			slInst, slErr = slicer.New(slicer.Config{BinaryPath: cfg.StudioPath, Wrapper: cfg.StudioWrapper, WorkRoot: filepath.Join(cfg.DataDir, "work", "slicer")})
 		})
 		return slInst, slErr
 	}
