@@ -15,6 +15,9 @@ var (
 	ErrCanceled       = errors.New("slicer: annulé, processus arrêté")
 	ErrNoResult       = errors.New("slicer: result.json absent ou illisible")
 	ErrInvalidOutput  = errors.New("slicer: archive de sortie invalide")
+	// ErrStudioCrashed : Studio s'est arrêté brutalement (violation d'accès,
+	// signal) sans écrire result.json. Constaté sur des 3MF synthétiques.
+	ErrStudioCrashed = errors.New("slicer: Bambu Studio a planté")
 )
 
 // Codes retour négatifs de Bambu Studio (src/libslic3r/Utils.hpp, note

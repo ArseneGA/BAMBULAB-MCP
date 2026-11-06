@@ -69,6 +69,8 @@ func fakeStudio(mode string, args []string) int {
 		fmt.Sscanf(mode, "err:%d", &code)
 		writeResult(code, "échec simulé")
 		return code & 0xff
+	case mode == "crash":
+		return 0xC0000005
 	case mode == "noresult":
 		return 0
 	case mode == "garbage":

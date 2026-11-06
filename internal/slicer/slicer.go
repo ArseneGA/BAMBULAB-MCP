@@ -456,6 +456,9 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 				return res, newStudioError(code, "pas de result.json, code lu sur le code de sortie du processus")
 			}
 		}
+		if u := uint64(res.ExitCode); res.ExitCode == -1 || (u >= 0xC0000000 && u <= 0xFFFFFFFF) {
+			return res, fmt.Errorf("%w (code de sortie %#x, aucun result.json, stderr: %s)", ErrStudioCrashed, u&0xFFFFFFFF, tail(res.Stderr, 300))
+		}
 		return res, fmt.Errorf("%w (code de sortie %d, stderr: %s)", ErrNoResult, res.ExitCode, tail(res.Stderr, 300))
 	}
 	if sr.ReturnCode != 0 {

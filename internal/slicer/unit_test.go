@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -140,6 +141,16 @@ func TestFakeStudioErrorCodes(t *testing.T) {
 func TestFakeNoResultJSON(t *testing.T) {
 	s := fakeSlicer(t, "noresult", time.Minute)
 	if _, err := s.Slice(context.Background(), fakeReq(t)); !errors.Is(err, ErrNoResult) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestFakeCrashIsNamed(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("code de sortie NTSTATUS propre à Windows")
+	}
+	s := fakeSlicer(t, "crash", time.Minute)
+	if _, err := s.Slice(context.Background(), fakeReq(t)); !errors.Is(err, ErrStudioCrashed) {
 		t.Fatalf("%v", err)
 	}
 }
