@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -25,11 +28,101 @@ type Client struct {
 	HTTP    *http.Client
 	// ChunkSize : taille des morceaux d'envoi (défaut 8 Mio).
 	ChunkSize int64
+	// Délais par requête (défauts : JSON 60 s, morceau d'envoi 10 min).
+	JSONTimeout  time.Duration
+	ChunkTimeout time.Duration
 }
 
-// NewClient crée un client (délai de connexion borné, pas de délai global : le long-polling est long).
+// ClientOptions règle la confiance TLS du client.
+type ClientOptions struct {
+	// ServerFingerprint : empreinte SHA-256 (hex, « : » tolérés) du certificat du serveur. Si renseignée, le
+	// certificat du serveur (auto-signé) doit avoir exactement cette empreinte ; la chaîne n'est pas vérifiée.
+	ServerFingerprint string
+}
+
+// NormalizeFingerprint met une empreinte en minuscules sans « : » et vérifie 64 chiffres hexadécimaux.
+func NormalizeFingerprint(fp string) (string, error) {
+	n := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(fp), ":", ""), " ", ""))
+	if len(n) != 64 {
+		return "", fmt.Errorf("empreinte de certificat invalide : 64 chiffres hexadécimaux (SHA-256) attendus")
+	}
+	if _, err := hex.DecodeString(n); err != nil {
+		return "", fmt.Errorf("empreinte de certificat invalide : %w", err)
+	}
+	return n, nil
+}
+
+// InsecureTransportWarning renvoie un avertissement lisible quand le serveur est joint en clair (http) hors
+// de cette machine : le secret d'agent et les fichiers passeraient en clair sur le réseau. Vide sinon.
+func InsecureTransportWarning(baseURL string) string {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Scheme != "http" {
+		return ""
+	}
+	h := strings.ToLower(u.Hostname())
+	if h == "localhost" || strings.HasSuffix(h, ".localhost") {
+		return ""
+	}
+	if ip := net.ParseIP(h); ip != nil && ip.IsLoopback() {
+		return ""
+	}
+	return "ATTENTION : " + baseURL + " est joint en HTTP clair hors de cette machine : le secret de l'agent et les fichiers transitent sans chiffrement. " +
+		"Utiliser https:// (derrière un proxy TLS) avec --server-fingerprint, ou un réseau de confiance."
+}
+
+// NewClient crée un client (délais de connexion/TLS/en-têtes bornés ; pas de délai global : le long-polling et
+// les envois sont longs, chaque requête porte son propre délai).
 func NewClient(baseURL, secret string) *Client {
-	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), Secret: secret, HTTP: &http.Client{}}
+	c, _ := NewClientWithOptions(baseURL, secret, ClientOptions{})
+	return c
+}
+
+// NewClientWithOptions crée un client avec épinglage facultatif du certificat du serveur.
+func NewClientWithOptions(baseURL, secret string, o ClientOptions) (*Client, error) {
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 2 * time.Minute,
+		ExpectContinueTimeout: time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConns:          4,
+	}
+	if o.ServerFingerprint != "" {
+		want, err := NormalizeFingerprint(o.ServerFingerprint)
+		if err != nil {
+			return nil, err
+		}
+		tr.TLSClientConfig = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, // remplacé par l'épinglage ci-dessous
+			VerifyPeerCertificate: func(raw [][]byte, _ [][]*x509.Certificate) error {
+				if len(raw) == 0 {
+					return errors.New("agentlink : le serveur n'a présenté aucun certificat")
+				}
+				sum := sha256.Sum256(raw[0])
+				if hex.EncodeToString(sum[:]) != want {
+					return errors.New("agentlink : l'empreinte du certificat du serveur ne correspond pas à --server-fingerprint")
+				}
+				return nil
+			},
+		}
+	}
+	return &Client{BaseURL: strings.TrimRight(baseURL, "/"), Secret: secret, HTTP: &http.Client{Transport: tr}}, nil
+}
+
+func (c *Client) jsonTimeout() time.Duration {
+	if c.JSONTimeout > 0 {
+		return c.JSONTimeout
+	}
+	return 60 * time.Second
+}
+
+func (c *Client) chunkTimeout() time.Duration {
+	if c.ChunkTimeout > 0 {
+		return c.ChunkTimeout
+	}
+	return 10 * time.Minute
 }
 
 func (c *Client) chunk() int64 {
@@ -66,6 +159,8 @@ func decodeErr(resp *http.Response) error {
 }
 
 func (c *Client) json(ctx context.Context, method, p string, in, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, c.jsonTimeout())
+	defer cancel()
 	var body io.Reader
 	hdr := map[string]string{}
 	if in != nil {
@@ -115,6 +210,8 @@ func (c *Client) Heartbeat(ctx context.Context, req HeartbeatRequest) (Heartbeat
 
 // NextTask est le long-polling ; (nil, nil) si aucun travail après `wait`.
 func (c *Client) NextTask(ctx context.Context, wait time.Duration) (*Task, error) {
+	ctx, cancel := context.WithTimeout(ctx, wait+30*time.Second)
+	defer cancel()
 	resp, err := c.do(ctx, http.MethodGet, "/tasks/next?wait="+strconv.Itoa(int(wait.Seconds())), nil, nil)
 	if err != nil {
 		return nil, err
@@ -174,10 +271,25 @@ func (c *Client) Upload(ctx context.Context, taskID, localPath, sha string, size
 	}
 	defer f.Close()
 	off := st.Offset
-	for off < size || size == 0 {
+	// Boucle d'envoi. Quand tous les octets sont partis sans que le serveur ait signalé la fin (reprise d'un
+	// .part complet, ou fichier vide), on émet un PUT FINAL vide (« bytes */total ») qui déclenche la
+	// vérification et la finalisation côté serveur ; une seule fois, sinon erreur (pas de boucle infinie).
+	finalSent := false
+	for {
+		if off >= size {
+			if finalSent {
+				return fmt.Errorf("transfert de %s : tout est envoyé mais le serveur ne le finalise pas", sha)
+			}
+			finalSent = true
+		} else {
+			finalSent = false
+		}
 		n := size - off
 		if n > c.chunk() {
 			n = c.chunk()
+		}
+		if n < 0 {
+			n = 0
 		}
 		if _, err := f.Seek(off, io.SeekStart); err != nil {
 			return err
@@ -186,15 +298,18 @@ func (c *Client) Upload(ctx context.Context, taskID, localPath, sha string, size
 		if n == 0 {
 			rng = fmt.Sprintf("bytes */%d", size)
 		}
-		resp, err := c.do(ctx, http.MethodPut, "/uploads/"+sha+"?task="+url.QueryEscape(taskID), io.LimitReader(f, n), map[string]string{
+		cctx, cancel := context.WithTimeout(ctx, c.chunkTimeout())
+		resp, err := c.do(cctx, http.MethodPut, "/uploads/"+sha+"?task="+url.QueryEscape(taskID), io.LimitReader(f, n), map[string]string{
 			"Content-Range": rng, "Content-Type": "application/octet-stream"})
 		if err != nil {
+			cancel()
 			return err
 		}
 		if resp.StatusCode/100 != 2 {
 			e := decodeErr(resp)
 			srv := resp.Header.Get("Upload-Offset")
 			resp.Body.Close()
+			cancel()
 			var ae *Error
 			if errors.As(e, &ae) && ae.Code == CodeConflict && srv != "" {
 				// Décalage : on se recale sur l'offset du serveur et on continue.
@@ -208,6 +323,7 @@ func (c *Client) Upload(ctx context.Context, taskID, localPath, sha string, size
 		var got UploadStatus
 		err = json.NewDecoder(resp.Body).Decode(&got)
 		resp.Body.Close()
+		cancel()
 		if err != nil {
 			return err
 		}
@@ -219,7 +335,6 @@ func (c *Client) Upload(ctx context.Context, taskID, localPath, sha string, size
 			return nil
 		}
 	}
-	return nil
 }
 
 // Download télécharge un artefact d'entrée avec reprise et vérifie son sha256.

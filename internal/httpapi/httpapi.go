@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 )
@@ -63,10 +65,17 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"job_id": id, "outcome": oc, "state": j.State})
 	})
 
+	// Navigateurs « humains » enregistrés (docs/SECURITY.md) : pages /enroll et GET /api/session ; les pages
+	// /confirm, /stop, /setup et /agents/pair exigent leur cookie.
+	human := humanauth.New(c.Store, humanauth.Options{Secure: func(r *http.Request) bool {
+		return r.TLS != nil || strings.HasPrefix(strings.ToLower(opts.PublicURL), "https://")
+	}})
+	human.RegisterPages(mux)
+
 	registerCatalog(mux, c)
-	registerAgent(mux, c)
+	registerAgent(mux, c, human)
 	registerGoals(mux, c)
-	registerPrinting(mux, c) // chaîne d'impression + pages /setup /confirm (printing.go)
+	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
 
 	server := mcpserver.New(c)
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{

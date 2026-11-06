@@ -55,9 +55,18 @@ func main() {
 	roots := fs.String("import-root", os.Getenv("BAMBU_IMPORT_ROOTS"), "racines d'import autorisées, séparées par '"+string(os.PathListSeparator)+"' (env BAMBU_IMPORT_ROOTS) ; vide = tout import refusé")
 	uvPath := fs.String("uv-path", os.Getenv("BAMBU_UV_PATH"), "exécutable uv du worker CAO (env BAMBU_UV_PATH ; défaut : PATH)")
 	geomDir := fs.String("geometry-dir", os.Getenv("BAMBU_GEOMETRY_DIR"), "projet Python du worker géométrie (env BAMBU_GEOMETRY_DIR ; défaut workers/geometry)")
+	publicURL := fs.String("public-url", os.Getenv("BAMBU_PUBLIC_URL"), "URL sous laquelle l'humain atteint le service (liens /confirm, /stop, /setup ; https => cookie Secure) (env BAMBU_PUBLIC_URL)")
+	anyHost := fs.Bool("allow-any-printer-host", os.Getenv("BAMBU_ALLOW_ANY_PRINTER_HOST") == "1", "lève la restriction des hôtes d'imprimante aux adresses privées / lien local / .local")
 	version := fs.Bool("version", false, "affiche la version")
-	if len(os.Args) > 1 && os.Args[1] == "seed-demo" {
-		os.Exit(seedDemoMain(os.Args[2:]))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "seed-demo":
+			os.Exit(seedDemoMain(os.Args[2:]))
+		case "enroll":
+			os.Exit(enrollMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "agent":
+			os.Exit(agentMain(os.Args[2:], os.Stdout, os.Stderr))
+		}
 	}
 	_ = fs.Parse(os.Args[1:])
 	if *version {
@@ -79,9 +88,13 @@ func main() {
 			hosts = append(hosts, h)
 		}
 	}
-	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts}, DrainTimeout: *drain}
+	if err := validatePublicURL(*publicURL); err != nil {
+		log.Error("configuration invalide", "err", err)
+		os.Exit(2)
+	}
+	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: strings.TrimRight(*publicURL, "/")}, DrainTimeout: *drain}
 	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log,
-		Catalog: catalogConfig(*roots, *uvPath, *geomDir)}, sc, nil); err != nil {
+		Catalog: catalogConfig(*roots, *uvPath, *geomDir), AllowAnyPrinterHost: *anyHost}, sc, nil); err != nil {
 		log.Error("arrêt sur erreur", "err", err)
 		os.Exit(1)
 	}
@@ -144,7 +157,7 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
-	c.Catalog.SetBaseURL("http://" + ln.Addr().String())
+	c.Catalog.SetBaseURL(publicBase(sc.HTTP.PublicURL, ln.Addr().String())) // jamais « http://[::]:port »
 	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version)
 	if ready != nil {
 		ready <- ln.Addr().String()

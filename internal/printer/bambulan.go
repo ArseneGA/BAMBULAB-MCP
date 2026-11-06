@@ -1,6 +1,7 @@
 package printer
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -65,6 +66,7 @@ type BambuConfig struct {
 	StartObserveTimeout  time.Duration // attente de PREPARE/RUNNING après start (défaut 90 s)
 	ReconnectDelay       time.Duration // défaut 2 s
 	AllowStartFromFinish bool          // autorise le départ depuis l'état finished (défaut non)
+	ReconcileSettle      time.Duration // délai de stabilisation avant de conclure « non démarré » (défaut 10 s)
 }
 
 func (c *BambuConfig) defaults() {
@@ -96,6 +98,7 @@ func (c *BambuConfig) defaults() {
 	d(&c.CommandTimeout, 10*time.Second)
 	d(&c.StartObserveTimeout, 90*time.Second)
 	d(&c.ReconnectDelay, 2*time.Second)
+	d(&c.ReconcileSettle, 10*time.Second)
 }
 
 // DefaultStartOptions renvoie les options usuelles (nivellement, calibrations).
@@ -123,9 +126,12 @@ type Bambu struct {
 	updatedAt   time.Time
 	firmware    string
 	lastPushAll time.Time
-	changed     chan struct{}
-	subs        map[*subscriber]struct{}
-	waiters     map[string]chan map[string]any
+	// lastPublishAt / acceptedAt : dernière publication de project_file et acceptation éventuelle (Reconcile).
+	lastPublishAt time.Time
+	acceptedAt    time.Time
+	changed       chan struct{}
+	subs          map[*subscriber]struct{}
+	waiters       map[string]chan map[string]any
 
 	seq      atomic.Int64
 	startMu  sync.Mutex // réservation : un seul Start à la fois
@@ -210,6 +216,33 @@ func buildTLS(host string, o TLSOptions, log *slog.Logger) (*tls.Config, error) 
 		log.Warn("TLS certificate verification explicitly disabled", "reason", o.InsecureReason, "host", host)
 	}
 	return cfg, nil
+}
+
+// CertInfo décrit le certificat présenté par une imprimante (affiché à l'humain avant épinglage).
+type CertInfo struct {
+	SHA256     string    `json:"sha256"`
+	SubjectCN  string    `json:"subject_cn"`
+	DNSNames   []string  `json:"dns_names,omitempty"`
+	NotAfter   time.Time `json:"not_after"`
+	SelfSigned bool      `json:"self_signed"`
+}
+
+// FetchCertInfo ouvre une connexion TLS (sans rien envoyer) et décrit le certificat feuille présenté.
+// Aucune confiance automatique : l'empreinte doit être validée par l'humain.
+func FetchCertInfo(ctx context.Context, hostport string) (CertInfo, error) {
+	d := tls.Dialer{Config: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, NetDialer: &net.Dialer{Timeout: 6 * time.Second}}
+	c, err := d.DialContext(ctx, "tcp", hostport)
+	if err != nil {
+		return CertInfo{}, err
+	}
+	defer c.Close()
+	certs := c.(*tls.Conn).ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return CertInfo{}, errors.New("printer: no certificate presented")
+	}
+	sum := sha256.Sum256(certs[0].Raw)
+	return CertInfo{SHA256: hex.EncodeToString(sum[:]), SubjectCN: certs[0].Subject.CommonName, DNSNames: certs[0].DNSNames,
+		NotAfter: certs[0].NotAfter, SelfSigned: bytes.Equal(certs[0].RawIssuer, certs[0].RawSubject)}, nil
 }
 
 // FetchCertFingerprint ouvre une connexion TLS et renvoie l'empreinte SHA-256

@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer/sim"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
@@ -40,6 +42,8 @@ type rig struct {
 	sim       *sim.Sim
 	dataDir   string
 	printerID string
+	// human : client HTTP d'un navigateur ENREGISTRÉ (cookie obtenu par le flux enroll, comme le ferait l'humain).
+	human *http.Client
 }
 
 func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
@@ -83,7 +87,7 @@ func newRig(t *testing.T, studio string) *rig {
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	c, err := core.Open(ctx, core.Config{DataDir: dir, Logger: quiet(), StudioPath: studio, Catalog: catalog.Config{Worker: fakeWorker},
-		PollInterval: 20 * time.Millisecond, HeartbeatInterval: 100 * time.Millisecond})
+		PollInterval: 20 * time.Millisecond, HeartbeatInterval: 100 * time.Millisecond, AllowAnyPrinterHost: true /* simulateur en loopback */})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +112,53 @@ func newRig(t *testing.T, studio string) *rig {
 		<-done
 		c.Close()
 	})
-	return &rig{t: t, c: c, web: web, cs: cs, dataDir: dir}
+	r := &rig{t: t, c: c, web: web, cs: cs, dataDir: dir}
+	r.human = r.enrollBrowser()
+	c.Printing.SetReconcileSettle(200 * time.Millisecond)
+	return r
+}
+
+// enrollBrowser joue le parcours de l'humain : `bambud enroll` (code créé dans la base, affiché sur SON terminal),
+// puis saisie du code sur /enroll dans un navigateur ; le cookie de session reste dans le jar du client.
+func (r *rig) enrollBrowser() *http.Client {
+	r.t.Helper()
+	code, _, err := humanauth.New(r.c.Store, humanauth.Options{}).NewEnrollCode(context.Background())
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	jar, _ := cookiejar.New(nil)
+	cl := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	if _, err := browserGet(cl, r.web.URL+"/enroll"); err != nil {
+		r.t.Fatal(err)
+	}
+	st, body := browserPost(r.t, cl, r.web.URL+"/enroll", url.Values{"code": {humanauth.FormatCode(code)}, "label": {"test"}})
+	if st != 200 || !strings.Contains(body, "enregistré") {
+		r.t.Fatalf("enregistrement du navigateur : %d %s", st, body)
+	}
+	return cl
+}
+
+func browserGet(cl *http.Client, u string) (*http.Response, error) {
+	req, _ := http.NewRequest("GET", u, nil)
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "none")
+	return cl.Do(req)
+}
+
+// browserPost soumet un formulaire comme un navigateur (navigation de même origine).
+func browserPost(t *testing.T, cl *http.Client, u string, f url.Values) (int, string) {
+	t.Helper()
+	req, _ := http.NewRequest("POST", u, strings.NewReader(f.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	res, err := cl.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res.StatusCode, string(b)
 }
 
 // call appelle un outil et exige le succès ; renvoie le contenu structuré.
@@ -204,7 +254,7 @@ var nonceRe = regexp.MustCompile(`name="nonce" value="([^"]+)"`)
 // humanGet ouvre une page comme un navigateur et en extrait le nonce du formulaire.
 func (r *rig) humanGet(pageURL string) (status int, body, nonce string) {
 	r.t.Helper()
-	res, err := http.Get(pageURL)
+	res, err := browserGet(r.human, pageURL)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -218,13 +268,7 @@ func (r *rig) humanGet(pageURL string) (status int, body, nonce string) {
 
 func (r *rig) humanPost(pageURL string, form url.Values) (int, string) {
 	r.t.Helper()
-	res, err := http.PostForm(pageURL, form)
-	if err != nil {
-		r.t.Fatal(err)
-	}
-	defer res.Body.Close()
-	b, _ := io.ReadAll(res.Body)
-	return res.StatusCode, string(b)
+	return browserPost(r.t, r.human, pageURL, form)
 }
 
 // humanConfirm : l'humain ouvre la page, coche (ou non) « plateau vide » et clique Lancer.
@@ -256,15 +300,25 @@ func (r *rig) addPrinter(extra map[string]any) map[string]any { return r.addPrin
 
 func (r *rig) addPrinterFor(s *sim.Sim, extra map[string]any) map[string]any {
 	r.t.Helper()
-	args := map[string]any{"name": "Atelier", "model_id": "p1s", "host": "127.0.0.1", "serial": s.Serial(), "nozzle_mm": 0.4, "ams_units": 1,
-		"pinned_sha256": s.Fingerprint(), "allow_start_from_finish": true}
+	args := map[string]any{"name": "Atelier", "model_id": "p1s", "host": "127.0.0.1", "serial": s.Serial(), "nozzle_mm": 0.4, "ams_units": 1}
 	_, mp := splitAddr(s.MQTTAddr())
 	_, fp := splitAddr(s.FTPAddr())
 	args["mqtt_port"], args["ftp_port"] = mp, fp
+	allowFinish := true // le simulateur rend FINISH après une impression ; réglage de code de confiance, jamais MCP
 	for k, v := range extra {
+		if k == "allow_start_from_finish" {
+			allowFinish, _ = v.(bool)
+			continue
+		}
 		args[k] = v
 	}
-	return r.call("add_printer", args)
+	out := r.call("add_printer", args)
+	if allowFinish {
+		if err := r.c.Printing.SetAllowStartFromFinish(context.Background(), str(out, "printer", "id"), true); err != nil {
+			r.t.Fatal(err)
+		}
+	}
+	return out
 }
 
 func splitAddr(a string) (string, int) {
@@ -274,12 +328,13 @@ func splitAddr(a string) (string, int) {
 	return a[:i], p
 }
 
-// humanSetsAccessCode : l'humain saisit le code sur la page /setup/printer/{id}.
+// humanSetsAccessCode : l'humain ouvre /setup/printer/{id}, compare l'empreinte du certificat présentée par
+// l'imprimante et le numéro de série, puis saisit le code d'accès : cela épingle l'empreinte affichée.
 func (r *rig) humanSetsAccessCode(setupURL string) {
 	r.t.Helper()
-	st, _, nonce := r.humanGet(setupURL)
-	if st != 200 || nonce == "" {
-		r.t.Fatalf("page de saisie : %d", st)
+	st, page, nonce := r.humanGet(setupURL)
+	if st != 200 || nonce == "" || !strings.Contains(page, "Empreinte SHA-256 présentée") {
+		r.t.Fatalf("page de saisie : %d %s", st, page)
 	}
 	if st, body := r.humanPost(setupURL, url.Values{"nonce": {nonce}, "access_code": {simAccessCode}}); st != 200 || strings.Contains(body, simAccessCode) {
 		r.t.Fatalf("saisie du code : %d (le code ne doit jamais être réaffiché)", st)

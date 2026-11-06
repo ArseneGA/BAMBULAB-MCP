@@ -53,7 +53,7 @@ func New(t *testing.T, cfg agentlink.Config) *Env {
 	}
 	srv := httptest.NewServer(reg.Handler())
 	e := &Env{T: t, Core: c, Reg: reg, Server: srv, Clock: clk}
-	t.Cleanup(func() { srv.Close(); reg.WaitImports(); c.Close() })
+	t.Cleanup(func() { srv.Close(); reg.Shutdown(); c.Close() })
 	return e
 }
 

@@ -2,6 +2,8 @@ package printing
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,6 +69,33 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	return fmt.Sprintf("Le fichier %s est envoyé sur la %s. Veux-tu lancer cette impression ?", j.Name, short), d
 }
 
+func plateOrOne(p int) int {
+	if p == 0 {
+		return 1
+	}
+	return p
+}
+
+// uploadRequestHash résume ce qui définit une demande de dépôt (imprimante, plateau, affectations) :
+// rejouer la même clé avec autre chose est refusé.
+func uploadRequestHash(printerID string, plate int, a []FilamentAssignment) string {
+	b, _ := json.Marshal(struct {
+		P  string
+		Pl int
+		A  []FilamentAssignment
+	}{printerID, plate, a})
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:8])
+}
+
+func sameUploadParams(raw json.RawMessage, printJobID string, in UploadInput, plate int) bool {
+	var p struct {
+		ID  string `json:"print_job_id"`
+		Req string `json:"request"`
+	}
+	return json.Unmarshal(raw, &p) == nil && p.ID == printJobID && p.Req == uploadRequestHash(in.PrinterID, plate, in.Assignments)
+}
+
 // findByUploadKey retrouve l'impression dont le dépôt a été lancé avec cette clé d'idempotence.
 func (s *Service) findByUploadKey(ctx context.Context, sha, printerID, key string) (Job, bool) {
 	all, err := s.ListJobs(ctx, "", 500)
@@ -77,7 +106,7 @@ func (s *Service) findByUploadKey(ctx context.Context, sha, printerID, key strin
 		if j.ArtifactSHA256 != sha || j.PrinterID != printerID || j.UploadJobID == "" {
 			continue
 		}
-		if q, err := s.d.Queue.Get(ctx, j.UploadJobID); err == nil && q.IdempotencyKey == key {
+		if q, err := s.d.Queue.Get(ctx, j.UploadJobID); err == nil && q.IdempotencyKey == idemKey(j.ID, "upload", key) {
 			return j, true
 		}
 	}
@@ -130,7 +159,10 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 	}
 	// Rejeu : même clé que le dépôt déjà lancé -> aucun nouveau travail.
 	if j.UploadJobID != "" && j.State != contracts.PrintValidated {
-		if q, err := s.d.Queue.Get(ctx, j.UploadJobID); err == nil && q.IdempotencyKey == key {
+		if q, err := s.d.Queue.Get(ctx, j.UploadJobID); err == nil && q.IdempotencyKey == idemKey(j.ID, "upload", key) {
+			if !sameUploadParams(q.Params, j.ID, in, plateOrOne(in.Plate)) {
+				return nil, fmt.Errorf("%w : upload_print_artifact avec cette clé a déjà été demandé avec une autre imprimante, un autre plateau ou d'autres matières", ErrReplayParams)
+			}
 			q, done := s.waitQueue(ctx, q.ID, 100*time.Millisecond)
 			_ = q
 			cur, _ := s.GetJob(ctx, j.ID)
@@ -173,10 +205,13 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 	}); err != nil {
 		return nil, err
 	}
-	params, _ := json.Marshal(map[string]string{"print_job_id": j.ID})
-	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobUpload, Class: contracts.ClassLight, Params: params, IdempotencyKey: key})
+	params, _ := json.Marshal(map[string]string{"print_job_id": j.ID, "request": uploadRequestHash(in.PrinterID, plate, in.Assignments)})
+	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobUpload, Class: contracts.ClassLight, Params: params, IdempotencyKey: idemKey(j.ID, "upload", key)})
 	if err != nil {
 		return nil, err
+	}
+	if !created && !sameUploadParams(qj.Params, j.ID, in, plate) {
+		return nil, fmt.Errorf("%w : upload_print_artifact avec cette clé a déjà été demandé avec une autre imprimante, un autre plateau ou d'autres matières", ErrReplayParams)
 	}
 	if created {
 		if _, err := s.update(ctx, j.ID, func(x *Job) error { x.UploadJobID = qj.ID; return nil }); err != nil {

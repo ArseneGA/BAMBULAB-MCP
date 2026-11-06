@@ -7,6 +7,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
@@ -22,17 +23,17 @@ import (
 //	GET  /api/print-jobs/{id}                   (get_print_status)
 //	POST /api/print-jobs/validate               POST /api/print-jobs/upload
 //	POST /api/print-jobs/{id}/confirmation      (request_print_confirmation)
-//	POST /api/print-jobs/start                  POST /api/print-jobs/{id}/cancel   (corps facultatif : stop_confirmation_id)
+//	POST /api/print-jobs/start                  POST /api/print-jobs/{id}/cancel   (PRINTING : crée une demande d'arrêt /stop/{id}, rien n'est arrêté)
 //	POST /api/print-jobs/{id}/reconcile
 //	GET  /api/confirmations/{id}                POST /api/previews     GET /api/previews/{sha256}
 //	POST /api/models/parametric                 POST /api/models/modify-geometry
-//	GET  /setup/printer/{id}  POST ...          GET  /confirm/{id}  POST ...   (pages HTML)
-func registerPrinting(mux *http.ServeMux, c *core.Core) {
+//	GET  /setup/printer/{id}  POST ...          GET  /confirm/{id}  POST ...   GET /stop/{id}  POST ...   (pages HTML, cookie de navigateur enregistré)
+func registerPrinting(mux *http.ServeMux, c *core.Core, human *humanauth.Service) {
 	p := c.Printing
 	if p == nil {
 		return
 	}
-	p.RegisterPages(mux)
+	p.RegisterPages(mux, human.Require) // pages HTML : navigateur enregistré (cookie) obligatoire
 	mux.HandleFunc("GET /api/printer-models", func(w http.ResponseWriter, r *http.Request) {
 		ms, err := p.ListPrinterModels(r.Context())
 		printingReply(c, w, map[string]any{"models": ms}, err, http.StatusOK)
@@ -103,12 +104,7 @@ func registerPrinting(mux *http.ServeMux, c *core.Core) {
 		printingReply(c, w, o, err, http.StatusOK)
 	})
 	mux.HandleFunc("POST /api/print-jobs/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
-		in := printing.CancelInput{PrintJobID: r.PathValue("id")}
-		if r.ContentLength != 0 && !decode(w, r, &in) {
-			return
-		}
-		in.PrintJobID = r.PathValue("id")
-		o, err := p.CancelPrint(r.Context(), in)
+		o, err := p.CancelPrint(r.Context(), printing.CancelInput{PrintJobID: r.PathValue("id")})
 		printingReply(c, w, o, err, http.StatusOK)
 	})
 	mux.HandleFunc("POST /api/print-jobs/{id}/reconcile", func(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +124,11 @@ func registerPrinting(mux *http.ServeMux, c *core.Core) {
 		printingReply(c, w, o, err, http.StatusOK) // l'image se récupère par GET /api/previews/{png_sha256}
 	})
 	mux.HandleFunc("GET /api/previews/{sha}", func(w http.ResponseWriter, r *http.Request) {
+		// Seuls les PNG enregistrés comme aperçus sont servis (jamais un blob quelconque du stockage).
+		if !p.IsPreview(r.Context(), r.PathValue("sha")) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "aperçu introuvable", "code": "not_found"})
+			return
+		}
 		f, err := c.Blobs.Open(r.PathValue("sha"))
 		if err != nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "aperçu introuvable", "code": "not_found"})

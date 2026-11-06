@@ -2,24 +2,25 @@ package httpapi
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/agentlink"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 )
 
 // registerAgent monte le protocole agent (/agent/v1/*, authentifié par secret
 // d'agent) et l'administration des agents (/api/agents*, /api/agent/tasks*).
 //
-//	POST   /api/agents/pairing               jeton d'appairage à usage unique (requête locale uniquement)
+//	GET/POST /agents/pair                    page HTML (navigateur enregistré) : crée un jeton d'appairage à usage unique
+//	POST   /api/agents/pairing               SUPPRIMÉ (410) : plus de jeton par JSON non authentifié ; `bambud agent pair` ou la page
 //	GET    /api/agents                       agents, disponibilité, dernière vue
 //	DELETE /api/agents/{id}                  révocation
 //	GET    /api/agents/{id}/inventory        inventaire Windows (état windows_only / copié)
 //	POST   /api/agents/{id}/inventory/select demande de copie contrôlée (crée un travail)
 //	POST   /api/agent/tasks                  confie un travail à l'agent (executor windows-agent)
 //	GET    /api/agent/tasks[/{id}]           suivi ; POST .../cancel ; POST .../requeue
-func registerAgent(mux *http.ServeMux, c *core.Core) {
+func registerAgent(mux *http.ServeMux, c *core.Core, human *humanauth.Service) {
 	reg, err := agentlink.For(c)
 	if err != nil {
 		c.Log.Error("registre des agents indisponible", "err", err)
@@ -27,20 +28,9 @@ func registerAgent(mux *http.ServeMux, c *core.Core) {
 	}
 	mux.Handle(agentlink.BasePath+"/", reg.Handler())
 
+	registerPairPage(mux, c, reg, human)
 	mux.HandleFunc("POST /api/agents/pairing", func(w http.ResponseWriter, r *http.Request) {
-		// Le jeton donne accès au service : seule une requête locale peut en créer un.
-		host, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "l'appairage ne peut être initié que depuis la machine du service"})
-			return
-		}
-		tok, exp, err := reg.NewPairing(r.Context())
-		if err != nil {
-			agentlink.WriteError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"pairing_token": tok, "expires_at": exp,
-			"instructions": "sur le poste Windows : bambu-agent pair --server http://<hôte>:<port> --token <pairing_token> ; usage unique"})
+		writeJSON(w, http.StatusGone, map[string]string{"error": "l'appairage ne se crée plus par l'API : lancer « bambud agent pair » sur la machine du service, ou ouvrir /agents/pair dans un navigateur enregistré"})
 	})
 	mux.HandleFunc("GET /api/agents", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"agents": reg.Status(r.Context())})

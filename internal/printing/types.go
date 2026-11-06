@@ -21,6 +21,7 @@ var (
 	ErrIncompatible  = errors.New("incompatible avec l'imprimante")
 	ErrPrinterBusy   = errors.New("imprimante réservée par une autre impression")
 	ErrNeedsApproval = errors.New("approbation humaine requise")
+	ErrReplayParams  = errors.New("clé d'idempotence déjà utilisée avec d'autres paramètres")
 )
 
 func invalidf(format string, a ...any) error {
@@ -42,12 +43,13 @@ type PrinterRecord struct {
 	AMSUnits int `json:"ams_units"`
 	MQTTPort int `json:"mqtt_port,omitempty" jsonschema:"défaut 8883 ; le simulateur utilise un port éphémère"`
 	FTPPort  int `json:"ftp_port,omitempty" jsonschema:"défaut 990"`
-	// PinnedSHA256 : empreinte du certificat de l'imprimante (non secrète).
+	// PinnedSHA256 : empreinte du certificat de l'imprimante (non secrète), épinglée par l'HUMAIN sur
+	// /setup/printer/{id} après qu'il l'a comparée au numéro de série ; effacée si l'hôte change.
 	// AllowStartFromFinish : accepte un nouveau départ depuis l'état « finished » (à valider sur le
-	// vrai matériel, J7 §5 point 8) ; faux par défaut : seul « idle » autorise un lancement.
+	// vrai matériel, J7 §5 point 8) ; faux par défaut ; non réglable par MCP/API.
 	AllowStartFromFinish bool      `json:"allow_start_from_finish,omitempty"`
 	PinnedSHA256         string    `json:"pinned_sha256,omitempty"`
-	InsecureReason       string    `json:"insecure_reason,omitempty"`
+	PinnedAt             time.Time `json:"pinned_at,omitzero"`
 	CreatedAt            time.Time `json:"created_at"`
 }
 

@@ -2,6 +2,7 @@ package printing_test
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -178,9 +179,9 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	if txt := r.callErr("start_print", map[string]any{"print_job_id": jobID, "confirmation_id": confID, "idempotency_key": "cle-start-non-approuve"}); !strings.Contains(txt, "confirm") {
 		t.Fatalf("approbation manquante : %s", txt)
 	}
-	// Les outils réservés à l'application ne sont pas un moyen de confirmer pour le modèle sans plateau vide.
-	if r.callErr("confirm_print_from_app", map[string]any{"confirmation_id": confID, "plate_clear": false}) == "" {
-		t.Fatal("confirmation sans attestation plateau vide")
+	// Aucun outil MCP ne confirme : l'ancien outil d'application n'existe plus.
+	if txt := r.callErr("confirm_print_from_app", map[string]any{"confirmation_id": confID, "plate_clear": true}); txt == "" {
+		t.Fatal("confirm_print_from_app ne doit plus exister")
 	}
 	// Formulaire forgé sans nonce : refusé. Sans case « plateau vide » : refusé.
 	if st, _ := r.humanPost(confURL, url.Values{"plate_clear": {"yes"}}); st != 403 {
@@ -355,16 +356,41 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	if s := r.call("start_print", map[string]any{"print_job_id": job5, "confirmation_id": str(cf5, "confirmation_id"), "idempotency_key": "cle-start-impression-5"}); str(s, "outcome") != "printing" {
 		t.Fatalf("lancement 5 : %v", s)
 	}
+	// Arrêt : cancel_print ne renvoie AUCUN identifiant exécutable ; il crée une demande et renvoie /stop/{id}.
 	c5 := r.call("cancel_print", map[string]any{"print_job_id": job5})
-	if str(c5, "outcome") != "needs_stop_confirmation" || str(c5, "stop_confirmation_id") == "" || str(c5, "question") == "" {
-		t.Fatalf("arrêt : confirmation séparée attendue : %v", c5)
+	stopURL := str(c5, "stop_url")
+	if str(c5, "outcome") != "stop_requested" || !strings.Contains(stopURL, "/stop/stp_") || str(c5, "question") == "" || c5["stop_confirmation_id"] != nil {
+		t.Fatalf("arrêt : demande d'arrêt attendue : %v", c5)
 	}
-	if f := r.call("cancel_print", map[string]any{"print_job_id": job5, "stop_confirmation_id": "stop_forge"}); str(f, "outcome") != "needs_stop_confirmation" || r.printState(job5) != "PRINTING" {
-		t.Fatalf("arrêt avec une confirmation forgée : %v", f)
+	if r.printState(job5) != "PRINTING" {
+		t.Fatal("cancel_print a arrêté sans l'humain")
 	}
-	c5b := r.call("cancel_print", map[string]any{"print_job_id": job5, "stop_confirmation_id": str(c5, "stop_confirmation_id")})
-	if str(c5b, "outcome") != "stopped" || str(c5b, "state") != "CANCELLED" {
-		t.Fatalf("arrêt confirmé : %v", c5b)
+	// L'ancien paramètre forgé ne fait rien (champ inconnu ou ignoré) ; l'impression continue.
+	_, _, _ = r.raw("cancel_print", map[string]any{"print_job_id": job5, "stop_confirmation_id": "stop_forge"})
+	if r.printState(job5) != "PRINTING" {
+		t.Fatal("arrêt avec un identifiant forgé")
+	}
+	// Une nouvelle demande réutilise la même page (pas d'accumulation).
+	if again := r.call("cancel_print", map[string]any{"print_job_id": job5}); str(again, "stop_url") != stopURL {
+		t.Fatalf("demande d'arrêt dupliquée : %v", again)
+	}
+	// Page vue sans navigateur enregistré : redirection vers /enroll, rien n'est arrêté.
+	if res, err := http.Get(stopURL); err != nil || res.Request.URL.Path != "/enroll" {
+		t.Fatalf("page /stop sans navigateur enregistré : %v %v", err, res)
+	}
+	// L'humain ouvre /stop, voit l'impression et valide.
+	hst, body, nonce := r.humanGet(stopURL)
+	if hst != 200 || nonce == "" || !strings.Contains(body, "Arrêter") || !strings.Contains(body, c5["job"].(map[string]any)["name"].(string)) {
+		t.Fatalf("page d'arrêt : %d %s", hst, body)
+	}
+	if st, _ := r.humanPost(stopURL, url.Values{}); st != 403 {
+		t.Fatalf("POST /stop sans nonce : %d", st)
+	}
+	if st, body := r.humanPost(stopURL, url.Values{"nonce": {nonce}}); st != 200 || !strings.Contains(body, "arrêtée") {
+		t.Fatalf("validation de l'arrêt : %d %s", st, body)
+	}
+	if r.printState(job5) != "CANCELLED" {
+		t.Fatalf("état après arrêt humain : %s", r.printState(job5))
 	}
 	if g := r.sim.GcodeState(); g != "FAILED" {
 		t.Fatalf("le simulateur devrait avoir reçu l'arrêt : %s", g)
@@ -427,19 +453,22 @@ func TestPrintToolsGuardsAndPreview(t *testing.T) {
 	if img == nil || img.MIMEType != "image/png" || len(img.Data) < 1000 || string(img.Data[1:4]) != "PNG" {
 		t.Fatalf("image : %+v", img)
 	}
-	// Les outils d'application sont marqués invisibles pour le modèle.
+	// L'outil de vue est en lecture seule, invisible pour le modèle ; aucun outil d'approbation n'existe.
 	tools, _ := r.cs.ListTools(t.Context(), nil)
 	seen := 0
 	for _, tl := range tools.Tools {
-		if tl.Name == "confirm_print_from_app" || tl.Name == "get_print_confirmation_view" {
+		if tl.Name == "confirm_print_from_app" {
+			t.Fatal("confirm_print_from_app ne doit plus exister")
+		}
+		if tl.Name == "get_print_confirmation_view" {
 			seen++
 			if !strings.Contains(fmt.Sprint(tl.Meta), "app") {
 				t.Fatalf("%s : visibility app attendue : %v", tl.Name, tl.Meta)
 			}
 		}
 	}
-	if seen != 2 {
-		t.Fatal("outils d'application absents")
+	if seen != 1 {
+		t.Fatal("outil de vue absent")
 	}
 	// start_print sur une impression inexistante / mauvaise entrée.
 	if r.callErr("start_print", map[string]any{"print_job_id": "pj_x", "confirmation_id": "cf_x", "idempotency_key": "court"}) == "" {
