@@ -57,6 +57,9 @@ func TestHandlerBuilt(t *testing.T) {
 			t.Fatalf("%s : %d", p, rec.Code)
 		}
 	}
+	if rec := get(h, "POST", "/health"); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /health : %d", rec.Code)
+	}
 	if rec := get(h, "POST", "/"); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("POST / : %d", rec.Code)
 	}

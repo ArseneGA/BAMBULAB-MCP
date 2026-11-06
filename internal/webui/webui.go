@@ -54,6 +54,13 @@ func handlerFor(f fs.FS) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if reserved(r.URL.Path) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			// /health n'existe qu'en GET : le routeur répondait 405, le repli ne doit pas le changer en 404.
+			if r.URL.Path == "/health" && r.Method != http.MethodGet && r.Method != http.MethodHead {
+				w.Header().Set("Allow", "GET, HEAD")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				_, _ = w.Write([]byte(`{"error":"méthode non autorisée","code":"method_not_allowed"}` + "\n"))
+				return
+			}
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte(`{"error":"ressource introuvable","code":"not_found"}` + "\n"))
 			return
