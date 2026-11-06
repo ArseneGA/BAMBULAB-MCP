@@ -292,7 +292,10 @@ func (s *Service) ModelParts(ctx context.Context, modelID string) (*PartsOutput,
 			id = fmt.Sprintf("obj%d", i+1)
 		}
 		label := o.Name
-		if label == "" {
+		switch {
+		case len(doc.Report.Objects) == 1 && (label == "" || strings.EqualFold(label, string(f.Format))):
+			label = m.Name // un STL ou un OBJ nomme son unique objet d'après son format : le nom du modèle est plus parlant
+		case label == "":
 			label = "Objet " + id
 		}
 		if o.Report == nil {

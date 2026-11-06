@@ -23,7 +23,7 @@ export function Home() {
       <div className="page-head">
         <span className="eyebrow">Atelier Bambu Lab</span>
         <h1>Atelier</h1>
-        <p>Catalogue 3D branché sur le service bambud. Préparation, comparaison, machines et impression sont branchées sur le serveur ; les fiches matériaux ne sont pas encore publiées.</p>
+        <p>Catalogue 3D branché sur le service bambud. Bibliothèque, préparation, comparaison, matériaux, impression et agent Windows sont branchés sur le serveur ; chaque écran affiche l'état réel ou dit pourquoi il ne peut pas.</p>
       </div>
 
       <div className="home-grid">

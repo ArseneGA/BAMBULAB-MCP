@@ -40,8 +40,23 @@ for (const [w, h] of [[1440, 900], [800, 700]]) {
     await page.waitForTimeout(300); await shot(page, 'import-dialogue-1440-light');
     await page.keyboard.press('Escape');
     await page.goto(`${base}/corbeille`); await page.waitForTimeout(500); await shot(page, 'corbeille-1440-light');
-    await page.goto(`${base}/materiaux`); await page.waitForTimeout(800); await shot(page, 'materiaux-bientot-1440-light');
-    await page.goto(`${base}/impression`); await page.waitForTimeout(800); await shot(page, 'impression-bientot-1440-light');
+    await page.goto(`${base}/impression`); await page.waitForTimeout(800); await shot(page, 'impression-registre-1440-light');
+  }
+  // Écrans branchés sur les routes matériaux / expériences / agents, dans les deux thèmes (l'écran de matériaux montre la fiche réelle).
+  for (const t of ['light', 'dark']) {
+    await page.goto(`${base}/materiaux`); await theme(page, t);
+    await page.getByRole('tab', { name: 'Matériaux' }).click();
+    await page.getByRole('option', { name: /PLA Basic/ }).first().click();
+    await page.getByRole('table', { name: /Propriétés de PLA Basic/ }).waitFor();
+    await page.getByRole('table', { name: /Propriétés de PLA Basic/ }).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(300); await shot(page, `materiaux-fiche-${w}-${t}`);
+    await page.goto(`${base}/agents`); await theme(page, t); await page.waitForTimeout(800); await shot(page, `agents-${w}-${t}`);
+    await page.goto(`${base}/comparaison`); await theme(page, t); await page.getByRole('list', { name: 'Expériences' }).waitFor().catch(() => undefined);
+    await page.waitForTimeout(400); await shot(page, `comparaison-liste-${w}-${t}`);
+    await page.goto(`${base}/modele/${pick.id}`); await theme(page, t);
+    await page.getByRole('button', { name: /Confirmer l'unité/ }).waitFor({ timeout: 20000 }).catch(() => undefined);
+    await page.getByRole('button', { name: /Confirmer l'unité/ }).scrollIntoViewIfNeeded().catch(() => undefined);
+    await page.waitForTimeout(400); await shot(page, `modele-unite-${w}-${t}`);
   }
   // Préparation et comparaison réelles (objectif -> critères validés -> expérience -> découpes Bambu Studio).
   if ((await (await fetch(`${base}/api/capabilities`)).json()).features.find((f) => f.id === 'slicing')?.available) {
@@ -55,12 +70,26 @@ for (const [w, h] of [[1440, 900], [800, 700]]) {
     await page.getByText('Objectif validé').waitFor();
     await page.evaluate(() => document.querySelector('.main').scrollTo(0, 0)); await page.waitForTimeout(400); await shot(page, `preparation-${w}-light`);
     await page.getByText('Objectif validé').scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot(page, `preparation-objectif-${w}-light`);
+    // Sous-parties du serveur et réglage manuel validé, avec provenance.
+    await page.getByRole('group', { name: /Objets et sous-parties/ }).getByRole('button').first().click();
+    await page.getByRole('button', { name: 'Ajouter un réglage' }).click();
+    await page.getByLabel('Clé du réglage').fill('wall_loops'); await page.getByLabel('Valeur', { exact: true }).fill('3');
+    await page.getByRole('button', { name: 'Valider les réglages' }).click();
+    await page.getByRole('table', { name: 'Différences avec la base' }).waitFor();
+    await page.getByRole('table', { name: 'Différences avec la base' }).scrollIntoViewIfNeeded(); await page.waitForTimeout(300); await shot(page, `preparation-reglages-${w}-light`);
     await page.evaluate(() => document.querySelector('.main').scrollTo(0, 0));
     await page.getByLabel(/Nombre de variantes/).selectOption('3');
     await page.getByRole('button', { name: /Créer l'expérience/ }).click();
     await page.waitForURL(/comparaison/);
     await page.waitForFunction(() => document.querySelectorAll('.cmp thead .tag-ok').length >= 4, null, { timeout: 180000 });
     for (const t of ['light', 'dark']) { await theme(page, t); await page.waitForTimeout(300); await shot(page, `comparaison-${w}-${t}`); }
+    // Retour d'expérience (formulaire rempli, non enregistré).
+    await theme(page, 'light');
+    await page.getByRole('button', { name: "Enregistrer l'essai réel" }).first().click();
+    await page.getByLabel(/Observations/).fill('Couches bien liées, léger stringing sur la face avant.');
+    await page.getByLabel('Nom de la mesure 1').fill('cote_x'); await page.getByLabel('Valeur de la mesure 1').fill('10,02'); await page.getByLabel('Unité de la mesure 1').fill('mm');
+    await page.waitForTimeout(300); await shot(page, `comparaison-essai-reel-${w}-light`);
+    await page.keyboard.press('Escape');
   }
   await ctx.close();
 }

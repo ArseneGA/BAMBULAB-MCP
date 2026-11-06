@@ -2,7 +2,8 @@ import type {
   ApplyResult, Capabilities, CollectionInfo, DuplicatesResult, Health, ImportInput, ImportStarted, Job, ModelDetails,
   OpPreview, Operation, RestoreResult, ScanReport, SearchParams, SearchResult,
 } from './types';
-import type { CancelOutput, AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
+import type { AgentTask, AnalyzeOutput, InventoryItem, InventorySummary, MaterialDetail, MaterialList, MemoryResponse, ModifyInput, ModifyOutput, PartsOutput, PrintResult, ResultInput, SelectResult, ExperimentSummary } from './extraTypes';
+import type { CancelOutput, ReconcileOutput, AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
 import type { ApplyOutput, CompareOutput, CreateExperimentInput, Experiment, Goal, GoalCriteriaCatalog, GoalInput } from './goalTypes';
 
 /**
@@ -100,6 +101,33 @@ export const api = {
   startPrint: (b: { print_job_id: string; confirmation_id: string; idempotency_key: string }) => request<StartOutput>('POST', '/api/print-jobs/start', b),
   /** Impression en cours : ne stoppe RIEN, renvoie stop_url (page /stop/{id} à valider par un humain en navigateur enregistré). */
   cancelPrint: (id: string) => request<CancelOutput>('POST', `/api/print-jobs/${encodeURIComponent(id)}/cancel`),
+  reconcilePrint: (id: string) => request<ReconcileOutput>('POST', `/api/print-jobs/${encodeURIComponent(id)}/reconcile`),
+  materials: (signal?: AbortSignal) => request<MaterialList>('GET', '/api/materials', undefined, signal),
+  material: (id: string, signal?: AbortSignal) => request<MaterialDetail>('GET', `/api/materials/${encodeURIComponent(id)}`, undefined, signal),
+  experiments: (modelId?: string, signal?: AbortSignal) => request<{ experiments: ExperimentSummary[] }>('GET', '/api/experiments' + qs({ model_id: modelId, limit: 50 }), undefined, signal),
+  printMemory: (experimentId: string, signal?: AbortSignal) => request<MemoryResponse>('GET', '/api/print-memory' + qs({ experiment_id: experimentId }), undefined, signal),
+  recordResult: (r: ResultInput) => request<PrintResult>('POST', '/api/print-results', r),
+  modifyProfile: (m: ModifyInput) => request<ModifyOutput>('POST', '/api/profiles/modify', m),
+  filaments: (machine: string, signal?: AbortSignal) => request<{ filaments: string[] }>('GET', '/api/profiles/filaments' + qs({ machine }), undefined, signal),
+  parts: (modelId: string, signal?: AbortSignal) => request<PartsOutput>('GET', `/api/models/${encodeURIComponent(modelId)}/parts`, undefined, signal),
+  analyze: (modelId: string, b: { unit?: string; machine?: string; recompute?: boolean }) => request<AnalyzeOutput>('POST', `/api/models/${encodeURIComponent(modelId)}/analyze`, b),
+  agentInventory: (id: string, p: { state?: string; limit?: number; offset?: number } = {}, signal?: AbortSignal) =>
+    request<{ summary: InventorySummary; items: InventoryItem[] }>('GET', `/api/agents/${encodeURIComponent(id)}/inventory` + qs({ state: p.state, limit: p.limit, offset: p.offset }), undefined, signal),
+  agentSelect: (id: string, root_label: string, rel_paths?: string[]) => request<SelectResult>('POST', `/api/agents/${encodeURIComponent(id)}/inventory/select`, { root_label, rel_paths }),
+  agentTasks: (signal?: AbortSignal) => request<{ tasks: AgentTask[] }>('GET', '/api/agent/tasks?limit=30', undefined, signal),
+  /** URL de téléchargement de l'original (stockage par empreintes ; jamais un chemin du disque). */
+  downloadUrl: (fileId: string) => BASE + `/api/files/${encodeURIComponent(fileId)}/download`,
+  /** Export groupé : archive zip des originaux, lue en entier puis proposée au téléchargement. */
+  async exportZip(modelIds: string[]): Promise<{ blob: Blob; files: number; skipped: number }> {
+    let res: Response;
+    try { res = await fetch(BASE + '/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_ids: modelIds }) }); }
+    catch { throw new ApiError('bambud est injoignable', 0, 'offline', true); }
+    if (!res.ok) {
+      let d: { error?: string; code?: string } | undefined; try { d = await res.json() as { error?: string; code?: string }; } catch { /* corps non JSON */ }
+      throw new ApiError(d?.error ?? `Erreur HTTP ${res.status}`, res.status, d?.code ?? 'http');
+    }
+    return { blob: await res.blob(), files: Number(res.headers.get('X-Export-Files') ?? 0), skipped: Number(res.headers.get('X-Export-Skipped') ?? 0) };
+  },
   agents: (signal?: AbortSignal) => request<{ agents: AgentStatus[] }>('GET', '/api/agents', undefined, signal),
   /** Télécharge le GLB d'aperçu (URL signée de la fiche). */
   async glb(signedUrl: string, signal?: AbortSignal): Promise<ArrayBuffer> {

@@ -94,7 +94,9 @@ Non listés au dossier mais livrés : `list_goal_criteria`, `search_models`, `li
 | Journal d'audit des mutations | oui | `TestMutationRollbackLeavesNoAudit`, `TestCatalogAuditAndImmutability` | – |
 | Vignettes / aperçus GLB en arrière-plan, URL signées | oui | `TestSignedAssetsServeOnlyPreviews` | vues 3D de l'interface : chantier `web/` |
 | Limites d'extraction, validation des formats | oui (zip-bomb, composants explosifs, magic) | `TestThreeMFZipBombEntry`, `TestThreeMFExplosiveComponentsFailFast`, `TestWrongMagicRejected`, `TestReadFileTooLarge` | – |
-| **Export groupé** | **non implémenté** | – | restant (dossier §14.2) |
+| **Téléchargement d'un original et export groupé (zip en flux)** | oui (`GET /api/files/{id}/download`, `POST /api/export`) | `TestDownloadExportPartsAndAnalyze` (octets et sha256 identiques, archive valide avec manifeste, refus de fichier inconnu / de modèle inconnu / de liste vide), `TestSafeNameNeverEscapesTheArchive` | seuls les originaux copiés dans le stockage par empreintes sont servis (jamais un chemin du disque) ; les fichiers « Windows seulement » sont listés comme laissés de côté ; 200 modèles maximum par archive ; renommage / déplacement **physiques** volontairement absents (catalogue seulement) |
+| Sous-parties stables d'un modèle (objets du fichier et corps connexes) | oui (`GET /api/models/{id}/parts`) | `TestDownloadExportPartsAndAnalyze` (identifiants identiques d'un appel à l'autre) | dérivées de l'analyse stockée ; un STL n'a qu'un objet |
+| Analyse avec unité confirmée / fabricabilité par machine par HTTP | oui (`POST /api/models/{id}/analyze`) | `TestDownloadExportPartsAndAnalyze` (cm ⇒ dimensions recalculées, unité invalide refusée, modèle inconnu 404) | fabricabilité = heuristiques |
 | Sauvegarde fichiers **et** base + essai de restauration | oui (J9) | `TestBackupWhileJobRunningThenRestoreInFreshDir`, `TestVerifyDataDirDetectsCorruptAndMissingBlobs`, `TestRestoreRefusesNonEmptyDirUnlessForce`, `TestCorruptedAndTruncatedArchives`, `TestHostileArchiveEntriesRefused`, `TestManifestHashesAndTamperedTarDetected`, `TestExcludeSecrets`, `TestBackupRestoreVerifyCommands`, smoke | pas de format `.tar.zst` (aucune dépendance zstd : `.tar.gz` ou `.tar`) ; archive non chiffrée (elle contient le coffre chiffré **et** sa clé : protéger le support) ; clé maître sous Windows liée à DPAPI : une archive Windows ne se restaure pas sur un autre compte/poste (non concerné sur Linux : clé fichier 0600) |
 
 ## 5. Modes d'exécution (dossier §15)
@@ -106,7 +108,7 @@ Non listés au dossier mais livrés : `list_goal_criteria`, `search_models`, `li
 | Perte de l'agent sans seconde impression | oui (`unknown`, réconciliation, travaux physiques refusés) | `TestAgentLostMakesTaskUnknownThenReconciles`, `TestPhysicalTaskIsNeverRequeued`, `TestAgentLostDuringTaskThenRestartReconciles` | – |
 | Fichiers « disponibles uniquement sur Windows » marqués comme tels | oui | `TestWindowsOnlyThenCopy`, `TestInventoryUploadImportEndToEnd` | – |
 | Qualification des sorties Linux/Windows sur un corpus commun | **non faite** | – | aucun slicer Linux qualifié |
-| Web app accessible depuis un autre appareil | le service est prêt (API, pages humaines, cookie, garde Host) ; l'**interface** est le chantier `web/` | `TestHumanPagesNeedCookieAPINeedsBearer`, `TestEnrollFlowAndCookieFlags` | interface livrée séparément : **non couverte par ce document** |
+| Web app accessible depuis un autre appareil | service prêt (API, pages humaines, cookie, garde Host) et **interface livrée** (`web/`, embarquée dans `bambud`, voir §0) | `TestHumanPagesNeedCookieAPINeedsBearer`, `TestEnrollFlowAndCookieFlags`, parcours `web/scripts/e2e.mjs` | accès depuis un autre appareil du LAN **non essayé** (un seul poste, loopback) ; HTTP clair |
 | Conversation Claude depuis un autre appareil (connecteur MCP distant authentifié) | `/mcp` Streamable HTTP + Bearer existe | `TestProxyBridge`, `TestAPIToken`, smoke | exposition hors LAN (HTTPS, publication, accès depuis le cloud) **non qualifiée, non configurée** ; un VPN de téléphone n'est pas une connectivité cloud |
 | Vues MCP App dans Claude Desktop | une vue de démonstration (`ui://bambu/atelier.html`) et `get_print_confirmation_view` en lecture seule | `TestIntegrationToolsAndResource` | contenu final = chantier `web/` ; rendu dans Claude Desktop **non qualifié** ; `visibility:["app"]` dépend de l'hôte |
 
@@ -132,8 +134,8 @@ Limites assumées : processus local avec les droits de l'utilisateur hors périm
 
 1. **Tout l'essai matériel** (BRANCHEMENT) : certificat réel, état réel, FTPS, `project_file`, `ams_mapping`, reprise de session TLS, premier lancement, arrêt, perte réseau. Les 9 points de J7 §5 restent ouverts.
 2. **Preuve sur le vrai serveur Linux** : Bambu Studio AppImage headless sous `xvfb-run`, CadQuery, unité systemd durcie, timer de sauvegarde. Le prompt de préparation couvre le slicing ; le reste se constate à l'installation.
-3. **Interface web et vues MCP App** (chantier `web/`) : non évaluées ici.
+3. **Interface web** : parcours complet vérifié contre le simulateur (§0). Reste : variantes **par zone** et réglages limités à un objet (`web/src/api/pending.ts`, entrée `zone_overrides`) ; photos d'un retour d'expérience ; accès depuis un autre appareil ; rendu des vues MCP App dans Claude Desktop (non qualifié).
 4. **Accès conversationnel hors Windows** : connecteur MCP distant authentifié, HTTPS, exposition : à qualifier puis configurer.
 5. **Qualification Linux/Windows des sorties de slicing** sur corpus commun.
 6. **Modification en direct du projet ouvert dans Studio** : exige une passerelle C++ (hors périmètre) ; l'alternative « copie + ouverture » est livrée.
-7. Export groupé ; similarité géométrique ; supports et coutures peints ; format `.tar.zst` ; chiffrement de l'archive de sauvegarde ; rotation du jeton d'API ; TLS natif ; mises à jour automatiques (aujourd'hui : relancer `install.sh`).
+7. Similarité géométrique ; supports et coutures peints ; format `.tar.zst` ; chiffrement de l'archive de sauvegarde ; rotation du jeton d'API ; TLS natif ; mises à jour automatiques (aujourd'hui : relancer `install.sh`).

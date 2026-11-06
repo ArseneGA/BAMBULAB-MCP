@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Check, SlidersHorizontal } from 'lucide-react';
+import { Check, ClipboardCheck, SlidersHorizontal } from 'lucide-react';
 import { Button, EmptyState, Panel, Tag } from '../components';
 import { api, ApiError, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import type { ApplyOutput, CompareCandidate, CompareOutput, Experiment, Metric } from '../api/goalTypes';
-import { Async, Dialog, Notice, PendingBanner, fmtNum } from './common';
+import type { ExperimentSummary, PrintResult } from '../api/extraTypes';
+import { MemoryPanel, RecordDialog } from './RecordResult';
+import { Async, Dialog, Notice, fmtDate, fmtNum } from './common';
 import './model.css';
 import './compare.css';
 
@@ -27,16 +29,42 @@ export function ComparePage() {
   const [sp] = useSearchParams();
   let id = sp.get('experiment');
   if (!id) { try { id = (JSON.parse(localStorage.getItem('atelier-last-experiment') ?? 'null') as { experiment_id?: string } | null)?.experiment_id ?? null; } catch { /* ignore */ } }
-  if (!id) {
-    return (
-      <>
-        <div className="page-head"><span className="eyebrow">Espace</span><h1>Comparaison</h1></div>
-        <PendingBanner screen="Comparaison" partial />
-        <EmptyState title="Aucune expérience ouverte" text="Une comparaison part d'un objectif validé : créez une expérience depuis la préparation d'un modèle. (La liste des expériences passées n'est pas encore exposée par le serveur.)" action={<Link to="/preparation"><Button size="sm" variant="primary" icon={<SlidersHorizontal size={14} />}>Ouvrir la préparation</Button></Link>} />
-      </>
-    );
-  }
+  if (!id) return <ExperimentIndex />;
   return <CompareView key={id} id={id} />;
+}
+
+const EXP_STATE: Record<ExperimentSummary['state'], { label: string; tone?: 'ok' | 'warn' }> = {
+  running: { label: 'découpes en cours', tone: 'warn' }, complete: { label: 'terminée', tone: 'ok' }, partial: { label: 'terminée avec échecs', tone: 'warn' },
+};
+
+/** Expériences passées (GET /api/experiments), la plus récente d'abord. */
+function ExperimentIndex() {
+  const list = useAsync((s) => api.experiments(undefined, s), []);
+  const models = useAsync((s) => api.models({ limit: 100, sort: 'name' }, s), []);
+  const name = (id: string) => models.data?.models.find((m) => m.id === id)?.name ?? id;
+  return (
+    <>
+      <div className="page-head"><span className="eyebrow">Espace</span><h1>Comparaison</h1><p>Expériences de découpe déjà créées : rouvrez-en une pour comparer ses variantes ou enregistrer le résultat réel d'une impression.</p></div>
+      <Async state={list} label="Chargement des expériences" empty={(d) => d.experiments.length === 0
+        ? <EmptyState title="Aucune expérience" text="Une comparaison part d'un objectif validé : créez une expérience depuis la préparation d'un modèle." action={<Link to="/preparation"><Button size="sm" variant="primary" icon={<SlidersHorizontal size={14} />}>Ouvrir la préparation</Button></Link>} /> : null}>
+        {(d) => (
+          <Panel title={`Expériences (${d.experiments.length})`} flush>
+            <ul className="exp-list" aria-label="Expériences">
+              {d.experiments.map((x) => (
+                <li key={x.id}>
+                  <Link to={`/comparaison?experiment=${encodeURIComponent(x.id)}`} className="exp-item">
+                    <strong>{name(x.model_id)}</strong>
+                    <span className="exp-meta"><Tag tone={EXP_STATE[x.state].tone}>{EXP_STATE[x.state].label}</Tag> {x.succeeded}/{x.candidates} découpes réussies{x.failed > 0 ? `, ${x.failed} en échec` : ''}</span>
+                    <span className="mono dim">{fmtDate(x.created_at)} · {x.machine ?? 'machine inconnue'}{x.material_family ? ` · ${x.material_family}` : ''} · {x.id}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
+      </Async>
+    </>
+  );
 }
 
 function CompareView({ id }: { id: string }) {
@@ -47,10 +75,13 @@ function CompareView({ id }: { id: string }) {
   useEffect(() => { if (complete !== false) return; const t = window.setInterval(() => reloadRef.current(), 2500); return () => window.clearInterval(t); }, [complete]);
   const [apply, setApply] = useState<CompareCandidate | null>(null);
   const [applied, setApplied] = useState<ApplyOutput>();
+  const [record, setRecord] = useState<CompareCandidate | null>(null);
+  const [saved, setSaved] = useState<PrintResult[]>([]);
+  const memory = useAsync((s) => api.printMemory(id, s), [id, saved.length]);
 
   return (
     <>
-      <PendingBanner screen="Comparaison" partial />
+
       <Async state={cmp} label="Chargement de l'expérience">
         {(c) => (
           <>
@@ -63,7 +94,7 @@ function CompareView({ id }: { id: string }) {
               {exp.data && <Link to={`/preparation?model=${exp.data.model_id}`}><Button icon={<SlidersHorizontal size={15} />}>Retour à la préparation</Button></Link>}
             </div>
             {!c.complete && <Notice tone="info" icon={<span className="spinner" aria-hidden />} title="Découpe des variantes en cours">Bambu Studio découpe chaque candidat ; le tableau se complète tout seul ({c.pending?.length ?? 0} en attente).</Notice>}
-            <Table c={c} exp={exp.data} onApply={setApply} />
+            <Table c={c} exp={exp.data} onApply={setApply} onRecord={setRecord} />
             <Rankings c={c} />
             {c.not_evaluable.length > 0 && (
               <Panel title="À vérifier par essai">
@@ -77,7 +108,9 @@ function CompareView({ id }: { id: string }) {
                 Révision de profil <span className="mono">{applied.profile_revision}</span> : {applied.overrides.length === 0 ? 'profil de base inchangé' : applied.overrides.map((o) => `${o.key} = ${String(o.value)}`).join(', ')}. {applied.notes.join(' ')}
               </Notice>
             )}
+            <MemoryPanel state={memory} saved={saved} />
             <ApplyDialog c={apply} compare={c} onClose={() => setApply(null)} onDone={(o) => { setApplied(o); setApply(null); }} />
+            <RecordDialog c={record} compare={c} exp={exp.data} onClose={() => setRecord(null)} onDone={(r) => { setSaved((l) => [r, ...l]); setRecord(null); }} />
           </>
         )}
       </Async>
@@ -85,7 +118,7 @@ function CompareView({ id }: { id: string }) {
   );
 }
 
-function Table({ c, exp, onApply }: { c: CompareOutput; exp?: Experiment; onApply: (k: CompareCandidate) => void }) {
+function Table({ c, exp, onApply, onRecord }: { c: CompareOutput; exp?: Experiment; onApply: (k: CompareCandidate) => void; onRecord: (k: CompareCandidate) => void }) {
   const metricIds = METRIC_ORDER.filter(([m]) => c.candidates.some((k) => k.metrics?.[m]));
   const ref = c.candidates.find((k) => k.kind === 'reference');
   return (
@@ -112,7 +145,7 @@ function Table({ c, exp, onApply }: { c: CompareOutput; exp?: Experiment; onAppl
           {c.candidates.some((k) => k.threshold_checks?.length) && <tr><th scope="row">Seuils de l'objectif</th>{c.candidates.map((k) => <td key={k.id}>{(k.threshold_checks ?? []).map((t) => <div key={t.criterion + t.metric}><Tag tone={t.pass ? 'ok' : 'err'}>{t.pass ? 'respecté' : 'non respecté'}</Tag> {t.label} {t.op} {t.limit}</div>)}</td>)}</tr>}
           {c.candidates.some((k) => k.engineering?.length) && <tr><th scope="row">Calcul d'ingénierie</th>{c.candidates.map((k) => <td key={k.id}>{(k.engineering ?? []).map((e) => <div key={e.criterion}>{e.error ? <Tag tone="warn">{e.error}</Tag> : <><span className="mono">SF {fmtNum(e.safety_factor, 2)}</span> <Tag>{e.confidence_level}</Tag> <span className="hint">{e.verdict}</span></>}</div>)}</td>)}</tr>}
           {c.candidates.some((k) => k.error) && <tr><th scope="row">Erreurs</th>{c.candidates.map((k) => <td key={k.id}>{k.error ? <Tag tone="err">{k.error}</Tag> : <span className="hint">—</span>}</td>)}</tr>}
-          <tr><th scope="row">Décision</th>{c.candidates.map((k) => <td key={k.id}><Button size="sm" variant="primary" disabled={k.state !== 'succeeded'} onClick={() => onApply(k)}>Appliquer</Button></td>)}</tr>
+          <tr><th scope="row">Décision</th>{c.candidates.map((k) => <td key={k.id}><div className="cmp-acts"><Button size="sm" variant="primary" disabled={k.state !== 'succeeded'} onClick={() => onApply(k)}>Appliquer</Button><Button size="sm" icon={<ClipboardCheck size={13} />} disabled={k.state !== 'succeeded'} onClick={() => onRecord(k)} title="Consigner ce que l'impression réelle a donné">Enregistrer l'essai réel</Button></div></td>)}</tr>
         </tbody>
       </table>
       {exp && <p className="hint">Mesures : « estimation slicer » = Bambu Studio hors préchauffage ; « lecture du G-code » = relevé sur le fichier découpé. Aucune ne prouve résistance, aspect ou précision réelle.</p>}

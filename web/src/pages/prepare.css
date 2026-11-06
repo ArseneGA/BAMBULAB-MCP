@@ -8,3 +8,12 @@
 .prep-add { display: flex; gap: var(--sp-2); }
 .prep-add .select { flex: 1; }
 .prep-opts { display: inline-flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.part-sub { margin-left: var(--sp-3); opacity: 0.9; }
+.set-row { display: grid; grid-template-columns: 110px minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: var(--sp-2); align-items: center; }
+@media (max-width: 560px) { .set-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.set-result { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); min-width: 0; }
+.set-scroll { overflow-x: auto; }
+.set-diff { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.set-diff th, .set-diff td { text-align: left; padding: var(--sp-1) var(--sp-3) var(--sp-1) 0; border-top: 1px solid var(--line); vertical-align: top; font-weight: 400; }
+.set-diff thead th { color: var(--text-2); font-weight: 600; border-top: 0; }
+.set-diff td, .set-diff th { overflow-wrap: anywhere; }

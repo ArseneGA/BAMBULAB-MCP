@@ -5,9 +5,17 @@ import {
   StatusDot, Tabs, Tag, Toggle, Tooltip, Tree, useToast,
 } from '../components';
 import { colorTokens, radii, spacingScale } from '../design/theme';
+import { Notice } from './common';
 import { useTheme } from '../design/theme';
-import { demoModels } from '../data/demo';
 import './design.css';
+
+/** Exemples FICTIFS, propres à cette page de spécimen : ils n'existent dans aucun catalogue. */
+const specimenModels = [
+  { id: 'm01', name: 'Exemple A', format: 'STEP' },
+  { id: 'm02', name: 'Exemple B', format: '3MF' },
+  { id: 'm03', name: 'Exemple C', format: 'STL' },
+  { id: 'm04', name: 'Exemple D', format: 'STL' },
+];
 
 function Specimen({ forcedTheme }: { forcedTheme?: 'light' | 'dark' }) {
   const toast = useToast();
@@ -33,9 +41,9 @@ function Specimen({ forcedTheme }: { forcedTheme?: 'light' | 'dark' }) {
 
       <section>
         <span className="eyebrow">Typographie</span>
-        <h1>Pince de maintien 25 mm</h1>
+        <h1>Titre de fiche modèle</h1>
         <p>Grotesque pour l'interface, lisible à petite taille. Les valeurs et cotes passent en mono :</p>
-        <p className="mono">48.00 × 32.00 × 20.00 mm · 0.20 mm · 9f2c1a</p>
+        <p className="mono">10.00 × 20.00 × 30.00 mm · 0.20 mm · 9f2c1a0b</p>
       </section>
 
       <section>
@@ -63,7 +71,7 @@ function Specimen({ forcedTheme }: { forcedTheme?: 'light' | 'dark' }) {
         <span className="eyebrow">Champs et sélecteurs</span>
         <div className="grid2">
           <SearchInput value={q} onChange={setQ} placeholder="Rechercher un modèle" />
-          <Field label="Collection"><Select options={[{ value: 'a', label: 'Atelier' }, { value: 'b', label: 'Maison' }]} /></Field>
+          <Field label="Collection"><Select options={[{ value: 'a', label: 'Collection A' }, { value: 'b', label: 'Collection B' }]} /></Field>
           <Field label="Nom (invalide)"><Input aria-invalid defaultValue="" placeholder="Obligatoire" /></Field>
           <Field label="Désactivé"><Input disabled value="Lecture seule" readOnly /></Field>
           <Segmented label="Vue" value={seg} onChange={setSeg} options={[{ value: 'a', label: 'Grille' }, { value: 'b', label: 'Liste' }, { value: 'c', label: 'Arbre', disabled: true }]} />
@@ -89,13 +97,13 @@ function Specimen({ forcedTheme }: { forcedTheme?: 'light' | 'dark' }) {
         <Tabs label="Exemple" value={tab} onChange={setTab} tabs={[{ value: 'one', label: 'Fichiers' }, { value: 'two', label: 'Versions' }]} />
         <div className="grid2">
           <Panel title="Liste" flush>
-            <List label="Modèles" items={demoModels.slice(0, 4)} getKey={(m) => m.id} selectedKey={sel} onSelect={(m) => setSel(m.id)}
-              render={(m) => <><FileBox size={14} aria-hidden /><span style={{ flex: 1 }}>{m.name}</span><Tag>{m.files[0].format}</Tag></>} />
+            <List label="Modèles" items={specimenModels} getKey={(m) => m.id} selectedKey={sel} onSelect={(m) => setSel(m.id)}
+              render={(m) => <><FileBox size={14} aria-hidden /><span style={{ flex: 1 }}>{m.name}</span><Tag>{m.format}</Tag></>} />
           </Panel>
           <Panel title="Arbre" flush>
             <Tree label="Collections" selectedId={node} onSelect={setNode} nodes={[
-              { id: 'n1', label: <><Folder size={14} aria-hidden />Atelier</>, children: [{ id: 'n2', label: 'Pinces' }, { id: 'n3', label: 'Poignées' }] },
-              { id: 'n4', label: <><Folder size={14} aria-hidden />Maison</> },
+              { id: 'n1', label: <><Folder size={14} aria-hidden />Collection A</>, children: [{ id: 'n2', label: 'Sous-collection 1' }, { id: 'n3', label: 'Sous-collection 2' }] },
+              { id: 'n4', label: <><Folder size={14} aria-hidden />Collection B</> },
             ]} />
           </Panel>
         </div>
@@ -104,8 +112,8 @@ function Specimen({ forcedTheme }: { forcedTheme?: 'light' | 'dark' }) {
       <section>
         <span className="eyebrow">Toast et états</span>
         <div className="row">
-          <Button size="sm" onClick={() => toast('ok', 'Copie vérifiée par empreinte (démo).')}>Toast succès</Button>
-          <Button size="sm" onClick={() => toast('err', 'Agent Windows hors ligne (démo).')}>Toast erreur</Button>
+          <Button size="sm" onClick={() => toast('ok', 'Message de succès (exemple).')}>Toast succès</Button>
+          <Button size="sm" onClick={() => toast('err', "Message d'erreur (exemple).")}>Toast erreur</Button>
         </div>
         <div className="grid2">
           <EmptyState title="Aucun modèle" text="Aucun résultat pour cette recherche." action={<Button size="sm">Réinitialiser</Button>} />
@@ -127,6 +135,7 @@ export function DesignPage() {
         <p>Les deux thèmes sont affichés côte à côte ; la bascule change le thème de toute l'application.</p>
         <div><Segmented label="Thème de l'application" value={theme} onChange={setTheme} options={[{ value: 'light', label: 'Clair' }, { value: 'dark', label: 'Sombre' }]} /></div>
       </div>
+      <Notice tone="info" title="Page de spécimen : valeurs fictives">Les noms, cotes et messages ci-dessous illustrent les composants du système de design. Aucun ne provient du catalogue, d'une imprimante ou d'une bobine.</Notice>
       <div className="specimens">
         <Specimen forcedTheme="light" />
         <Specimen forcedTheme="dark" />

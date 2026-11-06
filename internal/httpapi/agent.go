@@ -62,6 +62,9 @@ func registerAgent(mux *http.ServeMux, c *core.Core, human *humanauth.Service) {
 	mux.HandleFunc("GET /api/agent/tasks", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		ts, err := reg.ListTasks(r.Context(), q.Get("agent"), q.Get("state"), atoi(q.Get("limit")))
+		if ts == nil {
+			ts = []agentlink.TaskInfo{}
+		}
 		agentlink.Reply(w, map[string]any{"tasks": ts}, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/agent/tasks/{id}", func(w http.ResponseWriter, r *http.Request) {

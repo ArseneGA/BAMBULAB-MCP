@@ -188,14 +188,18 @@ func TestDownloadExportPartsAndAnalyze(t *testing.T) {
 	var p1, p2 struct {
 		State string `json:"state"`
 		Parts []struct {
-			ID   string `json:"id"`
-			Kind string `json:"kind"`
+			ID    string `json:"id"`
+			Kind  string `json:"kind"`
+			Label string `json:"label"`
 		} `json:"parts"`
 	}
 	if code := e.do("GET", "/api/models/"+res.Models[0].ID+"/parts", nil, &p1); code != 200 || p1.State != "ok" || len(p1.Parts) == 0 {
 		t.Fatalf("parts : %d %+v", code, p1)
 	}
 	e.do("GET", "/api/models/"+res.Models[0].ID+"/parts", nil, &p2)
+	if p1.Parts[0].Label == "" || p1.Parts[0].Label == "stl" {
+		t.Fatalf("libellé parlant attendu (nom du modèle) : %+v", p1.Parts[0])
+	}
 	if len(p1.Parts) != len(p2.Parts) || p1.Parts[0].ID != p2.Parts[0].ID {
 		t.Fatalf("sous-parties instables : %+v %+v", p1, p2)
 	}

@@ -9,6 +9,7 @@ import { GlbView } from '../viewer/LazyGlbView';
 import type { LoadedModel } from '../viewer/glbEngine';
 import { Async, Dialog, Notice, fmtBytes, fmtDate, fmtDims, fmtNum, shortSha } from './common';
 import { OperationFlow } from './OperationFlow';
+import { AnalysisTools, DownloadLink, ExportTools } from './ModelTools';
 import './model.css';
 
 export function ModelPage() {
@@ -156,6 +157,8 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
             <AnalysisBlock a={a} cad={m.cad} />
           </Panel>
 
+          <AnalysisTools m={m} onChanged={reload} />
+
           <Panel title="Sous-parties">
             {parts.length === 0 ? <p className="hint" style={{ margin: 0 }}>{m.preview.state === 'ready' ? 'Lecture du maillage…' : "Disponibles quand l'aperçu est prêt."}</p> : (
               <>
@@ -167,7 +170,7 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
             )}
           </Panel>
 
-          <Panel title="Fichiers associés">
+          <Panel title="Fichiers associés" actions={trashed ? undefined : <ExportTools m={m} />}>
             {m.files.map((f) => (
               <div key={f.id} className={`frow${f.availability === 'windows_only' ? ' frow-miss' : ''}`}>
                 <div className="fn"><span>{f.name}</span><Tag>{f.format.toUpperCase()}</Tag></div>
@@ -176,6 +179,7 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
                   {f.availability === 'windows_only' ? <StatusDot status="unavailable" label="Windows uniquement, non copié" /> : <StatusDot status="online" label="Copié sur Linux" />}
                   <span className="mono" title={f.sha256}>sha256 {shortSha(f.sha256)}…</span>
                   {f.unit && <span className="mono">unité {f.unit}</span>}
+                  {f.availability === 'linux' && !trashed && <DownloadLink fileId={f.id} name={f.name} />}
                 </div>
                 {f.rel_path && f.rel_path !== f.name && <div className="fs"><span className="mono">{f.rel_path}</span></div>}
               </div>

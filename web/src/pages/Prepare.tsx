@@ -7,11 +7,13 @@ import { useAsync, useConnection } from '../api/hooks';
 import type { Goal, GoalCriteriaCatalog, CriterionInfo, CriterionInput } from '../api/goalTypes';
 import { GlbView } from '../viewer/LazyGlbView';
 import { Async, Notice, PendingBanner, fmtDims } from './common';
+import { PartsPanel, SettingsPanel } from './PrepareParts';
+import type { Part } from '../api/extraTypes';
 import './model.css';
 import './prepare.css';
 
 interface Row { uid: string; type: string; text: string; priority: number; nonNeg: boolean; params: Record<string, string> }
-interface Draft { text: string; material: string; rows: Row[]; machine: string; count: number }
+interface Draft { text: string; material: string; rows: Row[]; machine: string; count: number; rev?: string }
 const DEFAULT_MACHINE = 'Bambu Lab P1S 0.4 nozzle';
 const key = (id: string) => `atelier-goal-draft:${id}`;
 const uid = () => Math.random().toString(36).slice(2, 8);
@@ -33,7 +35,6 @@ function PickModel({ onPick }: { onPick: (id: string) => void }) {
   return (
     <>
       <div className="page-head"><span className="eyebrow">Espace</span><h1>Préparation</h1><p>Choisissez le modèle à préparer : l'objectif de finition et les variantes portent sur une version précise du catalogue.</p></div>
-      <PendingBanner screen="Préparation" partial />
       <Async state={st} label="Chargement du catalogue" empty={(d) => d.models.length === 0 ? <EmptyState title="Le catalogue est vide" text="Importez d'abord un modèle depuis la bibliothèque." action={<Link to="/bibliotheque"><Button size="sm">Ouvrir la bibliothèque</Button></Link>} /> : null}>
         {(d) => (
           <Panel title="Modèles">
@@ -54,6 +55,7 @@ function PrepareView({ id }: { id: string }) {
   const [goal, setGoal] = useState<Goal>();
   const [busy, setBusy] = useState<'goal' | 'exp' | null>(null);
   const [error, setError] = useState<string>();
+  const [part, setPart] = useState<Part | null>(null);
   useEffect(() => { try { sessionStorage.setItem(key(id), JSON.stringify(draft)); } catch { /* ignore */ } }, [id, draft]);
 
   const patch = (p: Partial<Draft>) => { setDraft((d) => ({ ...d, ...p })); setGoal(undefined); };
@@ -78,7 +80,7 @@ function PrepareView({ id }: { id: string }) {
     if (!goal) return;
     setBusy('exp'); setError(undefined);
     try {
-      const x = await api.createExperiment({ model_id: id, model_version_id: version?.id, expected_model_revision: version?.id, goal_id: goal.id, base: { machine: draft.machine.trim() || undefined }, candidates: draft.count });
+      const x = await api.createExperiment({ model_id: id, model_version_id: version?.id, expected_model_revision: version?.id, goal_id: goal.id, base: { machine: draft.machine.trim() || undefined }, base_profile_revision: draft.rev, candidates: draft.count });
       try { localStorage.setItem('atelier-last-experiment', JSON.stringify({ model_id: id, experiment_id: x.id })); } catch { /* ignore */ }
       nav(`/comparaison?experiment=${encodeURIComponent(x.id)}`);
     } catch (e) { setError(describeError(e)); setBusy(null); }
@@ -89,7 +91,7 @@ function PrepareView({ id }: { id: string }) {
 
   return (
     <>
-      <PendingBanner screen="Préparation" partial />
+      <PendingBanner screen="Préparation" />
       <Async state={model} label="Chargement du modèle">
         {(d) => (
           <>
@@ -125,6 +127,10 @@ function PrepareView({ id }: { id: string }) {
                 </Panel>
 
                 {goal && <GoalResult goal={goal} onAnswer={(critId, param, value) => { const i = goal.criteria.findIndex((c) => c.id === critId); const row = draft.rows[i]; if (row) setRow(row.uid, { params: { ...row.params, [param]: value } }); }} />}
+
+                <PartsPanel modelId={id} selected={part?.id ?? null} onSelect={setPart} />
+
+                <SettingsPanel machine={draft.machine} revision={draft.rev} onRevision={(r) => setDraft((x) => ({ ...x, rev: r }))} part={part} catalog={catalog.data} disabled={slicing?.available === false} />
 
                 <Panel title="Variantes">
                   <div className="prep-form">

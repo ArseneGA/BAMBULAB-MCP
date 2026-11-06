@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { Boxes, SlidersHorizontal, GitCompare, Layers, Printer, Moon, Sun, Palette, Trash2 } from 'lucide-react';
 import { IconButton, StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
@@ -24,7 +24,7 @@ function Pills() {
     <>
       <span className="pill" title={c.server === 'online' ? `Service bambud ${c.health?.version ?? ''}` : 'Service bambud'}><StatusDot status={server} label={c.server === 'checking' ? 'Connexion' : 'Linux'} /></span>
       {c.browserEnrolled === false && <a className="pill enroll" href="/enroll" title="Les pages de confirmation d'impression exigent un navigateur enregistré (code à usage unique)">Enregistrer ce navigateur</a>}
-      <span className="pill" title={c.agents.length === 0 ? 'Aucun agent Windows appairé' : c.agents.map((a) => `${a.name} : ${a.online ? 'en ligne' : 'hors ligne'}${a.studio_running ? ', Bambu Studio ouvert' : a.studio_installed ? ', Bambu Studio installé' : ''}`).join(' ; ')}><StatusDot status={win} label={c.agents.length === 0 ? 'Windows' : c.agents.length === 1 ? `Windows : ${c.agents[0].name}` : `Windows ×${c.agents.length}`} /></span>
+      <Link to="/agents" className="pill" title={c.agents.length === 0 ? 'Aucun agent Windows appairé' : c.agents.map((a) => `${a.name} : ${a.online ? 'en ligne' : 'hors ligne'}${a.studio_running ? ', Bambu Studio ouvert' : a.studio_installed ? ', Bambu Studio installé' : ''}`).join(' ; ')}><StatusDot status={win} label={c.agents.length === 0 ? 'Windows' : c.agents.length === 1 ? `Windows : ${c.agents[0].name}` : `Windows ×${c.agents.length}`} /></Link>
       <span className="pill" title={c.cad === 'online' ? 'Backend CAO (STEP) disponible' : (c.cadNote ?? 'Backend CAO absent : les fichiers STEP ne sont pas convertis')}><StatusDot status={cad} label="CAO" /></span>
     </>
   );
