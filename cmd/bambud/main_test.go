@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
 )
 
 func getJSON(t *testing.T, method, url string, out any) int {
@@ -36,7 +37,7 @@ func TestServeAndGracefulShutdown(t *testing.T) {
 	ready := make(chan string, 1)
 	done := make(chan error, 1)
 	cfg := core.Config{DataDir: dir, Logger: log, PollInterval: 20 * time.Millisecond, HeartbeatInterval: 20 * time.Millisecond}
-	go func() { done <- run(ctx, log, "127.0.0.1:0", cfg, ready) }()
+	go func() { done <- run(ctx, log, "127.0.0.1:0", cfg, httpapi.Options{}, ready) }()
 	var addr string
 	select {
 	case addr = <-ready:
@@ -130,5 +131,14 @@ func TestJobAPIEndToEnd(t *testing.T) {
 	}
 	if got["state"] != "cancelled" || !strings.HasPrefix(got["id"].(string), "job_") {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestRunRefusesNonLoopbackWithoutToken(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := core.Config{DataDir: t.TempDir(), Logger: log}
+	err := run(context.Background(), log, "0.0.0.0:0", cfg, httpapi.Options{}, nil)
+	if err == nil || !strings.Contains(err.Error(), "jeton") {
+		t.Fatalf("démarrage hors loopback sans jeton non refusé : %v", err)
 	}
 }

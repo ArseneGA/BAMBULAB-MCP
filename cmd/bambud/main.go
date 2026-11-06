@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -40,6 +41,8 @@ func main() {
 	dataDir := fs.String("data-dir", envOr("BAMBU_DATA_DIR", "./data"), "dossier de données (env BAMBU_DATA_DIR)")
 	heavy := fs.Int("heavy-workers", envInt("BAMBU_HEAVY_WORKERS", 1), "travaux lourds simultanés")
 	light := fs.Int("light-workers", envInt("BAMBU_LIGHT_WORKERS", 4), "travaux légers simultanés")
+	apiToken := fs.String("api-token", os.Getenv("BAMBU_API_TOKEN"), "jeton d'API (Bearer) ; obligatoire hors loopback (env BAMBU_API_TOKEN)")
+	allowHosts := fs.String("allowed-hosts", os.Getenv("BAMBU_ALLOWED_HOSTS"), "noms d'hôte HTTP acceptés en plus du loopback, séparés par des virgules")
 	level := fs.String("log-level", envOr("BAMBU_LOG_LEVEL", "info"), "debug|info|warn|error")
 	version := fs.Bool("version", false, "affiche la version")
 	_ = fs.Parse(os.Args[1:])
@@ -56,7 +59,14 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log}, nil); err != nil {
+	var hosts []string
+	for _, h := range strings.Split(*allowHosts, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	opts := httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts}
+	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log}, opts, nil); err != nil {
 		log.Error("arrêt sur erreur", "err", err)
 		os.Exit(1)
 	}
@@ -64,7 +74,10 @@ func main() {
 
 // run démarre le service et bloque jusqu'à l'annulation de ctx. Si ready n'est
 // pas nil, l'adresse réelle d'écoute y est envoyée (utile aux tests, port 0).
-func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, ready chan<- string) error {
+func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, opts httpapi.Options, ready chan<- string) error {
+	if err := httpapi.ValidateListen(addr, opts.APIToken); err != nil {
+		return err
+	}
 	c, err := core.Open(ctx, cfg)
 	if err != nil {
 		return err
@@ -76,7 +89,7 @@ func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, re
 		return fmt.Errorf("écoute sur %s : %w", addr, err)
 	}
 	srv := &http.Server{
-		Handler:           httpapi.NewHandler(c),
+		Handler:           httpapi.NewHandlerWithOptions(c, opts),
 		ReadHeaderTimeout: 10 * time.Second,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
