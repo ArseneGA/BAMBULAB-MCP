@@ -49,6 +49,9 @@ type Core struct {
 	Recovery jobs.RecoveryReport
 	// Catalog : catalogue documentaire (jalon 2).
 	Catalog *catalog.Service
+	// CapabilityHooks complètent Capabilities() (jalon 8 : agents Windows). Posés
+	// avant que le service ne serve des requêtes.
+	CapabilityHooks []func(*contracts.Capabilities)
 }
 
 // Open prépare le dossier de données, migre la base, enregistre les handlers
@@ -151,7 +154,7 @@ func (c *Core) Capabilities() contracts.Capabilities {
 	}
 	kinds := c.Registry.Kinds()
 	sort.Strings(kinds)
-	return contracts.Capabilities{
+	caps := contracts.Capabilities{
 		Service: "bambud",
 		Version: Version,
 		Mode:    "linux_seul",
@@ -175,6 +178,10 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			string(contracts.ClassLight): c.Queue.Limit(contracts.ClassLight),
 		},
 	}
+	for _, h := range c.CapabilityHooks {
+		h(&caps)
+	}
+	return caps
 }
 
 func catalogImportNote(roots int) string {

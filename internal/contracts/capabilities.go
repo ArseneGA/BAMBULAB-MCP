@@ -17,6 +17,25 @@ type Capabilities struct {
 	Features    []Feature      `json:"features"`
 	JobKinds    []string       `json:"job_kinds"`
 	Concurrency map[string]int `json:"concurrency" jsonschema:"travaux simultanés par classe (heavy, light)"`
+	// Agents : agents Windows appairés et leur disponibilité (jalon 8). Vide sans agent.
+	Agents []AgentStatus `json:"agents,omitempty"`
+}
+
+// AgentStatus est la vue publique d'un agent Windows appairé (jamais de secret).
+type AgentStatus struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Online   bool   `json:"online" jsonschema:"vrai si l'agent a donné signe de vie récemment"`
+	LastSeen string `json:"last_seen,omitempty" jsonschema:"dernière vue (RFC 3339)"`
+	Version  string `json:"agent_version,omitempty"`
+	// Bambu Studio sur le poste Windows.
+	StudioInstalled bool     `json:"studio_installed"`
+	StudioRunning   bool     `json:"studio_running"`
+	StudioVersion   string   `json:"studio_version,omitempty"`
+	LocalSlicer     bool     `json:"local_slicer"`
+	SharedFolders   []string `json:"shared_folders,omitempty" jsonschema:"étiquettes des dossiers autorisés à l'import"`
+	CAD             []string `json:"cad,omitempty"`
+	Tasks           []string `json:"tasks,omitempty" jsonschema:"types de travaux acceptés"`
 }
 
 // Executable est un programme externe recherché sur la machine du service.
