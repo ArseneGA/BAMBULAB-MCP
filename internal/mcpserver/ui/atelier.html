@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  .muted { opacity: .7; }
+  pre { margin: 8px 0 0; padding: 8px; border-radius: 6px; background: rgba(127,127,127,.15); overflow: auto; }
+</style>
+</head>
+<body>
+<h1>Atelier 3D</h1>
+<p>Page de démonstration du jalon 1 : aucune donnée réelle, aucun accès réseau.</p>
+<p class="muted" id="status">En attente de l'hôte…</p>
+<pre id="data" hidden></pre>
+<script>
+// Protocole MCP Apps (postMessage JSON-RPC), implémenté directement, sans SDK.
+// NON VALIDÉ dans un hôte réel (voir docs/jalons/J1.md) : tout est gardé par try/catch
+// pour que la page reste lisible même si l'hôte ne répond pas.
+(function () {
+  var status = document.getElementById('status');
+  var data = document.getElementById('data');
+  var nextId = 1;
+  var pending = {};
+  function send(msg) { window.parent.postMessage(Object.assign({ jsonrpc: '2.0' }, msg), '*'); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) {
+      var id = nextId++;
+      pending[id] = { resolve: resolve, reject: reject };
+      send({ id: id, method: method, params: params });
+      setTimeout(function () { if (pending[id]) { delete pending[id]; reject(new Error('délai dépassé')); } }, 5000);
+    });
+  }
+  window.addEventListener('message', function (ev) {
+    var m = ev.data;
+    if (!m || m.jsonrpc !== '2.0') return;
+    try {
+      if (m.id !== undefined && pending[m.id] && (m.result !== undefined || m.error)) {
+        var p = pending[m.id]; delete pending[m.id];
+        m.error ? p.reject(new Error(m.error.message)) : p.resolve(m.result);
+      } else if (m.method === 'ui/notifications/tool-result') {
+        var sc = m.params && m.params.structuredContent;
+        data.textContent = JSON.stringify(sc !== undefined ? sc : m.params, null, 2);
+        data.hidden = false;
+        status.textContent = 'Résultat reçu.';
+      } else if (m.method === 'ui/notifications/host-context-changed') {
+        var t = m.params && m.params.theme;
+        if (t) document.documentElement.style.colorScheme = t;
+      }
+    } catch (e) { status.textContent = 'Erreur : ' + e.message; }
+  });
+  request('ui/initialize', {
+    appInfo: { name: 'bambu-atelier-demo', version: '0.1.0' },
+    appCapabilities: {},
+    protocolVersion: '2026-01-26'
+  }).then(function () {
+    send({ method: 'ui/notifications/initialized', params: {} });
+    status.textContent = 'Connecté à l\'hôte.';
+  }).catch(function (e) {
+    status.textContent = 'Hôte MCP Apps non détecté (' + e.message + ').';
+  });
+})();
+</script>
+</body>
+</html>
