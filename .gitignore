@@ -8,13 +8,10 @@ dist
 *.db
 *.db-wal
 *.db-shm
-<<<<<<< HEAD
 
 # Interface web (jalon 3) : artefacts de build embarques, jamais versionnes
 /internal/webui/assets/*
 !/internal/webui/assets/.gitkeep
 /internal/mcpserver/ui/views/*
 !/internal/mcpserver/ui/views/.gitkeep
-=======
 /dist/
->>>>>>> main
