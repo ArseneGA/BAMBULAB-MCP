@@ -29,9 +29,14 @@ var ErrNotFound = errors.New("introuvable")
 
 // Store encapsule la base SQLite.
 type Store struct {
-	db  *sql.DB
-	now func() time.Time
+	db    *sql.DB
+	now   func() time.Time
+	blobs *BlobStore
 }
+
+// AttachBlobs relie le magasin de blobs : AddSourceFile vérifie alors que le
+// blob d'un fichier « linux » existe avec la taille déclarée.
+func (s *Store) AttachBlobs(b *BlobStore) { s.blobs = b }
 
 // Options d'ouverture.
 type Options struct {
@@ -58,7 +63,10 @@ func Open(path string, opts Options) (*Store, error) {
 	q.Add("_pragma", fmt.Sprintf("busy_timeout(%d)", opts.BusyTimeout.Milliseconds()))
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "foreign_keys(1)")
-	q.Add("_pragma", "synchronous(NORMAL)")
+	q.Add("_pragma", "synchronous(FULL)")
+	q.Add("_pragma", "recursive_triggers(1)")
+	// BEGIN IMMEDIATE pour toute transaction : verrou d'écriture pris d'emblée.
+	q.Set("_txlock", "immediate")
 	dsn := path + "?" + q.Encode()
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

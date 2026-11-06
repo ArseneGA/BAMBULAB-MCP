@@ -70,11 +70,12 @@ func (b *bvh) build(start, end int) int {
 		c := b.centroid(ti)
 		return [3]float64{c.X, c.Y, c.Z}[axis]
 	}
-	if [3]float64{ext.X, ext.Y, ext.Z}[axis] == 0 {
-		return idx
-	}
 	seg := b.order[start:end]
-	sort.Slice(seg, func(i, j int) bool { return key(seg[i]) < key(seg[j]) })
+	// Centroïdes tous identiques : aucun tri utile, mais on coupe quand même en deux
+	// pour que les feuilles restent bornées (sinon une feuille de n triangles ferait un test linéaire).
+	if [3]float64{ext.X, ext.Y, ext.Z}[axis] != 0 {
+		sort.Slice(seg, func(i, j int) bool { return key(seg[i]) < key(seg[j]) })
+	}
 	mid := start + (end-start)/2
 	l := b.build(start, mid)
 	r := b.build(mid, end)

@@ -74,6 +74,9 @@ func ParseSTL(data []byte) (*Model, error) {
 		return nil, ErrEmpty
 	}
 	md.Objects = []Object{{ID: "1", Name: "stl", Mesh: m}}
+	if err := validateModel(md); err != nil {
+		return nil, err
+	}
 	return md, nil
 }
 
@@ -87,8 +90,8 @@ func looksASCII(data []byte) bool {
 		return false
 	}
 	// Le mot "facet" ou "endsolid" doit apparaître dans le texte ; les octets non ASCII dans la tête indiquent du binaire.
-	low := bytes.ToLower(data)
-	if !bytes.Contains(low, []byte("facet")) && !bytes.Contains(low, []byte("endsolid")) {
+	// Recherche insensible à la casse SANS copier le fichier entier.
+	if !containsFold(data, "facet") && !containsFold(data, "endsolid") {
 		return false
 	}
 	for _, b := range head {
@@ -97,6 +100,28 @@ func looksASCII(data []byte) bool {
 		}
 	}
 	return true
+}
+
+// containsFold cherche pat (en minuscules ASCII) dans data sans tenir compte de la casse,
+// sans allocation.
+func containsFold(data []byte, pat string) bool {
+	n := len(pat)
+	for i := 0; i+n <= len(data); i++ {
+		if data[i]|0x20 != pat[0] {
+			continue
+		}
+		ok := true
+		for j := 1; j < n; j++ {
+			if data[i+j]|0x20 != pat[j] {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
 }
 
 func parseSTLBinary(data []byte, n uint32) (*Mesh, error) {

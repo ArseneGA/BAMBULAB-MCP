@@ -19,9 +19,11 @@ import (
 
 // Erreurs.
 var (
-	ErrNotFound     = errors.New("travail introuvable")
-	ErrNotRunning   = errors.New("le travail n'est plus en cours d'exécution")
-	ErrKindMismatch = errors.New("clé d'idempotence déjà utilisée par un autre type de travail")
+	ErrNotFound            = errors.New("travail introuvable")
+	ErrNotRunning          = errors.New("le travail n'est plus en cours d'exécution")
+	ErrSecretInParams      = errors.New("params contient un champ secret (secret_*, password, access_code)")
+	ErrIdempotencyRequired = errors.New("clé d'idempotence obligatoire pour un travail à effet physique")
+	ErrKindMismatch        = errors.New("clé d'idempotence déjà utilisée par un autre type de travail")
 )
 
 // QueueConfig règle la file.
@@ -185,6 +187,12 @@ func (q *Queue) Enqueue(ctx context.Context, p EnqueueParams) (job contracts.Job
 	}
 	if len(p.Params) > 0 && !json.Valid(p.Params) {
 		return job, false, errors.New("params n'est pas un JSON valide")
+	}
+	if contracts.ContainsSecret(p.Params) {
+		return job, false, fmt.Errorf("%w : le handler doit lire les secrets dans la configuration, pas dans params", ErrSecretInParams)
+	}
+	if physicalKind(p.Kind) && p.IdempotencyKey == "" {
+		return job, false, fmt.Errorf("%s : %w", p.Kind, ErrIdempotencyRequired)
 	}
 	err = q.s.Tx(ctx, func(tx *sql.Tx) error {
 		if p.IdempotencyKey != "" {
@@ -404,9 +412,51 @@ func (q *Queue) MarkCancelled(ctx context.Context, id string) error {
 	return q.finish(ctx, id, contracts.JobCancelled, nil, nil, false)
 }
 
-// Requeue remet en file un travail en cours (arrêt propre d'un travail rejouable).
-func (q *Queue) Requeue(ctx context.Context, id string) error {
-	return q.mustUpdate(ctx, id, `UPDATE jobs SET state='queued', worker_id=NULL, progress=0, message='' WHERE id=? AND state='running'`)
+// ErrNotReplayable : le type de travail ne peut pas être remis en file.
+var ErrNotReplayable = errors.New("type de travail non rejouable")
+
+// Requeue remet en file un travail en cours (arrêt propre d'un travail
+// rejouable) et renvoie l'état final. Il respecte neverReplay (erreur
+// ErrNotReplayable, rien n'est modifié), la demande d'annulation (-> cancelled)
+// et MaxAttempts (-> failed).
+func (q *Queue) Requeue(ctx context.Context, id string) (contracts.JobState, error) {
+	var final contracts.JobState
+	err := q.s.Tx(ctx, func(tx *sql.Tx) error {
+		j, err := q.getTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if j.State != contracts.JobRunning {
+			return fmt.Errorf("%s : %w", id, ErrNotRunning)
+		}
+		if neverReplay(j.Kind) {
+			return fmt.Errorf("%s : %w", j.Kind, ErrNotReplayable)
+		}
+		now := store.FormatTime(q.s.Now())
+		switch {
+		case j.CancelRequested:
+			final = contracts.JobCancelled
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET state='cancelled', finished_at=? WHERE id=?`, now, id)
+		case j.Attempts >= q.cfg.MaxAttempts:
+			final = contracts.JobFailed
+			e, _ := json.Marshal(contracts.JobError{Code: "attempts_exhausted", Message: "tentatives épuisées après interruptions"})
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET state='failed', error=?, finished_at=? WHERE id=?`, string(e), now, id)
+		default:
+			final = contracts.JobQueued
+			_, err = tx.ExecContext(ctx, `UPDATE jobs SET state='queued', worker_id=NULL, progress=0, message='' WHERE id=?`, id)
+		}
+		if err != nil {
+			return err
+		}
+		return q.s.AuditTx(ctx, tx, "system", "job.requeue", "job", id, map[string]any{"state": final})
+	})
+	return final, err
+}
+
+// MarkUnknown termine un travail en cours dont l'issue réelle est incertaine
+// (type non rejouable interrompu ou annulé après son démarrage).
+func (q *Queue) MarkUnknown(ctx context.Context, id, message string) error {
+	return q.finish(ctx, id, contracts.JobUnknown, nil, &contracts.JobError{Code: "interrupted_unknown", Message: truncate(message, q.cfg.MaxLogLineBytes)}, false)
 }
 
 // CancelOutcome décrit le résultat d'une demande d'annulation.
@@ -460,7 +510,8 @@ type RecoveryReport struct {
 }
 
 // Recover traite les travaux restés « running » après un arrêt brutal :
-//   - annulation déjà demandée -> cancelled ;
+//   - annulation déjà demandée -> cancelled (kind rejouable) ; pour un kind non
+//     rejouable déjà démarré, l'effet a pu avoir lieu : unknown, jamais cancelled ;
 //   - kind rejouable et tentatives restantes -> requeue ;
 //   - kind rejouable mais tentatives épuisées -> failed ;
 //   - sinon (non rejouable, ex. start_print) -> unknown, JAMAIS relancé.
@@ -488,16 +539,17 @@ func (q *Queue) Recover(ctx context.Context, replayable func(kind string) bool) 
 			var query string
 			var args []any
 			var note string
+			canReplay := replayable(j.Kind) && !neverReplay(j.Kind)
 			switch {
-			case j.CancelRequested:
+			case j.CancelRequested && canReplay:
 				query, note = `UPDATE jobs SET state='cancelled', finished_at=? WHERE id=?`, "annulé : redémarrage après demande d'annulation"
 				args = []any{now, j.ID}
 				rep.Cancelled = append(rep.Cancelled, j.ID)
-			case replayable(j.Kind) && j.Attempts < q.cfg.MaxAttempts:
+			case !j.CancelRequested && canReplay && j.Attempts < q.cfg.MaxAttempts:
 				query, note = `UPDATE jobs SET state='queued', worker_id=NULL, progress=0, message='' WHERE id=?`, "remis en file après redémarrage"
 				args = []any{j.ID}
 				rep.Requeued = append(rep.Requeued, j.ID)
-			case replayable(j.Kind):
+			case !j.CancelRequested && canReplay:
 				e, _ := json.Marshal(contracts.JobError{Code: "attempts_exhausted", Message: "tentatives épuisées après interruptions"})
 				query, note = `UPDATE jobs SET state='failed', error=?, finished_at=? WHERE id=?`, "échec : tentatives épuisées"
 				args = []any{string(e), now, j.ID}

@@ -1,0 +1,45 @@
+package core
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+// ErrDataDirLocked : un autre processus utilise déjà ce dossier de données.
+var ErrDataDirLocked = errors.New("le dossier de données est déjà utilisé par une autre instance de bambud")
+
+// instanceLock est un verrou OS exclusif (LockFileEx / flock) sur le dossier de
+// données : il évite deux services sur la même base (double Recover, deux
+// workers qui rejoueraient ou lanceraient le même travail). Le système le
+// libère de lui-même si le processus meurt.
+type instanceLock struct{ f *os.File }
+
+func acquireInstanceLock(dir string) (*instanceLock, error) {
+	path := filepath.Join(dir, ".bambud.lock")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("fichier de verrou : %w", err)
+	}
+	ok, err := tryLock(f)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("verrou du dossier de données : %w", err)
+	}
+	if !ok {
+		f.Close()
+		return nil, fmt.Errorf("%w (%s) : arrêtez l'autre instance ou choisissez un autre --data-dir", ErrDataDirLocked, dir)
+	}
+	return &instanceLock{f: f}, nil
+}
+
+func (l *instanceLock) release() error {
+	if l == nil || l.f == nil {
+		return nil
+	}
+	_ = unlock(l.f)
+	err := l.f.Close()
+	l.f = nil
+	return err
+}

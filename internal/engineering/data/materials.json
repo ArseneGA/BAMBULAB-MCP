@@ -1,72 +1,94 @@
 {
  "version": "2026-11-06",
- "note": "Valeurs fabricant = fiches techniques Bambu Lab (copies CDN), lues le 2026-11-06 ; a reverifier contre la fiche de la bobine reelle. Inconnu = value null. Ne remplace pas un essai.",
+ "note": "Valeurs fabricant = fiches techniques Bambu Lab (PDF), re-telechargees et verifiees ligne a ligne le 2026-11-06 ; extraits exacts (pdftotext) et empreintes dans docs/research/materials-tds/. Les reglages recommandes (surplomb, pont) sont des recommandations (niveau heuristic), pas des mesures. A reverifier contre la fiche de la bobine reelle. Inconnu = value null. Ne remplace pas un essai.",
  "sources": {
   "bambu_pla_basic": {
    "title": "Bambu Lab Technical Data Sheet PLA Basic",
    "version": "V2.0",
    "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "20fe6ce2b094901a4cd2f301450ae93384e6928d20a3ec732b993aed67171451",
+   "extract": "docs/research/materials-tds/bambu_pla_basic.txt"
   },
   "bambu_petg_basic": {
    "title": "Bambu Lab Technical Data Sheet PETG Basic",
    "version": "V2.0",
    "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PETG_Basic_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "a05a5f58069064ff2f1a1027a7a1dae48f1252a96524744a0e633a4031371ef4",
+   "extract": "docs/research/materials-tds/bambu_petg_basic.txt"
   },
   "bambu_petg_hf": {
    "title": "Bambu Lab Technical Data Sheet PETG HF",
    "version": "V1.0",
    "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PETG_HF_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "51981f734b941947f3fe696cc370c1a4b7419f4eb4cffa77ea97c3d5d4b53ab4",
+   "extract": "docs/research/materials-tds/bambu_petg_hf.txt"
   },
   "bambu_abs": {
    "title": "Bambu Lab Technical Data Sheet ABS",
    "version": "V2.0",
    "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_ABS_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "a7d45a3cf2999342f423def6ba7d381690c935bccf13f284d1a5cb4bd4489c72",
+   "extract": "docs/research/materials-tds/bambu_abs.txt"
   },
   "bambu_asa": {
    "title": "Bambu Lab Technical Data Sheet ASA",
    "version": "V3.0",
    "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_ASA_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "9927eba5def39ebb3ffe7e7d2f99aafc6784b654371adca35d55f81bea4eacf0",
+   "extract": "docs/research/materials-tds/bambu_asa.txt"
   },
   "bambu_tpu_95a": {
    "title": "Bambu Lab Technical Data Sheet TPU 95A",
    "version": "V3.0",
    "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_TPU_95A_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "3c55328a8b93c89b93414638d6e13cd073c5f14a19bfee6f14af0e9955a7e1d6",
+   "extract": "docs/research/materials-tds/bambu_tpu_95a.txt"
   },
   "bambu_pc": {
    "title": "Bambu Lab Technical Data Sheet PC",
    "version": "V3.0",
    "url": "https://cdn.shopify.com/s/files/1/0645/5876/0155/files/Bambu_PC_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "f0d45692b13f8b602267c0ca40db67d496ad74487681ec67e98a2df9e5b6af7c",
+   "extract": "docs/research/materials-tds/bambu_pc.txt"
   },
   "bambu_pa6_cf": {
    "title": "Bambu Lab Technical Data Sheet PA6-CF",
    "version": "V3.0",
    "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PA6-CF_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "c58afd7d8660c2736d8ed6eabfd115310f4ab658fe4343827492df064fec98d6",
+   "extract": "docs/research/materials-tds/bambu_pa6_cf.txt"
   },
   "bambu_pla_cf": {
    "title": "Bambu Lab Technical Data Sheet PLA-CF",
    "version": "V2.0",
    "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA-CF_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "f257d34a99a8b2693314a9e576e87a66bb8afbf0724c7857e0407d77d9d1c847",
+   "extract": "docs/research/materials-tds/bambu_pla_cf.txt"
   },
   "bambu_petg_cf": {
    "title": "Bambu Lab Technical Data Sheet PETG-CF",
    "version": "V2.0",
    "url": "https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PETG-CF_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "721efdf6d284e1525257de9557858d3d74e3d24513a42b8a330ed7b9053865c9",
+   "extract": "docs/research/materials-tds/bambu_petg_cf.txt"
   },
   "bambu_pva": {
    "title": "Bambu Lab Technical Data Sheet PVA",
    "version": "V1.0",
    "url": "https://cdn.shopify.com/s/files/1/0584/7236/6216/files/Bambu_PVA_Technical_Data_Sheet.pdf",
-   "accessed": "2026-11-06"
+   "accessed": "2026-11-06",
+   "sha256": "81747000a058b80eda3436cabddfe6a0cd76f817d635dc40b4a2156c7bb8ca17",
+   "extract": "docs/research/materials-tds/bambu_pva.txt"
   },
   "lit_indicative": {
    "title": "Ordres de grandeur de la litterature / pratique courante (retrait, deformation admissible en clipsage, PA non charge). Aucune fiche fabricant verifiee ligne a ligne.",
@@ -199,16 +221,16 @@
      "unit": "deg",
      "source": "bambu_pla_basic",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 30,
      "unit": "mm",
      "source": "bambu_pla_basic",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.3,
@@ -351,16 +373,16 @@
      "unit": "deg",
      "source": "bambu_petg_basic",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 30,
      "unit": "mm",
      "source": "bambu_petg_basic",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.4,
@@ -503,16 +525,16 @@
      "unit": "deg",
      "source": "bambu_petg_hf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 30,
      "unit": "mm",
      "source": "bambu_petg_hf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.4,
@@ -655,16 +677,16 @@
      "unit": "deg",
      "source": "bambu_abs",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 40,
      "unit": "mm",
      "source": "bambu_abs",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.8,
@@ -807,16 +829,16 @@
      "unit": "deg",
      "source": "bambu_asa",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 40,
      "unit": "mm",
      "source": "bambu_asa",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.6,
@@ -961,16 +983,16 @@
      "unit": "deg",
      "source": "bambu_tpu_95a",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 20,
      "unit": "mm",
      "source": "bambu_tpu_95a",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.8,
@@ -1113,16 +1135,16 @@
      "unit": "deg",
      "source": "bambu_pc",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 40,
      "unit": "mm",
      "source": "bambu_pc",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.7,
@@ -1265,16 +1287,16 @@
      "unit": "deg",
      "source": "bambu_pa6_cf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 40,
      "unit": "mm",
      "source": "bambu_pa6_cf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.5,
@@ -1417,16 +1439,16 @@
      "unit": "deg",
      "source": "bambu_pla_cf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 30,
      "unit": "mm",
      "source": "bambu_pla_cf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.15,
@@ -1569,16 +1591,16 @@
      "unit": "deg",
      "source": "bambu_petg_cf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 30,
      "unit": "mm",
      "source": "bambu_petg_cf",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": 0.3,
@@ -1723,16 +1745,16 @@
      "unit": "deg",
      "source": "bambu_pva",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant (angle depuis la verticale), pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique ; angle depuis la verticale"
     },
     "max_bridge_mm": {
      "value": 30,
      "unit": "mm",
      "source": "bambu_pva",
      "date": "2026-11-06",
-     "level": "measured",
-     "domain": "Reglage recommande par le fabricant, pas une mesure normee"
+     "level": "heuristic",
+     "domain": "Recommandation du fabricant (reglage du profil d'impression), pas une mesure : niveau heuristique"
     },
     "shrinkage_pct": {
      "value": null,

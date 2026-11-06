@@ -72,6 +72,9 @@ func New(c *core.Core) *mcp.Server {
 	}, h.showAtelier)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
+	if c.Goals != nil {
+		AddGoalTools(s, c.Goals)
+	}
 	return s
 }
 
@@ -151,6 +154,7 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, j, err
 	}
+	j = j.Redacted() // jamais de champs secrets vers le client
 	tail := in.LogTail
 	if tail <= 0 {
 		tail = 50
