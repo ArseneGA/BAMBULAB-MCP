@@ -68,6 +68,12 @@ func neverReplay(kind string) bool {
 	return kind == "start_print" || strings.HasPrefix(kind, "start_print.") || strings.HasPrefix(kind, "printer.start")
 }
 
+// physicalKind : types à effet physique, qui exigent une clé d'idempotence à
+// l'enqueue (un doublon de requête ne doit jamais lancer deux impressions).
+func physicalKind(kind string) bool {
+	return neverReplay(kind) || kind == "upload_print_artifact" || strings.HasPrefix(kind, "upload_print_artifact.")
+}
+
 // Register enregistre un handler. replayable=true : sûr de relancer après un arrêt brutal.
 func (r *Registry) Register(kind string, replayable bool, h Handler) {
 	if neverReplay(kind) {
@@ -245,6 +251,10 @@ func (r *Runner) execute(runCtx context.Context, job contracts.Job) {
 
 	var err error
 	switch {
+	case cancelled && herr != nil && (!reg.replayable || neverReplay(job.Kind)):
+		// Déjà démarré et non rejouable : l'effet a pu avoir lieu, jamais « cancelled ».
+		err = r.q.MarkUnknown(bg, job.ID, "annulation demandée en cours d'exécution d'un travail non rejouable : l'issue réelle est inconnue, vérifier l'état réel")
+		log.Warn("travail non rejouable annulé en cours : unknown")
 	case cancelled && herr != nil:
 		err = r.q.MarkCancelled(bg, job.ID)
 		log.Info("travail annulé")
@@ -253,8 +263,9 @@ func (r *Runner) execute(runCtx context.Context, job contracts.Job) {
 	case runCtx.Err() != nil && errors.Is(herr, context.Canceled):
 		// Arrêt du service, pas une annulation voulue.
 		if reg.replayable && !neverReplay(job.Kind) {
-			err = r.q.Requeue(bg, job.ID)
-			log.Info("arrêt du service : travail rejouable remis en file")
+			var st contracts.JobState
+			st, err = r.q.Requeue(bg, job.ID)
+			log.Info("arrêt du service : travail rejouable traité", "etat", st)
 		} else {
 			log.Warn("arrêt du service : travail non rejouable laissé en cours (deviendra unknown à la reprise)")
 		}

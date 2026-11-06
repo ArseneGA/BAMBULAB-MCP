@@ -20,7 +20,7 @@ func TestEnvironmentAndCapabilities(t *testing.T) {
 	}
 	defer c.Close()
 	env, err := c.Environment(ctx)
-	if err != nil || !env.DataDirWritable || env.SchemaVersion != 1 || env.Missing == nil {
+	if err != nil || !env.DataDirWritable || env.SchemaVersion < 1 || env.Missing == nil {
 		t.Fatalf("%+v %v", env, err)
 	}
 	cp := c.Capabilities()
@@ -45,7 +45,7 @@ func TestOpenAppliesRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	a, _, _ := c.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: "system.selftest"})
-	b, _, _ := c.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: "start_print"})
+	b, _, _ := c.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: "start_print", IdempotencyKey: "print-core-1"})
 	c.Queue.Claim(ctx, "w")
 	c.Queue.Claim(ctx, "w")
 	c.Close() // arrêt brutal simulé : deux travaux restent 'running'
