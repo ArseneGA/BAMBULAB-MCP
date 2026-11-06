@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 )
@@ -18,7 +19,34 @@ var (
 	ErrConfirmationExpired  = errors.New("confirmation expirée")
 	ErrConfirmationMismatch = errors.New("la confirmation ne correspond plus à l'impression demandée")
 	ErrConfirmationToken    = errors.New("jeton de confirmation invalide")
+	ErrConfirmationInvalid  = errors.New("confirmation invalide")
 )
+
+// MaxConfirmationTTL : durée de vie maximale d'une confirmation.
+const MaxConfirmationTTL = 24 * time.Hour
+
+// Validate vérifie la liaison : imprimante et empreinte renseignées, plateau >= 0,
+// emplacements non vides et sans doublon (deux matières sur un même emplacement
+// rendraient l'empreinte ambiguë).
+func (b ConfirmationBinding) Validate() error {
+	if b.PrinterID == "" || b.ArtifactSHA256 == "" {
+		return fmt.Errorf("%w : imprimante et empreinte de l'artefact requises", ErrConfirmationInvalid)
+	}
+	if b.Plate < 0 {
+		return fmt.Errorf("%w : plateau négatif", ErrConfirmationInvalid)
+	}
+	seen := map[string]bool{}
+	for _, m := range b.Materials {
+		if m.Slot == "" || m.MaterialID == "" {
+			return fmt.Errorf("%w : emplacement et matière requis", ErrConfirmationInvalid)
+		}
+		if seen[m.Slot] {
+			return fmt.Errorf("%w : emplacement %q dupliqué", ErrConfirmationInvalid, m.Slot)
+		}
+		seen[m.Slot] = true
+	}
+	return nil
+}
 
 // ConfirmationBinding est ce que l'utilisateur a approuvé : imprimante, empreinte
 // de l'artefact, plateau et affectation matière (dossier §10). Tout changement
@@ -64,6 +92,12 @@ func hashToken(token string) string {
 // NewConfirmation émet une confirmation et le jeton aléatoire (256 bits) à remettre
 // à l'utilisateur. Le jeton n'est pas récupérable ensuite.
 func NewConfirmation(id, printJobID string, binding ConfirmationBinding, ttl time.Duration, now time.Time) (PrintConfirmation, string, error) {
+	if ttl <= 0 || ttl > MaxConfirmationTTL {
+		return PrintConfirmation{}, "", fmt.Errorf("%w : durée de vie %s hors de ]0 ; %s]", ErrConfirmationInvalid, ttl, MaxConfirmationTTL)
+	}
+	if err := binding.Validate(); err != nil {
+		return PrintConfirmation{}, "", err
+	}
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return PrintConfirmation{}, "", err
@@ -87,6 +121,9 @@ func NewConfirmation(id, printJobID string, binding ConfirmationBinding, ttl tim
 func (c *PrintConfirmation) Consume(token string, current ConfirmationBinding, now time.Time) error {
 	if c.UsedAt != nil {
 		return ErrConfirmationUsed
+	}
+	if err := current.Validate(); err != nil {
+		return fmt.Errorf("%w : %v", ErrConfirmationMismatch, err)
 	}
 	if !now.Before(c.ExpiresAt) {
 		return ErrConfirmationExpired

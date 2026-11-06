@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"math"
 	"path"
 	"sort"
 	"strconv"
@@ -83,7 +84,7 @@ func parseTransform(s string) (Matrix, error) {
 	var m Matrix
 	for i, t := range f {
 		v, err := strconv.ParseFloat(t, 64)
-		if err != nil {
+		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
 			return Identity, fmt.Errorf("transformation 3MF invalide : %q", t)
 		}
 		m[i] = v
@@ -97,10 +98,29 @@ type tmfReader struct {
 	models  map[string]*xModel
 	total   int64
 	scale   float64
-	tris    int
+	nodes   int // résolutions d'objets effectuées (mémoïsées comprises)
+	vtot    int // sommets cumulés produits
+	ttot    int // triangles cumulés produits
+	memo    map[string]*memoEntry
 	used    map[string]bool
 	warns   []string
 	warnSet map[string]bool
+}
+
+type memoEntry struct {
+	m   *Mesh
+	obj *xObject
+}
+
+// charge comptabilise de la géométrie produite (cumul global) et échoue au-delà
+// des plafonds : borne le travail même si l'arborescence de composants explose.
+func (r *tmfReader) charge(nv, nt int) error {
+	r.vtot += nv
+	r.ttot += nt
+	if r.ttot > MaxTriangles || r.vtot > MaxVertices {
+		return fmt.Errorf("%w : géométrie 3MF cumulée trop volumineuse (limites : %d triangles, %d sommets)", ErrFormat, MaxTriangles, MaxVertices)
+	}
+	return nil
 }
 
 func (r *tmfReader) warn(s string) {
@@ -113,6 +133,22 @@ func (r *tmfReader) warn(s string) {
 func normPath(p string) string {
 	p = strings.ReplaceAll(p, "\\", "/")
 	return strings.TrimPrefix(path.Clean("/"+p), "/")
+}
+
+// safeEntryName valide le nom d'une entrée de l'archive : pas de chemin absolu,
+// de lettre de lecteur, d'octet nul ni de segment « .. » (un nom comme « a..b »
+// reste légitime). Renvoie le nom normalisé.
+func safeEntryName(name string) (string, error) {
+	p := strings.ReplaceAll(name, "\\", "/")
+	if p == "" || strings.ContainsRune(p, 0) || strings.HasPrefix(p, "/") || (len(p) >= 2 && p[1] == ':') {
+		return "", fmt.Errorf("%w : chemin d'entrée suspect %q", ErrFormat, name)
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return "", fmt.Errorf("%w : chemin d'entrée suspect %q", ErrFormat, name)
+		}
+	}
+	return normPath(p), nil
 }
 
 func (r *tmfReader) read(name string) ([]byte, error) {
@@ -203,12 +239,21 @@ func (r *tmfReader) rootModelPath() string {
 }
 
 // meshOf construit le maillage (en unités du fichier) de l'objet id du fichier file,
-// composants résolus récursivement.
+// composants résolus récursivement. Le résultat est mémoïsé (le maillage renvoyé ne
+// doit jamais être modifié) ; chaque résolution et chaque copie de géométrie sont
+// comptabilisées globalement (maxVisitedNodes, MaxTriangles, MaxVertices).
 func (r *tmfReader) meshOf(file, id string, depth int, visiting map[string]bool) (*Mesh, *xObject, error) {
+	r.nodes++
+	if r.nodes > maxVisitedNodes {
+		return nil, nil, fmt.Errorf("%w : trop d'objets/composants 3MF à résoudre (limite %d)", ErrFormat, maxVisitedNodes)
+	}
 	if depth > 16 {
 		return nil, nil, fmt.Errorf("%w : imbrication de composants trop profonde", ErrFormat)
 	}
 	key := file + "#" + id
+	if e, ok := r.memo[key]; ok {
+		return e.m, e.obj, nil
+	}
 	if visiting[key] {
 		return nil, nil, fmt.Errorf("%w : composants circulaires (%s)", ErrFormat, key)
 	}
@@ -230,9 +275,17 @@ func (r *tmfReader) meshOf(file, id string, depth int, visiting map[string]bool)
 	}
 	out := &Mesh{}
 	if obj.Mesh != nil {
-		for _, v := range obj.Mesh.Vertices {
+		if err := r.charge(len(obj.Mesh.Vertices), len(obj.Mesh.Triangles)); err != nil {
+			return nil, nil, err
+		}
+		out.V = make([]Vec3, 0, len(obj.Mesh.Vertices))
+		for i, v := range obj.Mesh.Vertices {
+			if !finite3(v.X, v.Y, v.Z) {
+				return nil, nil, fmt.Errorf("%w : objet %s, sommet %d non fini", ErrFormat, id, i)
+			}
 			out.V = append(out.V, Vec3{v.X, v.Y, v.Z})
 		}
+		out.T = make([]Tri, 0, len(obj.Mesh.Triangles))
 		for i, t := range obj.Mesh.Triangles {
 			for _, k := range []int{t.V1, t.V2, t.V3} {
 				if k < 0 || k >= len(out.V) {
@@ -240,10 +293,6 @@ func (r *tmfReader) meshOf(file, id string, depth int, visiting map[string]bool)
 				}
 			}
 			out.T = append(out.T, Tri{t.V1, t.V2, t.V3})
-		}
-		r.tris += len(out.T)
-		if r.tris > MaxTriangles {
-			return nil, nil, fmt.Errorf("%w : trop de triangles", ErrFormat)
 		}
 	}
 	for _, c := range obj.Components {
@@ -259,8 +308,12 @@ func (r *tmfReader) meshOf(file, id string, depth int, visiting map[string]bool)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%w : %v", ErrFormat, err)
 		}
+		if err := r.charge(len(sub.V), len(sub.T)); err != nil {
+			return nil, nil, err
+		}
 		out.Append(sub.Transform(tm))
 	}
+	r.memo[key] = &memoEntry{m: out, obj: obj}
 	return out, obj, nil
 }
 
@@ -276,14 +329,17 @@ func ParseThreeMF(data []byte) (*Model, error) {
 	if len(zr.File) > maxZipEntries {
 		return nil, fmt.Errorf("%w : trop d'entrées dans l'archive (%d)", ErrFormat, len(zr.File))
 	}
-	r := &tmfReader{zr: zr, files: map[string]*zip.File{}, models: map[string]*xModel{}, used: map[string]bool{}, warnSet: map[string]bool{}}
+	r := &tmfReader{zr: zr, files: map[string]*zip.File{}, models: map[string]*xModel{}, memo: map[string]*memoEntry{}, used: map[string]bool{}, warnSet: map[string]bool{}}
 	for _, f := range zr.File {
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		n := normPath(f.Name)
-		if strings.Contains(f.Name, "..") {
-			return nil, fmt.Errorf("%w : chemin d'entrée suspect %q", ErrFormat, f.Name)
+		n, err := safeEntryName(f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if r.files[n] != nil {
+			return nil, fmt.Errorf("%w : entrée d'archive dupliquée %q", ErrFormat, n)
 		}
 		r.files[n] = f
 	}
@@ -343,6 +399,9 @@ func ParseThreeMF(data []byte) (*Model, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w : %v", ErrFormat, err)
 		}
+		if err := r.charge(len(sub.V), len(sub.T)); err != nil {
+			return nil, err
+		}
 		world := sub.Transform(tm)
 		if scale != 1 {
 			world = world.Transform(Scaling(scale))
@@ -374,6 +433,9 @@ func ParseThreeMF(data []byte) (*Model, error) {
 	}
 	if len(md.Objects) == 0 {
 		return nil, ErrEmpty
+	}
+	if err := validateModel(md); err != nil {
+		return nil, err
 	}
 	// Extras : tout ce qui n'est pas un .model lu ni un fichier de structure OPC.
 	var extras []string

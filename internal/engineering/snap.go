@@ -23,9 +23,15 @@ type SnapResult struct {
 	StrainAllowable float64 `json:"strain_allowable"`
 	MaxDeflectionMM float64 `json:"max_deflection_mm"`
 	BendingForceN   float64 `json:"bending_force_N"`
-	InsertionForceN float64 `json:"insertion_force_N"`
-	OK              bool    `json:"ok"`
+	// InsertionForceN est nul (null en JSON) quand la force n'est pas bornée (auto-blocage).
+	InsertionForceN         *float64 `json:"insertion_force_N"`
+	InsertionForceUnbounded bool     `json:"insertion_force_unbounded"`
+	OK                      bool     `json:"ok"`
 }
+
+// selfLockMinDen : seuil de 1 − μ·tan α sous lequel la force d'insertion est jugée non bornée
+// (μ·tan α ≥ 0,95 : auto-blocage pratique).
+const selfLockMinDen = 0.05
 
 // SnapFit : ε = 1,5·h·y/L² ; y_max = ε_adm·L²/(1,5·h) ; P = (b·h²/6)·E·ε/L ;
 // force d'insertion F = P·(μ + tan α)/(1 − μ·tan α).
@@ -94,12 +100,12 @@ func SnapFit(p SnapParams) (*SnapResult, error) {
 	P := p.Width * p.Thickness * p.Thickness / 6 * E * eps / p.Length
 	t := math.Tan(ang * math.Pi / 180)
 	den := 1 - mu*t
-	var F float64
-	if den <= 0.05 {
-		warns = append(warns, "μ·tan α ≥ ~1 : auto-blocage à l'insertion, la force n'est pas bornée ; réduire l'angle du flanc.")
-		F = math.Inf(1)
+	var F *float64
+	if den <= selfLockMinDen {
+		warns = append(warns, "μ·tan α ≥ 0,95 : auto-blocage à l'insertion, la force n'est pas bornée (non calculée) ; réduire l'angle du flanc.")
 	} else {
-		F = P * (mu + t) / den
+		v := P * (mu + t) / den
+		F = &v
 	}
 	ok := eps <= epsAdm
 	if !ok {
@@ -113,11 +119,11 @@ func SnapFit(p SnapParams) (*SnapResult, error) {
 		level = LevelHeuristic
 	}
 	warns = append(warns, "Déformation admissible indicative : valider par un essai de cycle d'insertion.")
-	r := &SnapResult{
-		StrainAllowable: epsAdm, MaxDeflectionMM: ymax, BendingForceN: P, InsertionForceN: F, OK: ok,
+	if eps >= 0.05 {
+		warns = append(warns, "ε ≥ 5 % : hors du domaine de validité (petites déformations).")
 	}
-	if math.IsInf(F, 1) {
-		r.InsertionForceN = math.MaxFloat64 // JSON ne sait pas encoder +Inf
+	r := &SnapResult{
+		StrainAllowable: epsAdm, MaxDeflectionMM: ymax, BendingForceN: P, InsertionForceN: F, InsertionForceUnbounded: F == nil, OK: ok,
 	}
 	r.Result = Result{
 		Value: eps, Unit: "mm/mm", Assumptions: asm,

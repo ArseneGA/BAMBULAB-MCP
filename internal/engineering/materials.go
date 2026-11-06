@@ -48,6 +48,10 @@ type DataSource struct {
 	Version  string `json:"version"`
 	URL      string `json:"url"`
 	Accessed string `json:"accessed"`
+	// SHA256 : empreinte du PDF vérifié ; Extract : chemin (depuis la racine du dépôt) du
+	// fichier d'extraits exacts (pdftotext) dans docs/research/materials-tds/.
+	SHA256  string `json:"sha256,omitempty"`
+	Extract string `json:"extract,omitempty"`
 }
 
 var (

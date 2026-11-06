@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -12,6 +13,20 @@ from .errors import GeometryError
 from .meshio import write_binary_stl
 
 Part = tuple[str, Any]  # (nom, Workplane)
+
+NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+MAX_HOLES = 50  # plafond de trous par branche/plaque (évite des booléens démesurés)
+
+
+def _count(p: dict[str, Any], key: str, default: int) -> int:
+    """Entier 0..MAX_HOLES (les booléens, flottants non entiers et NaN/Inf sont refusés)."""
+    v = p.get(key, default)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v != int(v):
+        raise GeometryError("invalid_params", f"{key} doit être un entier.")
+    v = int(v)
+    if v < 0 or v > MAX_HOLES:
+        raise GeometryError("invalid_params", f"{key} doit être compris entre 0 et {MAX_HOLES}.", {"value": v})
+    return v
 
 
 def _num(p: dict[str, Any], key: str, default: float | None = None, *, minimum: float = 0.0) -> float:
@@ -82,10 +97,8 @@ def bracket(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
     t = _num(p, "thickness", 4.0)
     w = _num(p, "width", 20.0)
     hd = _num(p, "hole_diameter", 4.5)
-    na = int(p.get("holes_a", 1))
-    nb = int(p.get("holes_b", 1))
-    if na < 0 or nb < 0:
-        raise GeometryError("invalid_params", "holes_a/holes_b doivent être >= 0.")
+    na = _count(p, "holes_a", 1)
+    nb = _count(p, "holes_b", 1)
     if la <= t or lb <= t:
         raise GeometryError("invalid_params", "Chaque branche doit être plus longue que l'épaisseur.")
     prof = [(0, 0), (la, 0), (la, t), (t, t), (t, lb), (0, lb)]
@@ -150,13 +163,19 @@ def hook(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
     arm = _num(p, "arm_length", 30.0)
     tip = _num(p, "tip_height", 12.0)
     hd = _num(p, "hole_diameter", 4.5)
-    nh = int(p.get("holes", 2))
-    if arm <= t or ph <= t or tip <= t:
-        raise GeometryError("invalid_params", "arm_length, plate_height, tip_height doivent dépasser thickness.")
+    nh = _count(p, "holes", 2)
+    if arm <= 2 * t or ph <= t or tip <= t:
+        raise GeometryError(
+            "invalid_params",
+            "arm_length doit dépasser 2 × thickness (le bras recouvre la plaque), plate_height et tip_height thickness.",
+        )
     prof = [(0, 0), (arm, 0), (arm, tip), (arm - t, tip), (arm - t, t), (t, t), (t, ph), (0, ph)]
     body = cq.Workplane("XZ").polyline(prof).close().extrude(-w)
     if nh:
-        zs = _spread(nh, t + hd, ph - hd)
+        lo, hi = t + hd, ph - hd
+        if hi <= lo or (hi - lo) / nh < 2.5 * hd:
+            ctx["warnings"].append("Trous de la plaque trop serrés ou trop près des bords (< 1,25 Ø).")
+        zs = _spread(nh, lo, hi) if hi > lo else [ph / 2]
         body = body.cut(cq.Workplane("YZ").pushPoints([(w / 2, z) for z in zs]).circle(hd / 2).extrude(t))
         if w < 2.5 * hd:
             ctx["warnings"].append("Largeur < 2,5 Ø de perçage.")
@@ -197,12 +216,18 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
         if key in params and isinstance(params[key], (int, float)) and params[key] < 2 * nozzle:
             ctx["warnings"].append(f"{key} < 2 × buse ({2 * nozzle:g} mm) : moins de 2 périmètres.")
 
-    name = str(req.get("name") or tpl)
+    name = req.get("name") or tpl
+    if not isinstance(name, str) or not NAME_RE.fullmatch(name) or name in (".", ".."):
+        raise GeometryError("invalid_params", "`name` doit correspondre à ^[A-Za-z0-9._-]{1,64}$.")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    out_root = out.resolve()
+    stl_path, step_path, json_path = (out_root / f"{name}.{ext}" for ext in ("stl", "step", "source.json"))
+    for target in (stl_path, step_path, json_path):  # confinement sous out_dir (liens symboliques compris)
+        if target.resolve().parent != out_root:
+            raise GeometryError("invalid_params", "Sortie hors de out_dir refusée.", {"path": str(target)})
     compound = cq.Compound.makeCompound([wp.val() for _, wp in parts])
     meshes = [tessellate(wp.val(), 0.02, 0.1) for _, wp in parts]
-    stl_path, step_path, json_path = out / f"{name}.stl", out / f"{name}.step", out / f"{name}.source.json"
     write_binary_stl(stl_path, meshes, name=name)
     cq.exporters.export(cq.Workplane(obj=compound), str(step_path))
     bb = compound.BoundingBox()

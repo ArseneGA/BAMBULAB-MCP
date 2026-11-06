@@ -81,6 +81,14 @@ const Disclaimer = "Aide à la conception : ne constitue pas une certification m
 // ErrInvalidInput est enveloppé par toutes les erreurs de validation d'entrée.
 var ErrInvalidInput = errors.New("entrée invalide")
 
+// ErrNotApplicable : le modèle de calcul n'est pas valide pour ce cas (grandes
+// déformations, élastomère...). L'erreur enveloppe aussi ErrInvalidInput.
+var ErrNotApplicable = errors.New("calcul non applicable")
+
+func notApplicable(format string, a ...any) error {
+	return fmt.Errorf("%w (%w): %s", ErrInvalidInput, ErrNotApplicable, fmt.Sprintf(format, a...))
+}
+
 func invalid(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalidInput, fmt.Sprintf(format, a...))
 }

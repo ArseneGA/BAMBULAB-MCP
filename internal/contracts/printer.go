@@ -44,21 +44,12 @@ type Printer struct {
 	StatusFreshnessSeconds *int `json:"status_freshness_seconds,omitempty"`
 }
 
-func ptr[T any](v T) *T { return &v }
-
-// SeedPrinterModels renvoie les profils livrés d'office. Volontairement minimal :
-// seules les valeurs publiques stables du P1S (machine de référence) sont
-// renseignées, le reste est inconnu jusqu'à lecture des profils du slicer (jalon slicing).
-func SeedPrinterModels() []PrinterModel {
-	return []PrinterModel{{
-		ID:                "p1s",
-		Name:              "Bambu Lab P1S",
-		Vendor:            "Bambu Lab",
-		BuildVolume:       &Dimensions{X: 256, Y: 256, Z: 256},
-		NozzleDiametersMM: []float64{0.4},
-		Enclosed:          ptr(true),
-		HeatedBed:         ptr(true),
-		AMSSupported:      ptr(true),
-		Source:            "valeurs publiques constructeur, à confirmer par les profils BBL du slicer",
-	}}
-}
+// SeedPrinterModels renvoie les profils machine livrés d'office : VIDE volontairement.
+//
+// TODO(internal/profiles) : le catalogue des modèles Bambu Lab (toute la gamme FDM :
+// volume, buses, plateaux, caisson, AMS, températures max.) sera produit à partir des
+// profils BBL du slicer par le package internal/profiles, livré par un autre chantier.
+// Tant qu'il n'est pas branché, aucun modèle n'est semé : ni la seule P1S « à confirmer »,
+// ni aucune valeur inventée ; un champ inconnu reste nil. Brancher ici (ou à l'ouverture
+// du core) le chargement de internal/profiles quand il existe.
+func SeedPrinterModels() []PrinterModel { return nil }
