@@ -41,6 +41,9 @@ type Config struct {
 	// Intervalles du runner (tests).
 	PollInterval      time.Duration
 	HeartbeatInterval time.Duration
+	// AllowAnyPrinterHost lève la restriction des hôtes d'imprimante aux adresses privées / lien local /
+	// .local (option serveur --allow-any-printer-host ; tests avec le simulateur en loopback).
+	AllowAnyPrinterHost bool
 }
 
 // Core regroupe les composants.
@@ -67,6 +70,14 @@ type Core struct {
 	Printing *printing.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
+
+	// Tâches de fond enregistrées par d'autres paquets (AddRunHook) : démarrées par Run, arrêtées avec son
+	// contexte ; fonctions d'arrêt (AddCloseHook) appelées par Close AVANT la fermeture de la base.
+	hookMu    sync.Mutex
+	runCtx    context.Context
+	runHooks  []func(ctx context.Context)
+	hooksWG   sync.WaitGroup
+	closeHook []func()
 }
 
 // Open prépare le dossier de données, migre la base, enregistre les handlers
@@ -148,7 +159,7 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("objectifs : %w", err)
 	}
 	pr, err := printing.New(printing.Deps{Store: st, Blobs: blobs, Queue: q, Registry: reg, Goals: gs, Catalog: cat, Log: cfg.Logger,
-		DataDir: cfg.DataDir, Slicer: slFactory})
+		DataDir: cfg.DataDir, Slicer: slFactory, AllowAnyPrinterHost: cfg.AllowAnyPrinterHost})
 	if err != nil {
 		st.Close()
 		lock.release()
@@ -173,11 +184,52 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	return c, nil
 }
 
-// Run démarre les workers et bloque jusqu'à l'annulation de ctx (puis drain).
-func (c *Core) Run(ctx context.Context) error { return c.Runner.Run(ctx) }
+// AddRunHook enregistre une tâche de fond (ex. balayage des agents Windows) : démarrée par Run (ou tout de
+// suite si Run tourne déjà), avec le contexte de Run ; Run n'en revient qu'après sa fin.
+func (c *Core) AddRunHook(f func(ctx context.Context)) {
+	c.hookMu.Lock()
+	defer c.hookMu.Unlock()
+	c.runHooks = append(c.runHooks, f)
+	if c.runCtx != nil {
+		c.startHookLocked(c.runCtx, f)
+	}
+}
+
+func (c *Core) startHookLocked(ctx context.Context, f func(ctx context.Context)) {
+	c.hooksWG.Add(1)
+	go func() { defer c.hooksWG.Done(); f(ctx) }()
+}
+
+// AddCloseHook enregistre une fonction d'arrêt appelée par Close avant la fermeture de la base
+// (ex. attendre les imports en arrière-plan).
+func (c *Core) AddCloseHook(f func()) {
+	c.hookMu.Lock()
+	c.closeHook = append(c.closeHook, f)
+	c.hookMu.Unlock()
+}
+
+// Run démarre les workers et les tâches de fond, et bloque jusqu'à l'annulation de ctx (puis drain).
+func (c *Core) Run(ctx context.Context) error {
+	c.hookMu.Lock()
+	c.runCtx = ctx
+	for _, f := range c.runHooks {
+		c.startHookLocked(ctx, f)
+	}
+	c.hookMu.Unlock()
+	err := c.Runner.Run(ctx)
+	c.hooksWG.Wait()
+	return err
+}
 
 // Close ferme la base puis libère le verrou d'instance. À appeler après la fin de Run.
 func (c *Core) Close() error {
+	c.hookMu.Lock()
+	hooks := c.closeHook
+	c.closeHook = nil
+	c.hookMu.Unlock()
+	for _, f := range hooks {
+		f()
+	}
 	if c.Printing != nil {
 		_ = c.Printing.Close()
 	}

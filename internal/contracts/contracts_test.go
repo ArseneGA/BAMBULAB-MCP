@@ -232,3 +232,31 @@ func TestPrinterModelUnknownsStayNil(t *testing.T) {
 		t.Fatal("les inconnus doivent rester nil")
 	}
 }
+
+// START_ABORTED_BEFORE_SEND : confirmation consommée mais lancement non enregistré, rien n'a été envoyé.
+// Terminal et sûr ; atteignable uniquement depuis AWAITING_PRINT_CONFIRMATION.
+func TestStartAbortedBeforeSendIsSafeTerminal(t *testing.T) {
+	n, err := Transition(PrintAwaitingConfirmation, EvAbortBeforeSend)
+	if err != nil || n != PrintStartAbortedBeforeSend {
+		t.Fatalf("AWAITING --abort_before_send--> %s (%v)", n, err)
+	}
+	if !PrintStartAbortedBeforeSend.Terminal() || len(AllowedEvents(PrintStartAbortedBeforeSend)) != 0 {
+		t.Fatal("START_ABORTED_BEFORE_SEND doit être terminal, sans sortie (aucune relance, aucun envoi possible)")
+	}
+	for _, e := range []PrintEvent{EvConfirm, EvCancel, EvStartLost, EvObservedPrinting, EvReconcilePrinting, EvReconcileNotStarted, EvRequestConfirmation, EvModify} {
+		if _, err := Transition(PrintStartAbortedBeforeSend, e); !errors.Is(err, ErrIllegalTransition) {
+			t.Errorf("sortie %s de l'état terminal acceptée", e)
+		}
+	}
+	for _, from := range []PrintState{PrintDraft, PrintPrepared, PrintUploaded, PrintStartRequested, PrintStartUnknown, PrintPrinting, PrintCompleted} {
+		if _, err := Transition(from, EvAbortBeforeSend); !errors.Is(err, ErrIllegalTransition) {
+			t.Errorf("abort_before_send accepté depuis %s", from)
+		}
+	}
+	// Seul AWAITING mène à cet état.
+	for k, v := range printTransitions {
+		if v == PrintStartAbortedBeforeSend && k.s != PrintAwaitingConfirmation {
+			t.Errorf("transition inattendue %s --%s--> START_ABORTED_BEFORE_SEND", k.s, k.e)
+		}
+	}
+}

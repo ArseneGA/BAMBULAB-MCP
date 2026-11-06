@@ -126,6 +126,9 @@ type StartRequest struct {
 // StartExpectation décrit l'impression attendue, pour la réconciliation.
 type StartExpectation struct {
 	Remote RemoteRef
+	// Since : instant (approximatif) où la commande de lancement a été demandée ; repère de repli
+	// quand l'adaptateur n'a pas lui-même publié la commande (service redémarré).
+	Since time.Time
 }
 
 // ReconcileOutcome est le verdict d'une réconciliation.

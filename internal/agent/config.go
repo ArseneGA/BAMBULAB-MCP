@@ -27,8 +27,11 @@ type Folder struct {
 // Le secret d'agent n'y figure jamais en clair : seulement le blob DPAPI (base64).
 type Config struct {
 	ServerURL string `json:"server_url"`
-	Name      string `json:"name,omitempty"`
-	AgentID   string `json:"agent_id,omitempty"`
+	// ServerFingerprint : empreinte SHA-256 du certificat TLS du serveur (--server-fingerprint) ; épinglage
+	// côté agent (https avec certificat auto-signé). Vide : vérification TLS classique pour https.
+	ServerFingerprint string `json:"server_fingerprint,omitempty"`
+	Name              string `json:"name,omitempty"`
+	AgentID           string `json:"agent_id,omitempty"`
 	// SecretProtected : "<agent_id>.<secret>" chiffré par DPAPI, en base64.
 	SecretProtected string `json:"secret_dpapi,omitempty"`
 	// DPAPIScope : "user" (défaut) ou "machine" (utile si l'agent tourne en service sous un autre compte).

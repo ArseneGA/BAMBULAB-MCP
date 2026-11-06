@@ -25,7 +25,7 @@ type StartOutput struct {
 	PrintJobID string               `json:"print_job_id"`
 	State      contracts.PrintState `json:"state"`
 	QueueJobID string               `json:"queue_job_id"`
-	Outcome    string               `json:"outcome" jsonschema:"printing | start_requested | start_unknown | rejected | not_sent | replayed"`
+	Outcome    string               `json:"outcome" jsonschema:"printing | start_requested | start_unknown | rejected | not_sent | aborted_before_send | replayed"`
 	Replayed   bool                 `json:"replayed"`
 	Note       string               `json:"note"`
 	Job        Job                  `json:"job"`
@@ -49,9 +49,14 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 	if err != nil {
 		return nil, err
 	}
-	// Rejeu de la même requête : on rend l'état, on ne relance JAMAIS.
+	// Clé composée : une même chaîne fournie pour une autre impression ou un autre type d'opération ne collisionne jamais.
+	ikey := idemKey(j.ID, "start", key)
+	// Rejeu de la même requête : on rend l'état, on ne relance JAMAIS. Mêmes clé ET paramètres, sinon refus.
 	if j.StartJobID != "" {
-		if q, err := s.d.Queue.Get(ctx, j.StartJobID); err == nil && q.IdempotencyKey == key {
+		if q, err := s.d.Queue.Get(ctx, j.StartJobID); err == nil && q.IdempotencyKey == ikey {
+			if !sameStartParams(q.Params, j.ID, in.ConfirmationID) {
+				return nil, fmt.Errorf("%w : start_print avec cette clé a déjà été demandé pour une autre confirmation", ErrReplayParams)
+			}
 			q, _ = s.waitQueue(ctx, q.ID, 200*time.Millisecond)
 			cur, _ := s.GetJob(ctx, j.ID)
 			return &StartOutput{PrintJobID: cur.ID, State: cur.State, QueueJobID: q.ID, Outcome: "replayed", Replayed: true, Job: cur,
@@ -90,9 +95,12 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 		return nil, fmt.Errorf("%w : l'imprimante n'est pas prête (%s) — rien n'a été envoyé, la confirmation reste valable", printer.ErrNotReady, why)
 	}
 	params, _ := json.Marshal(map[string]string{"print_job_id": j.ID, "confirmation_id": in.ConfirmationID})
-	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobStart, Class: contracts.ClassLight, Params: params, IdempotencyKey: key})
+	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobStart, Class: contracts.ClassLight, Params: params, IdempotencyKey: ikey})
 	if err != nil {
 		return nil, err
+	}
+	if !created && !sameStartParams(qj.Params, j.ID, in.ConfirmationID) {
+		return nil, fmt.Errorf("%w : start_print avec cette clé a déjà été demandé pour une autre confirmation", ErrReplayParams)
 	}
 	if created {
 		if _, err := s.update(ctx, j.ID, func(x *Job) error { x.StartJobID = qj.ID; return nil }); err != nil {
@@ -106,7 +114,9 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 	case !done:
 		out.Outcome, out.Note = "start_requested", "Lancement en cours : suivre avec get_print_status. Ne pas relancer."
 	case q.State == contracts.JobFailed && q.Error != nil && q.Error.Code == "not_sent":
-		out.Outcome, out.Note = "not_sent", "Rien n'a été envoyé à l'imprimante : "+q.Error.Message
+		out.Outcome, out.Note = "not_sent", "Rien n'a été envoyé à l'imprimante : "+q.Error.Message+" L'accord de l'utilisateur est invalidé : il doit confirmer à nouveau sur la page."
+	case q.State == contracts.JobFailed && q.Error != nil && q.Error.Code == "aborted_before_send":
+		out.Outcome, out.Note = "aborted_before_send", "Rien n'a été envoyé à l'imprimante (état START_ABORTED_BEFORE_SEND, terminal) : la confirmation avait été consommée mais le lancement n'a pas pu être enregistré. Reprendre avec une nouvelle impression et une nouvelle confirmation. "+q.Error.Message
 	case q.State == contracts.JobFailed:
 		out.Outcome, out.Note = "rejected", "Lancement refusé : "+q.Error.Message
 	default:
@@ -131,6 +141,18 @@ func (s *Service) checkReservation(ctx context.Context, j Job) error {
 	return nil
 }
 
+// idemKey compose la clé d'idempotence stockée dans la file : impression + type d'opération + clé fournie.
+func idemKey(printJobID, kind, key string) string { return printJobID + ":" + kind + ":" + key }
+
+// sameStartParams dit si les paramètres d'un travail start_print déjà en file sont ceux de la requête.
+func sameStartParams(raw json.RawMessage, printJobID, confID string) bool {
+	var p struct {
+		ID   string `json:"print_job_id"`
+		Conf string `json:"confirmation_id"`
+	}
+	return json.Unmarshal(raw, &p) == nil && p.ID == printJobID && p.Conf == confID
+}
+
 func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMessage, error) {
 	var p struct {
 		ID   string `json:"print_job_id"`
@@ -141,6 +163,10 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	}
 	bg := context.Background()
 	notSent := func(err error) (json.RawMessage, error) {
+		// Rien n'est parti : l'accord humain est invalidé (il doit recliquer), le jeton n'est pas brûlé.
+		if !errors.Is(err, printer.ErrBusy) && !errors.Is(err, ErrState) && !errors.Is(err, ErrNeedsApproval) { // un lancement concurrent perdant ne doit pas invalider l'accord du gagnant
+			s.invalidateApproval(p.Conf)
+		}
 		return nil, &jobs.HandlerError{Code: "not_sent", Err: err}
 	}
 	j, err := s.GetJob(bg, p.ID)
@@ -174,8 +200,11 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	jc.Progress(0.3, "commande de lancement")
 	serr := ad.Start(ctx, req)
 	s.mu.Lock()
-	consumed := s.consumedBy[p.Conf] == jc.Job.ID // CE lancement a consommé la confirmation
+	consumed := s.consumedBy[p.Conf].queueJob == jc.Job.ID // CE lancement a consommé la confirmation
 	s.mu.Unlock()
+	if cur, gerr := s.GetJob(bg, j.ID); gerr == nil && cur.State == contracts.PrintStartAbortedBeforeSend {
+		return nil, &jobs.HandlerError{Code: "aborted_before_send", Err: serr}
+	}
 	switch {
 	case serr == nil && rec.AllowStartFromFinish && !s.confirmActive(ctx, ad, j.Remote.Name):
 		// Départ depuis FINISH : l'état FINISH précédent peut avoir été pris pour un succès ; rien d'actif n'a été vu.
@@ -241,15 +270,7 @@ func (s *Service) rejectStart(ctx context.Context, id string, cause error) {
 
 // ---- suivi ----
 
-func stemOf(name string) string {
-	n := strings.TrimSuffix(name, ".3mf")
-	return strings.TrimSuffix(n, ".gcode")
-}
-
-func matches(st printer.Status, remote string) bool {
-	stem := stemOf(remote)
-	return stem != "" && (st.SubtaskName == stem || strings.Contains(st.GcodeFile, stem))
-}
+func matches(st printer.Status, remote string) bool { return printer.MatchesRemote(st, remote) }
 
 // observe applique un état d'imprimante à une impression PRINTING.
 func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
@@ -431,7 +452,7 @@ func (s *Service) Reconcile(ctx context.Context, id string) (*ReconcileOutput, e
 	}
 	rctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
-	r, err := rc.Reconcile(rctx, printer.StartExpectation{Remote: *j.Remote})
+	r, err := rc.Reconcile(rctx, printer.StartExpectation{Remote: *j.Remote, Since: startRequestedAt(j)})
 	if err != nil {
 		return nil, err
 	}
@@ -458,29 +479,38 @@ func (s *Service) Reconcile(ctx context.Context, id string) (*ReconcileOutput, e
 	return out, nil
 }
 
+// startRequestedAt : instant du dernier passage en START_REQUESTED (repère de la réconciliation).
+func startRequestedAt(j Job) time.Time {
+	for i := len(j.Events) - 1; i >= 0; i-- {
+		if j.Events[i].To == contracts.PrintStartRequested {
+			return j.Events[i].At
+		}
+	}
+	return time.Time{}
+}
+
 // ---- annulation ----
 
-// CancelInput est l'entrée de cancel_print.
+// CancelInput est l'entrée de cancel_print. Il n'y a PAS d'identifiant d'arrêt à fournir : arrêter une
+// impression en cours exige la validation d'un humain sur la page /stop/{id}.
 type CancelInput struct {
 	PrintJobID string `json:"print_job_id"`
-	// StopConfirmationID : seulement pour arrêter une impression EN COURS. Obtenu dans la
-	// réponse d'un premier appel ; l'utilisateur doit avoir confirmé l'arrêt.
-	StopConfirmationID string `json:"stop_confirmation_id,omitempty"`
 }
 
 // CancelOutput : résultat explicite.
 type CancelOutput struct {
-	PrintJobID         string               `json:"print_job_id"`
-	Outcome            string               `json:"outcome" jsonschema:"cancelled | needs_stop_confirmation | stopped | refused"`
-	State              contracts.PrintState `json:"state"`
-	StopConfirmationID string               `json:"stop_confirmation_id,omitempty"`
-	Question           string               `json:"question,omitempty"`
-	Note               string               `json:"note"`
-	Job                Job                  `json:"job"`
+	PrintJobID    string               `json:"print_job_id"`
+	Outcome       string               `json:"outcome" jsonschema:"cancelled | stop_requested | stopped | refused"`
+	State         contracts.PrintState `json:"state"`
+	StopURL       string               `json:"stop_url,omitempty" jsonschema:"page que l'HUMAIN ouvre (navigateur enregistré) pour arrêter l'impression ; rien n'est arrêté tant qu'il n'a pas validé"`
+	StopExpiresAt time.Time            `json:"stop_expires_at,omitzero"`
+	Question      string               `json:"question,omitempty"`
+	Note          string               `json:"note"`
+	Job           Job                  `json:"job"`
 }
 
-// CancelPrint annule selon la phase. En PRINTING : arrêt de l'imprimante après une
-// confirmation séparée (deux appels : identifiant d'arrêt, puis confirmation).
+// CancelPrint annule selon la phase. En PRINTING : CRÉE une demande d'arrêt et renvoie l'URL /stop/{id} ;
+// l'arrêt n'a lieu qu'après validation humaine sur cette page (le modèle ne peut pas le provoquer seul).
 func (s *Service) CancelPrint(ctx context.Context, in CancelInput) (*CancelOutput, error) {
 	j, err := s.GetJob(ctx, in.PrintJobID)
 	if err != nil {
@@ -493,35 +523,16 @@ func (s *Service) CancelPrint(ctx context.Context, in CancelInput) (*CancelOutpu
 		return out, nil
 	}
 	switch j.State {
-	case contracts.PrintCompleted, contracts.PrintFailed, contracts.PrintCancelled:
+	case contracts.PrintCompleted, contracts.PrintFailed, contracts.PrintCancelled, contracts.PrintStartAbortedBeforeSend:
 		return finish("refused", "L'impression est déjà terminée ("+string(j.State)+") : rien n'a été modifié.")
 	case contracts.PrintStartRequested, contracts.PrintStartUnknown:
-		return finish("refused", "Le lancement est en cours ou son issue est inconnue : annuler maintenant pourrait laisser une impression tourner. Utiliser reconcile_print puis, si elle tourne, cancel_print avec arrêt confirmé.")
+		return finish("refused", "Le lancement est en cours ou son issue est inconnue : annuler maintenant pourrait laisser une impression tourner. Utiliser reconcile_print puis, si elle tourne, cancel_print (l'arrêt est alors validé par l'humain).")
 	case contracts.PrintPrinting:
-		if in.StopConfirmationID == "" || !s.takeStop(in.StopConfirmationID, j.ID) {
-			id := "stop_" + randomNonce()[:16]
-			s.mu.Lock()
-			s.stops[id] = j.ID
-			s.mu.Unlock()
-			out.StopConfirmationID = id
-			out.Question = fmt.Sprintf("Veux-tu vraiment arrêter l'impression de %s en cours sur l'imprimante ? Le travail en cours sera perdu.", j.Name)
-			return finish("needs_stop_confirmation", "Arrêt d'une impression en cours : poser la question à l'utilisateur ; s'il confirme, rappeler cancel_print avec stop_confirmation_id.")
-		}
-		ad, _, err := s.adapter(ctx, j.PrinterID)
-		if err != nil {
-			return nil, err
-		}
-		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		if err := ad.Stop(cctx); err != nil {
-			return nil, fmt.Errorf("arrêt de l'imprimante en échec : %w", err)
-		}
-		_, err = s.transition(ctx, j.ID, contracts.EvCancel, "arrêt demandé par l'utilisateur sur l'imprimante", nil)
-		if err != nil {
-			return nil, err
-		}
-		_ = s.d.Store.Audit(ctx, actor, "print.stopped", "print_job", j.ID, nil)
-		return finish("stopped", "Commande d'arrêt acceptée par l'imprimante.")
+		id, exp := s.requestStop(j.ID)
+		out.StopURL, out.StopExpiresAt = s.BaseURL()+"/stop/"+id, exp
+		out.Question = fmt.Sprintf("Veux-tu vraiment arrêter l'impression de %s en cours sur l'imprimante ? Le travail en cours sera perdu.", j.Name)
+		_ = s.d.Store.Audit(ctx, actor, "print.stop_requested", "print_job", j.ID, map[string]any{"expires": exp})
+		return finish("stop_requested", "Rien n'est arrêté. Demande à l'utilisateur d'ouvrir stop_url dans son navigateur enregistré et de valider l'arrêt ; tu ne peux pas le faire à sa place.")
 	}
 	// Phases avant le lancement : annulation purement logique (et de la découpe en cours).
 	if j.State == contracts.PrintSlicing && j.SliceJobID != "" {
@@ -538,14 +549,86 @@ func (s *Service) CancelPrint(ctx context.Context, in CancelInput) (*CancelOutpu
 	return finish("cancelled", "Impression annulée avant tout lancement ; le fichier déposé éventuel reste sur la carte de l'imprimante mais ne sera pas lancé.")
 }
 
-func (s *Service) takeStop(stopID, jobID string) bool {
+// requestStop crée (ou réutilise, tant qu'elle est valide) la demande d'arrêt d'une impression.
+func (s *Service) requestStop(jobID string) (string, time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.stops[stopID] == jobID {
-		delete(s.stops, stopID)
-		return true
+	s.purgeLocked()
+	for id, r := range s.stops {
+		if r.jobID == jobID {
+			return id, r.expires
+		}
 	}
-	return false
+	id := "stp_" + randomNonce()[:20]
+	exp := s.now().Add(stopTTL)
+	s.stops[id] = stopReq{jobID: jobID, expires: exp}
+	return id, exp
+}
+
+// StopView : ce que la page /stop/{id} montre à l'humain.
+type StopView struct {
+	StopID      string    `json:"stop_id"`
+	PrintJobID  string    `json:"print_job_id"`
+	File        string    `json:"file"`
+	PrinterName string    `json:"printer_name"`
+	Percent     int       `json:"percent"`
+	Layer       int       `json:"layer"`
+	TotalLayers int       `json:"total_layers"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// GetStop relit une demande d'arrêt valide (sans la consommer).
+func (s *Service) GetStop(ctx context.Context, stopID string) (*StopView, error) {
+	s.mu.Lock()
+	r, ok := s.stops[stopID]
+	s.mu.Unlock()
+	if !ok || !s.now().Before(r.expires) {
+		return nil, fmt.Errorf("%w : demande d'arrêt expirée ou inconnue", ErrNotFound)
+	}
+	j, err := s.GetJob(ctx, r.jobID)
+	if err != nil {
+		return nil, err
+	}
+	if j.State != contracts.PrintPrinting {
+		return nil, fmt.Errorf("%w : l'impression n'est plus en cours (%s)", ErrState, j.State)
+	}
+	rec, _ := s.GetPrinterRecord(ctx, j.PrinterID)
+	v := &StopView{StopID: stopID, PrintJobID: j.ID, File: j.Name, PrinterName: rec.Name, ExpiresAt: r.expires}
+	if j.Print != nil {
+		v.Percent, v.Layer, v.TotalLayers = j.Print.Percent, j.Print.Layer, j.Print.TotalLayers
+	}
+	return v, nil
+}
+
+// ExecuteStop arrête l'impression après la validation HUMAINE de la demande (appelé par la page /stop/{id}
+// d'un navigateur enregistré, jamais par MCP). La demande n'est consommée qu'une fois l'arrêt accepté.
+func (s *Service) ExecuteStop(ctx context.Context, stopID string) (*CancelOutput, error) {
+	v, err := s.GetStop(ctx, stopID)
+	if err != nil {
+		return nil, err
+	}
+	j, err := s.GetJob(ctx, v.PrintJobID)
+	if err != nil {
+		return nil, err
+	}
+	ad, _, err := s.adapter(ctx, j.PrinterID)
+	if err != nil {
+		return nil, err
+	}
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := ad.Stop(cctx); err != nil {
+		return nil, fmt.Errorf("arrêt de l'imprimante en échec : %w", err)
+	}
+	s.mu.Lock()
+	delete(s.stops, stopID)
+	s.mu.Unlock()
+	if _, err = s.transition(ctx, j.ID, contracts.EvCancel, "arrêt validé par l'utilisateur sur la page /stop", nil); err != nil {
+		return nil, err
+	}
+	_ = s.d.Store.Audit(ctx, "human:web", "print.stopped", "print_job", j.ID, nil)
+	cur, _ := s.GetJob(ctx, j.ID)
+	return &CancelOutput{PrintJobID: j.ID, Outcome: "stopped", State: cur.State, Note: "Commande d'arrêt acceptée par l'imprimante.", Job: cur}, nil
 }
 
 // Recover traite l'impression laissée par un arrêt du service : un lancement en cours

@@ -25,7 +25,7 @@ import (
 const usage = `bambu-agent — agent Windows de l'Atelier Bambu (version %s)
 
 Commandes :
-  pair      --server URL --token JETON [--name NOM] [--dpapi-scope user|machine]
+  pair      --server URL --token JETON [--name NOM] [--dpapi-scope user|machine] [--server-fingerprint SHA256]
   folder    add --label L --path P | list | remove --label L
   run       boucle de travaux au premier plan
   inventory --label L          inventaire lecture seule d'un dossier autorisé (envoyé au serveur)
@@ -85,10 +85,11 @@ func parse(name string, args []string, setup func(*flag.FlagSet)) (*flag.FlagSet
 }
 
 func cmdPair(args []string) error {
-	var server, token, name, scope string
+	var server, token, name, scope, fingerprint string
 	_, cfg, err := parse("pair", args, func(fs *flag.FlagSet) {
-		fs.StringVar(&server, "server", "", "URL de bambud, ex. http://192.168.1.20:7878")
-		fs.StringVar(&token, "token", "", "jeton d'appairage (POST /api/agents/pairing sur le serveur)")
+		fs.StringVar(&server, "server", "", "URL de bambud, ex. https://bambu.lan:7878 (http clair déconseillé hors de cette machine)")
+		fs.StringVar(&token, "token", "", "jeton d'appairage (affiché par « bambud agent pair » ou par la page /agents/pair)")
+		fs.StringVar(&fingerprint, "server-fingerprint", "", "empreinte SHA-256 du certificat TLS du serveur (épinglage, https auto-signé)")
 		fs.StringVar(&name, "name", "", "nom de cet agent (défaut : nom du poste)")
 		fs.StringVar(&scope, "dpapi-scope", "user", "user | machine")
 	})
@@ -106,9 +107,23 @@ func cmdPair(args []string) error {
 	}
 	host, _ := os.Hostname()
 	cfg.ServerURL, cfg.Name, cfg.DPAPIScope = strings.TrimRight(server, "/"), name, scope
+	if fingerprint != "" {
+		fp, ferr := agentlink.NormalizeFingerprint(fingerprint)
+		if ferr != nil {
+			return ferr
+		}
+		cfg.ServerFingerprint = fp
+	}
+	if w := agentlink.InsecureTransportWarning(cfg.ServerURL); w != "" {
+		fmt.Fprintln(os.Stderr, w)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := agentlink.NewClient(cfg.ServerURL, "").Pair(ctx, agentlink.PairRequest{Token: token, Name: name, Host: host, AgentVersion: agent.Version})
+	cl, err := agentlink.NewClientWithOptions(cfg.ServerURL, "", agentlink.ClientOptions{ServerFingerprint: cfg.ServerFingerprint})
+	if err != nil {
+		return err
+	}
+	resp, err := cl.Pair(ctx, agentlink.PairRequest{Token: token, Name: name, Host: host, AgentVersion: agent.Version})
 	if err != nil {
 		return err
 	}

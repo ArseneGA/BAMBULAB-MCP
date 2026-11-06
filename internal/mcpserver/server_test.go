@@ -100,7 +100,7 @@ func TestIntegrationToolsAndResource(t *testing.T) {
 			t.Fatalf("outil manquant %s : %v", w, names)
 		}
 	}
-	if len(names) < 47 { // socle 5 + catalogue 14 + objectifs 8 + session Windows 3 + impression 17 (minimum)
+	if len(names) < 46 { // socle 5 + catalogue 14 + objectifs 8 + session Windows 3 + impression 16 (minimum ; confirm_print_from_app supprimé)
 		t.Fatalf("outils : %v", names)
 	}
 	// Schéma d'entrée issu de contracts : job_id requis.
@@ -245,7 +245,7 @@ func TestProxyBridge(t *testing.T) {
 	cs := connectClient(t, p.Server)
 
 	lt, err := cs.ListTools(ctx, nil)
-	if err != nil || len(lt.Tools) < 47 {
+	if err != nil || len(lt.Tools) < 46 {
 		t.Fatalf("outils relayés : %v %v", lt, err)
 	}
 	for _, tl := range lt.Tools {

@@ -100,7 +100,7 @@ func (f *fakeSlicing) Slice(ctx context.Context, req slicer.Request) (*slicer.Re
 		}
 	}
 	dir, _ := os.MkdirTemp("", "fakeslice-")
-	out := []byte("PK-fake gcode.3mf pour " + req.Label)
+	out := agentlinktest.FakeGcode3MF(2000, int64(len(req.Label)))
 	p := filepath.Join(dir, req.Label+".gcode.3mf")
 	os.WriteFile(p, out, 0o644)
 	return &slicer.Result{JobID: req.ID, WorkDir: dir, ArtifactPath: p, ArtifactSHA256: shaOf(out), ArtifactSize: int64(len(out)), BinaryVersion: "02.08.02.61"}, nil
@@ -330,7 +330,7 @@ func TestSliceReinforcement(t *testing.T) {
 	if len(r.slice.models) != 1 || !bytes.Equal(r.slice.models[0], model) {
 		t.Fatal("le slicer local n'a pas reçu le modèle vérifié")
 	}
-	want := []byte("PK-fake gcode.3mf pour piece")
+	want := agentlinktest.FakeGcode3MF(2000, int64(len("piece")))
 	if len(ti.Outputs) != 1 || ti.Outputs[0].SHA256 != shaOf(want) || ti.Outputs[0].Name != "piece.gcode.3mf" {
 		t.Fatalf("sorties : %+v", ti.Outputs)
 	}

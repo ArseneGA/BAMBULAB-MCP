@@ -387,7 +387,7 @@ func TestUploadResumeAndVerification(t *testing.T) {
 	hello(t, cl)
 	id := newTaskWithOutputRight(t, e, cl)
 
-	data := bytes.Repeat([]byte("0123456789abcdef"), 40_000) // 640 Ko
+	data := agentlinktest.FakeGcode3MF(640_000, 1) // .gcode.3mf valide, ~640 Ko
 	sha := sum(data)
 	dir := t.TempDir()
 	src := filepath.Join(dir, "out.gcode.3mf")
@@ -452,15 +452,15 @@ func TestUploadRejectsWrongHashAndOutOfOrder(t *testing.T) {
 	cl, _ := e.Pair("PC")
 	hello(t, cl)
 	id := newTaskWithOutputRight(t, e, cl)
-	good := []byte("contenu annoncé")
+	good := agentlinktest.FakeGcode3MF(200, 2)
 	sha := sum(good)
-	evil := []byte("contenu ALTÉRÉ!")
-	if len(evil) != len(good) { // même taille, empreinte différente
-		evil = append(evil[:0], []byte(strings.Repeat("x", len(good)))...)
+	evil := agentlinktest.FakeGcode3MF(200, 3) // même taille, contenu (donc empreinte) différent
+	if len(evil) != len(good) || sum(evil) == sha {
+		t.Fatal("préparation du test")
 	}
 	src := filepath.Join(t.TempDir(), "f")
 	os.WriteFile(src, evil, 0o644)
-	err := cl.Upload(bg, id, src, sha, int64(len(good)), agentlink.TargetArtifact, "f.bin", nil)
+	err := cl.Upload(bg, id, src, sha, int64(len(good)), agentlink.TargetArtifact, "f.gcode.3mf", nil)
 	if code(err) != agentlink.CodeHashMismatch {
 		t.Fatalf("empreinte altérée : %v", err)
 	}

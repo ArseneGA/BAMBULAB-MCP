@@ -184,7 +184,7 @@ func (h *handlers) cancelJob(ctx context.Context, _ *mcp.CallToolRequest, in Job
 		}
 		out.Outcome, out.State, out.Note = o.Outcome, contracts.JobState(o.State), o.Note
 		if o.Question != "" {
-			out.Note += " " + o.Question + " Rappeler cancel_print avec stop_confirmation_id=" + o.StopConfirmationID + " si l'utilisateur confirme."
+			out.Note += " " + o.Question + " Lien à donner à l'utilisateur (lui seul peut valider l'arrêt) : " + o.StopURL
 		}
 		return textResult(out.Note), out, nil
 	}

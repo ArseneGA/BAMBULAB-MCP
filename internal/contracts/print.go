@@ -23,11 +23,15 @@ const (
 	PrintFailed               PrintState = "FAILED"
 	PrintCancelled            PrintState = "CANCELLED"
 	PrintStartUnknown         PrintState = "START_UNKNOWN"
+	// PrintStartAbortedBeforeSend : la confirmation a été consommée mais l'impression n'a pas pu
+	// passer en START_REQUESTED ; la commande n'a PAS été publiée. Terminal et sûr : rien n'a été
+	// envoyé à l'imprimante ; un nouveau lancement exige une nouvelle impression et une nouvelle confirmation.
+	PrintStartAbortedBeforeSend PrintState = "START_ABORTED_BEFORE_SEND"
 )
 
 // Terminal : plus aucune transition possible.
 func (s PrintState) Terminal() bool {
-	return s == PrintCompleted || s == PrintFailed || s == PrintCancelled
+	return s == PrintCompleted || s == PrintFailed || s == PrintCancelled || s == PrintStartAbortedBeforeSend
 }
 
 // PrintEvent est un événement déclencheur de transition.
@@ -51,6 +55,9 @@ const (
 	EvPrintDone           PrintEvent = "print_done"
 	EvFail                PrintEvent = "fail"
 	EvCancel              PrintEvent = "cancel"
+	// EvAbortBeforeSend : la confirmation est consommée mais START_REQUESTED n'a pas pu être enregistré ;
+	// la commande n'est pas publiée.
+	EvAbortBeforeSend PrintEvent = "abort_before_send"
 )
 
 // ErrIllegalTransition est renvoyée (enveloppée) pour toute transition interdite.
@@ -91,6 +98,7 @@ var printTransitions = map[transitionKey]PrintState{
 	{PrintAwaitingConfirmation, EvConfirm}:           PrintStartRequested,
 	{PrintAwaitingConfirmation, EvInvalidateConfirm}: PrintUploaded,
 	{PrintAwaitingConfirmation, EvCancel}:            PrintCancelled,
+	{PrintAwaitingConfirmation, EvAbortBeforeSend}:   PrintStartAbortedBeforeSend,
 
 	{PrintStartRequested, EvObservedPrinting}: PrintPrinting,
 	{PrintStartRequested, EvStartRejected}:    PrintFailed,

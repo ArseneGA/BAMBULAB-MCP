@@ -95,6 +95,20 @@ type Registry struct {
 
 	wg       sync.WaitGroup // imports en arrière-plan
 	importMu sync.Mutex     // un import de réception à la fois
+
+	// Arrêt : les imports en arrière-plan portent ce contexte, annulé par Shutdown (appelé par Core.Close).
+	bgCtx    context.Context
+	bgCancel context.CancelFunc
+	closed   bool
+
+	// Verrous par (agent, sha) : un seul écrivain du fichier .part à la fois.
+	shaMu    sync.Mutex
+	shaLocks map[string]*shaLock
+}
+
+type shaLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 type live struct {
@@ -111,8 +125,9 @@ func New(d Deps, cfg Config) (*Registry, error) {
 	if d.Log == nil {
 		d.Log = slog.Default()
 	}
-	r := &Registry{d: d, cfg: cfg, wake: make(chan struct{}), live: map[string]live{},
+	r := &Registry{d: d, cfg: cfg, wake: make(chan struct{}), live: map[string]live{}, shaLocks: map[string]*shaLock{},
 		inbox: filepath.Join(d.DataDir, "agent-inbox"), stage: filepath.Join(d.DataDir, "agent-staging")}
+	r.bgCtx, r.bgCancel = context.WithCancel(context.Background())
 	for _, dir := range []string{r.inbox, r.stage} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, err
@@ -160,13 +175,28 @@ func hashHex(s string) string {
 
 // ---- appairage ----
 
-// NewPairing génère un jeton d'appairage à usage unique (affiché une seule fois).
+// DefaultPairingTTL : validité d'un jeton d'appairage.
+const DefaultPairingTTL = 15 * time.Minute
+
+// NewPairing génère un jeton d'appairage à usage unique (affiché une seule fois). Il n'est exposé que par
+// la CLI humaine (`bambud agent pair`) et la page /agents/pair d'un navigateur enregistré.
 func (r *Registry) NewPairing(ctx context.Context) (token string, expires time.Time, err error) {
+	return createPairing(ctx, r.d.Store, r.now(), r.cfg.PairingTTL)
+}
+
+// CreatePairing crée un jeton d'appairage directement dans la base (CLI `bambud agent pair`, sans registre).
+func CreatePairing(ctx context.Context, st *store.Store, ttl time.Duration) (string, time.Time, error) {
+	return createPairing(ctx, st, st.Now(), ttl)
+}
+
+func createPairing(ctx context.Context, st *store.Store, now time.Time, ttl time.Duration) (token string, expires time.Time, err error) {
 	token = "pair-" + newToken(16)
-	now := r.now()
-	expires = now.Add(r.cfg.PairingTTL)
-	_, err = r.db().ExecContext(ctx, `INSERT INTO agent_pairings(token_hash,created_at,expires_at) VALUES(?,?,?)`,
+	expires = now.Add(ttl)
+	_, err = st.DB().ExecContext(ctx, `INSERT INTO agent_pairings(token_hash,created_at,expires_at) VALUES(?,?,?)`,
 		hashHex(token), store.FormatTime(now), store.FormatTime(expires))
+	if err == nil {
+		_ = st.Audit(ctx, "human", "agent.pairing_created", "agent_pairing", "", map[string]any{"expires": expires})
+	}
 	return token, expires, err
 }
 
@@ -513,16 +543,32 @@ func (r *Registry) Sweep(ctx context.Context) error {
 	return nil
 }
 
-// Run balaie périodiquement jusqu'à l'annulation de ctx.
+// Run balaie périodiquement jusqu'à l'annulation de ctx (démarré par Core.Run via AddRunHook), et purge
+// les fichiers .part abandonnés.
 func (r *Registry) Run(ctx context.Context) {
 	t := time.NewTicker(r.cfg.SweepEvery)
 	defer t.Stop()
+	purge := time.NewTicker(time.Hour)
+	defer purge.Stop()
+	r.PurgeStaging(PartMaxAge)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
 			_ = r.Sweep(ctx)
+		case <-purge.C:
+			r.PurgeStaging(PartMaxAge)
 		}
 	}
+}
+
+// Shutdown annule les imports en arrière-plan et attend leur fin. À appeler (Core.Close) AVANT la
+// fermeture de la base ; plus aucun import ne démarre ensuite.
+func (r *Registry) Shutdown() {
+	r.mu.Lock()
+	r.closed = true
+	r.mu.Unlock()
+	r.bgCancel()
+	r.wg.Wait()
 }

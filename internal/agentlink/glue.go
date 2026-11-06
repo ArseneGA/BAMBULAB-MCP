@@ -26,5 +26,7 @@ func For(c *core.Core) (*Registry, error) {
 	}
 	forBy[c] = r
 	c.CapabilityHooks = append(c.CapabilityHooks, r.ApplyCapabilities)
+	c.AddRunHook(r.Run)        // balayage des agents perdus et purge des .part, avec le contexte de Core.Run
+	c.AddCloseHook(r.Shutdown) // imports en arrière-plan annulés et attendus avant la fermeture de la base
 	return r, nil
 }

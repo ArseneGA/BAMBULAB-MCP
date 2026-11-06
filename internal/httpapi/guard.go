@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -22,6 +23,23 @@ type Options struct {
 	// « Authorization: Bearer <jeton> ». Obligatoire quand l'écoute n'est pas
 	// sur loopback (voir ValidateListen).
 	APIToken string
+	// PublicURL : URL sous laquelle l'humain atteint le service (ex. https://bambu.lan:7878). Sert aux liens
+	// affichés au modèle (/confirm, /stop, /setup), autorise automatiquement son nom d'hôte et décide de
+	// l'attribut Secure du cookie de session (https). Vide : adresse d'écoute (jamais « [::] »).
+	PublicURL string
+}
+
+// isHumanPath : pages HTML du canal humain et leur état de session. Elles ne passent PAS par le jeton
+// d'API (un navigateur ne sait pas l'envoyer) : elles exigent le cookie d'un navigateur enregistré
+// (humanauth.Require). Tout le reste (API JSON, /mcp) exige le Bearer quand un jeton est configuré.
+func isHumanPath(p string) bool {
+	switch {
+	case p == "/enroll" || strings.HasPrefix(p, "/enroll/"), p == "/api/session",
+		strings.HasPrefix(p, "/confirm/"), strings.HasPrefix(p, "/stop/"), strings.HasPrefix(p, "/setup/"),
+		p == "/agents/pair":
+		return true
+	}
+	return false
 }
 
 // MinTokenLen : longueur minimale d'un jeton d'API.
@@ -68,6 +86,9 @@ func guard(opts Options, next http.Handler) http.Handler {
 	for _, h := range opts.AllowedHosts {
 		allowed[strings.Trim(strings.ToLower(strings.TrimSpace(h)), "[]")] = true
 	}
+	if u, err := url.Parse(opts.PublicURL); err == nil && u.Hostname() != "" {
+		allowed[strings.ToLower(u.Hostname())] = true
+	}
 	cop := http.NewCrossOriginProtection()
 	for _, o := range opts.TrustedOrigins {
 		_ = cop.AddTrustedOrigin(o)
@@ -94,7 +115,7 @@ func guard(opts Options, next http.Handler) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "hôte non autorisé"})
 			return
 		}
-		if opts.APIToken != "" && !(r.Method == http.MethodGet && r.URL.Path == "/health") {
+		if opts.APIToken != "" && !(r.Method == http.MethodGet && r.URL.Path == "/health") && !isHumanPath(r.URL.Path) {
 			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 			sum := sha256.Sum256([]byte(got))
 			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare(sum[:], tokenSum[:]) != 1 {

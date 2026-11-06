@@ -60,8 +60,17 @@ type Deps struct {
 	Now       func() time.Time
 	// ConfirmationTTL : durée de vie d'une confirmation (défaut 10 min, max 24 h).
 	ConfirmationTTL time.Duration
-	// BaseURL : base des liens locaux (/setup, /confirm) ; défaut Catalog.BaseURL().
+	// BaseURL : base des liens locaux (/setup, /confirm, /stop) ; défaut Catalog.BaseURL().
 	BaseURL func() string
+	// AllowAnyPrinterHost lève la restriction « adresses privées / lien local / .local » de l'hôte
+	// d'une imprimante (option serveur --allow-any-printer-host ; tests avec le simulateur en loopback).
+	AllowAnyPrinterHost bool
+	// ApprovalTTL : validité d'un accord humain après le clic (défaut 2 min).
+	ApprovalTTL time.Duration
+	// CertFetch lit le certificat présenté par l'imprimante (défaut printer.FetchCertInfo).
+	CertFetch func(ctx context.Context, hostport string) (printer.CertInfo, error)
+	// ReconcileSettle : délai de stabilisation de la réconciliation (défaut de l'adaptateur : 10 s).
+	ReconcileSettle time.Duration
 }
 
 // Service est la chaîne d'impression.
@@ -79,16 +88,21 @@ type Service struct {
 	tracking map[string]context.CancelFunc
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
-	stops    map[string]string // identifiant d'arrêt -> print job
+	stops    map[string]stopReq // identifiant de demande d'arrêt -> print job (TTL, purgé)
 	// consumedBy : confirmation -> travail de lancement qui l'a consommée (un autre lancement
-	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN).
-	consumedBy map[string]string
+	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN). TTL, purgé.
+	consumedBy map[string]consumedEntry
 
 	jobMu sync.Mutex // sérialise les mises à jour d'un même PrintJob dans le processus
 
-	modelsOnce sync.Once
+	// Modèles : pas de sync.Once (un ctx annulé ne doit pas figer l'échec) ; on réessaie tant qu'il n'a pas réussi.
+	modelsMu   sync.Mutex
+	modelsDone bool
 	modelsN    int
 	modelsErr  error
+
+	// confirmTransition : passage AWAITING -> START_REQUESTED après consommation (substituable en test).
+	confirmTransition func(ctx context.Context, jobID, confID string) error
 }
 
 type adapterEntry struct {
@@ -127,10 +141,28 @@ func New(d Deps) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{d: d, secrets: secrets, log: d.Log, ctx: ctx, cancel: cancel,
 		adapters: map[string]*adapterEntry{}, tracking: map[string]context.CancelFunc{},
-		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]string{}, consumedBy: map[string]string{}}
+		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, consumedBy: map[string]consumedEntry{}}
+	s.confirmTransition = s.defaultConfirmTransition
+	if d.CertFetch == nil {
+		s.d.CertFetch = printer.FetchCertInfo
+	}
 	if d.Adapters == nil {
 		s.d.Adapters = s.defaultAdapter
 	}
+	s.wg.Add(1)
+	go func() { // maintenance : purge des nonces, demandes d'arrêt, approbations et traces expirées
+		defer s.wg.Done()
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				s.purge()
+			}
+		}
+	}()
 	if d.Registry != nil {
 		d.Registry.Register(JobSlice, true, s.sliceHandler)
 		d.Registry.Register(JobUpload, true, s.uploadHandler)
@@ -256,29 +288,39 @@ func (s *Service) slicerInst() (*slicer.Slicer, error) {
 	return sl, nil
 }
 
-// EnsureModels sème (une fois) les modèles depuis les profils Bambu Studio quand
-// ils sont disponibles. Renvoie le nombre de modèles semés et l'éventuelle raison d'absence.
+// EnsureModels sème les modèles depuis les profils Bambu Studio quand ils sont disponibles. Renvoie le
+// nombre de modèles semés et l'éventuelle raison d'absence. Un échec (Bambu Studio absent, contexte
+// annulé) n'est PAS mémorisé définitivement : le prochain appel réessaie.
 func (s *Service) EnsureModels(ctx context.Context) (int, error) {
-	s.modelsOnce.Do(func() {
-		sl, err := s.slicerInst()
-		if err != nil {
+	s.modelsMu.Lock()
+	defer s.modelsMu.Unlock()
+	if s.modelsDone {
+		return s.modelsN, nil
+	}
+	sl, err := s.slicerInst()
+	if err != nil {
+		s.modelsErr = err
+		return 0, err
+	}
+	ms, err := SeedPrinterModels(sl.Profiles())
+	if err != nil {
+		s.modelsErr = err
+		return 0, err
+	}
+	for _, m := range ms {
+		if err := s.d.Store.PutDoc(ctx, actor, "printer_models", m.ID, m); err != nil {
 			s.modelsErr = err
-			return
+			return 0, err
 		}
-		ms, err := SeedPrinterModels(sl.Profiles())
-		if err != nil {
-			s.modelsErr = err
-			return
-		}
-		for _, m := range ms {
-			if err := s.d.Store.PutDoc(ctx, actor, "printer_models", m.ID, m); err != nil {
-				s.modelsErr = err
-				return
-			}
-		}
-		s.modelsN = len(ms)
-	})
-	return s.modelsN, s.modelsErr
+	}
+	s.modelsDone, s.modelsN, s.modelsErr = true, len(ms), nil
+	return s.modelsN, nil
+}
+
+func (s *Service) modelsError() error {
+	s.modelsMu.Lock()
+	defer s.modelsMu.Unlock()
+	return s.modelsErr
 }
 
 // PutPrinterModel enregistre un modèle (tests, imports hors profils).
@@ -322,7 +364,7 @@ func (s *Service) GetPrinterModel(ctx context.Context, idOrName string) (contrac
 			return c, nil
 		}
 	}
-	return m, fmt.Errorf("%w : modèle d'imprimante %q (modèles connus : %d ; profils Bambu Studio %s)", ErrNotFound, idOrName, len(all), availability(s.modelsErr))
+	return m, fmt.Errorf("%w : modèle d'imprimante %q (modèles connus : %d ; profils Bambu Studio %s)", ErrNotFound, idOrName, len(all), availability(s.modelsError()))
 }
 
 func availability(err error) string {
@@ -334,29 +376,49 @@ func availability(err error) string {
 
 // ---- registre des imprimantes ----
 
-// AddPrinterInput décrit une imprimante. Le code d'accès n'est PAS une entrée :
-// l'humain le saisit sur la page locale /setup/printer/{id}.
+// AddPrinterInput décrit une imprimante. Le code d'accès n'est PAS une entrée (l'humain le saisit sur
+// /setup/printer/{id}), ni l'empreinte du certificat (récupérée par le serveur et validée par l'humain sur
+// cette même page), ni aucune option de contournement (désactiver la vérification TLS, départ depuis FINISH).
 type AddPrinterInput struct {
-	Name                 string  `json:"name" jsonschema:"nom d'usage, ex. Atelier"`
-	ModelID              string  `json:"model_id" jsonschema:"modèle Bambu (identifiant de list_printer_models, ex. p1s) ou nom exact"`
-	Host                 string  `json:"host" jsonschema:"adresse IP ou nom d'hôte sur le LAN"`
-	Serial               string  `json:"serial" jsonschema:"numéro de série (alphanumérique)"`
-	NozzleMM             float64 `json:"nozzle_mm,omitempty" jsonschema:"buse installée en mm (défaut 0,4)"`
-	AMSUnits             int     `json:"ams_units,omitempty" jsonschema:"nombre d'AMS raccordés (défaut 0)"`
-	MQTTPort             int     `json:"mqtt_port,omitempty"`
-	FTPPort              int     `json:"ftp_port,omitempty"`
-	AllowStartFromFinish bool    `json:"allow_start_from_finish,omitempty" jsonschema:"accepter un nouveau départ depuis l'état finished (à valider sur le vrai matériel ; défaut faux)"`
-	PinnedSHA256         string  `json:"pinned_sha256,omitempty" jsonschema:"empreinte SHA-256 du certificat de l'imprimante (non secrète), validée hors bande"`
-	InsecureReason       string  `json:"insecure_reason,omitempty" jsonschema:"diagnostic uniquement : raison de désactiver la vérification du certificat"`
+	Name     string  `json:"name" jsonschema:"nom d'usage, ex. Atelier"`
+	ModelID  string  `json:"model_id" jsonschema:"modèle Bambu (identifiant de list_printer_models, ex. p1s) ou nom exact"`
+	Host     string  `json:"host" jsonschema:"adresse IP privée ou lien local (192.168.x.x, 10.x, 172.16-31.x, fc00::/7, fe80::/10) ou nom en .local"`
+	Serial   string  `json:"serial" jsonschema:"numéro de série (alphanumérique)"`
+	NozzleMM float64 `json:"nozzle_mm,omitempty" jsonschema:"buse installée en mm (défaut 0,4)"`
+	AMSUnits int     `json:"ams_units,omitempty" jsonschema:"nombre d'AMS raccordés (défaut 0)"`
+	MQTTPort int     `json:"mqtt_port,omitempty"`
+	FTPPort  int     `json:"ftp_port,omitempty"`
 }
 
 var (
 	serialRe = regexp.MustCompile(`^[A-Za-z0-9]{6,32}$`)
-	shaRe    = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 	hostRe   = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$`)
 )
 
-// AddPrinter enregistre une imprimante (sans code d'accès) et renvoie le lien de saisie.
+// CheckPrinterHost applique la politique d'hôte : une imprimante Bambu LAN est sur un réseau local.
+// Adresse privée (RFC 1918, fc00::/7), lien local (169.254/16, fe80::/10) ou nom en .local ; le
+// loopback et les adresses publiques sont refusés (le serveur ne doit pas être détourné vers un tiers),
+// sauf option serveur (allowAny).
+func CheckPrinterHost(host string, allowAny bool) error {
+	h := strings.TrimSpace(host)
+	if ip := net.ParseIP(strings.Trim(h, "[]")); ip != nil {
+		if allowAny || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+			return nil
+		}
+		return invalidf("hôte %s refusé : seules les adresses privées ou de lien local sont acceptées (option serveur --allow-any-printer-host pour lever)", host)
+	}
+	if !hostRe.MatchString(h) {
+		return invalidf("hôte invalide")
+	}
+	if allowAny || strings.HasSuffix(strings.ToLower(h), ".local") {
+		return nil
+	}
+	return invalidf("hôte %q refusé : un nom d'hôte doit se terminer par .local (sinon utiliser l'adresse IP privée)", host)
+}
+
+// AddPrinter enregistre une imprimante (sans code d'accès, sans empreinte) et renvoie le lien de saisie.
+// Tant que l'humain n'a pas validé l'empreinte du certificat et saisi le code sur /setup/printer/{id},
+// aucune connexion n'est tentée.
 func (s *Service) AddPrinter(ctx context.Context, in AddPrinterInput) (*PrinterView, error) {
 	in.Name, in.Host, in.Serial = strings.TrimSpace(in.Name), strings.TrimSpace(in.Host), strings.TrimSpace(in.Serial)
 	if in.Name == "" || len(in.Name) > 80 {
@@ -365,11 +427,8 @@ func (s *Service) AddPrinter(ctx context.Context, in AddPrinterInput) (*PrinterV
 	if !serialRe.MatchString(in.Serial) {
 		return nil, invalidf("numéro de série invalide (6 à 32 caractères alphanumériques)")
 	}
-	if net.ParseIP(in.Host) == nil && !hostRe.MatchString(in.Host) {
-		return nil, invalidf("hôte invalide")
-	}
-	if in.PinnedSHA256 != "" && !shaRe.MatchString(in.PinnedSHA256) {
-		return nil, invalidf("pinned_sha256 doit être un SHA-256 hexadécimal (64 caractères)")
+	if err := CheckPrinterHost(in.Host, s.d.AllowAnyPrinterHost); err != nil {
+		return nil, err
 	}
 	if in.AMSUnits < 0 || in.AMSUnits > 4 {
 		return nil, invalidf("ams_units entre 0 et 4")
@@ -400,14 +459,112 @@ func (s *Service) AddPrinter(ctx context.Context, in AddPrinterInput) (*PrinterV
 		return nil, fmt.Errorf("%w : %s ne prend pas en charge l'AMS", ErrIncompatible, model.Name)
 	}
 	rec := PrinterRecord{ID: contracts.NewID("prn"), ModelID: model.ID, Name: in.Name, Host: in.Host, Serial: in.Serial,
-		NozzleMM: noz, AMSUnits: in.AMSUnits, MQTTPort: in.MQTTPort, FTPPort: in.FTPPort, AllowStartFromFinish: in.AllowStartFromFinish,
-		PinnedSHA256: strings.ToLower(in.PinnedSHA256), InsecureReason: in.InsecureReason, CreatedAt: s.now()}
+		NozzleMM: noz, AMSUnits: in.AMSUnits, MQTTPort: in.MQTTPort, FTPPort: in.FTPPort, CreatedAt: s.now()}
 	if _, err := s.d.Store.PutDocIfRev(ctx, actor, "printers", rec.ID, rec, 0); err != nil {
 		return nil, err
 	}
 	_ = s.d.Store.Audit(ctx, actor, "printer.add", "printer", rec.ID, map[string]any{"model": model.ID, "host": in.Host})
 	return s.view(ctx, rec, model), nil
 }
+
+// updatePrinter applique une mutation à l'enregistrement d'une imprimante (version optimiste).
+func (s *Service) updatePrinter(ctx context.Context, id string, mutate func(*PrinterRecord) error) (PrinterRecord, error) {
+	for attempt := 0; attempt < 8; attempt++ {
+		var rec PrinterRecord
+		rev, err := s.d.Store.GetDocRev(ctx, "printers", id, &rec)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return rec, fmt.Errorf("%w : imprimante %q", ErrNotFound, id)
+			}
+			return rec, err
+		}
+		if err := mutate(&rec); err != nil {
+			return rec, err
+		}
+		if _, err := s.d.Store.PutDocIfRev(ctx, actor, "printers", id, rec, rev); err != nil {
+			if errors.Is(err, store.ErrConflict) {
+				continue
+			}
+			return rec, err
+		}
+		return rec, nil
+	}
+	return PrinterRecord{}, errors.New("imprimante modifiée en continu par ailleurs : réessayer")
+}
+
+// UpdatePrinterHost change l'hôte d'une imprimante. L'empreinte de certificat épinglée est EFFACÉE : le
+// nouvel hôte doit être re-épinglé par l'humain sur /setup/printer/{id} (aucune connexion avant).
+func (s *Service) UpdatePrinterHost(ctx context.Context, id, host string) (*PrinterView, error) {
+	host = strings.TrimSpace(host)
+	if err := CheckPrinterHost(host, s.d.AllowAnyPrinterHost); err != nil {
+		return nil, err
+	}
+	rec, err := s.updatePrinter(ctx, id, func(r *PrinterRecord) error {
+		if r.Host != host {
+			r.Host, r.PinnedSHA256, r.PinnedAt = host, "", time.Time{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.dropAdapter(id)
+	_ = s.d.Store.Audit(ctx, actor, "printer.host_changed", "printer", id, map[string]any{"host": host, "repin_required": true})
+	model, _ := s.GetPrinterModel(ctx, rec.ModelID)
+	return s.view(ctx, rec, model), nil
+}
+
+// SetAllowStartFromFinish autorise (ou non) un départ depuis l'état « finished » pour cette imprimante.
+// Réservé au code de confiance (tests, futur outil CLI) : jamais exposé par MCP ni par l'API JSON, car
+// ce comportement n'est pas validé sur le matériel réel (J7 §5 point 8).
+func (s *Service) SetAllowStartFromFinish(ctx context.Context, id string, allow bool) error {
+	if _, err := s.updatePrinter(ctx, id, func(r *PrinterRecord) error { r.AllowStartFromFinish = allow; return nil }); err != nil {
+		return err
+	}
+	s.dropAdapter(id)
+	return nil
+}
+
+// SetReconcileSettle règle le délai de stabilisation de la réconciliation (tests).
+func (s *Service) SetReconcileSettle(d time.Duration) {
+	s.mu.Lock()
+	s.d.ReconcileSettle = d
+	s.mu.Unlock()
+}
+
+// PinAndSetAccessCode épingle l'empreinte de certificat que l'humain a vue (vide : conserver l'épinglage
+// existant) et enregistre le code d'accès. Appelé UNIQUEMENT par la page /setup/printer/{id}.
+func (s *Service) PinAndSetAccessCode(ctx context.Context, printerID, fingerprint, code string) error {
+	fingerprint = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(fingerprint), ":", ""))
+	if fingerprint != "" && !shaRe.MatchString(fingerprint) {
+		return invalidf("empreinte invalide")
+	}
+	if fingerprint == "" {
+		rec, err := s.GetPrinterRecord(ctx, printerID)
+		if err != nil {
+			return err
+		}
+		if rec.PinnedSHA256 == "" {
+			return invalidf("aucune empreinte de certificat à épingler : l'imprimante n'a pas pu être jointe pour la lire")
+		}
+	}
+	code = strings.TrimSpace(code)
+	if len(code) < 4 || len(code) > 64 {
+		return invalidf("code d'accès : 4 à 64 caractères")
+	}
+	if fingerprint != "" {
+		if _, err := s.updatePrinter(ctx, printerID, func(r *PrinterRecord) error {
+			r.PinnedSHA256, r.PinnedAt = fingerprint, s.now()
+			return nil
+		}); err != nil {
+			return err
+		}
+		_ = s.d.Store.Audit(ctx, "human:web", "printer.cert_pinned", "printer", printerID, map[string]any{"sha256": fingerprint})
+	}
+	return s.SetAccessCode(ctx, printerID, code)
+}
+
+var shaRe = regexp.MustCompile(`^[0-9a-fA-F]{64}$`)
 
 func (s *Service) view(_ context.Context, rec PrinterRecord, model contracts.PrinterModel) *PrinterView {
 	return &PrinterView{PrinterRecord: rec, ModelName: model.Name, AccessCodeSet: s.secrets.HasAccessCode(rec.ID),
@@ -474,16 +631,16 @@ func (s *Service) SetAccessCode(ctx context.Context, printerID, code string) err
 // ---- adaptateurs ----
 
 func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret printer.SecretProvider, verifier printer.ProofVerifier) (printer.Adapter, error) {
-	tls := printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}
 	if rec.PinnedSHA256 == "" {
-		if rec.InsecureReason == "" {
-			return nil, fmt.Errorf("%w : empreinte de certificat non épinglée pour %s (pinned_sha256 requis, ou insecure_reason pour un diagnostic)", ErrUnavailable, rec.Name)
-		}
-		tls = printer.TLSOptions{InsecureSkipVerify: true, InsecureReason: rec.InsecureReason}
+		return nil, fmt.Errorf("%w : le certificat de %s n'est pas épinglé — l'humain doit valider son empreinte sur %s", ErrUnavailable, rec.Name, s.BaseURL()+"/setup/printer/"+rec.ID)
 	}
+	s.mu.Lock()
+	settle := s.d.ReconcileSettle
+	s.mu.Unlock()
 	return printer.NewBambu(printer.BambuConfig{
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
-		Secrets: secret, TLS: tls, Verifier: verifier, Logger: s.log, AllowStartFromFinish: rec.AllowStartFromFinish,
+		Secrets: secret, TLS: printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}, Verifier: verifier, Logger: s.log,
+		AllowStartFromFinish: rec.AllowStartFromFinish, ReconcileSettle: settle,
 	})
 }
 
