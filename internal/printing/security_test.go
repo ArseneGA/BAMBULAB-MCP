@@ -113,9 +113,7 @@ func TestSetupPagePinsTheDisplayedFingerprint(t *testing.T) {
 	if rec.PinnedSHA256 != r.sim.Fingerprint() {
 		t.Fatalf("empreinte épinglée %s, attendue celle qui a été affichée %s", rec.PinnedSHA256, r.sim.Fingerprint())
 	}
-	if st := r.call("get_printer_status", map[string]any{"printer_id": id}); str(st, "state") != "idle" {
-		t.Fatalf("après épinglage : %v", st)
-	}
+	r.waitPrinterState(id, "idle")
 	// Le nonce est à usage unique.
 	if s, _ := r.humanPost(setup, url.Values{"nonce": {nonce}, "access_code": {simAccessCode}}); s != 403 {
 		t.Fatalf("nonce rejoué : %d", s)
@@ -130,9 +128,7 @@ func TestHostChangeForcesRepin(t *testing.T) {
 	ap := r.addPrinter(nil)
 	id := str(ap, "printer", "id")
 	r.humanSetsAccessCode(str(ap, "setup_url"))
-	if st := r.call("get_printer_status", map[string]any{"printer_id": id}); str(st, "state") != "idle" {
-		t.Fatalf("avant : %v", st)
-	}
+	r.waitPrinterState(id, "idle")
 	// Même hôte : l'épinglage est conservé.
 	if _, err := r.c.Printing.UpdatePrinterHost(t.Context(), id, "127.0.0.1"); err != nil {
 		t.Fatal(err)

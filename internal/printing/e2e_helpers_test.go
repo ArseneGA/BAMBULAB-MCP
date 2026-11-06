@@ -341,6 +341,24 @@ func (r *rig) humanSetsAccessCode(setupURL string) {
 	}
 }
 
+// waitPrinterState interroge get_printer_status jusqu'à obtenir l'état voulu (borné) : la connexion MQTT et le
+// premier rapport complet sont asynchrones, un statut lu juste après la connexion peut encore être « unknown ».
+func (r *rig) waitPrinterState(id, want string) map[string]any {
+	r.t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	var st map[string]any
+	for {
+		st = r.call("get_printer_status", map[string]any{"printer_id": id})
+		if str(st, "state") == want {
+			return st
+		}
+		if time.Now().After(deadline) {
+			r.t.Fatalf("état %q non atteint en 20 s : %v", want, st)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // fakeArtifact dépose dans le stockage un faux .gcode.3mf (octets quelconques) : seul le validateur substitué le lit.
 func (r *rig) fakeArtifact() string {
 	r.t.Helper()

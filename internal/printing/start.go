@@ -305,6 +305,12 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 	case printer.StateFinished:
 		_, _ = s.transition(ctx, id, contracts.EvPrintDone, "l'imprimante rapporte la fin de l'impression (FINISH)", func(x *Job) error { pg.Percent = 100; x.Print = pg; return nil })
 	case printer.StateFailed:
+		s.mu.Lock()
+		stopping := s.stopping[id]
+		s.mu.Unlock()
+		if stopping {
+			return // arrêt humain en cours : ExecuteStop enregistre CANCELLED (sinon le relevé suivant verra FAILED)
+		}
 		msg := fmt.Sprintf("l'imprimante rapporte un échec (%s, print_error=%d)", st.FailReason, st.PrintError)
 		_, _ = s.transition(ctx, id, contracts.EvFail, msg, func(x *Job) error { x.Print, x.LastError = pg, msg; return nil })
 	default:
@@ -617,6 +623,14 @@ func (s *Service) ExecuteStop(ctx context.Context, stopID string) (*CancelOutput
 	}
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	s.mu.Lock()
+	s.stopping[j.ID] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.stopping, j.ID)
+		s.mu.Unlock()
+	}()
 	if err := ad.Stop(cctx); err != nil {
 		return nil, fmt.Errorf("arrêt de l'imprimante en échec : %w", err)
 	}

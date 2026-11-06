@@ -98,6 +98,7 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	})
 
 	// ---- 2. état + fraîcheur ----
+	r.waitPrinterState(r.printerID, "idle")
 	ps := r.call("get_printer_status", map[string]any{"printer_id": r.printerID})
 	if str(ps, "state") != "idle" || ps["age_seconds"] == nil || ps["stale"] != false || str(ps, "plate_empty") != "inconnu" {
 		t.Fatalf("statut : %v", ps)

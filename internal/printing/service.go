@@ -88,6 +88,7 @@ type Service struct {
 	tracking map[string]context.CancelFunc
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
+	stopping map[string]bool    // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)
 	stops    map[string]stopReq // identifiant de demande d'arrêt -> print job (TTL, purgé)
 	// consumedBy : confirmation -> travail de lancement qui l'a consommée (un autre lancement
 	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN). TTL, purgé.
@@ -141,7 +142,7 @@ func New(d Deps) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{d: d, secrets: secrets, log: d.Log, ctx: ctx, cancel: cancel,
 		adapters: map[string]*adapterEntry{}, tracking: map[string]context.CancelFunc{},
-		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, consumedBy: map[string]consumedEntry{}}
+		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, stopping: map[string]bool{}, consumedBy: map[string]consumedEntry{}}
 	s.confirmTransition = s.defaultConfirmTransition
 	if d.CertFetch == nil {
 		s.d.CertFetch = printer.FetchCertInfo

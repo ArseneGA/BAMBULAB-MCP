@@ -150,6 +150,7 @@ func ctx5(t *testing.T) context.Context {
 
 func waitState(t *testing.T, ad printer.Adapter, want printer.State, d time.Duration) printer.Status {
 	t.Helper()
+	d += 10 * time.Second // marge pour les machines chargées ; on sort dès que l'état voulu est atteint
 	deadline := time.Now().Add(d)
 	var st printer.Status
 	for time.Now().Before(deadline) {

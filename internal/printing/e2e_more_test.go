@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestConcurrentStartsSendOneCommand(t *testing.T) {
@@ -94,8 +95,20 @@ func TestHTTPRoutesAndPageSecurity(t *testing.T) {
 		t.Fatalf("imprimante inconnue : %d", st)
 	}
 	r.humanSetsAccessCode(r.web.URL + "/setup/printer/" + id)
-	if st, m, _ := r.httpJSON("GET", "/api/printers/"+id+"/status", ""); st != 200 || m["state"] != "idle" {
-		t.Fatalf("statut : %d %v", st, m)
+	// La connexion MQTT et le premier rapport complet sont asynchrones : attente bornée de l'état « idle ».
+	var (
+		stHTTP int
+		stBody map[string]any
+	)
+	for deadline := time.Now().Add(20 * time.Second); ; {
+		stHTTP, stBody, _ = r.httpJSON("GET", "/api/printers/"+id+"/status", "")
+		if (stHTTP == 200 && stBody["state"] == "idle") || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if stHTTP != 200 || stBody["state"] != "idle" {
+		t.Fatalf("statut : %d %v", stHTTP, stBody)
 	}
 	art := r.fakeArtifact()
 	st, v, _ := r.httpJSON("POST", "/api/print-jobs/validate", fmt.Sprintf(`{"artifact_id":%q,"printer_id":%q}`, art, id))
