@@ -1,0 +1,248 @@
+{
+  "version": "2026.11.1",
+  "note": "Règles de départ versionnées : critère -> leviers de réglage Bambu Studio. Les clés ont été vérifiées dans les profils BBL 02.08.00.05 (process 0.20mm Standard, filament Bambu PLA Basic). Les pas et bornes sont des heuristiques d'atelier, pas des recommandations fabricant ni des garanties : chaque levier porte son compromis attendu et doit être validé par un essai. Les énumérations (seam_position, ironing_type, draft_shield, sparse_infill_pattern) sont contrôlées contre l'archive produite par Studio dans les tests d'intégration.",
+  "provenance": "heuristic",
+  "families": ["PLA", "PETG", "ABS", "ASA", "TPU", "PC", "PA", "PVA"],
+  "family_notes": "La famille se lit dans filament_type du profil filament de base. Une famille absente de cette liste (PPA, PLA-CF, etc.) ne reçoit que des leviers valables pour toutes les familles (families = [\"*\"]) ; les leviers dépendant du matériau (vitesses, températures, ironing) sont ignorés et signalés. Aucune valeur d'un matériau n'est jamais copiée vers un autre : les bornes de température viennent du profil filament de base lui-même.",
+  "criteria": {
+    "surface_aspect": {
+      "label": "Aspect de surface",
+      "description": "Qualité visuelle des faces : lisse, mate, brillante, peu de lignes de couche ou de couture.",
+      "params": {
+        "finish": {"values": ["smooth", "matte", "glossy", "few_lines"], "required": false, "description": "aspect visé"}
+      },
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": ["layer_height_mm", "layers"]},
+      "test": "Éprouvette (paroi verticale + dessus plat + surplomb) imprimée avec chaque variante, comparée sous éclairage rasant ; photos à conditions identiques.",
+      "levers": [
+        {"id": "sa_seam", "key": "seam_position", "target": "process", "op": "set", "value": "back", "families": ["*"],
+         "effect": "couture alignée à l'arrière : invisible de face", "tradeoff": "la couture se concentre sur la face arrière"},
+        {"id": "sa_layer", "key": "layer_height", "target": "process", "op": "add", "value": -0.08, "min": 0.08, "families": ["*"],
+         "effect": "couches plus fines : marches d'escalier moins visibles", "tradeoff": "temps d'impression fortement augmenté (nombre de couches multiplié)"},
+        {"id": "sa_outer_speed", "key": "outer_wall_speed", "target": "process", "op": "scale", "value": 0.6, "min": 60, "families": ["PLA", "PETG", "ABS", "ASA", "PC", "PA"],
+         "effect": "paroi externe plus lente : moins de vibrations et un dépôt plus régulier", "tradeoff": "temps d'impression en hausse"},
+        {"id": "sa_ironing", "key": "ironing_type", "target": "process", "op": "set", "value": "top", "families": ["PLA", "PETG", "ABS", "ASA"],
+         "when": {"param": "finish", "not_in": ["matte"]},
+         "effect": "lissage des surfaces supérieures", "tradeoff": "temps en hausse ; risque de traces ou de surchauffe locale sur petites surfaces"},
+        {"id": "sa_accel", "key": "outer_wall_acceleration", "target": "process", "op": "scale", "value": 0.6, "min": 1000, "families": ["*"],
+         "effect": "accélérations réduites sur la paroi externe : moins d'ondulations (ringing)", "tradeoff": "temps en hausse"}
+      ]
+    },
+    "strength": {
+      "label": "Résistance mécanique",
+      "description": "Pièce qui supporte un effort. La direction de l'effort par rapport aux couches change le choix (rupture inter-couches).",
+      "params": {
+        "load_direction": {"values": ["z", "xy", "multi", "unknown"], "required": true, "description": "effort perpendiculaire aux couches (z), dans le plan des couches (xy), multiple, ou inconnu"},
+        "load_axis": {"type": "vector3", "required": false, "description": "axe principal de l'effort dans le repère du modèle ; défaut +Z du modèle si load_direction = z"},
+        "engineering": {"type": "object", "required": false, "description": "données d'un calcul de poutre (support, load_type, load, length, section, material) : active l'évaluation par calcul"}
+      },
+      "evaluable_if_params": ["engineering"],
+      "evaluation": {"status": "non_evaluable", "by": ["engineering"], "indicators": ["wall_loops", "sparse_infill_density"]},
+      "test": "Éprouvettes dans l'orientation d'usage chargées jusqu'à rupture ou flèche limite, avec une même méthode de chargement.",
+      "levers": [
+        {"id": "st_orient", "kind": "orientation", "mode": "load_in_plane", "families": ["*"],
+         "when": {"param": "load_direction", "in": ["z"]},
+         "effect": "oriente la pièce pour que l'effort soit dans le plan des couches (plus résistant que perpendiculaire)", "tradeoff": "peut ajouter des surplombs, donc des supports, et dégrader l'aspect de certaines faces"},
+        {"id": "st_temp", "key": "nozzle_temperature", "target": "filament", "op": "add", "value": 5, "bound_key": "nozzle_temperature_range_high", "families": ["PLA", "PETG", "ABS", "ASA", "PC", "PA"],
+         "when": {"param": "load_direction", "in": ["z", "multi", "unknown"]},
+         "effect": "meilleure fusion entre couches (borne : plage haute du profil filament lui-même)", "tradeoff": "fils parasites (stringing), odeur, déformation des détails fins possibles"},
+        {"id": "st_walls", "key": "wall_loops", "target": "process", "op": "add", "value": 2, "max": 8, "families": ["*"],
+         "effect": "plus de parois : section résistante en périphérie plus épaisse", "tradeoff": "matière et temps en hausse"},
+        {"id": "st_infill", "key": "sparse_infill_density", "target": "process", "op": "add", "value": 15, "max": 60, "families": ["*"],
+         "effect": "remplissage plus dense", "tradeoff": "matière et temps en hausse"},
+        {"id": "st_pattern", "key": "sparse_infill_pattern", "target": "process", "op": "set", "value": "gyroid", "families": ["*"],
+         "effect": "motif de remplissage isotrope", "tradeoff": "effet limité sur le temps ; peu d'effet sur la résistance inter-couches (le gain vient surtout de l'isotropie)"},
+        {"id": "st_shell", "key": "top_shell_layers", "target": "process", "op": "add", "value": 2, "max": 8, "families": ["*"],
+         "effect": "peaux supérieures plus épaisses (pièces sollicitées en flexion)", "tradeoff": "matière et temps en hausse"}
+      ]
+    },
+    "dimensional_accuracy": {
+      "label": "Précision dimensionnelle / emboîtement",
+      "description": "Dimensions fonctionnelles, jeux et assemblages.",
+      "params": {
+        "fit_type": {"values": ["clearance", "transition", "interference"], "required": false, "description": "type d'ajustement visé"}
+      },
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": ["layer_height_mm"]},
+      "test": "Mesurer au pied à coulisse les cotes fonctionnelles d'une éprouvette et essayer l'assemblage ; corriger ensuite avec xy_contour_compensation / xy_hole_compensation d'après la mesure. Les jeux de conception se calculent avec l'outil d'ingénierie de jeu (engineering.FitClearance).",
+      "levers": [
+        {"id": "da_speed", "key": "outer_wall_speed", "target": "process", "op": "scale", "value": 0.7, "min": 60, "families": ["PLA", "PETG", "ABS", "ASA", "PC", "PA"],
+         "effect": "paroi externe plus lente : contours plus fidèles", "tradeoff": "temps en hausse"},
+        {"id": "da_accel", "key": "outer_wall_acceleration", "target": "process", "op": "scale", "value": 0.6, "min": 1000, "families": ["*"],
+         "effect": "accélérations réduites : moins de déformation aux angles", "tradeoff": "temps en hausse"},
+        {"id": "da_layer", "key": "layer_height", "target": "process", "op": "add", "value": -0.04, "min": 0.08, "families": ["*"],
+         "effect": "meilleure résolution verticale", "tradeoff": "temps en hausse"}
+      ]
+    },
+    "flexibility": {
+      "label": "Souplesse",
+      "description": "Pièce souple, joint, charnière ou ressort.",
+      "params": {
+        "direction": {"values": ["softer", "stiffer"], "required": false, "description": "plus souple (défaut) ou plus rigide"}
+      },
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": ["wall_loops", "sparse_infill_density"]},
+      "test": "Essai fonctionnel défini pour l'usage : flexion répétée, compression, récupération après charge.",
+      "levers": [
+        {"id": "fl_infill_soft", "key": "sparse_infill_density", "target": "process", "op": "add", "value": -10, "min": 5, "families": ["*"],
+         "when": {"param": "direction", "not_in": ["stiffer"]},
+         "effect": "remplissage moins dense : pièce plus souple", "tradeoff": "résistance et appui des surfaces supérieures réduits"},
+        {"id": "fl_walls_soft", "key": "wall_loops", "target": "process", "op": "add", "value": -1, "min": 2, "families": ["*"],
+         "when": {"param": "direction", "not_in": ["stiffer"]},
+         "effect": "moins de parois : plus souple", "tradeoff": "moins résistant en surface"},
+        {"id": "fl_infill_stiff", "key": "sparse_infill_density", "target": "process", "op": "add", "value": 20, "max": 60, "families": ["*"],
+         "when": {"param": "direction", "in": ["stiffer"]},
+         "effect": "remplissage plus dense : plus rigide", "tradeoff": "matière et temps en hausse"},
+        {"id": "fl_walls_stiff", "key": "wall_loops", "target": "process", "op": "add", "value": 1, "max": 6, "families": ["*"],
+         "when": {"param": "direction", "in": ["stiffer"]},
+         "effect": "plus de parois : plus rigide", "tradeoff": "matière et temps en hausse"}
+      ]
+    },
+    "thermal_resistance": {
+      "label": "Tenue thermique",
+      "description": "Pièce exposée à la chaleur.",
+      "params": {"temperature_c": {"type": "number", "required": false, "description": "température de service"}},
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": []},
+      "no_levers_reason": "La tenue thermique est une propriété du matériau (température de fléchissement sous charge, cristallinité) : aucun réglage de découpe ne la garantit. Comparer la fiche du matériau aux conditions réelles.",
+      "test": "Maintenir une éprouvette chargée à la température de service pendant la durée visée et mesurer la déformation.",
+      "levers": []
+    },
+    "outdoor_resistance": {
+      "label": "Tenue extérieure",
+      "description": "Exposition aux UV, à l'eau, aux cycles thermiques.",
+      "params": {},
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": []},
+      "no_levers_reason": "La tenue aux UV et à l'humidité dépend du matériau choisi ; aucun réglage de découpe ne la garantit.",
+      "test": "Exposition d'éprouvettes dans les conditions réelles ou accélérées, avec contrôle périodique.",
+      "levers": []
+    },
+    "chemical_resistance": {
+      "label": "Tenue chimique",
+      "description": "Contact avec un produit (huile, solvant, nettoyant).",
+      "params": {"agent": {"type": "string", "required": false, "description": "produit concerné"}},
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": []},
+      "no_levers_reason": "La compatibilité chimique dépend du matériau et du produit ; aucun réglage de découpe ne la garantit.",
+      "test": "Immersion ou contact d'éprouvettes avec le produit réel, durée et température réalistes.",
+      "levers": []
+    },
+    "warping_flatness": {
+      "label": "Déformation / planéité",
+      "description": "Grande pièce avec peu de gauchissement, surfaces d'appui planes.",
+      "params": {},
+      "evaluation": {"status": "non_evaluable", "by": ["geometry"], "indicators": ["bed_contact_mm2", "height_mm"]},
+      "test": "Mesurer la planéité (règle et jauge d'épaisseur) après refroidissement complet, dimensions finales comparées au modèle.",
+      "levers": [
+        {"id": "wf_orient", "kind": "orientation", "mode": "max_contact", "families": ["*"],
+         "effect": "maximise la surface en contact avec le plateau", "tradeoff": "peut accroître les surplombs ou l'emprise sur le plateau"},
+        {"id": "wf_shield", "key": "draft_shield", "target": "process", "op": "set", "value": "enabled", "families": ["ABS", "ASA", "PC", "PA", "PETG"],
+         "effect": "paroi pare-courants d'air autour de la pièce", "tradeoff": "matière et temps supplémentaires"},
+        {"id": "wf_initial", "key": "initial_layer_speed", "target": "process", "op": "scale", "value": 0.8, "min": 20, "families": ["*"],
+         "effect": "première couche plus lente : meilleure adhérence", "tradeoff": "quelques secondes de plus"}
+      ]
+    },
+    "speed": {
+      "label": "Vitesse d'impression",
+      "description": "Temps d'impression court. Seuil possible : durée maximale.",
+      "params": {},
+      "evaluation": {"status": "evaluable", "by": ["slicer"], "metric": "print_time_s"},
+      "levers": [
+        {"id": "sp_layer", "key": "layer_height", "target": "process", "op": "add", "value": 0.08, "max_nozzle_fraction": 0.75, "families": ["*"],
+         "effect": "couches plus épaisses : moins de couches", "tradeoff": "surface moins lisse, détails fins moins nets"},
+        {"id": "sp_infill", "key": "sparse_infill_density", "target": "process", "op": "add", "value": -10, "min": 5, "families": ["*"],
+         "effect": "moins de remplissage", "tradeoff": "résistance et rigidité réduites"},
+        {"id": "sp_walls", "key": "wall_loops", "target": "process", "op": "add", "value": -1, "min": 2, "families": ["*"],
+         "effect": "moins de parois", "tradeoff": "résistance réduite"},
+        {"id": "sp_shell", "key": "top_shell_layers", "target": "process", "op": "add", "value": -1, "min": 3, "families": ["*"],
+         "effect": "peaux supérieures plus minces", "tradeoff": "risque de surfaces supérieures moins fermées"},
+        {"id": "sp_inner", "key": "inner_wall_speed", "target": "process", "op": "scale", "value": 1.2, "max": 500, "families": ["PLA", "PETG"],
+         "effect": "parois internes plus rapides", "tradeoff": "limité en pratique par le débit volumique maximal du filament ; qualité des parois moins sûre"}
+      ]
+    },
+    "material_economy": {
+      "label": "Économie de matière",
+      "description": "Moins de filament consommé. Seuil possible : masse maximale.",
+      "params": {},
+      "evaluation": {"status": "evaluable", "by": ["slicer"], "metric": "filament_g"},
+      "levers": [
+        {"id": "me_infill", "key": "sparse_infill_density", "target": "process", "op": "add", "value": -10, "min": 5, "families": ["*"],
+         "effect": "moins de remplissage", "tradeoff": "résistance et rigidité réduites"},
+        {"id": "me_walls", "key": "wall_loops", "target": "process", "op": "add", "value": -1, "min": 2, "families": ["*"],
+         "effect": "moins de parois", "tradeoff": "résistance réduite"},
+        {"id": "me_top", "key": "top_shell_layers", "target": "process", "op": "add", "value": -1, "min": 3, "families": ["*"],
+         "effect": "peaux supérieures plus minces", "tradeoff": "surfaces supérieures moins fermées"},
+        {"id": "me_bottom", "key": "bottom_shell_layers", "target": "process", "op": "add", "value": -1, "min": 2, "families": ["*"],
+         "effect": "peaux inférieures plus minces", "tradeoff": "face contre le plateau moins pleine"}
+      ]
+    },
+    "minimal_supports": {
+      "label": "Peu ou pas de supports",
+      "description": "Limiter les supports à retirer.",
+      "params": {},
+      "evaluation": {"status": "evaluable", "by": ["slicer", "geometry"], "metric": "support_g"},
+      "levers": [
+        {"id": "ms_orient", "kind": "orientation", "mode": "min_overhang", "families": ["*"],
+         "effect": "oriente la pièce pour réduire la surface en surplomb", "tradeoff": "peut défavoriser la résistance inter-couches ou l'aspect de certaines faces"}
+      ]
+    },
+    "transparency": {
+      "label": "Transparence / diffusion",
+      "description": "Vision nette à travers une paroi, ou diffusion de la lumière : à traiter séparément, elles peuvent s'opposer.",
+      "params": {
+        "mode": {"values": ["clear", "diffuse"], "required": true, "description": "vision nette (clear) ou diffusion lumineuse (diffuse)"}
+      },
+      "evaluation": {"status": "non_evaluable", "by": [], "indicators": ["layer_height_mm"]},
+      "test": "Éprouvettes d'épaisseur connue devant une mire ou une source lumineuse connue ; photos à éclairage identique (indicateur comparatif, pas une mesure optique).",
+      "levers": [
+        {"id": "tr_infill_clear", "key": "sparse_infill_density", "target": "process", "op": "set", "value": "100%", "families": ["PETG", "PLA"],
+         "when": {"param": "mode", "in": ["clear"]},
+         "effect": "remplissage plein : moins de diffusion interne", "tradeoff": "matière et temps en hausse"},
+        {"id": "tr_layer_clear", "key": "layer_height", "target": "process", "op": "add", "value": -0.08, "min": 0.08, "families": ["PETG", "PLA"],
+         "when": {"param": "mode", "in": ["clear"]},
+         "effect": "couches fines : moins d'interfaces diffusantes", "tradeoff": "temps fortement augmenté"},
+        {"id": "tr_speed_clear", "key": "outer_wall_speed", "target": "process", "op": "scale", "value": 0.6, "min": 60, "families": ["PETG", "PLA"],
+         "when": {"param": "mode", "in": ["clear"]},
+         "effect": "parois lentes : dépôt plus régulier", "tradeoff": "temps en hausse"},
+        {"id": "tr_temp_clear", "key": "nozzle_temperature", "target": "filament", "op": "add", "value": 5, "bound_key": "nozzle_temperature_range_high", "families": ["PETG", "PLA"],
+         "when": {"param": "mode", "in": ["clear"]},
+         "effect": "meilleure fusion entre cordons (borne : plage haute du profil filament)", "tradeoff": "fils parasites et suintements possibles"},
+        {"id": "tr_infill_diffuse", "key": "sparse_infill_density", "target": "process", "op": "set", "value": "25%", "families": ["PETG", "PLA"],
+         "when": {"param": "mode", "in": ["diffuse"]},
+         "effect": "remplissage partiel : diffuse la lumière", "tradeoff": "vision nette impossible ; résistance moyenne"},
+        {"id": "tr_pattern_diffuse", "key": "sparse_infill_pattern", "target": "process", "op": "set", "value": "gyroid", "families": ["PETG", "PLA"],
+         "when": {"param": "mode", "in": ["diffuse"]},
+         "effect": "motif irrégulier : diffusion plus homogène", "tradeoff": "dépend de l'éclairage ; à comparer sur éprouvette"}
+      ]
+    }
+  },
+  "conflicts": [
+    {"a": "strength", "b": "speed",
+     "why": "La résistance demande plus de parois et de remplissage ; la vitesse demande l'inverse.",
+     "proposals": [
+       "Compromis : garder des couches épaisses, ajouter une paroi et un remplissage gyroid moyen (la variante de compromis du générateur).",
+       "Orienter la pièce pour que l'effort soit dans le plan des couches plutôt que d'ajouter de la matière.",
+       "Renforcer seulement la zone sollicitée (variante par zone ; non générée automatiquement, à définir sur la géométrie)."]},
+    {"a": "strength", "b": "material_economy",
+     "why": "La résistance consomme de la matière (parois, remplissage).",
+     "proposals": [
+       "Privilégier l'orientation et le motif gyroid plutôt que la densité.",
+       "Renforcer par zone seulement les parties chargées (non généré automatiquement)."]},
+    {"a": "surface_aspect", "b": "speed",
+     "why": "Un bel aspect demande des couches fines et des parois lentes.",
+     "proposals": [
+       "Couches fines et parois lentes uniquement sur les faces visibles (variante par zone ; non générée automatiquement).",
+       "Cacher la couture à l'arrière sans changer la vitesse (levier sans coût de temps)."]},
+    {"a": "dimensional_accuracy", "b": "speed",
+     "why": "La précision demande des parois externes lentes et des couches fines.",
+     "proposals": [
+       "Ralentir seulement la paroi externe, garder le remplissage rapide."]},
+    {"a": "transparency", "b": "speed",
+     "why": "La transparence demande des couches fines, des parois lentes et un remplissage plein.",
+     "proposals": [
+       "Réserver la transparence à la zone concernée et imprimer le reste en mode rapide (variante par zone)."]},
+    {"a": "transparency", "b": "material_economy",
+     "why": "Un remplissage plein pour la vision nette consomme de la matière.",
+     "proposals": [
+       "Réduire l'épaisseur de la zone transparente plutôt que le remplissage."]},
+    {"a": "surface_aspect", "b": "material_economy",
+     "why": "Peaux plus minces et remplissage réduit peuvent marquer les surfaces supérieures.",
+     "proposals": [
+       "Conserver les peaux supérieures et réduire seulement le remplissage."]}
+  ]
+}
