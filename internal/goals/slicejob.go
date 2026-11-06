@@ -89,9 +89,14 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if err := json.Unmarshal(jc.Job.Params, &p); err != nil {
 		return nil, &jobs.HandlerError{Code: "bad_params", Err: err}
 	}
-	if s.cfg.Slicer == nil {
-		s.setCandidate(context.Background(), p.CandidateID, "failed", "Bambu Studio indisponible", nil, "")
-		return nil, &jobs.HandlerError{Code: "slicer_unavailable", Err: fmt.Errorf("%w: Bambu Studio non configuré", ErrUnavailable)}
+	s.load()
+	if s.sl == nil {
+		cause := "Bambu Studio non installé ou non configuré"
+		if s.slErr != nil {
+			cause = s.slErr.Error()
+		}
+		s.setCandidate(context.Background(), p.CandidateID, "failed", "slicer_missing : "+cause, nil, "")
+		return nil, &jobs.HandlerError{Code: "slicer_missing", Err: fmt.Errorf("%w: %s", ErrUnavailable, cause)}
 	}
 	exp, err := s.GetExperiment(ctx, p.ExperimentID)
 	if err != nil {
@@ -160,7 +165,7 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 		timeout = time.Duration(exp.Details.Budget.SliceTimeoutSeconds) * time.Second
 	}
 	jc.Progress(0.2, "découpe par Bambu Studio")
-	res, err := s.cfg.Slicer.Slice(ctx, slicer.Request{
+	res, err := s.sl.Slice(ctx, slicer.Request{
 		ID: sanitizeName(cand.ID), Label: sanitizeName(cand.ID), Model: in,
 		Machine: exp.Details.Base.Machine, Process: exp.Details.Base.Process, Filaments: exp.Details.Base.Filaments,
 		Arrange: arrange, Overrides: ovs, Timeout: timeout,

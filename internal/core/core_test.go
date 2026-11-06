@@ -29,7 +29,7 @@ func TestEnvironmentAndCapabilities(t *testing.T) {
 		t.Fatalf("concurrence : %v", cp.Concurrency)
 	}
 	for _, f := range cp.Features {
-		if f.ID == "slicing" && f.Available {
+		if f.ID == "slicing" && f.Available && c.StudioErr != nil {
 			t.Fatal("slicing annoncé disponible alors qu'il n'existe pas")
 		}
 	}

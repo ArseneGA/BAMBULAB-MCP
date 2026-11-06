@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -55,10 +56,14 @@ type Config struct {
 	Store    *store.Store
 	Blobs    *store.BlobStore
 	Queue    *jobs.Queue
-	Registry *jobs.Registry  // si fourni, le handler de découpe y est enregistré
-	Slicer   *slicer.Slicer  // nil : génération possible, découpe indisponible
-	Profiles *profiles.Store // défaut : profils du slicer
-	Rules    *Rules          // défaut : règles embarquées
+	Registry *jobs.Registry // si fourni, le handler de découpe y est enregistré
+	Slicer   *slicer.Slicer // nil : génération possible, découpe indisponible
+	// SlicerFactory : construction paresseuse du slicer quand Slicer est nil
+	// (profils chargés à la première utilisation). Une erreur laisse les outils
+	// disponibles ; la découpe échoue alors avec le code slicer_missing.
+	SlicerFactory func() (*slicer.Slicer, error)
+	Profiles      *profiles.Store // défaut : profils du slicer
+	Rules         *Rules          // défaut : règles embarquées
 
 	DefaultCandidates int           // défaut 3
 	MaxCandidates     int           // plafond configurable, défaut 6
@@ -72,6 +77,23 @@ type Service struct {
 	cfg   Config
 	rules *Rules
 	prof  *profiles.Store
+	sl    *slicer.Slicer
+	slErr error
+	once  sync.Once
+}
+
+// load résout (une fois) le slicer et les profils.
+func (s *Service) load() {
+	s.once.Do(func() {
+		s.sl = s.cfg.Slicer
+		if s.sl == nil && s.cfg.SlicerFactory != nil {
+			s.sl, s.slErr = s.cfg.SlicerFactory()
+		}
+		s.prof = s.cfg.Profiles
+		if s.prof == nil && s.sl != nil {
+			s.prof = s.sl.Profiles()
+		}
+	})
 }
 
 // New construit le service et enregistre le handler de découpe.
@@ -101,11 +123,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	prof := cfg.Profiles
-	if prof == nil && cfg.Slicer != nil {
-		prof = cfg.Slicer.Profiles()
-	}
-	s := &Service{cfg: cfg, rules: rules, prof: prof}
+	s := &Service{cfg: cfg, rules: rules}
 	if cfg.Registry != nil {
 		cfg.Registry.Register(JobKind, true, s.sliceHandler)
 	}
@@ -116,8 +134,13 @@ func New(cfg Config) (*Service, error) {
 func (s *Service) Rules() *Rules { return s.rules }
 
 func (s *Service) needProfiles() error {
+	s.load()
 	if s.prof == nil {
-		return fmt.Errorf("%w: profils Bambu Studio non chargés (installer Bambu Studio ou configurer le dossier de profils)", ErrUnavailable)
+		cause := ""
+		if s.slErr != nil {
+			cause = " (" + s.slErr.Error() + ")"
+		}
+		return fmt.Errorf("%w: slicer_missing : profils Bambu Studio non chargés, installer Bambu Studio ou configurer son dossier%s", ErrUnavailable, cause)
 	}
 	return nil
 }

@@ -6,15 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
-	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
 
 const (
@@ -70,7 +72,7 @@ func realSlicer(t *testing.T) *slicer.Slicer {
 
 type env struct {
 	t      *testing.T
-	core   *core.Core
+	core   *testCore
 	svc    *Service
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -81,7 +83,7 @@ type env struct {
 func newEnv(t *testing.T, prof *profiles.Store, sl *slicer.Slicer, run bool) *env {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	c, err := core.Open(ctx, core.Config{DataDir: t.TempDir(), PollInterval: 30 * time.Millisecond, HeartbeatInterval: 200 * time.Millisecond})
+	c, err := openTestCore(t.TempDir())
 	if err != nil {
 		cancel()
 		t.Fatal(err)
@@ -189,3 +191,31 @@ func strengthSpeed(dir string, withBeam bool) GoalInput {
 		},
 	}
 }
+
+// testCore assemble ce dont le service a besoin sans importer internal/core
+// (core importe goals : un test interne ne peut pas dépendre de core).
+type testCore struct {
+	Store    *store.Store
+	Blobs    *store.BlobStore
+	Queue    *jobs.Queue
+	Registry *jobs.Registry
+	runner   *jobs.Runner
+}
+
+func openTestCore(dir string) (*testCore, error) {
+	st, err := store.Open(filepath.Join(dir, "bambu.db"), store.Options{})
+	if err != nil {
+		return nil, err
+	}
+	blobs, err := store.NewBlobStore(filepath.Join(dir, "blobs"))
+	if err != nil {
+		return nil, err
+	}
+	q := jobs.NewQueue(st, jobs.QueueConfig{})
+	reg := jobs.NewRegistry()
+	return &testCore{Store: st, Blobs: blobs, Queue: q, Registry: reg,
+		runner: jobs.NewRunner(q, reg, jobs.RunnerConfig{PollInterval: 30 * time.Millisecond, HeartbeatInterval: 200 * time.Millisecond})}, nil
+}
+
+func (c *testCore) Run(ctx context.Context) error { return c.runner.Run(ctx) }
+func (c *testCore) Close() error                  { return c.Store.Close() }
