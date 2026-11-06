@@ -5,7 +5,8 @@
 #
 # Usage : scripts/smoke-linux.sh [--url URL] [--token-file FICHIER] [--machine NOM] [--wait SECONDES] [--no-cad]
 #   --url          URL du service (défaut : $BAMBU_URL, sinon http://127.0.0.1:7878)
-#   --token-file   fichier contenant le jeton d'API (défaut : $BAMBU_API_TOKEN_FILE ; omis si le service n'en exige pas)
+#   --token-file   fichier contenant le jeton d'API seul, ou un fichier d'environnement avec une ligne BAMBU_API_TOKEN=…
+#                  (ex. /etc/atelier/atelier.env, à lire avec sudo) ; défaut : $BAMBU_API_TOKEN_FILE ; omis si le service n'en exige pas
 #   --machine      preset machine pour les profils filament (défaut : "Bambu Lab P1S 0.4 nozzle")
 #   --wait         attente max. (s) du chargement des profils et du ping CadQuery au démarrage (défaut 90)
 #   --no-cad       ne pas exiger le backend CAO (CadQuery)
@@ -24,7 +25,7 @@ while [ $# -gt 0 ]; do
     --machine) MACHINE="$2"; shift 2 ;;
     --wait) WAIT="$2"; shift 2 ;;
     --no-cad) NEED_CAD=0; shift ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n "2,14p" "$0"; exit 0 ;;
     *) echo "option inconnue : $1" >&2; exit 2 ;;
   esac
 done
@@ -34,7 +35,12 @@ command -v curl >/dev/null 2>&1 || { echo "curl est requis" >&2; exit 2; }
 TOKEN=""
 if [ -n "$TOKEN_FILE" ]; then
   [ -r "$TOKEN_FILE" ] || { echo "ECHEC  fichier de jeton illisible : $TOKEN_FILE" >&2; exit 2; }
-  TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
+  # fichier d'une ligne (le jeton seul) ou fichier d'environnement (/etc/atelier/atelier.env : ligne BAMBU_API_TOKEN=…)
+  if grep -q '^BAMBU_API_TOKEN=' "$TOKEN_FILE"; then
+    TOKEN="$(grep -m1 '^BAMBU_API_TOKEN=' "$TOKEN_FILE" | cut -d= -f2- | tr -d '[:space:]"'"'"'')"
+  else
+    TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
+  fi
 fi
 
 FAILED=0
