@@ -54,16 +54,17 @@ export function Async<T>({ state, children, label = 'Chargement', empty }: { sta
 }
 
 /* ---------- bandeau « bientôt branché » ---------- */
-export function PendingBanner({ screen, extra, partial }: { screen: PendingNeed['screen']; extra?: ReactNode; partial?: boolean }) {
+export function PendingBanner({ screen, extra }: { screen: PendingNeed['screen']; extra?: ReactNode }) {
   const needs = pendingFor(screen);
+  if (needs.length === 0) return null;
   return (
-    <aside className="pending" role="note" aria-label="Fonction bientôt branchée">
+    <aside className="pending" role="note" aria-label="Limite connue">
       <Construction size={16} aria-hidden />
       <div>
-        {partial ? <><strong>Branché sur le serveur.</strong> Reste à fournir côté serveur :</> : <><strong>Bientôt branché.</strong> Cet écran affiche des données de démonstration : le serveur n'expose pas encore ces fonctions. Aucune action n'est réelle.</>}
+        <strong>Limite connue.</strong> {needs.map((n) => n.today).join(' ')}
         {extra}
         <details>
-          <summary>{partial ? "Limites actuelles et besoins serveur" : "Ce que le serveur doit fournir"} ({needs.length})</summary>
+          <summary>Pourquoi, et ce qui manque côté serveur ({needs.length})</summary>
           <ul>{needs.map((n) => <li key={n.id}><span className="mono">{n.id}</span> — {n.needs}</li>)}</ul>
         </details>
       </div>

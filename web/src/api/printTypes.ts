@@ -36,4 +36,5 @@ export interface AgentStatus {
   id: string; name: string; online: boolean; last_seen?: string; agent_version?: string; studio_installed: boolean; studio_running: boolean; studio_version?: string;
   local_slicer: boolean; shared_folders?: string[]; cad?: string[]; tasks?: string[];
 }
+export interface ReconcileOutput { print_job_id: string; outcome: 'started' | 'not_started' | 'unknown'; reason: string; state: PrintState; note: string; job: PrintJob }
 export interface CancelOutput { print_job_id: string; outcome: 'cancelled' | 'stop_requested' | 'stopped' | 'refused'; state: PrintState; stop_url?: string; stop_expires_at?: string; question?: string; note: string; job: PrintJob }

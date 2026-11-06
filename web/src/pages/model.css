@@ -46,3 +46,7 @@
 .audit li:first-child { border-top: 0; }
 .audit .sub { color: var(--text-3); }
 .v3-placeholder { display: grid; place-items: center; height: 100%; }
+.mdl-tools { display: grid; gap: var(--sp-3); }
+.mdl-tool-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); justify-items: start; }
+.mdl-tool-row .field, .mdl-tool-row label { width: 100%; }
+.mdl-fab { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); }

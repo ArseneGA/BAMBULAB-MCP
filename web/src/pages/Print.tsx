@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ExternalLink, Plus, RefreshCw, ScanSearch, ShieldCheck } from 'lucide-react';
 import { Button, EmptyState, Field, Input, List, Panel, Select, StatusDot, Tag, useToast } from '../components';
 import { api, assetUrl, describeError } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
-import type { CancelOutput, ConfirmationView, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
-import { Async, Dialog, Notice, PendingBanner, fmtDate } from './common';
+import type { CancelOutput, ConfirmationView, ReconcileOutput, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
+import { Async, Dialog, Notice, fmtDate } from './common';
+import { CompletedBox } from './CompletedBox';
 import './print.css';
 
 const STATE_LABEL: Record<PrintState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
@@ -41,7 +42,6 @@ export function PrintPage() {
   return (
     <>
       <div className="page-head"><span className="eyebrow">Espace</span><h1>Impression</h1><p>Registre des imprimantes, découpe, validation, dépôt du fichier puis demande de confirmation. Le lancement exige votre accord sur la page de confirmation du serveur : rien ne démarre sans elle.</p></div>
-      <PendingBanner screen="Impression" partial />
       <div className="prt">
         <div className="prt-col">
           <Panel title="Imprimantes" actions={<Button size="sm" icon={<Plus size={13} />} onClick={() => setAddOpen(true)}>Ajouter</Button>}>
@@ -79,7 +79,7 @@ function PrinterCard({ p }: { p: PrinterView }) {
   const d = st.data;
   return (
     <div className="prt-card">
-      <dl className="kv">
+      <dl className="kvl">
         <dt>Modèle</dt><dd>{p.model_name}</dd>
         <dt>Adresse</dt><dd className="mono">{p.host}</dd>
         <dt>Série</dt><dd className="mono">{p.serial}</dd>
@@ -161,6 +161,7 @@ function JobDetail({ job, printer, onChange }: { job: PrintJob; printer?: Printe
   const [conf, setConf] = useState<ConfirmationView>();
   const [start, setStart] = useState<StartOutput>();
   const [stop, setStop] = useState<CancelOutput>();
+  const [recon, setRecon] = useState<ReconcileOutput>();
   const [busy, setBusy] = useState<string | null>(null);
   const upKey = useRef(uuid()), startKey = useRef(uuid());
   const complete = assign.every((a) => a.material_id.trim() !== '');
@@ -243,8 +244,13 @@ function JobDetail({ job, printer, onChange }: { job: PrintJob; printer?: Printe
         {stop && (
           <Notice tone={stop.outcome === 'refused' ? 'err' : 'info'} title={`Arrêt : ${stop.outcome}`} actions={stop.stop_url ? <a className="btn btn-danger btn-sm" href={assetUrl(stop.stop_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page d'arrêt</a> : undefined}>{stop.note}</Notice>
         )}
-        {job.state === 'START_UNKNOWN' && <Notice tone="err" title="Lancement incertain : ne pas relancer">Le service ne sait pas si l'imprimante a démarré. Vérifiez sur la machine, puis faites réconcilier par l'assistant (outil <span className="mono">reconcile_print</span>) : l'interface ne relance jamais.</Notice>}
-        {job.state === 'COMPLETED' && <Notice tone="info" title="Impression terminée">Enregistrez le résultat réel (retour d'expérience) pour nourrir la mémoire des essais.</Notice>}
+        {job.state === 'START_UNKNOWN' && (
+          <Notice tone="err" title="Lancement incertain : ne pas relancer" actions={<Button icon={<ScanSearch size={14} />} disabled={busy !== null} onClick={() => wrap('recon', async () => { setRecon(await api.reconcilePrint(job.id)); onChange(); })}>{busy === 'recon' ? "Lecture de l'imprimante…" : "Vérifier l'état réel"}</Button>}>
+            Le service ne sait pas si l'imprimante a démarré. Vérifiez sur la machine, puis lisez son état réel : la vérification est en lecture seule et n'envoie jamais de commande de lancement. Un nouveau lancement exigerait une nouvelle confirmation sur la page serveur.
+          </Notice>
+        )}
+        {recon && <Notice tone={recon.outcome === 'unknown' ? 'warn' : 'info'} title={`Réconciliation : ${{ started: "l'impression tourne", not_started: "rien n'a démarré", unknown: 'impossible de conclure' }[recon.outcome]}`}>{recon.reason}. {recon.note}</Notice>}
+        {job.state === 'COMPLETED' && <CompletedBox job={job} />}
         {job.next && !['VALIDATED', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job.state) && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(job.state) && <p className="hint" style={{ margin: 0 }}>Étape suivante : {job.next}</p>}
         {job.events && job.events.length > 0 && <details><summary>Historique ({job.events.length})</summary><ul className="audit">{job.events.slice().reverse().slice(0, 10).map((e, i) => <li key={i}><span className="mono">{fmtDate(e.at)}</span><span>{e.from} → {e.to}</span><span className="sub">{e.note ?? e.event}</span></li>)}</ul></details>}
       </div>
@@ -275,7 +281,7 @@ function ConfirmBox({ c, onStart, starting }: { c: ConfirmationView; onStart: ()
   return (
     <div className="prt-confirm">
       <h3>Confirmation de lancement</h3>
-      <dl className="kv">
+      <dl className="kvl">
         <dt>Fichier</dt><dd className="mono">{b.file}</dd>
         <dt>Imprimante</dt><dd>{b.printer_name} ({b.printer_model})</dd>
         <dt>Empreinte</dt><dd className="mono">{b.sha256.slice(0, 16)}…</dd>

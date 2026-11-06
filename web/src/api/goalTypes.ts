@@ -29,7 +29,7 @@ export interface Goal {
 
 export interface BaseSpec { machine?: string; printer?: string; nozzle?: number; process?: string; filaments?: string[] }
 export interface CreateExperimentInput {
-  model_id: string; model_version_id?: string; expected_model_revision?: string; goal_id: string; base: BaseSpec; candidates?: number;
+  model_id: string; model_version_id?: string; expected_model_revision?: string; goal_id: string; base: BaseSpec; base_profile_revision?: string; candidates?: number;
 }
 export interface Metric { value: number; unit: string; label: string; note?: string }
 export interface CandidateChange { criterion: string; criterion_type: string; lever: string; key?: string; target?: string; from?: unknown; to?: unknown; effect: string; expected_tradeoff?: string }

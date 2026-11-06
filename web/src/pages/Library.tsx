@@ -7,6 +7,7 @@ import { api } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
 import type { CollectionInfo, ModelSummary, Operation } from '../api/types';
 import { Async, Dialog, FormatBadge, fmtBytes, fmtDims } from './common';
+import { ExportSelected } from './ModelTools';
 import { ImportDialog } from './ImportDialog';
 import { OperationFlow } from './OperationFlow';
 import { Field, Input } from '../components';
@@ -167,6 +168,7 @@ export function Library() {
               <strong>{selected.length} sélectionné{selected.length > 1 ? 's' : ''}</strong>
               <Button size="sm" icon={<Tags size={14} />} onClick={() => { setAsk('tag'); setAskVal(''); }}>Ajouter une étiquette…</Button>
               <Button size="sm" icon={<FolderInput size={14} />} onClick={() => { setAsk('move'); setAskVal(''); }}>Déplacer…</Button>
+              <ExportSelected ids={selected} />
               <Button size="sm" variant="danger" icon={<Trash2 size={14} />} onClick={() => startOps(`Mettre ${selected.length} modèle(s) à la corbeille`, [{ op: 'delete', model_ids: selected }])}>Corbeille…</Button>
               <Button size="sm" variant="ghost" onClick={() => setSelected([])}>Tout désélectionner</Button>
             </div>

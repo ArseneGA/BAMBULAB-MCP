@@ -35,3 +35,4 @@
 .difftable .before { color: var(--text-3); text-decoration: line-through; text-decoration-color: var(--err); overflow-wrap: anywhere; }
 .difftable .after { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
 .logbox { margin: 0; max-height: 160px; overflow: auto; padding: var(--sp-2) var(--sp-3); background: var(--surface-2); border-radius: var(--r-2); font: 400 var(--fs-xs)/1.5 var(--font-mono); white-space: pre-wrap; }
+a.btn { text-decoration: none; }
