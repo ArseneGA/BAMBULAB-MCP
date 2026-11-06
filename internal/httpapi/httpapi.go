@@ -64,6 +64,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	})
 
 	registerCatalog(mux, c)
+	registerAgent(mux, c)
 	registerGoals(mux, c)
 
 	server := mcpserver.New(c)

@@ -71,6 +71,7 @@ func New(c *core.Core) *mcp.Server {
 		Meta:        AppToolMeta(AtelierURI),
 	}, h.showAtelier)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
+	registerAgentTools(s, c)
 	if c.Goals != nil {
 		AddGoalTools(s, c.Goals)
 	}
