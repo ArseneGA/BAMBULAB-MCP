@@ -216,18 +216,20 @@ func (s *Service) approvedFor(confID, jobID string) (*approval, error) {
 	return &cp, nil
 }
 
-// proofToken encode « identifiant.jeton » dans la preuve de l'adaptateur.
-func proofToken(confID, token string) string { return confID + "." + token }
+// proofToken encode « identifiant.jeton.travail » dans la preuve de l'adaptateur : le troisième
+// élément est le travail de file qui porte le lancement, pour savoir QUEL lancement a consommé la confirmation.
+func proofToken(confID, token, queueJob string) string { return confID + "." + token + "." + queueJob }
 
 // verifyProof est le ProofVerifier de l'adaptateur : appelé par printer.Bambu.Start
 // APRÈS les contrôles d'état de l'imprimante et JUSTE AVANT la publication de la
 // commande. Il consomme atomiquement la confirmation (ConsumeConfirmation) pour CE
 // PrintJob et la liaison COURANTE, puis passe l'impression en START_REQUESTED.
 func (s *Service) verifyProof(ctx context.Context, p printer.ConfirmationProof) error {
-	confID, token, ok := strings.Cut(p.Token, ".")
-	if !ok || confID == "" || token == "" {
+	parts := strings.SplitN(p.Token, ".", 3)
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		return errors.New("preuve mal formée")
 	}
+	confID, token, queueJob := parts[0], parts[1], parts[2]
 	bg := context.Background()
 	var conf contracts.PrintConfirmation
 	if err := s.d.Store.GetDoc(bg, "print_confirmations", confID, &conf); err != nil {
@@ -252,6 +254,7 @@ func (s *Service) verifyProof(ctx context.Context, p printer.ConfirmationProof) 
 	}
 	s.mu.Lock()
 	delete(s.approv, confID) // usage unique, y compris côté mémoire
+	s.consumedBy[confID] = queueJob
 	s.mu.Unlock()
 	if _, err := s.transition(bg, j.ID, contracts.EvConfirm, "confirmation "+confID+" consommée ; commande de lancement envoyée à l'imprimante", func(x *Job) error {
 		x.LastError = ""

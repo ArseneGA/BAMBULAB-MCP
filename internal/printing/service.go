@@ -80,6 +80,9 @@ type Service struct {
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
 	stops    map[string]string // identifiant d'arrêt -> print job
+	// consumedBy : confirmation -> travail de lancement qui l'a consommée (un autre lancement
+	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN).
+	consumedBy map[string]string
 
 	jobMu sync.Mutex // sérialise les mises à jour d'un même PrintJob dans le processus
 
@@ -124,7 +127,7 @@ func New(d Deps) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{d: d, secrets: secrets, log: d.Log, ctx: ctx, cancel: cancel,
 		adapters: map[string]*adapterEntry{}, tracking: map[string]context.CancelFunc{},
-		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]string{}}
+		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]string{}, consumedBy: map[string]string{}}
 	if d.Adapters == nil {
 		s.d.Adapters = s.defaultAdapter
 	}
@@ -334,16 +337,17 @@ func availability(err error) string {
 // AddPrinterInput décrit une imprimante. Le code d'accès n'est PAS une entrée :
 // l'humain le saisit sur la page locale /setup/printer/{id}.
 type AddPrinterInput struct {
-	Name           string  `json:"name" jsonschema:"nom d'usage, ex. Atelier"`
-	ModelID        string  `json:"model_id" jsonschema:"modèle Bambu (identifiant de list_printer_models, ex. p1s) ou nom exact"`
-	Host           string  `json:"host" jsonschema:"adresse IP ou nom d'hôte sur le LAN"`
-	Serial         string  `json:"serial" jsonschema:"numéro de série (alphanumérique)"`
-	NozzleMM       float64 `json:"nozzle_mm,omitempty" jsonschema:"buse installée en mm (défaut 0,4)"`
-	AMSUnits       int     `json:"ams_units,omitempty" jsonschema:"nombre d'AMS raccordés (défaut 0)"`
-	MQTTPort       int     `json:"mqtt_port,omitempty"`
-	FTPPort        int     `json:"ftp_port,omitempty"`
-	PinnedSHA256   string  `json:"pinned_sha256,omitempty" jsonschema:"empreinte SHA-256 du certificat de l'imprimante (non secrète), validée hors bande"`
-	InsecureReason string  `json:"insecure_reason,omitempty" jsonschema:"diagnostic uniquement : raison de désactiver la vérification du certificat"`
+	Name                 string  `json:"name" jsonschema:"nom d'usage, ex. Atelier"`
+	ModelID              string  `json:"model_id" jsonschema:"modèle Bambu (identifiant de list_printer_models, ex. p1s) ou nom exact"`
+	Host                 string  `json:"host" jsonschema:"adresse IP ou nom d'hôte sur le LAN"`
+	Serial               string  `json:"serial" jsonschema:"numéro de série (alphanumérique)"`
+	NozzleMM             float64 `json:"nozzle_mm,omitempty" jsonschema:"buse installée en mm (défaut 0,4)"`
+	AMSUnits             int     `json:"ams_units,omitempty" jsonschema:"nombre d'AMS raccordés (défaut 0)"`
+	MQTTPort             int     `json:"mqtt_port,omitempty"`
+	FTPPort              int     `json:"ftp_port,omitempty"`
+	AllowStartFromFinish bool    `json:"allow_start_from_finish,omitempty" jsonschema:"accepter un nouveau départ depuis l'état finished (à valider sur le vrai matériel ; défaut faux)"`
+	PinnedSHA256         string  `json:"pinned_sha256,omitempty" jsonschema:"empreinte SHA-256 du certificat de l'imprimante (non secrète), validée hors bande"`
+	InsecureReason       string  `json:"insecure_reason,omitempty" jsonschema:"diagnostic uniquement : raison de désactiver la vérification du certificat"`
 }
 
 var (
@@ -396,7 +400,7 @@ func (s *Service) AddPrinter(ctx context.Context, in AddPrinterInput) (*PrinterV
 		return nil, fmt.Errorf("%w : %s ne prend pas en charge l'AMS", ErrIncompatible, model.Name)
 	}
 	rec := PrinterRecord{ID: contracts.NewID("prn"), ModelID: model.ID, Name: in.Name, Host: in.Host, Serial: in.Serial,
-		NozzleMM: noz, AMSUnits: in.AMSUnits, MQTTPort: in.MQTTPort, FTPPort: in.FTPPort,
+		NozzleMM: noz, AMSUnits: in.AMSUnits, MQTTPort: in.MQTTPort, FTPPort: in.FTPPort, AllowStartFromFinish: in.AllowStartFromFinish,
 		PinnedSHA256: strings.ToLower(in.PinnedSHA256), InsecureReason: in.InsecureReason, CreatedAt: s.now()}
 	if _, err := s.d.Store.PutDocIfRev(ctx, actor, "printers", rec.ID, rec, 0); err != nil {
 		return nil, err
@@ -479,7 +483,7 @@ func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret pr
 	}
 	return printer.NewBambu(printer.BambuConfig{
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
-		Secrets: secret, TLS: tls, Verifier: verifier, Logger: s.log,
+		Secrets: secret, TLS: tls, Verifier: verifier, Logger: s.log, AllowStartFromFinish: rec.AllowStartFromFinish,
 	})
 }
 

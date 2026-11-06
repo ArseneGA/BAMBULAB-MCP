@@ -1,6 +1,7 @@
 package printing
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
 
@@ -34,3 +36,22 @@ func newBareService(t *testing.T) (*Service, func()) {
 }
 
 var _ = contracts.PrintDraft
+
+func jsonOf(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// loadFixtureProfiles : jeu de profils de test de internal/profiles (fournisseur fictif TST).
+func loadFixtureProfiles(t *testing.T) *profiles.Store {
+	t.Helper()
+	ps, err := profiles.Load(filepath.Join("..", "profiles", "testdata", "vendor"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ps
+}

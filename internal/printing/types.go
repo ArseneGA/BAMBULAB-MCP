@@ -43,9 +43,12 @@ type PrinterRecord struct {
 	MQTTPort int `json:"mqtt_port,omitempty" jsonschema:"défaut 8883 ; le simulateur utilise un port éphémère"`
 	FTPPort  int `json:"ftp_port,omitempty" jsonschema:"défaut 990"`
 	// PinnedSHA256 : empreinte du certificat de l'imprimante (non secrète).
-	PinnedSHA256   string    `json:"pinned_sha256,omitempty"`
-	InsecureReason string    `json:"insecure_reason,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	// AllowStartFromFinish : accepte un nouveau départ depuis l'état « finished » (à valider sur le
+	// vrai matériel, J7 §5 point 8) ; faux par défaut : seul « idle » autorise un lancement.
+	AllowStartFromFinish bool      `json:"allow_start_from_finish,omitempty"`
+	PinnedSHA256         string    `json:"pinned_sha256,omitempty"`
+	InsecureReason       string    `json:"insecure_reason,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 // ToContract projette vers contracts.Printer.
@@ -86,6 +89,7 @@ type PrintProgress struct {
 	TotalLayers   int       `json:"total_layers"`
 	RemainingMin  int       `json:"remaining_minutes"`
 	ObservedAt    time.Time `json:"observed_at"`
+	SeenActive    bool      `json:"seen_active" jsonschema:"vrai une fois qu'un état préparation/impression/pause de CE fichier a été observé : seul un FINISH/FAILED vu après peut être attribué à cette impression"`
 	MatchesFile   bool      `json:"matches_file" jsonschema:"vrai si le rapport de l'imprimante désigne bien le fichier de cette impression"`
 	PrinterReason string    `json:"printer_reason,omitempty"`
 }

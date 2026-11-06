@@ -67,6 +67,23 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	return fmt.Sprintf("Le fichier %s est envoyé sur la %s. Veux-tu lancer cette impression ?", j.Name, short), d
 }
 
+// findByUploadKey retrouve l'impression dont le dépôt a été lancé avec cette clé d'idempotence.
+func (s *Service) findByUploadKey(ctx context.Context, sha, printerID, key string) (Job, bool) {
+	all, err := s.ListJobs(ctx, "", 500)
+	if err != nil {
+		return Job{}, false
+	}
+	for _, j := range all {
+		if j.ArtifactSHA256 != sha || j.PrinterID != printerID || j.UploadJobID == "" {
+			continue
+		}
+		if q, err := s.d.Queue.Get(ctx, j.UploadJobID); err == nil && q.IdempotencyKey == key {
+			return j, true
+		}
+	}
+	return Job{}, false
+}
+
 func (s *Service) waitQueue(ctx context.Context, id string, d time.Duration) (contracts.Job, bool) {
 	deadline := time.Now().Add(d)
 	for {
@@ -99,7 +116,12 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 		if !s.d.Blobs.Has(in.ArtifactID) {
 			return nil, fmt.Errorf("%w : artefact %q", ErrNotFound, in.ArtifactID)
 		}
-		j, err = s.adoptArtifact(ctx, in.ArtifactID, in.PrinterID)
+		// Rejeu par artefact : la même clé d'idempotence désigne l'impression déjà créée pour ce dépôt.
+		if prev, ok := s.findByUploadKey(ctx, in.ArtifactID, in.PrinterID, key); ok {
+			j = prev
+		} else {
+			j, err = s.adoptArtifact(ctx, in.ArtifactID, in.PrinterID)
+		}
 	default:
 		return nil, invalidf("print_job_id ou artifact_id requis")
 	}

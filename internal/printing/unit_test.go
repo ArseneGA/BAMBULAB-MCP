@@ -270,6 +270,28 @@ func TestCutPlaneCapsAndHoles(t *testing.T) {
 		t.Fatalf("coupe d'une pièce percée : %v", err)
 	}
 	t.Logf("pièce percée : %s | %v", ap[0].Detail, warns)
+	// Cohérence sur les trois axes : sans avertissement le résultat est étanche ; avec, la coupe reste ouverte et le dit.
+	nestedSeen := false
+	for _, ax := range []string{"x", "y", "z"} {
+		bb := holed.Bounds()
+		off := map[string]float64{"x": bb.Min.X + bb.Size.X/2, "y": bb.Min.Y + bb.Size.Y/2, "z": bb.Min.Z + bb.Size.Z/2}[ax]
+		cut, _, w, err := applyOps(ctx, svc, holed, []GeometryOp{{Op: "cut_plane", Axis: ax, Offset: &off, Keep: "below"}})
+		if err != nil {
+			t.Fatalf("axe %s : %v", ax, err)
+		}
+		if len(w) == 0 && !stats(cut).Watertight {
+			t.Errorf("axe %s : pas d'avertissement mais maillage ouvert (%d arêtes)", ax, stats(cut).OpenEdges)
+		}
+		if len(w) > 0 && strings.Contains(w[0], "imbriqués") {
+			nestedSeen = true
+			if stats(cut).Watertight {
+				t.Errorf("axe %s : avertissement de capuchon absent mais maillage étanche ?", ax)
+			}
+		}
+	}
+	if !nestedSeen {
+		t.Error("aucune coupe de la pièce percée n'a traversé le trou dans l'axe : jeu de test à revoir")
+	}
 }
 
 func ptr(f float64) *float64 { return &f }

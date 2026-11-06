@@ -74,14 +74,15 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 		return nil, err
 	}
 	// Contrôle d'état FRAIS avant toute chose (idle, connecté, sans erreur) ; Bambu.Start le refait.
-	ad, _, err := s.adapter(ctx, j.PrinterID)
+	ad, rec, err := s.adapter(ctx, j.PrinterID)
 	if err != nil {
 		return nil, err
 	}
 	sctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	st, err := ad.Status(sctx)
 	cancel()
-	if err != nil || !st.Connected || st.Stale || st.State != printer.StateIdle || st.HasError() {
+	okState := st.State == printer.StateIdle || (rec.AllowStartFromFinish && st.State == printer.StateFinished)
+	if err != nil || !st.Connected || st.Stale || !okState || st.HasError() {
 		why := fmt.Sprintf("état %s, connecté=%v, périmé=%v, erreurs=%v", st.State, st.Connected, st.Stale, st.HasError())
 		if err != nil {
 			why = err.Error()
@@ -156,7 +157,7 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if j.Remote == nil {
 		return notSent(errors.New("aucun fichier déposé"))
 	}
-	ad, _, err := s.adapter(bg, j.PrinterID)
+	ad, rec, err := s.adapter(bg, j.PrinterID)
 	if err != nil {
 		return notSent(err)
 	}
@@ -168,15 +169,29 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 		Remote: *j.Remote, Plate: j.Plate, UseAMS: j.UseAMS, AMSMapping: j.AMSMapping, PlateClear: a.plateClear,
 		Options: printer.DefaultStartOptions(),
 		Proof: printer.ConfirmationProof{PrinterID: j.PrinterID, SHA256: j.ArtifactSHA256, Plate: j.Plate, AMSMapping: j.AMSMapping,
-			Token: proofToken(p.Conf, a.token), ExpiresAt: conf.ExpiresAt},
+			Token: proofToken(p.Conf, a.token, jc.Job.ID), ExpiresAt: conf.ExpiresAt},
 	}
 	jc.Progress(0.3, "commande de lancement")
 	serr := ad.Start(ctx, req)
-	cur, _ := s.GetJob(bg, j.ID)
-	consumed := cur.State != contracts.PrintAwaitingConfirmation
+	s.mu.Lock()
+	consumed := s.consumedBy[p.Conf] == jc.Job.ID // CE lancement a consommé la confirmation
+	s.mu.Unlock()
 	switch {
+	case serr == nil && rec.AllowStartFromFinish && !s.confirmActive(ctx, ad, j.Remote.Name):
+		// Départ depuis FINISH : l'état FINISH précédent peut avoir été pris pour un succès ; rien d'actif n'a été vu.
+		if _, err := s.transition(bg, j.ID, contracts.EvStartLost, "commande acceptée mais aucune activité observée pour ce fichier (départ depuis FINISH)", func(x *Job) error {
+			x.LastError = "lancement indéterminé : ne pas relancer ; reconcile_print"
+			return nil
+		}); err != nil && !errors.Is(err, ErrState) {
+			s.log.Warn("START_UNKNOWN non enregistré", "print_job", j.ID, "err", err)
+		}
+		out, _ := json.Marshal(map[string]string{"outcome": "start_unknown", "note": "Aucune activité observée après la commande (départ depuis FINISH). NE PAS relancer : appeler reconcile_print."})
+		return out, nil
 	case serr == nil:
-		if _, err := s.transition(bg, j.ID, contracts.EvObservedPrinting, "imprimante en préparation/impression observée", nil); err != nil {
+		if _, err := s.transition(bg, j.ID, contracts.EvObservedPrinting, "imprimante en préparation/impression observée", func(x *Job) error {
+			x.Print = &PrintProgress{PrinterState: "preparing", MatchesFile: true, SeenActive: true, ObservedAt: s.now()}
+			return nil
+		}); err != nil {
 			return nil, &jobs.HandlerError{Code: "state", Err: err}
 		}
 		s.track(j.ID)
@@ -202,6 +217,19 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	default:
 		return notSent(serr) // refus avant la consommation de la confirmation : elle reste valable
 	}
+}
+
+// confirmActive attend (au plus 20 s) de voir ce fichier préparer/imprimer sur l'imprimante.
+func (s *Service) confirmActive(ctx context.Context, ad printer.Adapter, remote string) bool {
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) && ctx.Err() == nil {
+		if st, err := ad.Status(ctx); err == nil && matches(st, remote) &&
+			(st.State == printer.StatePreparing || st.State == printer.StatePrinting || st.State == printer.StatePaused) {
+			return true
+		}
+		sleepCtx(ctx, 100*time.Millisecond)
+	}
+	return false
 }
 
 func (s *Service) rejectStart(ctx context.Context, id string, cause error) {
@@ -232,6 +260,20 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 	m := matches(st, j.Remote.Name)
 	pg := &PrintProgress{PrinterState: string(st.State), Percent: st.Progress, Layer: st.Layer, TotalLayers: st.TotalLayers,
 		RemainingMin: st.RemainingMin, ObservedAt: s.now(), MatchesFile: m, PrinterReason: st.FailReason}
+	if j.Print != nil {
+		pg.SeenActive = j.Print.SeenActive
+	}
+	if m && (st.State == printer.StatePreparing || st.State == printer.StatePrinting || st.State == printer.StatePaused) {
+		pg.SeenActive = true
+	}
+	if m && !pg.SeenActive && (st.State == printer.StateFinished || st.State == printer.StateFailed) {
+		// Un FINISH/FAILED du même fichier vu avant toute activité peut venir d'une impression antérieure.
+		pg.PrinterReason = "état final du même fichier observé sans activité préalable : non attribuable à cette impression"
+		if j.Print == nil || j.Print.PrinterState != pg.PrinterState {
+			_, _ = s.update(ctx, id, func(x *Job) error { x.Print = pg; return nil })
+		}
+		return
+	}
 	if !m {
 		if j.Print == nil || j.Print.MatchesFile || j.Print.PrinterState != pg.PrinterState {
 			_, _ = s.update(ctx, id, func(x *Job) error { x.Print = pg; return nil })
