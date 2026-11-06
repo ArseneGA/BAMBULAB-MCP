@@ -1,0 +1,1 @@
+{"type":"machine","name":"Test T1 0.4 nozzle","inherits":"fdm_tst_common","from":"system","instantiation":"true","printer_model":"Test T1","printer_variant":"0.4","nozzle_diameter":["0.4"],"printable_height":"230","default_print_profile":"0.20mm Std @TST","default_filament_profile":["Test PLA"]}
