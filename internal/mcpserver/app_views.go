@@ -46,11 +46,6 @@ var toolViewMeta = map[string]mcp.Meta{
 	"get_model_details": AppToolMeta(ModelViewURI),
 }
 
-// appOnlyMeta : outil appelable par la vue mais caché du modèle.
-func appOnlyMeta() mcp.Meta {
-	return mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}}
-}
-
 const fallbackViewHTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Atelier</title>
 <style>:root{color-scheme:light dark}body{font:14px/1.5 system-ui,sans-serif;padding:16px}</style></head>
 <body><h1 style="font-size:16px">Vue non construite</h1>

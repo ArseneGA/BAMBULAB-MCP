@@ -1,0 +1,215 @@
+package printing
+
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
+)
+
+// Erreurs nommées (distinguables par errors.Is ; traduites en codes HTTP/MCP).
+var (
+	ErrInvalid       = errors.New("entrée invalide")
+	ErrNotFound      = errors.New("introuvable")
+	ErrState         = errors.New("état d'impression incompatible avec l'opération")
+	ErrNotConfirmed  = errors.New("confirmation humaine manquante")
+	ErrUnavailable   = errors.New("indisponible")
+	ErrIncompatible  = errors.New("incompatible avec l'imprimante")
+	ErrPrinterBusy   = errors.New("imprimante réservée par une autre impression")
+	ErrNeedsApproval = errors.New("approbation humaine requise")
+)
+
+func invalidf(format string, a ...any) error {
+	return fmt.Errorf("%w : %s", ErrInvalid, fmt.Sprintf(format, a...))
+}
+
+// PrinterRecord est la configuration persistée d'une imprimante. Le code
+// d'accès n'y figure JAMAIS (voir SecretStore).
+type PrinterRecord struct {
+	ID       string  `json:"id"`
+	ModelID  string  `json:"model_id"`
+	Name     string  `json:"name"`
+	Host     string  `json:"host"`
+	Serial   string  `json:"serial"`
+	Firmware *string `json:"firmware,omitempty"`
+	// NozzleMM : buse installée (donnée déclarée par l'utilisateur).
+	NozzleMM float64 `json:"nozzle_mm"`
+	// AMSUnits : nombre d'AMS raccordés (déclaré ; 0 = bobine externe seule).
+	AMSUnits int `json:"ams_units"`
+	MQTTPort int `json:"mqtt_port,omitempty" jsonschema:"défaut 8883 ; le simulateur utilise un port éphémère"`
+	FTPPort  int `json:"ftp_port,omitempty" jsonschema:"défaut 990"`
+	// PinnedSHA256 : empreinte du certificat de l'imprimante (non secrète).
+	// AllowStartFromFinish : accepte un nouveau départ depuis l'état « finished » (à valider sur le
+	// vrai matériel, J7 §5 point 8) ; faux par défaut : seul « idle » autorise un lancement.
+	AllowStartFromFinish bool      `json:"allow_start_from_finish,omitempty"`
+	PinnedSHA256         string    `json:"pinned_sha256,omitempty"`
+	InsecureReason       string    `json:"insecure_reason,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
+// ToContract projette vers contracts.Printer.
+func (r PrinterRecord) ToContract() contracts.Printer {
+	h, s := r.Host, r.Serial
+	return contracts.Printer{ID: r.ID, ModelID: r.ModelID, Name: r.Name, Host: &h, Serial: &s, Firmware: r.Firmware}
+}
+
+// PrinterView est ce que voit le client : configuration SANS secret, plus l'état du coffre.
+type PrinterView struct {
+	PrinterRecord
+	ModelName     string `json:"model_name"`
+	AccessCodeSet bool   `json:"access_code_set" jsonschema:"vrai si un code d'accès est enregistré (sa valeur n'est jamais renvoyée)"`
+	SetupURL      string `json:"setup_url,omitempty" jsonschema:"page locale où l'humain saisit le code d'accès"`
+}
+
+// FilamentAssignment lie un filament de la découpe à un emplacement physique et une matière.
+type FilamentAssignment struct {
+	FilamentSlot int    `json:"filament_slot" jsonschema:"numéro (1..n) du filament dans le fichier découpé"`
+	Tray         string `json:"tray" jsonschema:"emplacement physique : ams1:1 à ams4:4 (AMS n, bobine m) ou ext (bobine externe)"`
+	MaterialID   string `json:"material_id" jsonschema:"identifiant de matière du catalogue, ou libellé libre de la bobine chargée"`
+}
+
+// JobEvent est une ligne d'historique d'un PrintJob.
+type JobEvent struct {
+	At    time.Time            `json:"at"`
+	Event string               `json:"event"`
+	From  contracts.PrintState `json:"from"`
+	To    contracts.PrintState `json:"to"`
+	Note  string               `json:"note,omitempty"`
+}
+
+// PrintProgress est le dernier état observé de l'impression.
+type PrintProgress struct {
+	PrinterState  string    `json:"printer_state"`
+	Percent       int       `json:"percent"`
+	Layer         int       `json:"layer"`
+	TotalLayers   int       `json:"total_layers"`
+	RemainingMin  int       `json:"remaining_minutes"`
+	ObservedAt    time.Time `json:"observed_at"`
+	SeenActive    bool      `json:"seen_active" jsonschema:"vrai une fois qu'un état préparation/impression/pause de CE fichier a été observé : seul un FINISH/FAILED vu après peut être attribué à cette impression"`
+	MatchesFile   bool      `json:"matches_file" jsonschema:"vrai si le rapport de l'imprimante désigne bien le fichier de cette impression"`
+	PrinterReason string    `json:"printer_reason,omitempty"`
+}
+
+// ArtifactSummary résume l'artefact découpé (mesures lues dans l'archive).
+type ArtifactSummary struct {
+	Plates        []slicer.PlateResult `json:"plates"`
+	PrinterModel  string               `json:"printer_model,omitempty"`
+	MachinePreset string               `json:"machine_preset,omitempty"`
+	Process       string               `json:"process,omitempty"`
+	Filaments     []string             `json:"filament_presets,omitempty"`
+	Nozzles       []string             `json:"nozzles,omitempty"`
+	BedType       string               `json:"bed_type,omitempty"`
+	StudioVersion string               `json:"studio_version,omitempty"`
+}
+
+// Job est un PrintJob enrichi : état contracts.PrintState + tout ce qui lie l'impression
+// à son artefact, son imprimante, sa confirmation et son suivi.
+type Job struct {
+	ID              string               `json:"id"`
+	State           contracts.PrintState `json:"state"`
+	PrinterID       string               `json:"printer_id"`
+	ModelID         string               `json:"model_id,omitempty"`
+	VersionID       string               `json:"version_id,omitempty"`
+	ProfileRevision string               `json:"profile_revision,omitempty"`
+	Name            string               `json:"name,omitempty" jsonschema:"nom du fichier découpé"`
+	ArtifactSHA256  string               `json:"artifact_sha256,omitempty"`
+	ArtifactSize    int64                `json:"artifact_size,omitempty"`
+	Plate           int                  `json:"plate,omitempty"`
+	Assignments     []FilamentAssignment `json:"assignments,omitempty"`
+	UseAMS          bool                 `json:"use_ams"`
+	AMSMapping      []int                `json:"ams_mapping,omitempty"`
+	Remote          *printer.RemoteRef   `json:"remote,omitempty"`
+	Summary         *ArtifactSummary     `json:"summary,omitempty"`
+	Validation      *ValidationReport    `json:"validation,omitempty"`
+	ConfirmationID  string               `json:"confirmation_id,omitempty"`
+	SliceJobID      string               `json:"slice_job_id,omitempty"`
+	UploadJobID     string               `json:"upload_job_id,omitempty"`
+	StartJobID      string               `json:"start_job_id,omitempty"`
+	Print           *PrintProgress       `json:"print,omitempty"`
+	LastError       string               `json:"last_error,omitempty"`
+	StopConfirmID   string               `json:"stop_confirm_id,omitempty"`
+	Events          []JobEvent           `json:"events,omitempty"`
+	CreatedAt       time.Time            `json:"created_at"`
+	UpdatedAt       time.Time            `json:"updated_at"`
+	Slice           *SliceSpec           `json:"slice,omitempty" jsonschema:"paramètres figés de la découpe"`
+	Next            string               `json:"next,omitempty" jsonschema:"prochaine étape autorisée de la séquence"`
+}
+
+// SliceSpec fige ce qui sert à découper (reproductibilité).
+type SliceSpec struct {
+	Machine     string                 `json:"machine,omitempty"`
+	Printer     string                 `json:"printer_model,omitempty"`
+	Nozzle      float64                `json:"nozzle_mm"`
+	Process     string                 `json:"process,omitempty"`
+	Filaments   []string               `json:"filaments,omitempty"`
+	Overrides   []slicer.Override      `json:"overrides,omitempty"`
+	Orientation *goals.OrientationSpec `json:"orientation,omitempty"`
+	SourceSHA   string                 `json:"source_sha256"`
+	SourceName  string                 `json:"source_name"`
+	SourceFmt   string                 `json:"source_format"`
+	Plate       int                    `json:"plate"`
+}
+
+// ToContract projette vers contracts.PrintJob.
+func (j Job) ToContract() contracts.PrintJob {
+	pj := contracts.PrintJob{ID: j.ID, State: j.State, PrinterID: j.PrinterID, VersionID: j.VersionID,
+		ArtifactSHA256: j.ArtifactSHA256, LastError: j.LastError, CreatedAt: j.CreatedAt, UpdatedAt: j.UpdatedAt}
+	if j.Plate > 0 {
+		p := j.Plate
+		pj.Plate = &p
+	}
+	for _, a := range j.Assignments {
+		pj.Materials = append(pj.Materials, contracts.SlotAssignment{Slot: bindingSlot(a), MaterialID: a.MaterialID})
+	}
+	if j.Remote != nil {
+		n := j.Remote.Name
+		pj.RemoteRef = &n
+	}
+	return pj
+}
+
+// bindingSlot encode « filament>emplacement » : la liaison approuvée couvre donc
+// aussi quel filament va dans quel emplacement (l'empreinte de la confirmation en dépend).
+func bindingSlot(a FilamentAssignment) string { return fmt.Sprintf("f%d>%s", a.FilamentSlot, a.Tray) }
+
+func (j *Job) event(ev contracts.PrintEvent, from, to contracts.PrintState, note string, now time.Time) {
+	j.Events = append(j.Events, JobEvent{At: now, Event: string(ev), From: from, To: to, Note: note})
+	if over := len(j.Events) - 60; over > 0 {
+		j.Events = j.Events[over:]
+	}
+}
+
+// ValidationReport est le rapport de validate_print_artifact.
+type ValidationReport struct {
+	OK         bool           `json:"ok" jsonschema:"vrai seulement si aucun contrôle bloquant n'a échoué"`
+	At         time.Time      `json:"at"`
+	PrinterID  string         `json:"printer_id"`
+	ArtifactID string         `json:"artifact_id"`
+	Plate      int            `json:"plate"`
+	Archive    []slicer.Check `json:"archive_checks" jsonschema:"validation d'archive (structure, G-code, trajectoires, cohérence avec la demande)"`
+	Compat     []slicer.Check `json:"compatibility_checks" jsonschema:"compatibilité avec l'imprimante réelle : modèle, buse, plateau, volume, matières/AMS"`
+	Blocking   []string       `json:"blocking,omitempty"`
+	Warnings   []string       `json:"warnings,omitempty"`
+	Validator  string         `json:"validator" jsonschema:"slicer.ValidateArchive, ou un validateur substitué (tests)"`
+}
+
+func (v *ValidationReport) add(compat bool, name string, ok bool, level, detail string) {
+	c := slicer.Check{Name: name, OK: ok, Level: level, Detail: detail}
+	if compat {
+		v.Compat = append(v.Compat, c)
+	} else {
+		v.Archive = append(v.Archive, c)
+	}
+	if !ok {
+		line := name + " : " + detail
+		if level == "error" {
+			v.Blocking = append(v.Blocking, line)
+		} else {
+			v.Warnings = append(v.Warnings, line)
+		}
+	}
+}

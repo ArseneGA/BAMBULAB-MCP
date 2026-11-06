@@ -78,6 +78,13 @@ func guard(opts Options, next http.Handler) http.Handler {
 	}
 	inner := cop.Handler(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Protocole de l'agent Windows (distant, pas un navigateur) : il s'authentifie par son propre
+		// secret Bearer (ou, pour /pair, par un jeton d'appairage à usage unique), vérifiés par agentlink.
+		// Ni garde Host ni CSRF navigateur ni jeton d'API ici. /api/agents/pairing reste sous garde et loopback.
+		if strings.HasPrefix(r.URL.Path, "/agent/v1/") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		host := r.Host
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h

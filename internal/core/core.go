@@ -13,12 +13,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
@@ -55,9 +57,14 @@ type Core struct {
 	lock *instanceLock
 	// Catalog : catalogue documentaire (jalon 2).
 	Catalog *catalog.Service
+	// CapabilityHooks complètent Capabilities() (jalon 8 : agents Windows). Posés
+	// avant que le service ne serve des requêtes.
+	CapabilityHooks []func(*contracts.Capabilities)
 	// Goals : objectifs, candidats, expériences (jalon 6). Disponible même sans
 	// Bambu Studio ; la découpe échoue alors avec slicer_missing.
 	Goals *goals.Service
+	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
+	Printing *printing.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 }
@@ -118,21 +125,36 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	if studioErr == nil {
 		_, studioErr = slicer.Locate(cfg.StudioPath)
 	}
+	// Slicer partagé (profils chargés une seule fois) par les objectifs et l'impression.
+	var slOnce sync.Once
+	var slInst *slicer.Slicer
+	var slErr error
+	slFactory := func() (*slicer.Slicer, error) {
+		if studioErr != nil {
+			return nil, studioErr
+		}
+		slOnce.Do(func() {
+			slInst, slErr = slicer.New(slicer.Config{BinaryPath: cfg.StudioPath, WorkRoot: filepath.Join(cfg.DataDir, "work", "slicer")})
+		})
+		return slInst, slErr
+	}
 	gs, err := goals.New(goals.Config{
 		Store: st, Blobs: blobs, Queue: q, Registry: reg, WorkRoot: filepath.Join(cfg.DataDir, "work", "goals"),
-		SlicerFactory: func() (*slicer.Slicer, error) {
-			if studioErr != nil {
-				return nil, studioErr
-			}
-			return slicer.New(slicer.Config{BinaryPath: cfg.StudioPath, WorkRoot: filepath.Join(cfg.DataDir, "work", "slicer")})
-		},
+		SlicerFactory: slFactory,
 	})
 	if err != nil {
 		st.Close()
 		lock.release()
 		return nil, fmt.Errorf("objectifs : %w", err)
 	}
-	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, StudioErr: studioErr, lock: lock}
+	pr, err := printing.New(printing.Deps{Store: st, Blobs: blobs, Queue: q, Registry: reg, Goals: gs, Catalog: cat, Log: cfg.Logger,
+		DataDir: cfg.DataDir, Slicer: slFactory})
+	if err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("impression : %w", err)
+	}
+	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, lock: lock}
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
 	})
@@ -143,6 +165,7 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("reprise des travaux : %w", err)
 	}
 	c.Recovery = rep
+	pr.Recover(ctx) // lancement interrompu -> START_UNKNOWN ; suivi des impressions actives
 	if n := len(rep.Requeued) + len(rep.Unknown) + len(rep.Cancelled) + len(rep.Failed); n > 0 {
 		cfg.Logger.Warn("reprise après interruption", "remis_en_file", len(rep.Requeued), "inconnus", len(rep.Unknown),
 			"annules", len(rep.Cancelled), "echecs", len(rep.Failed))
@@ -155,6 +178,9 @@ func (c *Core) Run(ctx context.Context) error { return c.Runner.Run(ctx) }
 
 // Close ferme la base puis libère le verrou d'instance. À appeler après la fin de Run.
 func (c *Core) Close() error {
+	if c.Printing != nil {
+		_ = c.Printing.Close()
+	}
 	err := c.Store.Close()
 	if lerr := c.lock.release(); err == nil {
 		err = lerr
@@ -202,7 +228,7 @@ func (c *Core) Capabilities() contracts.Capabilities {
 	}
 	kinds := c.Registry.Kinds()
 	sort.Strings(kinds)
-	return contracts.Capabilities{
+	caps := contracts.Capabilities{
 		Service: "bambud",
 		Version: Version,
 		Mode:    "linux_seul",
@@ -217,7 +243,8 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			{ID: "mesh_import", Available: true, Note: "STL, OBJ, 3MF : analyse et aperçu GLB dérivé (Go)"},
 			{ID: "slicing", Available: c.StudioErr == nil, Note: slicingNote(c.StudioErr)},
 			{ID: "goals_experiments", Available: true, Note: "objectifs, candidats, expériences, comparaison ; la découpe exige Bambu Studio (sinon erreur slicer_missing)"},
-			{ID: "printer_lan", Available: false, Note: "non implémenté dans ce jalon"},
+			{ID: "printer_lan", Available: true, Note: "adaptateur Bambu LAN (MQTT/FTPS) : registre d'imprimantes, dépôt, confirmation humaine, lancement, suivi ; validé contre le simulateur seulement, aucune imprimante réelle contactée"},
+			{ID: "print_chain", Available: true, Note: "découpe headless -> validation -> dépôt -> confirmation humaine -> lancement -> suivi -> réconciliation ; la découpe exige Bambu Studio"},
 			{ID: "cad_worker", Available: cadOK, Note: cadNote},
 			{ID: "windows_agent", Available: false, Note: "aucun agent connecté"},
 		},
@@ -227,6 +254,10 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			string(contracts.ClassLight): c.Queue.Limit(contracts.ClassLight),
 		},
 	}
+	for _, h := range c.CapabilityHooks {
+		h(&caps)
+	}
+	return caps
 }
 
 func catalogImportNote(roots int) string {

@@ -7,12 +7,14 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 )
 
 //go:embed ui/atelier.html
@@ -72,8 +74,12 @@ func New(c *core.Core) *mcp.Server {
 	}, h.showAtelier)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
+	registerAgentTools(s, c)
 	if c.Goals != nil {
 		AddGoalTools(s, c.Goals)
+	}
+	if c.Printing != nil {
+		AddPrintTools(s, c.Printing) // chaîne d'impression (print_tools.go)
 	}
 	return s
 }
@@ -170,6 +176,18 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 
 func (h *handlers) cancelJob(ctx context.Context, _ *mcp.CallToolRequest, in JobIDInput) (*mcp.CallToolResult, CancelJobOutput, error) {
 	out := CancelJobOutput{JobID: in.JobID}
+	if strings.HasPrefix(in.JobID, "pj_") && h.c.Printing != nil {
+		// Identifiant d'impression : annulation adaptée à la phase (voir printing.CancelPrint)
+		o, err := h.c.Printing.CancelPrint(ctx, printing.CancelInput{PrintJobID: in.JobID})
+		if err != nil {
+			return nil, out, err
+		}
+		out.Outcome, out.State, out.Note = o.Outcome, contracts.JobState(o.State), o.Note
+		if o.Question != "" {
+			out.Note += " " + o.Question + " Rappeler cancel_print avec stop_confirmation_id=" + o.StopConfirmationID + " si l'utilisateur confirme."
+		}
+		return textResult(out.Note), out, nil
+	}
 	oc, err := h.c.Queue.RequestCancel(ctx, in.JobID)
 	if err != nil {
 		if errors.Is(err, jobs.ErrNotFound) {
