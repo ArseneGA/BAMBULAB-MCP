@@ -80,6 +80,9 @@ func TestWindowTitleAndRecentProjects(t *testing.T) {
 		unsaved bool
 	}{
 		"Bambu Studio":                   {"", false},
+		"BambuStudio":                    {"", false},
+		"cube20.gcode - BambuStudio":     {"cube20.gcode", false},
+		"*cube20 - BambuStudio":          {"cube20", true},
 		"mon_projet - Bambu Studio":      {"mon_projet", false},
 		"*mon_projet - Bambu Studio":     {"mon_projet", true},
 		"Bambu Studio - mon_projet.3mf":  {"mon_projet.3mf", false},

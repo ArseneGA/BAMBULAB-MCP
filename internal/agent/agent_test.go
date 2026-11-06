@@ -107,14 +107,15 @@ func (f *fakeSlicing) Slice(ctx context.Context, req slicer.Request) (*slicer.Re
 }
 
 type rig struct {
-	t      *testing.T
-	env    *agentlinktest.Env
-	cfg    *agent.Config
-	cl     *agentlink.Client
-	pair   agentlink.PairResponse
-	studio *fakeStudio
-	slice  *fakeSlicing
-	folder string
+	realSlicing bool // vrai : le slicer local réel (Bambu Studio CLI) au lieu du faux
+	t           *testing.T
+	env         *agentlinktest.Env
+	cfg         *agent.Config
+	cl          *agentlink.Client
+	pair        agentlink.PairResponse
+	studio      *fakeStudio
+	slice       *fakeSlicing
+	folder      string
 }
 
 func newRig(t *testing.T, rc agentlink.Config) *rig {
@@ -133,7 +134,11 @@ func newRig(t *testing.T, rc agentlink.Config) *rig {
 
 func (r *rig) start() (cancel context.CancelFunc, done chan struct{}) {
 	r.t.Helper()
-	a, err := agent.New(agent.Options{Config: r.cfg, Secret: r.pair.Secret, Studio: r.studio, Slicing: r.slice, Log: agentlinktest.Quiet(),
+	var sl agent.Slicing = r.slice
+	if r.realSlicing {
+		sl = nil
+	}
+	a, err := agent.New(agent.Options{Config: r.cfg, Secret: r.pair.Secret, Studio: r.studio, Slicing: sl, Log: agentlinktest.Quiet(),
 		Client: agentlink.NewClient(r.env.Server.URL, r.pair.Secret)})
 	if err != nil {
 		r.t.Fatal(err)
@@ -498,6 +503,62 @@ func TestCapabilitiesAnnounced(t *testing.T) {
 	}
 	if strings.Contains(got, "modify_open_project") || strings.Contains(got, "start_print") {
 		t.Fatalf("capacité annoncée à tort : %s", got)
+	}
+}
+
+// Slicing RÉEL par l'agent (Bambu Studio CLI local) : modèle téléchargé et vérifié, slicing,
+// artefact rapatrié sur le serveur et validé (archive Studio). Ignoré si Studio est absent.
+func TestSliceReinforcementReal(t *testing.T) {
+	if _, err := slicer.Locate(""); err != nil {
+		t.Skip("Bambu Studio absent : " + err.Error())
+	}
+	r := newRig(t, agentlink.Config{})
+	r.realSlicing = true
+	model := stl("cube20", 20)
+	sha, _, _ := r.env.Core.Blobs.Put(bytes.NewReader(model), "")
+	r.start()
+	params, _ := json.Marshal(map[string]any{"label": "cube20", "printer": "Bambu Lab P1S", "nozzle": 0.4})
+	ti, err := r.env.Reg.CreateTask(bg, agentlink.CreateTaskInput{Kind: agentlink.KindSlice, Params: params, Inputs: []agentlink.Artifact{{SHA256: sha, Name: "cube20.stl"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ti = r.waitState(ti.ID, agentlink.StateSucceeded, agentlink.StateFailed)
+	if ti.State != agentlink.StateSucceeded {
+		t.Fatalf("slicing réel : %+v %s", ti.Error, ti.Result)
+	}
+	if len(ti.Outputs) != 1 || !strings.HasSuffix(ti.Outputs[0].Name, ".gcode.3mf") || ti.Outputs[0].Size < 10_000 {
+		t.Fatalf("sorties : %+v", ti.Outputs)
+	}
+	if err := r.env.Core.Blobs.Verify(ti.Outputs[0].SHA256); err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.env.Core.Blobs.Path(ti.Outputs[0].SHA256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.OpenReader(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zr.Close()
+	found := false
+	for _, f := range zr.File {
+		found = found || f.Name == "Metadata/plate_1.gcode"
+	}
+	if !found {
+		t.Fatal("l'archive rapatriée ne contient pas plate_1.gcode")
+	}
+	var out struct {
+		Slice struct {
+			BinaryVersion string `json:"binary_version"`
+			Validation    struct {
+				OK bool `json:"ok"`
+			} `json:"validation"`
+		} `json:"slice"`
+	}
+	json.Unmarshal(ti.Result, &out)
+	if out.Slice.BinaryVersion == "" || !out.Slice.Validation.OK {
+		t.Fatalf("validation et version liées au résultat : %s", ti.Result)
 	}
 }
 

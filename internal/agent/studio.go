@@ -91,6 +91,12 @@ func SafeOpenName(name string) (string, error) {
 	return n, nil
 }
 
+// isAppToken reconnaît le nom de l'application dans un titre. Mesuré sur Studio
+// 02.08.02.61 : « <projet> - BambuStudio » (sans espace, extension .3mf retirée).
+func isAppToken(s string) bool {
+	return strings.EqualFold(strings.ReplaceAll(strings.TrimSpace(s), " ", ""), "bambustudio")
+}
+
 // ParseWindowTitle extrait le nom de projet d'un titre de fenêtre de Studio.
 // Le format exact est mesuré dans docs/jalons/J8.md ; l'analyse est tolérante :
 // retire « Bambu Studio », les séparateurs et le marqueur « * » de modification.
@@ -101,7 +107,7 @@ func ParseWindowTitle(title string) (name string, unsaved bool) {
 		if len(parts) > 1 {
 			var keep []string
 			for _, p := range parts {
-				if !strings.EqualFold(strings.TrimSpace(p), "Bambu Studio") {
+				if !isAppToken(p) {
 					keep = append(keep, p)
 				}
 			}
@@ -109,7 +115,7 @@ func ParseWindowTitle(title string) (name string, unsaved bool) {
 			break
 		}
 	}
-	if strings.EqualFold(t, "Bambu Studio") {
+	if isAppToken(t) {
 		return "", false
 	}
 	if strings.HasPrefix(t, "*") || strings.HasSuffix(t, "*") {
@@ -117,6 +123,53 @@ func ParseWindowTitle(title string) (name string, unsaved bool) {
 		t = strings.Trim(t, "* ")
 	}
 	return t, unsaved
+}
+
+// splitCommandLine découpe une ligne de commande Windows (guillemets doubles).
+func splitCommandLine(s string) []string {
+	var args []string
+	var cur strings.Builder
+	inQ, has := false, false
+	for _, r := range s {
+		switch {
+		case r == '"':
+			inQ, has = !inQ, true
+		case (r == ' ' || r == '\t') && !inQ:
+			if has {
+				args, cur, has = append(args, cur.String()), strings.Builder{}, false
+			}
+		default:
+			cur.WriteRune(r)
+			has = true
+		}
+	}
+	if has {
+		args = append(args, cur.String())
+	}
+	return args
+}
+
+// ProjectFromCommandLine retrouve le fichier de projet passé à Studio en argument
+// (double-clic dans l'Explorateur, « bambu-studio.exe fichier.3mf »). Il doit exister
+// et porter le nom affiché dans le titre de la fenêtre, sinon on l'ignore (le projet
+// a pu être changé depuis, via Fichier > Ouvrir).
+func ProjectFromCommandLine(cmdline, windowName string) string {
+	if windowName == "" {
+		return ""
+	}
+	want := strings.TrimSuffix(strings.ToLower(windowName), ".3mf")
+	for _, a := range splitCommandLine(cmdline)[min(1, len(splitCommandLine(cmdline))):] {
+		if !strings.EqualFold(filepath.Ext(a), ".3mf") || !filepath.IsAbs(a) {
+			continue
+		}
+		if strings.TrimSuffix(strings.ToLower(filepath.Base(a)), ".3mf") != want {
+			continue
+		}
+		if st, err := os.Stat(a); err == nil && !st.IsDir() {
+			return a
+		}
+	}
+	return ""
 }
 
 var recentRe = regexp.MustCompile(`"recent_projects"\s*:\s*(\{[^}]*\})`)
@@ -179,6 +232,11 @@ type SystemStudio struct {
 	ConfiguredPath string
 	// ConfPath : BambuStudio.conf (défaut %APPDATA%\BambuStudio\BambuStudio.conf).
 	ConfPath string
+	// ExtraArgs : options insérées avant le fichier (ex. --datadir pour une sonde isolée du profil
+	// de l'utilisateur). Vide en fonctionnement normal : la commande est « bambu-studio.exe <fichier> ».
+	ExtraArgs []string
+	// Settle : attente après le lancement avant d'observer les processus (défaut 3 s).
+	Settle time.Duration
 }
 
 func (s *SystemStudio) confPath() string {
@@ -207,15 +265,17 @@ func (s *SystemStudio) Info(ctx context.Context) StudioInfo {
 		pids[p.PID] = true
 	}
 	for _, w := range topWindows() {
-		if pids[w.PID] && w.Title != "" {
+		// Seules les fenêtres visibles et titrées comptent (Studio en crée une centaine d'invisibles « panel »).
+		if pids[w.PID] && w.Title != "" && w.Visible {
 			info.Windows = append(info.Windows, w)
 		}
 	}
-	// Fenêtre principale : visible, titre non vide, la plus « riche ».
+	// Fenêtre principale : visible, titre « <projet> - BambuStudio ». L'assistant de
+	// configuration ou une boîte de dialogue ne portent pas ce suffixe.
 	var best *StudioWindow
 	for i := range info.Windows {
 		w := &info.Windows[i]
-		if !w.Visible || !strings.Contains(strings.ToLower(w.Title), "bambu studio") && len(info.Windows) > 1 {
+		if !strings.HasSuffix(strings.ToLower(strings.ReplaceAll(w.Title, " ", "")), "bambustudio") {
 			continue
 		}
 		if best == nil || len(w.Title) > len(best.Title) {
@@ -223,7 +283,17 @@ func (s *SystemStudio) Info(ctx context.Context) StudioInfo {
 		}
 	}
 	if best != nil {
-		info.Project = ResolveOpenProject(best.Title, RecentProjects(s.confPath()))
+		op := ResolveOpenProject(best.Title, RecentProjects(s.confPath()))
+		if cl, err := processCommandLine(best.PID); err == nil {
+			if p := ProjectFromCommandLine(cl, op.Name); p != "" {
+				op.Path, op.Method, op.Confidence = p, "window_title+process_command_line", "high"
+				op.Note = ""
+				if op.Unsaved {
+					op.Note = "des modifications non enregistrées existent dans Studio : le fichier lu est l'état sauvegardé"
+				}
+			}
+		}
+		info.Project = op
 	}
 	return info
 }
@@ -244,6 +314,9 @@ func (s *SystemStudio) Open(ctx context.Context, file string) (OpenResult, error
 		res.RunningBefore = append(res.RunningBefore, p.PID)
 	}
 	res.Command = OpenCommand(b.Path, file)
+	if len(s.ExtraArgs) > 0 {
+		res.Command = append(append([]string{b.Path}, s.ExtraArgs...), file)
+	}
 	cmd := exec.Command(res.Command[0], res.Command[1:]...)
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
@@ -251,7 +324,11 @@ func (s *SystemStudio) Open(ctx context.Context, file string) (OpenResult, error
 	}
 	res.LaunchedPID = cmd.Process.Pid
 	go func() { _ = cmd.Wait() }() // récolte le processus sans bloquer
-	time.Sleep(3 * time.Second)
+	settle := s.Settle
+	if settle <= 0 {
+		settle = 3 * time.Second
+	}
+	time.Sleep(settle)
 	alive := false
 	for _, p := range studioProcesses() {
 		res.RunningAfter = append(res.RunningAfter, p.PID)

@@ -253,14 +253,23 @@ func cmdStudio(args []string) error {
 	sub, rest := args[0], args[1:]
 	var file string
 	var closeAfter bool
+	var extra string
+	var settle, pid int
 	_, cfg, err := parse("studio", rest, func(fs *flag.FlagSet) {
 		fs.StringVar(&file, "file", "", "fichier à ouvrir")
+		fs.IntVar(&pid, "pid", 0, "close : PID du processus Studio à fermer (seulement celui-là)")
+		fs.IntVar(&settle, "settle", 3, "secondes d'attente avant d'observer Studio après le lancement")
+		fs.StringVar(&extra, "extra-args", "", "options Studio avant le fichier, séparées par « ; » (ex. --datadir;D:/profil-sonde)")
 		fs.BoolVar(&closeAfter, "close", false, "fermer proprement l'instance lancée par la sonde (seulement celle-là)")
 	})
 	if err != nil {
 		return err
 	}
 	st := &agent.SystemStudio{ConfiguredPath: cfg.StudioPath}
+	st.Settle = time.Duration(settle) * time.Second
+	if extra != "" {
+		st.ExtraArgs = strings.Split(extra, ";")
+	}
 	ctx := context.Background()
 	print := func(v any) { b, _ := json.MarshalIndent(v, "", "  "); fmt.Println(string(b)) }
 	switch sub {
@@ -276,6 +285,16 @@ func cmdStudio(args []string) error {
 			return err
 		}
 		print(rep)
+	case "close":
+		// Fermeture propre (WM_CLOSE) d'UN processus Studio désigné, jamais des autres.
+		found := false
+		for _, p := range st.Info(ctx).Processes {
+			found = found || p.PID == pid
+		}
+		if pid == 0 || !found {
+			return errors.New("--pid doit désigner un processus bambu-studio.exe en cours")
+		}
+		fmt.Printf("WM_CLOSE envoyé à %d fenêtre(s) du processus %d\n", agent.CloseWindowsOfPID(pid), pid)
 	case "open", "probe":
 		if file == "" && len(os.Args) > 3 {
 			file = os.Args[len(os.Args)-1]

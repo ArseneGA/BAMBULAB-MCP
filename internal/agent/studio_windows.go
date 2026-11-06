@@ -91,6 +91,38 @@ func CloseWindowsOfPID(pid int) int {
 	return n
 }
 
+// processCommandLine lit la ligne de commande d'un processus du même utilisateur
+// (PEB -> RTL_USER_PROCESS_PARAMETERS, lecture seule de sa mémoire). Sert à retrouver
+// le fichier passé à Studio (double-clic dans l'Explorateur, `bambu-studio.exe fichier`).
+func processCommandLine(pid int) (string, error) {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, uint32(pid))
+	if err != nil {
+		return "", err
+	}
+	defer windows.CloseHandle(h)
+	var pbi windows.PROCESS_BASIC_INFORMATION
+	if err := windows.NtQueryInformationProcess(h, windows.ProcessBasicInformation, unsafe.Pointer(&pbi), uint32(unsafe.Sizeof(pbi)), nil); err != nil {
+		return "", err
+	}
+	var peb windows.PEB
+	if err := windows.ReadProcessMemory(h, uintptr(unsafe.Pointer(pbi.PebBaseAddress)), (*byte)(unsafe.Pointer(&peb)), unsafe.Sizeof(peb), nil); err != nil {
+		return "", err
+	}
+	var params windows.RTL_USER_PROCESS_PARAMETERS
+	if err := windows.ReadProcessMemory(h, uintptr(unsafe.Pointer(peb.ProcessParameters)), (*byte)(unsafe.Pointer(&params)), unsafe.Sizeof(params), nil); err != nil {
+		return "", err
+	}
+	n := int(params.CommandLine.Length) / 2
+	if n == 0 || n > 32768 {
+		return "", nil
+	}
+	buf := make([]uint16, n)
+	if err := windows.ReadProcessMemory(h, uintptr(unsafe.Pointer(params.CommandLine.Buffer)), (*byte)(unsafe.Pointer(&buf[0])), uintptr(n*2), nil); err != nil {
+		return "", err
+	}
+	return string(utf16.Decode(buf)), nil
+}
+
 // detach lance le processus indépendamment de l'agent (nouveau groupe de processus).
 func detach(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | 0x00000008 /* DETACHED_PROCESS */}
