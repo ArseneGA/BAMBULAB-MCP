@@ -71,6 +71,7 @@ func New(c *core.Core) *mcp.Server {
 		Meta:        AppToolMeta(AtelierURI),
 	}, h.showAtelier)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
+	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
 	return s
 }
 
@@ -78,6 +79,9 @@ func New(c *core.Core) *mcp.Server {
 func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	t.InputSchema = contracts.MustSchemaFor[In]()
 	t.OutputSchema = contracts.MustSchemaFor[Out]()
+	if m, ok := toolViewMeta[t.Name]; ok && t.Meta == nil {
+		t.Meta = m // lien outil -> vue MCP App (app_views.go)
+	}
 	mcp.AddTool(s, t, h)
 }
 

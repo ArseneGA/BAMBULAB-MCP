@@ -100,7 +100,7 @@ func TestIntegrationToolsAndResource(t *testing.T) {
 			t.Fatalf("outil manquant %s : %v", w, names)
 		}
 	}
-	if len(names) != 19 { // 5 du socle + 14 du catalogue
+	if len(names) < 20 { // 5 du socle + 14 du catalogue + get_mesh_chunk (jalon 3) ; les jalons suivants en ajoutent
 		t.Fatalf("outils : %v", names)
 	}
 	// Schéma d'entrée issu de contracts : job_id requis.
@@ -151,7 +151,7 @@ func TestIntegrationToolsAndResource(t *testing.T) {
 		t.Fatalf("CSP absente du _meta : %v", rr.Contents[0].Meta)
 	}
 	lr, _ := cs.ListResources(ctx, nil)
-	if len(lr.Resources) != 1 || lr.Resources[0].URI != mcpserver.AtelierURI || lr.Resources[0].MIMEType != mcpserver.AppMIMEType {
+	if len(lr.Resources) != 3 || lr.Resources[0].URI != mcpserver.AtelierURI || lr.Resources[0].MIMEType != mcpserver.AppMIMEType { // atelier + search + model
 		t.Fatalf("liste des ressources : %+v", lr.Resources)
 	}
 	if _, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "ui://inconnu"}); err == nil {
@@ -245,7 +245,7 @@ func TestProxyBridge(t *testing.T) {
 	cs := connectClient(t, p.Server)
 
 	lt, err := cs.ListTools(ctx, nil)
-	if err != nil || len(lt.Tools) != 19 {
+	if err != nil || len(lt.Tools) < 20 {
 		t.Fatalf("outils relayés : %v %v", lt, err)
 	}
 	for _, tl := range lt.Tools {

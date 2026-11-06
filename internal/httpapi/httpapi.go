@@ -11,6 +11,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/webui"
 )
 
 // NewHandler assemble les routes : /health, /api/*, /mcp (MCP Streamable HTTP).
@@ -66,6 +67,8 @@ func NewHandler(c *core.Core) http.Handler {
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Logger: c.Log,
 	}))
+	// Interface web embarquée (repli SPA) : en dernier, ne masque ni /api ni /mcp.
+	mux.Handle("/", webui.Handler())
 	return mux
 }
 
