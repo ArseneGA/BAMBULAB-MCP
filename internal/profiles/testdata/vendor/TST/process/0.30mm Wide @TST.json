@@ -1,0 +1,1 @@
+{"type":"process","name":"0.30mm Wide @TST","inherits":"fdm_process","instantiation":"true","layer_height":"0.3","compatible_printers":[],"compatible_printers_condition":"nozzle_diameter[0]==0.6"}

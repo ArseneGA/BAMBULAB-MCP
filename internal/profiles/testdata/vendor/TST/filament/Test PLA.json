@@ -1,0 +1,1 @@
+{"type":"filament","name":"Test PLA","inherits":"fdm_filament","instantiation":"true","compatible_printers":["Test T1 0.4 nozzle","Test T1 0.6 nozzle"],"nozzle_temperature":["215"]}

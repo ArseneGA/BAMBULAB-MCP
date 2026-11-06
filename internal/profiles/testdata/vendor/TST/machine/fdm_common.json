@@ -1,0 +1,1 @@
+{"type":"machine","name":"fdm_common","instantiation":"false","printable_height":"250","nozzle_diameter":["0.4"],"printable_area":["0x0","200x0","200x200","0x200"],"gcode_flavor":"marlin","retraction_length":["0.8"]}

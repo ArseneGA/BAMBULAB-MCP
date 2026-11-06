@@ -1,0 +1,1 @@
+{"type":"process","name":"0.20mm Std @TST","inherits":"fdm_process","instantiation":"true","compatible_printers":["Test T1 0.4 nozzle"]}
