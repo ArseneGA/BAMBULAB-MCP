@@ -1,0 +1,25 @@
+Extrait de la fiche technique Bambu Lab Technical Data Sheet PLA Basic (V2.0)
+URL            : https://cdn.shopify.com/s/files/1/0380/5149/files/Bambu_PLA_Basic_Technical_Data_Sheet.pdf
+Date           : 2026-11-06 (re-téléchargement de vérification depuis l'URL ci-dessus)
+SHA-256 du PDF : 20fe6ce2b094901a4cd2f301450ae93384e6928d20a3ec732b993aed67171451
+Taille du PDF  : 336398 octets
+Extraction     : pdftotext -raw -enc UTF-8 (poppler). Les lignes ci-dessous sont reprises telles quelles,
+                 seules les lignes portant les propriétés utilisées par internal/engineering sont conservées.
+                 Valeurs « Max Overhang Angle » / « Max Bridging Length » = réglages recommandés (recommandation).
+----------------------------------------------------------------------------------------------------
+Max Overhang Angle 55°
+Max Bridging Length 30 mm
+Density ISO 1183 1.24 g/cm³
+Heat Deflection Temperature ISO 75 1.8 MPa 54 °C
+Heat Deflection Temperature ISO 75 0.45 MPa 57 °C
+Young's Modulus (X-Y) ISO 527, GB/T 1040 2680 ± 130 MPa
+Young's Modulus (Z) ISO 527, GB/T 1040 2160 ± 90 MPa
+Tensile Strength (X-Y) ISO 527, GB/T 1040 39 ± 2 MPa
+Tensile Strength (Z) ISO 527, GB/T 1040 35 ± 3 MPa
+Breaking Elongation Rate (X-Y) ISO 527, GB/T 1040 12.2 ± 0.4%
+Breaking Elongation Rate (Z) ISO 527, GB/T 1040 7.5 ± 0.3%
+Bending Modulus (X-Y) ISO 178, GB/T 9341 2750 ± 60 MPa
+Bending Modulus (Z) ISO 178, GB/T 9341 2370 ± 50 MPa
+Bending Strength (X-Y) ISO 178, GB/T 9341 76 ± 3 MPa
+Bending Strength (Z) ISO 178, GB/T 9341 68 ± 2 MPa
+----------------------------------------------------------------------------------------------------

@@ -169,6 +169,18 @@ func (s *Store) AddSourceFile(ctx context.Context, actor string, f contracts.Sou
 	if !validSHA256(f.SHA256) {
 		return f, errors.New("empreinte sha256 invalide")
 	}
+	if f.SizeBytes < 0 {
+		return f, errors.New("taille négative")
+	}
+	if f.Availability == contracts.AvailableLinux && s.blobs != nil {
+		size, err := s.blobs.Size(f.SHA256)
+		if err != nil {
+			return f, fmt.Errorf("blob de %s absent du magasin : %w", f.Name, err)
+		}
+		if size != f.SizeBytes {
+			return f, fmt.Errorf("taille déclarée %d ≠ taille du blob %d pour %s", f.SizeBytes, size, f.Name)
+		}
+	}
 	f.CreatedAt = s.Now()
 	err := s.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
@@ -224,6 +236,44 @@ func (s *Store) CreateVersion(ctx context.Context, actor string, v contracts.Mod
 	v.CreatedAt = s.Now()
 	ids, _ := json.Marshal(v.SourceFileIDs)
 	err := s.Tx(ctx, func(tx *sql.Tx) error {
+		var exists int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM models WHERE id=?`, v.ModelID).Scan(&exists); err != nil {
+			return err
+		}
+		if exists == 0 {
+			return fmt.Errorf("modèle %s : %w", v.ModelID, ErrNotFound)
+		}
+		seen := map[string]bool{}
+		for _, sid := range v.SourceFileIDs {
+			if seen[sid] {
+				return fmt.Errorf("fichier source %s en double dans la version", sid)
+			}
+			seen[sid] = true
+			var owner string
+			err := tx.QueryRowContext(ctx, `SELECT model_id FROM source_files WHERE id=?`, sid).Scan(&owner)
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("fichier source %s : %w", sid, ErrNotFound)
+			}
+			if err != nil {
+				return err
+			}
+			if owner != v.ModelID {
+				return fmt.Errorf("fichier source %s appartient au modèle %s, pas à %s", sid, owner, v.ModelID)
+			}
+		}
+		if v.ParentID != nil {
+			var pm string
+			err := tx.QueryRowContext(ctx, `SELECT model_id FROM model_versions WHERE id=?`, *v.ParentID).Scan(&pm)
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("version parente %s : %w", *v.ParentID, ErrNotFound)
+			}
+			if err != nil {
+				return err
+			}
+			if pm != v.ModelID {
+				return fmt.Errorf("la version parente %s appartient au modèle %s, pas à %s", *v.ParentID, pm, v.ModelID)
+			}
+		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO model_versions(id,model_id,parent_id,label,note,source_file_ids,created_at) VALUES(?,?,?,?,?,?,?)`,
 			v.ID, v.ModelID, nullStr(v.ParentID), v.Label, v.Note, string(ids), FormatTime(v.CreatedAt)); err != nil {
@@ -262,40 +312,4 @@ func (s *Store) ListVersions(ctx context.Context, modelID string) ([]contracts.M
 var docTables = map[string]bool{
 	"materials": true, "printer_models": true, "printers": true,
 	"print_jobs": true, "print_confirmations": true, "manufacturing_goals": true,
-}
-
-// PutDoc insère ou remplace un document JSON ; v est sérialisé en JSON.
-func (s *Store) PutDoc(ctx context.Context, actor, table, id string, v any) error {
-	if !docTables[table] {
-		return fmt.Errorf("table de documents inconnue %q", table)
-	}
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	return s.Tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO `+table+`(id,doc,updated_at) VALUES(?,?,?)
-			 ON CONFLICT(id) DO UPDATE SET doc=excluded.doc, updated_at=excluded.updated_at`,
-			id, string(raw), FormatTime(s.now())); err != nil {
-			return err
-		}
-		return s.AuditTx(ctx, tx, actor, table+".put", table, id, nil)
-	})
-}
-
-// GetDoc décode un document dans out.
-func (s *Store) GetDoc(ctx context.Context, table, id string, out any) error {
-	if !docTables[table] {
-		return fmt.Errorf("table de documents inconnue %q", table)
-	}
-	var doc string
-	err := s.db.QueryRowContext(ctx, `SELECT doc FROM `+table+` WHERE id=?`, id).Scan(&doc)
-	if errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("%s %s : %w", table, id, ErrNotFound)
-	}
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal([]byte(doc), out)
 }

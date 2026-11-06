@@ -15,10 +15,13 @@ import (
 
 // NewHandler assemble les routes : /health, /api/*, /mcp (MCP Streamable HTTP).
 //
-// Sécurité (jalon 1) : aucune authentification ; bambud n'écoute par défaut que
-// sur 127.0.0.1 et le handler MCP du SDK refuse les en-têtes Host non locaux
-// (protection DNS rebinding). Ne pas exposer tel quel hors machine.
-func NewHandler(c *core.Core) http.Handler {
+// Sécurité : voir guard.go (Host loopback ou liste blanche, protection
+// cross-origin, jeton d'API obligatoire hors loopback). NewHandler applique les
+// réglages par défaut (loopback uniquement, sans jeton).
+func NewHandler(c *core.Core) http.Handler { return NewHandlerWithOptions(c, Options{}) }
+
+// NewHandlerWithOptions est NewHandler avec des options de sécurité explicites.
+func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		v, err := c.Store.SchemaVersion(r.Context())
@@ -42,7 +45,7 @@ func NewHandler(c *core.Core) http.Handler {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "erreur interne"})
 			return
 		}
-		writeJSON(w, http.StatusOK, j)
+		writeJSON(w, http.StatusOK, j.Redacted())
 	})
 	mux.HandleFunc("POST /api/jobs/{id}/cancel", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
@@ -66,7 +69,7 @@ func NewHandler(c *core.Core) http.Handler {
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Logger: c.Log,
 	}))
-	return mux
+	return guard(opts, mux) // unique point de branchement du middleware de sécurité
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

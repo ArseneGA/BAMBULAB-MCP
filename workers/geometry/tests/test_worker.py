@@ -173,3 +173,60 @@ def test_parametric_cli_roundtrip(tmp_path):
     out, rc = call("parametric", {"template": "spacer", "params": {"outer_diameter": 10, "height": 5},
                                   "out_dir": str(tmp_path)})
     assert rc == 0 and out["result"]["level"] == "calculé"
+
+
+# --- durcissement (relecture) ------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["../evil", "a/b", "a\\b", "", "x" * 65, "..", "nom avec espace", "é"])
+def test_parametric_rejects_unsafe_names(tmp_path, name):
+    out = tmp_path / "out"
+    with pytest.raises(GeometryError) as e:
+        parametric.run({"template": "spacer", "params": {"outer_diameter": 10, "height": 3},
+                        "out_dir": str(out), "name": name or 5})
+    assert e.value.code == "invalid_params"
+    assert not list(tmp_path.glob("*.stl")) and not list(out.glob("*.stl")) if out.exists() else True
+
+
+def test_parametric_outputs_stay_in_out_dir(tmp_path):
+    out = tmp_path / "out"
+    r = parametric.run({"template": "spacer", "params": {"outer_diameter": 10, "height": 3},
+                        "out_dir": str(out), "name": "ok.v1-2_x"})
+    for f in r["files"].values():
+        assert Path(f).resolve().parent == out.resolve()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), "abc", 0, -1, 0.0000001, 1e9, True, None])
+def test_step_import_tolerances_rejected(step_box, tmp_path, bad):
+    for key in ("tolerance_mm", "angular_tolerance_rad"):
+        with pytest.raises(GeometryError) as e:
+            step_import.run({"path": str(step_box), "out_dir": str(tmp_path / "o"), key: bad})
+        assert e.value.code == "invalid_params"
+
+
+def test_step_import_triangle_cap(step_two, tmp_path, monkeypatch):
+    monkeypatch.setattr(step_import, "MAX_TRIANGLES", 5)
+    with pytest.raises(GeometryError) as e:
+        step_import.run({"path": str(step_two), "out_dir": str(tmp_path / "o")})
+    assert e.value.code == "too_complex"
+
+
+def test_hole_counts_capped_and_integer(tmp_path):
+    for tpl, params in (("bracket", {"leg_a": 40, "leg_b": 30, "holes_a": 10**6}),
+                        ("bracket", {"leg_a": 40, "leg_b": 30, "holes_b": 1.5}),
+                        ("hook", {"holes": 51}),
+                        ("hook", {"holes": True})):
+        with pytest.raises(GeometryError) as e:
+            run_tpl(tmp_path, tpl, params)
+        assert e.value.code == "invalid_params"
+
+
+def test_hook_arm_must_exceed_twice_thickness(tmp_path):
+    with pytest.raises(GeometryError) as e:
+        run_tpl(tmp_path, "hook", {"arm_length": 8, "thickness": 4})
+    assert e.value.code == "invalid_params"
+
+
+def test_hook_tiny_plate_does_not_crash(tmp_path):
+    r = run_tpl(tmp_path, "hook", {"plate_height": 10, "hole_diameter": 6, "holes": 3})
+    assert r["warnings"] and r["parts"][0]["volume_mm3"] > 0

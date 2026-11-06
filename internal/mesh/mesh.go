@@ -74,7 +74,7 @@ func (m *Mesh) Bounds() BBox {
 // Validate vérifie les index et les valeurs finies.
 func (m *Mesh) Validate() error {
 	for i, v := range m.V {
-		if math.IsNaN(v.X+v.Y+v.Z) || math.IsInf(v.X+v.Y+v.Z, 0) {
+		if !finite3(v.X, v.Y, v.Z) {
 			return fmt.Errorf("sommet %d non fini", i)
 		}
 	}
@@ -209,9 +209,33 @@ var (
 
 // Limites de sécurité.
 const (
-	MaxTriangles     = 20_000_000
-	maxZipEntryBytes = 1 << 30 // 1 GiB décompressé par entrée
-	maxZipTotalBytes = 2 << 30
+	// MaxTriangles et MaxVertices plafonnent la géométrie CUMULÉE d'un fichier.
+	MaxTriangles = 5_000_000
+	MaxVertices  = 10_000_000
+	// MaxFileBytes : taille maximale d'un fichier lu par ReadFile.
+	MaxFileBytes     = 512 << 20
+	maxZipEntryBytes = 128 << 20 // 128 Mio décompressés par entrée
+	maxZipTotalBytes = 512 << 20 // 512 Mio décompressés au total
 	maxZipEntries    = 10000
-	maxXMLTokenDepth = 64
+	// maxVisitedNodes borne le nombre total de résolutions d'objets/composants 3MF
+	// (défense contre l'explosion combinatoire d'une arborescence de composants).
+	maxVisitedNodes = 200_000
 )
+
+// finite3 indique que les trois coordonnées sont finies.
+func finite3(x, y, z float64) bool {
+	return !math.IsNaN(x+y+z) && !math.IsInf(x+y+z, 0) && !math.IsInf(x, 0) && !math.IsInf(y, 0) && !math.IsInf(z, 0)
+}
+
+// validateModel vérifie chaque maillage d'un modèle lu (index, valeurs finies).
+func validateModel(md *Model) error {
+	for _, o := range md.Objects {
+		if o.Mesh == nil {
+			continue
+		}
+		if err := o.Mesh.Validate(); err != nil {
+			return fmt.Errorf("%w : objet %s : %v", ErrFormat, o.ID, err)
+		}
+	}
+	return nil
+}

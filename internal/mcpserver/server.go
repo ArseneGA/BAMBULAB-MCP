@@ -147,6 +147,7 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, j, err
 	}
+	j = j.Redacted() // jamais de champs secrets vers le client
 	tail := in.LogTail
 	if tail <= 0 {
 		tail = 50

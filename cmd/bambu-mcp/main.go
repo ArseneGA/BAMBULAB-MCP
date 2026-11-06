@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -43,7 +44,9 @@ func run(ctx context.Context, args []string, in io.ReadCloser, out io.WriteClose
 	fs.SetOutput(errw) // jamais stdout
 	url := fs.String("url", envOr("BAMBU_URL", "http://127.0.0.1:7878/mcp"), "point d'entrée MCP de bambud (env BAMBU_URL)")
 	embedded := fs.Bool("embedded", false, "ouvre le cœur local au lieu de relayer vers bambud")
-	dataDir := fs.String("data-dir", envOr("BAMBU_DATA_DIR", "./data"), "dossier de données (mode --embedded ; env BAMBU_DATA_DIR)")
+	dataDir := fs.String("data-dir", envOr("BAMBU_DATA_DIR", core.DefaultDataDir()), "dossier de données absolu (mode --embedded ; env BAMBU_DATA_DIR ; défaut %LOCALAPPDATA%\\BambuAtelier ou $XDG_DATA_HOME/bambu-atelier)")
+	apiToken := fs.String("api-token", os.Getenv("BAMBU_API_TOKEN"), "jeton d'API de bambud (Bearer ; env BAMBU_API_TOKEN)")
+	attempts := fs.Int("connect-attempts", 4, "tentatives de connexion initiale à bambud (backoff exponentiel)")
 	level := fs.String("log-level", envOr("BAMBU_LOG_LEVEL", "info"), "debug|info|warn|error")
 	version := fs.Bool("version", false, "affiche la version (sur stderr)")
 	if err := fs.Parse(args); err != nil {
@@ -64,7 +67,7 @@ func run(ctx context.Context, args []string, in io.ReadCloser, out io.WriteClose
 	if *embedded {
 		err = runEmbedded(ctx, log, *dataDir, tr)
 	} else {
-		err = runBridge(ctx, log, *url, tr)
+		err = runBridge(ctx, log, *url, *apiToken, *attempts, tr)
 	}
 	if err != nil && ctx.Err() == nil {
 		log.Error("arrêt sur erreur", "err", err)
@@ -73,11 +76,30 @@ func run(ctx context.Context, args []string, in io.ReadCloser, out io.WriteClose
 	return 0
 }
 
-func runBridge(ctx context.Context, log *slog.Logger, url string, tr mcp.Transport) error {
+// bearerTransport ajoute le jeton d'API à chaque requête vers bambud.
+type bearerTransport struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+b.token)
+	return b.next.RoundTrip(r)
+}
+
+func runBridge(ctx context.Context, log *slog.Logger, url, token string, attempts int, tr mcp.Transport) error {
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		return fmt.Errorf("URL invalide %q", url)
 	}
-	p, err := mcpserver.NewProxy(ctx, &mcp.StreamableClientTransport{Endpoint: url}, log)
+	dial := func() mcp.Transport {
+		t := &mcp.StreamableClientTransport{Endpoint: url}
+		if token != "" {
+			t.HTTPClient = &http.Client{Transport: bearerTransport{token: token, next: http.DefaultTransport}}
+		}
+		return t
+	}
+	p, err := mcpserver.NewProxyWithOptions(ctx, mcpserver.ProxyOptions{Dial: dial, ConnectAttempts: attempts}, log)
 	if err != nil {
 		return fmt.Errorf("%w (bambud est-il démarré sur %s ? sinon utiliser --embedded)", err, url)
 	}

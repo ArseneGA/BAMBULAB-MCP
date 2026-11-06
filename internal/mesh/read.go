@@ -59,9 +59,15 @@ func ReadFile(p string) (*Model, error) {
 		return nil, err
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, 1<<31))
+	if st, err := f.Stat(); err == nil && st.Size() > MaxFileBytes {
+		return nil, fmt.Errorf("%w : fichier de %d octets, limite %d", ErrFormat, st.Size(), int64(MaxFileBytes))
+	}
+	data, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(data)) > MaxFileBytes { // taille inconnue ou fichier qui grandit : échec explicite, pas de troncature
+		return nil, fmt.Errorf("%w : fichier plus grand que la limite de %d octets", ErrFormat, int64(MaxFileBytes))
 	}
 	return Parse(p, data)
 }

@@ -26,6 +26,7 @@ func ParseOBJ(data []byte) (*Model, error) {
 	sc := bufio.NewScanner(bytes.NewReader(data))
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	line := 0
+	totalTris := 0
 	concave := false
 	for sc.Scan() {
 		line++
@@ -46,6 +47,9 @@ func ParseOBJ(data []byte) (*Model, error) {
 					return nil, fmt.Errorf("%w : ligne %d : nombre invalide %q", ErrFormat, line, f[1+k])
 				}
 				c[k] = v
+			}
+			if len(verts) >= MaxVertices {
+				return nil, fmt.Errorf("%w : trop de sommets (limite %d)", ErrFormat, MaxVertices)
 			}
 			verts = append(verts, Vec3{c[0], c[1], c[2]})
 		case "o", "g":
@@ -84,11 +88,12 @@ func ParseOBJ(data []byte) (*Model, error) {
 			if len(ids) > 3 {
 				concave = true // détecté ci-dessous seulement si besoin ; on signale la triangulation
 			}
+			totalTris += len(ids) - 2
+			if totalTris > MaxTriangles { // total tous groupes confondus
+				return nil, fmt.Errorf("%w : trop de triangles (limite %d)", ErrFormat, MaxTriangles)
+			}
 			for i := 1; i+1 < len(ids); i++ {
 				cur.tris = append(cur.tris, Tri{ids[0], ids[i], ids[i+1]})
-			}
-			if len(cur.tris) > MaxTriangles {
-				return nil, fmt.Errorf("%w : trop de triangles", ErrFormat)
 			}
 		}
 	}
@@ -109,6 +114,9 @@ func ParseOBJ(data []byte) (*Model, error) {
 	}
 	if n == 0 {
 		return nil, ErrEmpty
+	}
+	if err := validateModel(md); err != nil {
+		return nil, err
 	}
 	return md, nil
 }
