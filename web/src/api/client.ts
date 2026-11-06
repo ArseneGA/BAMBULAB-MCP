@@ -2,7 +2,7 @@ import type {
   ApplyResult, Capabilities, CollectionInfo, DuplicatesResult, Health, ImportInput, ImportStarted, Job, ModelDetails,
   OpPreview, Operation, RestoreResult, ScanReport, SearchParams, SearchResult,
 } from './types';
-import type { AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
+import type { CancelOutput, AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
 import type { ApplyOutput, CompareOutput, CreateExperimentInput, Experiment, Goal, GoalCriteriaCatalog, GoalInput } from './goalTypes';
 
 /**
@@ -98,6 +98,8 @@ export const api = {
   confirmation: (id: string, signal?: AbortSignal) => request<ConfirmationView>('GET', `/api/confirmations/${encodeURIComponent(id)}`, undefined, signal),
   /** Ne part que si l'humain a approuvé la confirmation sur la page /confirm/{id} : le serveur refuse sinon. */
   startPrint: (b: { print_job_id: string; confirmation_id: string; idempotency_key: string }) => request<StartOutput>('POST', '/api/print-jobs/start', b),
+  /** Impression en cours : ne stoppe RIEN, renvoie stop_url (page /stop/{id} à valider par un humain en navigateur enregistré). */
+  cancelPrint: (id: string) => request<CancelOutput>('POST', `/api/print-jobs/${encodeURIComponent(id)}/cancel`),
   agents: (signal?: AbortSignal) => request<{ agents: AgentStatus[] }>('GET', '/api/agents', undefined, signal),
   /** Télécharge le GLB d'aperçu (URL signée de la fiche). */
   async glb(signedUrl: string, signal?: AbortSignal): Promise<ArrayBuffer> {

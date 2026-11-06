@@ -8,7 +8,7 @@ export interface PrinterView {
   id: string; model_id: string; model_name: string; name: string; host: string; serial: string; firmware?: string; nozzle_mm: number; ams_units: number;
   access_code_set: boolean; setup_url?: string; pinned_sha256?: string; insecure_reason?: string; allow_start_from_finish?: boolean; created_at: string;
 }
-export interface AddPrinterInput { name: string; model_id: string; host: string; serial: string; nozzle_mm?: number; ams_units?: number; pinned_sha256?: string }
+export interface AddPrinterInput { name: string; model_id: string; host: string; serial: string; nozzle_mm?: number; ams_units?: number }
 export interface PrinterStatus {
   printer_id: string; reachable: boolean; error?: string; state: string; gcode_state?: string; progress_percent: number; layer: number; total_layers: number;
   remaining_minutes: number; temps: { nozzle: number; nozzle_target: number; bed: number; bed_target: number; chamber: number }; print_error: number; hms_count: number;
@@ -36,3 +36,4 @@ export interface AgentStatus {
   id: string; name: string; online: boolean; last_seen?: string; agent_version?: string; studio_installed: boolean; studio_running: boolean; studio_version?: string;
   local_slicer: boolean; shared_folders?: string[]; cad?: string[]; tasks?: string[];
 }
+export interface CancelOutput { print_job_id: string; outcome: 'cancelled' | 'stop_requested' | 'stopped' | 'refused'; state: PrintState; stop_url?: string; stop_expires_at?: string; question?: string; note: string; job: PrintJob }

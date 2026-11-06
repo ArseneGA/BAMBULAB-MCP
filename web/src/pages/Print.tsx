@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { Button, EmptyState, Field, Input, List, Panel, Select, StatusDot, Tag, useToast } from '../components';
 import { api, assetUrl, describeError } from '../api/client';
-import { useAsync } from '../api/hooks';
-import type { ConfirmationView, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
+import { useAsync, useConnection } from '../api/hooks';
+import type { CancelOutput, ConfirmationView, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
 import { Async, Dialog, Notice, PendingBanner, fmtDate } from './common';
 import './print.css';
 
@@ -86,7 +86,7 @@ function PrinterCard({ p }: { p: PrinterView }) {
         <dt>Buse / AMS</dt><dd className="mono">{p.nozzle_mm} mm · {p.ams_units} AMS</dd>
         <dt>Code d'accès</dt><dd>{p.access_code_set ? <Tag tone="ok">enregistré</Tag> : <Tag tone="warn">à saisir</Tag>}</dd>
       </dl>
-      {!p.access_code_set && p.setup_url && <Notice title="Code d'accès non saisi" actions={<a className="btn btn-secondary btn-sm" href={assetUrl(p.setup_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page de saisie</a>}>Le code se saisit sur une page locale du serveur ; il n'est jamais renvoyé ni affiché dans cette interface.</Notice>}
+      {!p.access_code_set && p.setup_url && <Notice title="Code d'accès non saisi" actions={<a className="btn btn-secondary btn-sm" href={assetUrl(p.setup_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page de saisie</a>}>La page locale du serveur affiche l'empreinte du certificat présenté par l'imprimante et recueille le code d'accès ; il n'est jamais renvoyé ni affiché dans cette interface. Tant que rien n'est épinglé, aucune connexion n'est tentée (navigateur enregistré requis).</Notice>}
       <div className="prt-status" role="status">
         {st.error && !d ? <StatusDot status="offline" label="Statut indisponible" /> : !d ? <span className="hint">Lecture de l'état…</span> : (
           <>
@@ -103,13 +103,13 @@ function PrinterCard({ p }: { p: PrinterView }) {
 
 function AddPrinter({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: (p: PrinterView) => void }) {
   const models = useAsync((s) => api.printerModels(s), []);
-  const [f, setF] = useState({ name: '', model_id: '', host: '', serial: '', nozzle: '0.4', ams: '0', pin: '' });
+  const [f, setF] = useState({ name: '', model_id: '', host: '', serial: '', nozzle: '0.4', ams: '0' });
   const [err, setErr] = useState<string>();
   const [busy, setBusy] = useState(false);
   const ok = f.name.trim() && f.model_id && f.host.trim() && f.serial.trim();
   const submit = async () => {
     setBusy(true); setErr(undefined);
-    try { onAdded(await api.addPrinter({ name: f.name.trim(), model_id: f.model_id, host: f.host.trim(), serial: f.serial.trim(), nozzle_mm: Number(f.nozzle) || undefined, ams_units: Number(f.ams) || 0, pinned_sha256: f.pin.trim() || undefined })); }
+    try { onAdded(await api.addPrinter({ name: f.name.trim(), model_id: f.model_id, host: f.host.trim(), serial: f.serial.trim(), nozzle_mm: Number(f.nozzle) || undefined, ams_units: Number(f.ams) || 0 })); }
     catch (e) { setErr(describeError(e)); } finally { setBusy(false); }
   };
   return (
@@ -121,9 +121,7 @@ function AddPrinter({ open, onClose, onAdded }: { open: boolean; onClose: () => 
       <Field label="Numéro de série"><Input value={f.serial} onChange={(e) => setF({ ...f, serial: e.target.value })} spellCheck={false} /></Field>
       <Field label="Buse installée (mm)"><Input value={f.nozzle} onChange={(e) => setF({ ...f, nozzle: e.target.value })} inputMode="decimal" /></Field>
       <Field label="Nombre d'AMS raccordés"><Select value={f.ams} onChange={(e) => setF({ ...f, ams: e.target.value })} options={[0, 1, 2, 3, 4].map((n) => ({ value: String(n), label: String(n) }))} /></Field>
-      <Field label="Empreinte SHA-256 du certificat de l'imprimante (relevée hors bande)"><Input value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value })} spellCheck={false} placeholder="64 caractères hexadécimaux" /></Field>
-      <p className="hint" style={{ margin: 0 }}>Sans empreinte, le service refuse de se connecter : la vérification du certificat n'est jamais désactivée silencieusement.</p>
-      <p className="hint" style={{ margin: 0 }}>Le code d'accès LAN n'est pas demandé ici : après l'ajout, une page locale du serveur le recueille.</p>
+      <p className="hint" style={{ margin: 0 }}>L'adresse doit être privée (192.168.x.x, 10.x, 172.16-31.x, lien local ou nom .local). Le certificat de l'imprimante est épinglé par le serveur sur la page locale de saisie, où vous confirmez son empreinte avec le code d'accès LAN, qui n'est pas demandé ici : après l'ajout, une page locale du serveur le recueille.</p>
     </Dialog>
   );
 }
@@ -162,6 +160,7 @@ function JobDetail({ job, printer, onChange }: { job: PrintJob; printer?: Printe
   const [upload, setUpload] = useState<UploadOutput>();
   const [conf, setConf] = useState<ConfirmationView>();
   const [start, setStart] = useState<StartOutput>();
+  const [stop, setStop] = useState<CancelOutput>();
   const [busy, setBusy] = useState<string | null>(null);
   const upKey = useRef(uuid()), startKey = useRef(uuid());
   const complete = assign.every((a) => a.material_id.trim() !== '');
@@ -235,6 +234,15 @@ function JobDetail({ job, printer, onChange }: { job: PrintJob; printer?: Printe
             {live.data?.note && <p className="hint">{live.data.note}</p>}
           </div>
         )}
+        {job.state === 'PRINTING' && (
+          <div className="prt-acts">
+            <Button variant="danger" disabled={busy !== null} onClick={() => wrap('stop', async () => setStop(await api.cancelPrint(job.id)))}>{busy === 'stop' ? 'Demande…' : "Demander l'arrêt…"}</Button>
+            <span className="hint">Cela ne stoppe rien : l'arrêt se valide sur une page dédiée.</span>
+          </div>
+        )}
+        {stop && (
+          <Notice tone={stop.outcome === 'refused' ? 'err' : 'info'} title={`Arrêt : ${stop.outcome}`} actions={stop.stop_url ? <a className="btn btn-danger btn-sm" href={assetUrl(stop.stop_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page d'arrêt</a> : undefined}>{stop.note}</Notice>
+        )}
         {job.state === 'START_UNKNOWN' && <Notice tone="err" title="Lancement incertain : ne pas relancer">Le service ne sait pas si l'imprimante a démarré. Vérifiez sur la machine, puis faites réconcilier par l'assistant (outil <span className="mono">reconcile_print</span>) : l'interface ne relance jamais.</Notice>}
         {job.state === 'COMPLETED' && <Notice tone="info" title="Impression terminée">Enregistrez le résultat réel (retour d'expérience) pour nourrir la mémoire des essais.</Notice>}
         {job.next && !['VALIDATED', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(job.state) && !['COMPLETED', 'FAILED', 'CANCELLED'].includes(job.state) && <p className="hint" style={{ margin: 0 }}>Étape suivante : {job.next}</p>}
@@ -263,6 +271,7 @@ function Report({ r }: { r: ValidationReport }) {
  */
 function ConfirmBox({ c, onStart, starting }: { c: ConfirmationView; onStart: () => void; starting: boolean }) {
   const b = c.binding;
+  const conn = useConnection();
   return (
     <div className="prt-confirm">
       <h3>Confirmation de lancement</h3>
@@ -278,6 +287,7 @@ function ConfirmBox({ c, onStart, starting }: { c: ConfirmationView; onStart: ()
         <>
           <p style={{ margin: 0 }}>{c.instructions}</p>
           <a className="btn btn-primary" href={assetUrl(c.confirm_url)} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Ouvrir la page de confirmation</a>
+          {conn.browserEnrolled === false && <Notice title="Ce navigateur n'est pas enregistré" actions={<a className="btn btn-secondary btn-sm" href="/enroll" target="_blank" rel="noreferrer">Enregistrer ce navigateur</a>}>La page de confirmation exige un navigateur enregistré : lancez <span className="mono">bambud enroll</span> sur la machine du service, puis saisissez le code sur /enroll.</Notice>}
           <p className="hint" style={{ margin: 0 }} role="status"><span className="spinner" aria-hidden /> En attente de votre accord sur cette page (vérification toutes les 2,5 s)…</p>
         </>
       ) : (

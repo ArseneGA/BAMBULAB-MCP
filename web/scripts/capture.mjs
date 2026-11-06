@@ -101,7 +101,7 @@ try {
 try {
   const prs = (await (await fetch(`${base}/api/printers`)).json()).printers;
   if (prs.length === 0) throw new Error('aucune imprimante enregistrée (lancer le simulateur puis e2e.mjs avec SIM_PIN)');
-  const pr = prs[0];
+  const pr = prs[prs.length - 1];
   const j = async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return r.json(); };
   // Imprimante au repos (le simulateur imprime pendant quelques secondes après un lancement).
   for (let i = 0; i < 40; i++) { const s = await j('GET', `/api/printers/${pr.id}/status`); if (s.reachable && !['RUNNING', 'PREPARE', 'PAUSE'].includes(s.gcode_state ?? '')) break; await new Promise((r) => setTimeout(r, 3000)); }

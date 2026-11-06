@@ -54,8 +54,8 @@ export const PENDING: PendingNeed[] = [
   },
   {
     id: 'print_cancel_reconcile', screen: 'Impression',
-    today: "L'interface suit, valide, envoie et demande la confirmation ; elle ne propose ni annulation d'une impression en cours ni réconciliation d'un lancement incertain.",
-    needs: "Écrans pour POST /api/print-jobs/{id}/cancel (une impression en cours exige un stop_confirmation_id approuvé par l'humain, donc une page /confirm dédiée à l'arrêt) et POST /api/print-jobs/{id}/reconcile ; aujourd'hui seulement via les outils MCP cancel_print et reconcile_print.",
+    today: "Impression en cours : la demande d'arrêt renvoie stop_url (page /stop à valider en navigateur enregistré) ; réconciliation d'un lancement incertain absente de l'interface.",
+    needs: "Écran pour POST /api/print-jobs/{id}/reconcile (aujourd'hui seulement l'outil MCP reconcile_print).",
     milestone: "impression (suite)",
   },
   {
