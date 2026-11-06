@@ -98,7 +98,7 @@ func TestExecWorkerFrozenNoDevAndNeverWritesProject(t *testing.T) {
 	}
 	rec := readRec(t, out)
 	args := strings.Join(toStrings(rec["args"]), " ")
-	want := "run --frozen --no-dev --project " + project + " python -m bambu_geometry parametric"
+	want := "run --frozen --no-dev --extra cad --project " + project + " python -m bambu_geometry parametric"
 	if args != want {
 		t.Errorf("arguments : %q, attendu %q", args, want)
 	}

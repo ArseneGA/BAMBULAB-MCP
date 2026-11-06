@@ -63,10 +63,10 @@ func (b *capBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// workerArgs : `uv run --frozen --no-dev` n'installe que ce que uv.lock fige, sans groupe de développement et
+// workerArgs : `uv run --frozen --no-dev --extra cad` n'installe que ce que uv.lock fige (CadQuery compris), sans groupe de développement et
 // sans jamais réécrire uv.lock (le dossier du projet peut être en lecture seule).
 func workerArgs(dir, command string) []string {
-	return []string{"run", "--frozen", "--no-dev", "--project", dir, "python", "-m", "bambu_geometry", command}
+	return []string{"run", "--frozen", "--no-dev", "--extra", "cad", "--project", dir, "python", "-m", "bambu_geometry", command}
 }
 
 // workerEnv : environnement du worker. UV_PROJECT_ENVIRONMENT fourni par l'opérateur est respecté tel quel.
@@ -86,7 +86,7 @@ func (s *Service) workerEnv(dir string) []string {
 	return env
 }
 
-// execWorker lance `uv run --frozen --no-dev --project <dir> python -m bambu_geometry <commande>`
+// execWorker lance `uv run --frozen --no-dev --extra cad --project <dir> python -m bambu_geometry <commande>`
 // (protocole : workers/geometry/PROTOCOL.md) : requête JSON sur stdin, une ligne
 // JSON sur stdout. Les arguments sont passés en tableau, sans shell.
 func (s *Service) execWorker(ctx context.Context, command string, req map[string]any) (json.RawMessage, error) {
