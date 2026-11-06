@@ -124,7 +124,7 @@ func TestMutationRollbackLeavesNoAudit(t *testing.T) {
 func TestDocs(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openTemp(t)
-	p := contracts.SeedPrinterModels()[0]
+	p := contracts.PrinterModel{ID: "fixture", Name: "Modèle de test", Vendor: "Bambu Lab"}
 	if err := s.PutDoc(ctx, "t", "printer_models", p.ID, p); err != nil {
 		t.Fatal(err)
 	}
