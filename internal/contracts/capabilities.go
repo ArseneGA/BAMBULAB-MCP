@@ -19,6 +19,27 @@ type Capabilities struct {
 	Concurrency map[string]int `json:"concurrency" jsonschema:"travaux simultanés par classe (heavy, light)"`
 	// Agents : agents Windows appairés et leur disponibilité (jalon 8). Vide sans agent.
 	Agents []AgentStatus `json:"agents,omitempty"`
+	// Studio : Bambu Studio du serveur et profils réellement chargés (vérifiable sans lancer de découpe).
+	Studio *StudioInfo `json:"studio,omitempty"`
+}
+
+// StudioInfo décrit l'installation de Bambu Studio utilisée par le service et les profils chargés.
+type StudioInfo struct {
+	Available   bool   `json:"available"`
+	Path        string `json:"path,omitempty"`
+	Version     string `json:"version,omitempty" jsonschema:"version détectée de Bambu Studio (ex. 02.09.00.00)"`
+	ProfilesDir string `json:"profiles_dir,omitempty" jsonschema:"dossier des profils système BBL"`
+	// Profils chargés ; nil tant que le chargement (lancé au premier appel) n'est pas terminé.
+	Profiles *ProfileCounts `json:"profiles,omitempty"`
+	Note     string         `json:"note,omitempty"`
+}
+
+// ProfileCounts : nombre de profils chargés par famille (presets instanciables pour machines/process/filaments).
+type ProfileCounts struct {
+	Models    int `json:"models" jsonschema:"modèles d'imprimante"`
+	Machines  int `json:"machines"`
+	Processes int `json:"processes"`
+	Filaments int `json:"filaments"`
 }
 
 // AgentStatus est la vue publique d'un agent Windows appairé (jamais de secret).
@@ -44,6 +65,7 @@ type Executable struct {
 	Purpose string `json:"purpose"`
 	Found   bool   `json:"found"`
 	Path    string `json:"path,omitempty"`
+	Version string `json:"version,omitempty"`
 }
 
 // EnvironmentReport est la réponse de inspect_environment. Aucune donnée sensible
