@@ -66,7 +66,7 @@ type FitParams struct {
 	Material    string  // id matériau (optionnel : "" = pas de correction de retrait)
 	Nozzle      float64 // mm
 	Orientation string  // vertical|horizontal
-	Dimension   float64 // dimension nominale de l'ajustement en mm (optionnel, pour le retrait)
+	Dimension   float64 // dimension nominale de l'ajustement en mm (optionnel, 3–100 ; informatif, voir FitClearance)
 }
 
 // FitResult : Value = jeu DIAMÉTRAL total recommandé en mm (négatif = interférence).
@@ -77,6 +77,11 @@ type FitResult struct {
 
 // FitClearance recommande un jeu diamétral (cote trou − cote arbre).
 // Base buse 0,4 mm : libre 0,40 ; glissant 0,25 ; serré 0,10 ; press −0,10 mm.
+//
+// Le retrait du matériau n'est PAS ajouté au jeu : le trou et l'arbre rétrécissent
+// ensemble dans les mêmes proportions, leur écart ne dépend donc pas (au premier
+// ordre) de la dimension nominale. Pour compenser le retrait d'une cote absolue,
+// utiliser ScaleForShrinkage ou HoleCompensation.
 func FitClearance(p FitParams) (*FitResult, error) {
 	fit, err := parseFit(p.Fit)
 	if err != nil {
@@ -89,8 +94,8 @@ func FitClearance(p FitParams) (*FitResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p.Dimension < 0 {
-		return nil, invalid("dimension négative")
+	if p.Dimension != 0 && (math.IsNaN(p.Dimension) || p.Dimension < 3 || p.Dimension > 100) {
+		return nil, invalid("dimension %v mm hors du domaine 3–100 mm", p.Dimension)
 	}
 	base := map[FitType]float64{FitFree: 0.40, FitSliding: 0.25, FitSnug: 0.10, FitPress: -0.10}[fit]
 	v := base + 0.25*(p.Nozzle-0.4)
@@ -106,25 +111,12 @@ func FitClearance(p FitParams) (*FitResult, error) {
 	level := LevelHeuristic
 	var srcs = []Source{litSource}
 	var warns = []string{"Valeur à valider par un essai d'assemblage (pièce test imprimée avec le même matériau et la même buse)."}
-	if p.Material != "" && p.Dimension > 0 {
+	if p.Material != "" {
 		m, err := GetMaterial(p.Material)
 		if err != nil {
 			return nil, err
 		}
-		u := newUsed()
-		s, err := m.need("shrinkage_pct", u)
-		if err != nil {
-			warns = append(warns, "Retrait inconnu : non pris en compte.")
-		} else {
-			corr := p.Dimension * s / 100
-			v += corr
-			asm = append(asm, "Retrait "+m.ID+" "+ftoa(s)+" % appliqué à la dimension "+ftoa(p.Dimension)+" mm (+"+ftoa(round(corr, 3))+" mm)")
-			srcs = append(srcs, u.sources...)
-		}
-	} else if p.Material != "" {
-		if _, err := GetMaterial(p.Material); err != nil {
-			return nil, err
-		}
+		asm = append(asm, "Retrait "+m.ID+" non ajouté au jeu : le trou et l'arbre rétrécissent ensemble, l'écart entre cotes reste le jeu recommandé (le retrait se compense sur les cotes absolues, voir scale_for_shrinkage)")
 	}
 	if fit == FitPress {
 		warns = append(warns, "Emmanchement : interférence sur plastique imprimé, risque de fissuration entre couches ; préférer un insert ou un ajustement serré.")
@@ -134,7 +126,7 @@ func FitClearance(p FitParams) (*FitResult, error) {
 	res.Result = Result{
 		Value: v, Unit: "mm", Range: &Range{Min: round(v-0.05, 3), Max: round(v+0.05, 3)},
 		Assumptions: asm, Level: level, Sources: srcs, Warnings: warns,
-		Validity: "Buse 0,1–1,2 mm ; dimensions d'ajustement ~3–100 mm ; FDM, hauteur de couche 0,1–0,3 mm. " + Disclaimer,
+		Validity: "Buse 0,1–1,2 mm ; dimensions d'ajustement 3–100 mm (si fournie) ; FDM, hauteur de couche 0,1–0,3 mm (non vérifiée). " + Disclaimer,
 	}
 	return res, nil
 }
@@ -149,16 +141,20 @@ type HoleParams struct {
 
 // HoleCompensation retourne le diamètre à modéliser pour obtenir le diamètre nominal imprimé.
 // d_modélisé = d + δ(orientation) + d·s/100 ; δ vertical 0,15 mm, horizontal 0,25 mm (buse 0,4),
-// +0,05 mm si d < 3 mm.
+// +0,05 mm si d < 3 mm (règle empirique non sourcée : heuristique).
+// Le retrait d·s/100 est ajouté ici car il porte sur une cote absolue (contrairement au jeu de FitClearance).
 func HoleCompensation(p HoleParams) (*Result, error) {
 	if err := positive("diamètre", p.Diameter); err != nil {
 		return nil, err
 	}
-	if p.Diameter > 500 {
-		return nil, invalid("diamètre %.1f mm hors domaine", p.Diameter)
+	if p.Diameter < 1 || p.Diameter > 100 {
+		return nil, invalid("diamètre %.2f mm hors du domaine 1–100 mm", p.Diameter)
 	}
 	if err := checkNozzle(p.Nozzle); err != nil {
 		return nil, err
+	}
+	if p.Nozzle < 0.2 || p.Nozzle > 0.8 {
+		return nil, invalid("buse %.2f mm hors du domaine 0,2–0,8 mm de la compensation de trou", p.Nozzle)
 	}
 	axis, err := parseAxis(p.Axis)
 	if err != nil {
@@ -176,6 +172,7 @@ func HoleCompensation(p HoleParams) (*Result, error) {
 	warns := []string{"Ordre de grandeur à calibrer par un retour d'impression."}
 	if p.Diameter < 3 {
 		delta += 0.05
+		asm = append(asm, "Trou < 3 mm : +0,05 mm (règle empirique non sourcée, heuristique)")
 		warns = append(warns, "Trou < 3 mm : très sensible à la buse et au slicer ; prévoir un perçage de reprise.")
 	}
 	level := LevelHeuristic
@@ -191,6 +188,8 @@ func HoleCompensation(p HoleParams) (*Result, error) {
 			shrink = p.Diameter * s / 100
 			asm = append(asm, "Retrait "+m.ID+" "+ftoa(s)+" % ajouté (+"+ftoa(round(shrink, 3))+" mm)")
 			srcs = append(srcs, u.sources...)
+		} else {
+			warns = append(warns, "Retrait de "+m.ID+" inconnu : non pris en compte, le diamètre imprimé sera plus grand que prévu si le matériau rétrécit.")
 		}
 	}
 	v := round(p.Diameter+delta+shrink, 3)

@@ -130,8 +130,8 @@ func TestBeamZWarnsAndFallback(t *testing.T) {
 		t.Errorf("PA level = %s", pa.Level)
 	}
 	// Poutre courte et échec
-	f, _ := BeamStress(BeamParams{Support: "cantilever", LoadType: "point", Load: 500, Length: 20,
-		Section: Section{Shape: "rect", B: 10, H: 5}, Material: "PLA"})
+	f, _ := BeamStress(BeamParams{Support: "cantilever", LoadType: "point", Load: 800, Length: 20,
+		Section: Section{Shape: "rect", B: 10, H: 10}, Material: "PLA"})
 	if f.Verdict != "fail" || !containsAny(f.Warnings, "L/h < 5") {
 		t.Errorf("fail attendu: %s %v", f.Verdict, f.Warnings)
 	}
@@ -175,7 +175,10 @@ func TestSnapFit(t *testing.T) {
 	// P = b h²/6 * E ε / L = 5*4/6*2750*0.03/10
 	near(t, "P", r.BendingForceN, 5.0*4/6*2750*0.03/10, 1e-9)
 	tn := math.Tan(30 * math.Pi / 180)
-	near(t, "F insertion", r.InsertionForceN, r.BendingForceN*(0.3+tn)/(1-0.3*tn), 1e-9)
+	if r.InsertionForceN == nil || r.InsertionForceUnbounded {
+		t.Fatal("force d'insertion attendue")
+	}
+	near(t, "F insertion", *r.InsertionForceN, r.BendingForceN*(0.3+tn)/(1-0.3*tn), 1e-9)
 	if r.Level != LevelHeuristic {
 		t.Errorf("level %s", r.Level)
 	}
@@ -196,8 +199,12 @@ func TestSnapFit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := json.Marshal(lock); err != nil {
+	b, err := json.Marshal(lock)
+	if err != nil {
 		t.Errorf("json: %v", err)
+	}
+	if lock.InsertionForceN != nil || !lock.InsertionForceUnbounded || !strings.Contains(string(b), `"insertion_force_N":null`) {
+		t.Errorf("force non bornée attendue (nulle) : %+v %s", lock.InsertionForceN, b)
 	}
 }
 
@@ -269,7 +276,7 @@ func TestFitAndHole(t *testing.T) {
 	f2, _ := FitClearance(FitParams{Fit: FitFree, Nozzle: 0.6, Orientation: "vertical"})
 	near(t, "libre 0.6", f2.Value, 0.45, 1e-9)
 	f3, _ := FitClearance(FitParams{Fit: FitSnug, Nozzle: 0.4, Orientation: "horizontal", Material: "PLA", Dimension: 100})
-	near(t, "serré horiz PLA", f3.Value, 0.10+0.05+0.3, 1e-9)
+	near(t, "serré horiz PLA (retrait non ajouté)", f3.Value, 0.10+0.05, 1e-9)
 	f4, _ := FitClearance(FitParams{Fit: FitPress, Nozzle: 0.4, Orientation: "vertical"})
 	if f4.Value >= 0 {
 		t.Error("press doit être une interférence")
@@ -297,6 +304,9 @@ func TestFitAndHole(t *testing.T) {
 	h2, _ := HoleCompensation(HoleParams{Diameter: 10, Axis: "horizontal", Nozzle: 0.4})
 	near(t, "trou horizontal", h2.Value, 10.25, 1e-9)
 	h3, _ := HoleCompensation(HoleParams{Diameter: 2, Axis: "vertical", Nozzle: 0.4})
+	if !containsAny(h3.Assumptions, "non sourcée") {
+		t.Error("règle d<3 mm à marquer heuristique/non sourcée")
+	}
 	near(t, "petit trou", h3.Value, 2.2, 1e-9)
 	h4, _ := HoleCompensation(HoleParams{Diameter: 100, Axis: "vertical", Nozzle: 0.4, Material: "PLA"})
 	near(t, "retrait trou", h4.Value, 100+0.15+0.3, 1e-9)
@@ -409,4 +419,79 @@ func containsAny(ws []string, sub string) bool {
 		}
 	}
 	return false
+}
+
+func TestBeamRefusesLargeDeflection(t *testing.T) {
+	// L=100, section 10x2 : flèche >> L/10.
+	_, err := BeamStress(BeamParams{Support: "cantilever", LoadType: "point", Load: 5, Length: 100,
+		Section: Section{Shape: "rect", B: 10, H: 2}, Material: "PLA"})
+	if !errors.Is(err, ErrNotApplicable) || !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("attendu ErrNotApplicable : %v", err)
+	}
+	// Juste sous le seuil : accepté.
+	if _, err := BeamStress(BeamParams{Support: "cantilever", LoadType: "point", Load: 10, Length: 100,
+		Section: Section{Shape: "rect", B: 20, H: 10}, Material: "PLA"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestIsElastomer(t *testing.T) {
+	one := 300.0
+	for _, m := range []*Material{
+		{ID: "x", Family: "TPU"}, {ID: "tpe_90a", Family: "autre"}, {ID: "y", Family: "Flex"},
+		{ID: "z", Family: "PU", Properties: map[string]Property{"elongation_xy": {Value: &one}}},
+	} {
+		if !isElastomer(m) {
+			t.Errorf("%+v devrait être un élastomère", m)
+		}
+	}
+	for _, id := range MaterialIDs() {
+		m, _ := GetMaterial(id)
+		if want := strings.HasPrefix(id, "TPU"); isElastomer(m) != want {
+			t.Errorf("%s : isElastomer=%v, attendu %v", id, isElastomer(m), want)
+		}
+	}
+	// Une poutre en TPU est refusée.
+	_, err := BeamStress(BeamParams{Support: "cantilever", LoadType: "point", Load: 1, Length: 50,
+		Section: Section{Shape: "rect", B: 20, H: 20}, Material: "TPU-95A"})
+	if !errors.Is(err, ErrNotApplicable) {
+		t.Errorf("poutre TPU : %v", err)
+	}
+}
+
+func TestFitClearanceIgnoresShrinkageAndChecksDomain(t *testing.T) {
+	a, _ := FitClearance(FitParams{Fit: FitSliding, Nozzle: 0.4, Orientation: "vertical"})
+	b, err := FitClearance(FitParams{Fit: FitSliding, Nozzle: 0.4, Orientation: "vertical", Material: "PLA", Dimension: 100})
+	if err != nil || a.Value != b.Value {
+		t.Fatalf("le retrait ne doit pas modifier le jeu : %v %v %v", a.Value, b.Value, err)
+	}
+	if !containsAny(b.Assumptions, "rétrécissent ensemble") {
+		t.Error("documentation du retrait manquante")
+	}
+	for _, d := range []float64{1, 150, math.NaN()} {
+		if _, err := FitClearance(FitParams{Fit: FitSliding, Nozzle: 0.4, Orientation: "vertical", Dimension: d}); !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("dimension %v acceptée", d)
+		}
+	}
+}
+
+func TestHoleAndWallDomains(t *testing.T) {
+	for _, d := range []float64{0.5, 150, 500} {
+		if _, err := HoleCompensation(HoleParams{Diameter: d, Axis: "vertical", Nozzle: 0.4}); !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("diamètre %v accepté", d)
+		}
+	}
+	if _, err := HoleCompensation(HoleParams{Diameter: 10, Axis: "vertical", Nozzle: 1.0}); !errors.Is(err, ErrInvalidInput) {
+		t.Error("buse 1,0 hors domaine du trou")
+	}
+	for _, th := range []float64{0.1, 11} {
+		if _, err := WallCheck(th, 0.4); !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("épaisseur %v acceptée", th)
+		}
+	}
+	// Retrait inconnu (PVA) : avertissement explicite.
+	h, err := HoleCompensation(HoleParams{Diameter: 10, Axis: "vertical", Nozzle: 0.4, Material: "PVA"})
+	if err != nil || !containsAny(h.Warnings, "inconnu") {
+		t.Errorf("avertissement retrait inconnu : %v %v", h.Warnings, err)
+	}
 }
