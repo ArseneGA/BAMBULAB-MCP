@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -94,7 +95,12 @@ func TestIntegrationToolsAndResource(t *testing.T) {
 	}
 	sort.Strings(names)
 	want := []string{"cancel_job", "get_capabilities", "get_job_status", "inspect_environment", "show_atelier"}
-	if strings.Join(names, ",") != strings.Join(want, ",") {
+	for _, w := range want {
+		if !slices.Contains(names, w) {
+			t.Fatalf("outil manquant %s : %v", w, names)
+		}
+	}
+	if len(names) != 19 { // 5 du socle + 14 du catalogue
 		t.Fatalf("outils : %v", names)
 	}
 	// Schéma d'entrée issu de contracts : job_id requis.
@@ -239,7 +245,7 @@ func TestProxyBridge(t *testing.T) {
 	cs := connectClient(t, p.Server)
 
 	lt, err := cs.ListTools(ctx, nil)
-	if err != nil || len(lt.Tools) != 5 {
+	if err != nil || len(lt.Tools) != 19 {
 		t.Fatalf("outils relayés : %v %v", lt, err)
 	}
 	for _, tl := range lt.Tools {
