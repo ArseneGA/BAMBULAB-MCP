@@ -66,6 +66,20 @@ type Model struct {
 	UpdatedAt    time.Time   `json:"updated_at"`
 	// DeletedAt non nil = en corbeille (restaurable).
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// Description libre, licence et provenance (dossier §14.2).
+	Description string      `json:"description,omitempty"`
+	License     string      `json:"license,omitempty" jsonschema:"licence du modèle (SPDX ou texte libre) ; vide = inconnue"`
+	Provenance  *Provenance `json:"provenance,omitempty"`
+}
+
+// Provenance dit d'où vient un modèle. Rien n'est inventé : les champs inconnus sont vides.
+type Provenance struct {
+	Source     string    `json:"source,omitempty" jsonschema:"origine déclarée (import, génération, site...)"`
+	URL        string    `json:"url,omitempty"`
+	Author     string    `json:"author,omitempty"`
+	OriginPath string    `json:"origin_path,omitempty" jsonschema:"chemin d'origine à l'import, informatif"`
+	ImportedAt time.Time `json:"imported_at,omitzero"`
+	Note       string    `json:"note,omitempty"`
 }
 
 // SourceFile est un fichier original, immuable, adressé par son empreinte.
@@ -80,6 +94,12 @@ type SourceFile struct {
 	// OriginPath : chemin d'origine côté Windows, informatif (jamais utilisé pour lire).
 	OriginPath *string   `json:"origin_path,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
+	// RelPath : chemin relatif d'origine (structure du dossier importé).
+	RelPath string `json:"rel_path,omitempty"`
+	// OriginMTime : date de modification de l'original lors de l'import (import incrémental).
+	OriginMTime *time.Time `json:"origin_mtime,omitempty"`
+	// Unit : unité confirmée par l'utilisateur (mm, cm, m, inch) ; vide = inconnue.
+	Unit string `json:"unit,omitempty"`
 }
 
 // ModelVersion est une version immuable d'un modèle.
