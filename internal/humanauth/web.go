@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -124,7 +125,7 @@ func (s *Service) RegisterPages(mux *http.ServeMux) {
 		if label == "" {
 			label = shortUA(r.UserAgent())
 		}
-		token, sess, err := s.Enroll(r.Context(), r.PostFormValue("code"), label)
+		token, sess, err := s.EnrollFrom(r.Context(), s.clientKey(r), r.PostFormValue("code"), label)
 		if err != nil {
 			st, msg := http.StatusForbidden, ErrBadCode.Error()
 			switch {
@@ -169,4 +170,16 @@ func shortUA(ua string) string {
 		ua = ua[:60]
 	}
 	return ua
+}
+
+// clientKey identifie l'appelant pour le limiteur d'essais.
+func (s *Service) clientKey(r *http.Request) string {
+	if s.o.ClientKey != nil {
+		return s.o.ClientKey(r)
+	}
+	h, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return h
 }

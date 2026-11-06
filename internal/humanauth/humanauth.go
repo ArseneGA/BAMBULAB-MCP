@@ -44,6 +44,16 @@ const (
 	codeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // sans 0/O/1/I
 	maxFailures  = 6
 	lockFor      = 5 * time.Minute
+	maxLockFor   = time.Hour // plafond du backoff par adresse
+
+	// Plafond global : au-delà de globalMaxFailures échecs (de la part d'adresses encore autorisées) en
+	// lockFor, TOUS les enrôlements sont suspendus (globalLockBase, doublé à chaque déclenchement, au plus
+	// globalLockMax). Une adresse déjà verrouillée n'alimente plus ce compteur : il faut donc au moins
+	// globalMaxFailures/maxFailures adresses distinctes pour le déclencher.
+	globalMaxFailures = 60
+	globalLockBase    = time.Minute
+	globalLockMax     = 15 * time.Minute
+	maxTrackedKeys    = 4096
 )
 
 // Erreurs.
@@ -72,6 +82,9 @@ type Options struct {
 	// Secure dit si le cookie doit porter l'attribut Secure pour cette requête (https direct ou URL
 	// publique en https). Par défaut : TLS direct seulement.
 	Secure func(*http.Request) bool
+	// ClientKey donne l'identifiant de l'appelant pour le limiteur d'essais (adresse client, en tenant compte
+	// d'un proxy de confiance). Nil : RemoteAddr sans le port.
+	ClientKey func(*http.Request) string
 }
 
 // Service gère les codes et les sessions.
@@ -79,8 +92,19 @@ type Service struct {
 	st   *store.Store
 	o    Options
 	mu   sync.Mutex
-	fail []time.Time // échecs récents (limiteur global)
-	lock time.Time   // verrouillé jusqu'à
+	keys map[string]*keyState // limiteur par adresse client
+	// limiteur global (plafond haut, backoff)
+	gfail    []time.Time
+	glock    time.Time
+	gstrikes int
+}
+
+// keyState : échecs récents, verrou et nombre de verrous successifs d'une adresse client.
+type keyState struct {
+	fail    []time.Time
+	lock    time.Time
+	strikes int
+	last    time.Time
 }
 
 // New construit le service au-dessus d'une base déjà migrée.
@@ -94,7 +118,7 @@ func New(st *store.Store, o Options) *Service {
 	if o.Now == nil {
 		o.Now = func() time.Time { return st.Now() }
 	}
-	return &Service{st: st, o: o}
+	return &Service{st: st, o: o, keys: map[string]*keyState{}}
 }
 
 func (s *Service) now() time.Time { return s.o.Now().UTC() }
@@ -139,37 +163,106 @@ func FormatCode(c string) string {
 	return c
 }
 
-func (s *Service) locked() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.now().Before(s.lock)
-}
-
-func (s *Service) noteFailure() {
+// locked dit si cette adresse (ou tout le monde, plafond global) est verrouillée.
+func (s *Service) locked(key string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	keep := s.fail[:0]
-	for _, t := range s.fail {
+	if now.Before(s.glock) {
+		return true
+	}
+	if k := s.keys[key]; k != nil && now.Before(k.lock) {
+		return true
+	}
+	return false
+}
+
+// pruneLocked retire les adresses sans verrou ni échec récent ; si la table reste pleine, la plus ancienne saute.
+func (s *Service) pruneLocked(now time.Time) {
+	for k, st := range s.keys {
+		if !now.Before(st.lock) && now.Sub(st.last) > maxLockFor {
+			delete(s.keys, k)
+		}
+	}
+	for len(s.keys) >= maxTrackedKeys {
+		oldest, ot := "", now
+		for k, st := range s.keys {
+			if st.last.Before(ot) || oldest == "" {
+				oldest, ot = k, st.last
+			}
+		}
+		delete(s.keys, oldest)
+	}
+}
+
+func (s *Service) noteFailure(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	k := s.keys[key]
+	if k == nil {
+		s.pruneLocked(now)
+		k = &keyState{}
+		s.keys[key] = k
+	}
+	k.last = now
+	keep := k.fail[:0]
+	for _, t := range k.fail {
 		if now.Sub(t) < lockFor {
 			keep = append(keep, t)
 		}
 	}
-	s.fail = append(keep, now)
-	if len(s.fail) >= maxFailures {
-		s.lock = now.Add(lockFor)
-		s.fail = nil
+	k.fail = append(keep, now)
+	if len(k.fail) >= maxFailures {
+		k.strikes++
+		d := lockFor << (k.strikes - 1)
+		if d > maxLockFor || d <= 0 {
+			d = maxLockFor
+		}
+		k.lock = now.Add(d)
+		k.fail = nil
+	}
+	// plafond global
+	gk := s.gfail[:0]
+	for _, t := range s.gfail {
+		if now.Sub(t) < lockFor {
+			gk = append(gk, t)
+		}
+	}
+	s.gfail = append(gk, now)
+	if len(s.gfail) >= globalMaxFailures {
+		d := globalLockBase << s.gstrikes
+		if d > globalLockMax || d <= 0 {
+			d = globalLockMax
+		}
+		s.gstrikes++
+		s.glock = now.Add(d)
+		s.gfail = nil
+	}
+}
+
+func (s *Service) noteSuccess(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.keys, key)
+	if s.gstrikes > 0 && !s.now().Before(s.glock) {
+		s.gstrikes = 0
 	}
 }
 
 // Enroll échange un code valide contre un jeton de session (renvoyé une seule fois, jamais stocké en clair).
 func (s *Service) Enroll(ctx context.Context, code, label string) (token string, sess Session, err error) {
-	if s.locked() {
+	return s.EnrollFrom(ctx, "", code, label)
+}
+
+// EnrollFrom est Enroll avec l'identifiant de l'appelant (adresse client) pour le limiteur d'essais.
+func (s *Service) EnrollFrom(ctx context.Context, key, code, label string) (token string, sess Session, err error) {
+	if s.locked(key) {
 		return "", Session{}, ErrLocked
 	}
 	code = NormalizeCode(code)
 	if len(code) != CodeLen {
-		s.noteFailure()
+		s.noteFailure(key)
 		return "", Session{}, ErrBadCode
 	}
 	if len(label) > 80 {
@@ -213,10 +306,11 @@ func (s *Service) Enroll(ctx context.Context, code, label string) (token string,
 	})
 	if err != nil {
 		if errors.Is(err, ErrBadCode) {
-			s.noteFailure()
+			s.noteFailure(key)
 		}
 		return "", Session{}, err
 	}
+	s.noteSuccess(key)
 	return token, sess, nil
 }
 

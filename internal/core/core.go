@@ -21,6 +21,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
@@ -72,6 +73,13 @@ type Core struct {
 	Printing *printing.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
+
+	studioBin *slicer.Binary                 // installation retenue (nil si StudioErr)
+	slicerFn  func() (*slicer.Slicer, error) // slicer partagé (profils chargés une fois)
+	profOnce  sync.Once
+	profMu    sync.Mutex
+	profInfo  *contracts.ProfileCounts // nil tant que le chargement n'est pas fini
+	profErr   error
 
 	// Tâches de fond enregistrées par d'autres paquets (AddRunHook) : démarrées par Run, arrêtées avec son
 	// contexte ; fonctions d'arrêt (AddCloseHook) appelées par Close AVANT la fermeture de la base.
@@ -129,14 +137,18 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("catalogue : %w", err)
 	}
 	var studioErr error
+	var studioBin *slicer.Binary
+	if cfg.StudioPath == "" {
+		cfg.StudioPath = os.Getenv("BAMBU_STUDIO_BIN") // posée mais invalide : erreur, jamais de repli silencieux
+	}
 	if cfg.StudioPath != "" {
 		// un chemin explicite doit exister : pas de repli silencieux sur une autre installation
-		if _, err := os.Stat(cfg.StudioPath); err != nil {
+		if fi, err := os.Stat(cfg.StudioPath); err != nil || fi.IsDir() {
 			studioErr = fmt.Errorf("Bambu Studio introuvable à %s", cfg.StudioPath)
 		}
 	}
 	if studioErr == nil {
-		_, studioErr = slicer.Locate(cfg.StudioPath)
+		studioBin, studioErr = slicer.Locate(cfg.StudioPath)
 	}
 	// Slicer partagé (profils chargés une seule fois) par les objectifs et l'impression.
 	var slOnce sync.Once
@@ -167,7 +179,8 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		lock.release()
 		return nil, fmt.Errorf("impression : %w", err)
 	}
-	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, lock: lock}
+	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
+	c.AddRunHook(func(context.Context) { c.Catalog.WarmCAD() }) // vérifie CadQuery (ping) dès le démarrage, sans bloquer
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
 	})
@@ -276,7 +289,7 @@ func registerBuiltins(reg *jobs.Registry) {
 
 // Capabilities décrit ce que le service sait réellement faire à cet instant.
 func (c *Core) Capabilities() contracts.Capabilities {
-	cadOK, cadNote := c.Catalog.CADStatus()
+	cadOK, cadNote := c.Catalog.CADHealth() // vérifié pour de vrai (ping du worker : import de cadquery), en cache
 	if !cadOK {
 		cadNote = "backend CAO absent : " + cadNote
 	}
@@ -308,10 +321,49 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			string(contracts.ClassLight): c.Queue.Limit(contracts.ClassLight),
 		},
 	}
+	caps.Studio = c.studioInfo()
 	for _, h := range c.CapabilityHooks {
 		h(&caps)
 	}
 	return caps
+}
+
+// studioInfo décrit Bambu Studio et les profils chargés. Le chargement des profils (lourd) est lancé en
+// arrière-plan au premier appel : tant qu'il n'est pas fini, Profiles est nil.
+func (c *Core) studioInfo() *contracts.StudioInfo {
+	if c.StudioErr != nil || c.studioBin == nil {
+		note := "Bambu Studio introuvable"
+		if c.StudioErr != nil {
+			note = c.StudioErr.Error()
+		}
+		return &contracts.StudioInfo{Available: false, Note: note}
+	}
+	info := &contracts.StudioInfo{Available: true, Path: c.studioBin.Path, Version: c.studioBin.Version, ProfilesDir: c.studioBin.ProfilesDir()}
+	c.profOnce.Do(func() {
+		go func() {
+			sl, err := c.slicerFn()
+			c.profMu.Lock()
+			defer c.profMu.Unlock()
+			if err != nil {
+				c.profErr = err
+				return
+			}
+			ps := sl.Profiles()
+			c.profInfo = &contracts.ProfileCounts{Models: ps.Count(profiles.KindMachineModel), Machines: len(ps.Names(profiles.KindMachine)),
+				Processes: len(ps.Names(profiles.KindProcess)), Filaments: len(ps.Names(profiles.KindFilament))}
+		}()
+	})
+	c.profMu.Lock()
+	defer c.profMu.Unlock()
+	switch {
+	case c.profErr != nil:
+		info.Available, info.Note = false, "profils non chargés : "+c.profErr.Error()
+	case c.profInfo == nil:
+		info.Note = "chargement des profils en cours"
+	default:
+		info.Profiles = c.profInfo
+	}
+	return info
 }
 
 func catalogImportNote(roots int) string {
@@ -342,10 +394,17 @@ func (c *Core) Environment(ctx context.Context) (contracts.EnvironmentReport, er
 		NumCPU: runtime.NumCPU(), DataDir: c.Cfg.DataDir, DataDirWritable: writable(c.Cfg.DataDir),
 		SchemaVersion: v, Missing: []string{},
 	}
-	rep.Executables = []contracts.Executable{
-		findExe("bambu-studio", "slicing headless (CLI Bambu Studio)", "BAMBU_STUDIO_PATH", "bambu-studio", "bambu-studio.AppImage", "BambuStudio", "bambu-studio-cli"),
-		findExe("python", "worker CAO (STEP, paramétrique)", "BAMBU_PYTHON", "python3", "python"),
+	// Ce que le service utilise réellement (BAMBU_STUDIO_BIN / --studio-bin, BAMBU_UV_PATH, BAMBU_GEOMETRY_DIR),
+	// pas une recherche indépendante.
+	studio := contracts.Executable{Name: "bambu-studio", Purpose: "slicing headless (CLI Bambu Studio)"}
+	if c.studioBin != nil && c.StudioErr == nil {
+		studio.Found, studio.Path, studio.Version = true, c.studioBin.Path, c.studioBin.Version
 	}
+	uv := contracts.Executable{Name: "uv", Purpose: "worker CAO (STEP, paramétrique) : uv + projet workers/geometry"}
+	if uvPath, _, err := c.Catalog.WorkerBackend(); err == nil {
+		uv.Found, uv.Path = true, uvPath
+	}
+	rep.Executables = []contracts.Executable{studio, uv}
 	if !rep.DataDirWritable {
 		rep.Missing = append(rep.Missing, "droit d'écriture sur le dossier de données")
 	}

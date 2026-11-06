@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 )
 
@@ -142,6 +143,38 @@ func TestRunRefusesNonLoopbackWithoutToken(t *testing.T) {
 	err := run(context.Background(), log, "0.0.0.0:0", cfg, serveConfig{}, nil)
 	if err == nil || !strings.Contains(err.Error(), "jeton") {
 		t.Fatalf("démarrage hors loopback sans jeton non refusé : %v", err)
+	}
+}
+
+// Le jeton est aussi exigé en écoute loopback dès que le service est exposé (proxy) ou si --require-token.
+func TestRunRequiresTokenWhenExposedOrForced(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cases := map[string]serveConfig{
+		"--require-token":      {RequireToken: true},
+		"url publique":         {HTTP: httpapi.Options{PublicURL: "https://bambu.example.ts.net", PublicURLs: []string{"https://bambu.example.ts.net"}}},
+		"hôte autorisé public": {HTTP: httpapi.Options{AllowedHosts: []string{"bambu.example.ts.net"}}},
+	}
+	for name, sc := range cases {
+		err := run(context.Background(), log, "127.0.0.1:0", core.Config{DataDir: t.TempDir(), Logger: log}, sc, nil)
+		if err == nil || !strings.Contains(err.Error(), "jeton") || !strings.Contains(err.Error(), "proxy") {
+			t.Errorf("%s : démarrage loopback sans jeton non refusé : %v", name, err)
+		}
+	}
+}
+
+func TestPublicURLList(t *testing.T) {
+	const l = "https://bambu.example.ts.net/, http://192.168.1.5:7878"
+	if got := publicBase(l, "127.0.0.1:7878"); got != "https://bambu.example.ts.net" {
+		t.Errorf("la première URL sert aux liens : %q", got)
+	}
+	if validatePublicURL(l) != nil {
+		t.Error("liste valide refusée")
+	}
+	if validatePublicURL("https://a.example, ftp://b") == nil || validatePublicURL(" , ") == nil {
+		t.Error("liste invalide acceptée")
+	}
+	if got := splitPublicURLs(l); len(got) != 2 || got[1] != "http://192.168.1.5:7878" {
+		t.Errorf("découpe : %v", got)
 	}
 }
 

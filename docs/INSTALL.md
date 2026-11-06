@@ -52,7 +52,7 @@ Le script est **idempotent** : le relancer met à jour les binaires et la config
 | binaires | `/opt/atelier/bin/bambud`, `bambu-mcp` (copie atomique), outil `atelier-admin` (lien `/usr/local/bin`) |
 | worker CAO | `/opt/atelier/cad/geometry` + `uv sync --extra cad` sous l'utilisateur `atelier` (quelques minutes la première fois : télécharge Python 3.12 et CadQuery) |
 | Bambu Studio | l'AppImage est **extraite une fois** dans `/opt/atelier/bambustudio/squashfs-root` (profils BBL à côté de `AppRun`) ; `BAMBU_STUDIO_BIN` pointe sur `AppRun` |
-| écran virtuel | `xvfb-run` détecté → `BAMBU_STUDIO_WRAPPER="xvfb-run -a"` (bambud l'utilise aussi par défaut sous Linux sans écran) |
+| écran virtuel | `xvfb-run` détecté → `BAMBU_STUDIO_WRAPPER="xvfb-run -a"` (posé **explicitement** par le script : bambud n'active plus jamais `xvfb-run` de lui-même ; `BAMBU_STUDIO_WRAPPER=none` ou vide = aucun préfixe) |
 | `/etc/atelier/atelier.env` (600, root) | `BAMBU_DATA_DIR`, `BAMBU_ADDR`, `BAMBU_PUBLIC_URL`, `BAMBU_ALLOWED_HOSTS` (nom d'hôte, `.local`, IP), `BAMBU_STUDIO_*`, `BAMBU_UV_PATH`, `BAMBU_GEOMETRY_DIR`, **`BAMBU_API_TOKEN` généré une fois, jamais affiché** |
 | service | `atelier.service` (durci : `NoNewPrivileges`, `ProtectSystem=strict`, `PrivateTmp`…), activé et démarré ; attend `/health` |
 | sauvegarde | `atelier-backup.timer` (03:30 par défaut), rotation des `--backup-keep` dernières archives |
@@ -65,7 +65,15 @@ curl -s http://127.0.0.1:7878/health               # {"schema_version":…,"stat
 journalctl -u atelier -n 30 --no-pager
 ```
 
-Au démarrage, `journalctl` signale en avertissement un éventuel Bambu Studio introuvable ou un `xvfb-run` absent. La découpe ne fonctionne que si `get_capabilities` annonce `slicing` disponible (voir E4).
+Au démarrage, `journalctl` signale en avertissement un éventuel Bambu Studio introuvable. Un `BAMBU_STUDIO_BIN` (ou `--studio-bin`) qui désigne un fichier absent **empêche le démarrage** (message « Bambu Studio introuvable »), sans repli sur une autre installation. La découpe ne fonctionne que si `get_capabilities` annonce `slicing` disponible (voir E4).
+
+Test de fumée complet (santé, Studio et profils chargés, CadQuery réellement importé, MCP `tools/list`, profils filament) :
+
+```bash
+sudo scripts/smoke-linux.sh --url http://127.0.0.1:7878 --token-file /etc/atelier/atelier.env   # le jeton est lu dans le fichier, jamais affiché
+```
+
+Options de sécurité utiles derrière un proxy (Funnel, `tailscale serve`, nginx) — **toujours un jeton d'API** : `BAMBU_REQUIRE_TOKEN=1`, `BAMBU_PUBLIC_URL` (une ou plusieurs URL séparées par des virgules ; la première sert aux liens), `BAMBU_ALLOWED_HOSTS`, `BAMBU_TRUSTED_PROXIES` (défaut : loopback). `BAMBU_IMPORT_ROOTS` ne doit pas contenir `BAMBU_DATA_DIR` ni s'y trouver. Détails : `docs/DEPLOY-LINUX.md` § 3 et § 7, `docs/SECURITY.md`.
 
 ## B. Enregistrer votre navigateur
 
@@ -76,7 +84,7 @@ sudo atelier-admin enroll
 # Code d'enregistrement : ABCD-EFGH   (usage unique, 10 minutes)
 ```
 
-Ouvrez `http://IP:7878/enroll` dans le navigateur (PC, téléphone, tablette du réseau local) et saisissez le code. Répétez pour chaque appareil. Gestion : `sudo atelier-admin enroll --list`, `--revoke <id>`, `--revoke-all`.
+Ouvrez `http://IP:7878/enroll` dans le navigateur (PC, téléphone, tablette du réseau local) et saisissez le code. Répétez pour chaque appareil. **L'interface web (`http://IP:7878/`) a besoin de ce même enregistrement** : le jeton d'API reste sur le serveur, c'est le cookie du navigateur enregistré qui authentifie les appels de l'interface. Un navigateur inconnu voit l'écran « Enregistrer ce navigateur » qui mène à `/enroll`. Gestion : `sudo atelier-admin enroll --list`, `--revoke <id>`, `--revoke-all`.
 
 > Le serveur est en HTTP clair sur le réseau local. Acceptable à la maison ; ne l'exposez pas sur Internet. Pour un accès hors LAN, placez un proxy HTTPS devant bambud (alors `--public-url https://…` rend le cookie `Secure`).
 
@@ -176,9 +184,12 @@ Le service vide ses travaux en cours à l'arrêt (30 s) et reprend au démarrage
 |---|---|
 | `curl …/health` ne répond pas | `journalctl -u atelier -n 50` ; écoute hors loopback sans jeton refusée (le jeton est généré par `install.sh`) |
 | « hôte non autorisé » (403) | l'adresse utilisée dans le navigateur n'est pas dans `BAMBU_ALLOWED_HOSTS` : l'ajouter dans `/etc/atelier/atelier.env` (ou `--allowed-hosts`) puis `sudo systemctl restart atelier` |
-| `/enroll` refuse le code | code expiré (10 min), déjà utilisé, ou 6 échecs (verrou 5 min) : relancer `sudo atelier-admin enroll` |
-| `get_capabilities` : `slicing` indisponible | Studio introuvable ou profils absents : vérifier `BAMBU_STUDIO_BIN` (doit être `…/squashfs-root/AppRun`), `ls /opt/atelier/bambustudio/squashfs-root/resources/profiles/BBL`, `which xvfb-run` |
-| `cad_worker` indisponible | `sudo -u atelier env HOME=/var/lib/atelier/home /opt/atelier/bin/uv sync --extra cad` dans `/opt/atelier/cad/geometry` ; relancer `install.sh` |
+| `/enroll` refuse le code | code expiré (10 min), déjà utilisé, ou 6 échecs de votre adresse (verrou 5 min, doublé à chaque récidive ; un plafond global suspend brièvement tous les enrôlements après de très nombreux échecs) : relancer `sudo atelier-admin enroll` |
+| L'interface web affiche « Enregistrer ce navigateur » | normal pour un navigateur inconnu : `sudo atelier-admin enroll`, puis le code sur `/enroll` |
+| bambud refuse de démarrer : « jeton d'API obligatoire » | écoute hors loopback, `--require-token`, ou `BAMBU_PUBLIC_URL`/`BAMBU_ALLOWED_HOSTS` désignant un nom non loopback sans `BAMBU_API_TOKEN` (≥ 16 caractères) |
+| bambud refuse de démarrer : racine d'import | `BAMBU_IMPORT_ROOTS` contient le dossier de données (ou s'y trouve) : choisir un dossier distinct |
+| `get_capabilities` : `slicing` indisponible | Studio introuvable ou profils absents : vérifier `BAMBU_STUDIO_BIN` (doit être `…/squashfs-root/AppRun`), `ls /opt/atelier/bambustudio/squashfs-root/resources/profiles/BBL`, `which xvfb-run` ; `/api/capabilities` donne `studio` (chemin, version, profils chargés) |
+| `cad_worker` indisponible | la note de `/api/capabilities` donne la cause (c'est le résultat d'un vrai `ping` du worker qui importe CadQuery) : `sudo -u atelier env HOME=/var/lib/atelier/home /opt/atelier/bin/uv sync --frozen --no-dev --extra cad` dans `/opt/atelier/cad/geometry` ; relancer `install.sh` |
 | Claude Desktop n'affiche pas l'outil | Claude Desktop pas redémarré **complètement** ; JSON de config invalide ; serveur injoignable (`Test-NetConnection IP -Port 7878`) ; jeton erroné (journal du pont : `%APPDATA%\Claude\logs\mcp-server-bambu-atelier.log`) |
 | `Accès refusé` à l'exécution d'un `.exe` compilé | politique du poste : utiliser `go run ./cmd/…` (c'est ce que fait `scripts/smoke.ps1` en repli) |
 | Sauvegarde en échec « blob corrompu » | un fichier du magasin ne correspond plus à son empreinte : `sudo atelier-admin verify` le nomme ; restaurez ce blob depuis une sauvegarde saine |

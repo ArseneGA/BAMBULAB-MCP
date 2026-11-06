@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -176,27 +174,8 @@ func verifyMain(args []string, out, errw io.Writer) int {
 // parseWrapper découpe une commande préfixe ("xvfb-run -a"). "none" ou "-" la désactive.
 func parseWrapper(s string) []string {
 	s = strings.TrimSpace(s)
-	if s == "" || s == "none" || s == "-" {
+	if s == "" || strings.EqualFold(s, "none") || s == "-" {
 		return nil
 	}
 	return strings.Fields(s)
-}
-
-// defaultStudioWrapper : sous Linux sans écran (service systemd) et si xvfb-run existe, Bambu Studio est lancé
-// sous un écran virtuel ; sinon aucun préfixe. Un réglage explicite (--studio-wrapper) l'emporte toujours.
-func defaultStudioWrapper(goos string, getenv func(string) string, lookPath func(string) (string, error)) []string {
-	if goos != "linux" || getenv("DISPLAY") != "" || getenv("WAYLAND_DISPLAY") != "" {
-		return nil
-	}
-	if _, err := lookPath("xvfb-run"); err != nil {
-		return nil
-	}
-	return []string{"xvfb-run", "-a"}
-}
-
-func studioWrapper(flagValue string) []string {
-	if strings.TrimSpace(flagValue) != "" {
-		return parseWrapper(flagValue)
-	}
-	return defaultStudioWrapper(runtime.GOOS, os.Getenv, exec.LookPath)
 }

@@ -77,23 +77,44 @@ func TestBackupRestoreVerifyCommands(t *testing.T) {
 	}
 }
 
-func TestStudioWrapperDefaults(t *testing.T) {
-	found := func(string) (string, error) { return "/usr/bin/xvfb-run", nil }
-	none := func(string) (string, error) { return "", os.ErrNotExist }
-	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
-	if got := defaultStudioWrapper("linux", env(nil), found); len(got) != 2 || got[0] != "xvfb-run" || got[1] != "-a" {
-		t.Errorf("service sans écran : %v", got)
-	}
-	if defaultStudioWrapper("linux", env(map[string]string{"DISPLAY": ":0"}), found) != nil {
-		t.Error("avec écran : pas de wrapper")
-	}
-	if defaultStudioWrapper("linux", env(nil), none) != nil || defaultStudioWrapper("windows", env(nil), found) != nil {
-		t.Error("sans xvfb-run ou hors Linux : pas de wrapper")
+// Le wrapper xvfb n'est plus activé implicitement : seul un réglage explicite compte.
+func TestStudioWrapperExplicitOnly(t *testing.T) {
+	if got := parseWrapper(""); got != nil {
+		t.Errorf("sans réglage : aucun préfixe attendu, obtenu %v", got)
 	}
 	if got := parseWrapper("xvfb-run -a -s '-screen'"); len(got) != 4 {
 		t.Errorf("parseWrapper : %v", got)
 	}
-	if parseWrapper("none") != nil || parseWrapper(" ") != nil {
-		t.Error("none / vide")
+	for _, v := range []string{"none", "NONE", "-", " "} {
+		if parseWrapper(v) != nil {
+			t.Errorf("%q devrait désactiver le préfixe", v)
+		}
+	}
+}
+
+func TestResolveStudioPath(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "bambu-studio")
+	if err := os.WriteFile(exe, []byte("x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := resolveStudioPath("", ""); err != nil || p != "" {
+		t.Errorf("rien de demandé : %q %v", p, err)
+	}
+	if p, err := resolveStudioPath("", exe); err != nil || p != exe {
+		t.Errorf("BAMBU_STUDIO_BIN valide : %q %v", p, err)
+	}
+	if p, err := resolveStudioPath(exe, "/absent"); err != nil || p != exe {
+		t.Errorf("--studio-bin l'emporte : %q %v", p, err)
+	}
+	for name, args := range map[string][2]string{
+		"env introuvable":  {"", filepath.Join(dir, "absent")},
+		"env dossier":      {"", dir},
+		"flag introuvable": {filepath.Join(dir, "absent"), exe},
+	} {
+		_, err := resolveStudioPath(args[0], args[1])
+		if err == nil || !strings.Contains(err.Error(), "introuvable") {
+			t.Errorf("%s : erreur claire attendue, obtenu %v", name, err)
+		}
 	}
 }

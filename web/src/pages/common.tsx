@@ -108,6 +108,24 @@ export function Dialog({ open, onClose, title, children, wide, footer }: { open:
   );
 }
 
+/* ---------- écran « Enregistrer ce navigateur » (jeton d'API configuré, navigateur inconnu) ---------- */
+/** Adresse de la page d'enregistrement, qui ramène ensuite à l'écran courant. */
+export const enrollUrl = (path: string) => `/enroll?next=${encodeURIComponent(path)}`;
+
+export function EnrollGate() {
+  const c = useConnection();
+  const here = typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search;
+  return (
+    <div className="enroll-gate" role="alert">
+      <ErrorState
+        title="Enregistrer ce navigateur"
+        text="Ce serveur est protégé par un jeton d'API : l'interface web n'y accède que depuis un navigateur enregistré. Sur le poste qui fait tourner bambud, lancez « bambud enroll » dans un terminal : le code à 8 caractères s'affiche là (il n'est jamais transmis à Claude). Saisissez-le sur la page d'enregistrement."
+        action={<div className="enroll-gate-actions"><a className="enroll" href={enrollUrl(here)}>Enregistrer ce navigateur</a><Button variant="ghost" onClick={c.recheck}>J'ai terminé, réessayer</Button></div>}
+      />
+    </div>
+  );
+}
+
 /* ---------- pastille « connexion » pour les bandeaux ---------- */
 export function ServerBanner() {
   const c = useConnection();

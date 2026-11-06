@@ -20,6 +20,13 @@ Paramètres (mm) :
 Résultat : `template`, `params`, `parts[]{name,volume_mm3,solids,tessellation}`, `bbox_mm`, `derived`, `assumptions[]`, `warnings[]`, `files{stl,step,source}`, `level:"calculé"`, `validity`.
 Erreurs : `invalid_params`, `cad_backend_missing`, `cad_failure`.
 
+## ping
+Requête : `{}`. Importe réellement CadQuery/OCP (vérification de santé, utilisée par `GET /api/capabilities`, résultat mis en cache côté bambud).
+Résultat : `{"cadquery":"<version>","python":"<version>"}`. Erreur : `cad_unavailable` (CadQuery/OCP absent ou non chargeable).
+
+## Exécution par bambud
+`uv run --frozen --no-dev --extra cad --project <dir> python -m bambu_geometry <commande>` : jamais d'écriture de `uv.lock`, pas de groupe `dev`. L'environnement virtuel est celui de `UV_PROJECT_ENVIRONMENT` s'il est défini ; à défaut, `<data-dir>/venvs/geometry` (sauf si `<dir>/.venv` existe). `PYTHONDONTWRITEBYTECODE=1` : bambud n'écrit rien dans `<dir>`.
+
 ## Confinement des chemins
 Le worker n'est pas un bac à sable : l'appelant (bambud) DOIT confiner `path` (lecture) et `out_dir` (écriture) à des dossiers autorisés avant l'appel et ne jamais les tirer tels quels d'une entrée utilisateur. Côté worker : `name` doit respecter `^[A-Za-z0-9._-]{1,64}$` et les fichiers de sortie sont vérifiés (`resolve`) sous `out_dir`.
 Plafonds : `step_import` — `tolerance_mm` dans [0,001 ; 10], `angular_tolerance_rad` dans [0,01 ; 1,6], valeurs finies (sinon `invalid_params`), au plus 5 000 000 de triangles (sinon `too_complex`) ; `parametric` — `holes`/`holes_a`/`holes_b` entiers de 0 à 50.

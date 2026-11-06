@@ -230,3 +230,9 @@ def test_hook_arm_must_exceed_twice_thickness(tmp_path):
 def test_hook_tiny_plate_does_not_crash(tmp_path):
     r = run_tpl(tmp_path, "hook", {"plate_height": 10, "hole_diameter": 6, "holes": 3})
     assert r["warnings"] and r["parts"][0]["volume_mm3"] > 0
+
+
+def test_ping_imports_cadquery():
+    r, rc = call("ping", {})
+    assert rc == 0 and r["ok"] is True
+    assert r["result"]["cadquery"] and r["result"]["python"]

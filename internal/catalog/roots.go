@@ -27,6 +27,37 @@ func within(root, p string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
+// checkRootAgainstDataDir refuse une racine d'import configurée qui contient le dossier de données, ou qui
+// s'y trouve : importer puis télécharger (GET /api/files/{id}/download) exposerait la base, les blobs et
+// secrets/master.key. Les chemins sont comparés après résolution des liens symboliques.
+func checkRootAgainstDataDir(root, dataDir string) error {
+	if dataDir == "" {
+		return nil
+	}
+	c, err := canonical(root)
+	if err != nil {
+		return nil // inexistante ou relative : AddRoot s'en plaint
+	}
+	d, err := filepath.Abs(dataDir)
+	if err != nil {
+		return nil
+	}
+	if r, err := filepath.EvalSymlinks(d); err == nil {
+		d = r
+	}
+	if within(c, d) {
+		return fmt.Errorf("%w : contient le dossier de données %q (base, blobs, secrets) ; choisir un dossier de fichiers 3D distinct", ErrNotAllowed, d)
+	}
+	if within(d, c) {
+		return fmt.Errorf("%w : se trouve dans le dossier de données %q (base, blobs, secrets) ; choisir un dossier distinct", ErrNotAllowed, d)
+	}
+	return nil
+}
+
+// WorkerBackend renvoie l'exécutable uv et le projet du worker géométrie réellement retenus (ErrBackendMissing
+// sinon) : ce que le service utilise, pas une hypothèse.
+func (s *Service) WorkerBackend() (uv, dir string, err error) { return s.stepBackend() }
+
 // AddRoot ajoute une racine autorisée (le dossier doit exister).
 func (s *Service) AddRoot(p string) error {
 	c, err := canonical(p)

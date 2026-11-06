@@ -34,4 +34,8 @@ a.pill:not(.enroll):focus-visible { outline: 2px solid var(--accent); outline-of
 .topbar { position: relative; z-index: 5; }
 .nav a { position: relative; }
 .nav-soon { width: 6px; height: 6px; background: var(--warn); transform: rotate(45deg); margin-left: 2px; flex: none; }
+.enroll-gate { max-width: 640px; margin: var(--sp-6) auto; }
+.enroll-gate .state p { max-width: 56ch; }
+.enroll-gate-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; justify-content: center; }
+.enroll-gate-actions .enroll { font-size: inherit; }
 .enroll { color: var(--warn); font-size: var(--fs-sm); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
