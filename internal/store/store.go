@@ -175,6 +175,15 @@ func (s *Store) migrate(ctx context.Context) error {
 	return nil
 }
 
+// LatestSchemaVersion renvoie la version de schéma la plus récente embarquée dans ce binaire.
+func LatestSchemaVersion() int {
+	ms, err := loadMigrations()
+	if err != nil || len(ms) == 0 {
+		return 0
+	}
+	return ms[len(ms)-1].version
+}
+
 // SchemaVersion renvoie la version courante du schéma.
 func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 	var v int

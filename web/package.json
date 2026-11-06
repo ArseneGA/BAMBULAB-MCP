@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5174 --strictPort",
-    "build": "tsc --noEmit && vite build && npm run build:mcp-app",
+    "build": "tsc --noEmit && vite build && vite build --config mcp-app/vite.config.ts && node scripts/embed.mjs --skip-build",
     "build:app": "vite build",
     "build:mcp-app": "vite build --config mcp-app/vite.config.ts",
     "typecheck": "tsc --noEmit",
