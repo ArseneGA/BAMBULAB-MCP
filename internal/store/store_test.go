@@ -45,8 +45,9 @@ func TestMigrationsAndReopen(t *testing.T) {
 	defer s2.Close()
 	var n int
 	_ = s2.DB().QueryRow(`SELECT COUNT(*) FROM schema_version`).Scan(&n)
-	if n != 2 {
-		t.Fatalf("migration réappliquée : %d lignes (2 migrations attendues, v%d)", n, v)
+	ms, _ := loadMigrations()
+	if n != len(ms) {
+		t.Fatalf("migration réappliquée : %d lignes (%d migrations attendues, v%d)", n, len(ms), v)
 	}
 }
 
