@@ -91,10 +91,85 @@ type uploadRow struct {
 	Root   string
 	Rel    string
 	State  string
+	Name   string
+}
+
+// name : nom du fichier pour le contrôle de format (chemin relatif d'un import, nom déclaré d'une sortie).
+func (u uploadRow) name() string {
+	if u.Target == TargetInbox {
+		return u.Rel
+	}
+	return u.Name
+}
+
+// lockSHA sérialise les écritures d'un même fichier .part (agent, empreinte) ; renvoie la fonction de libération.
+func (r *Registry) lockSHA(agentID, sha string) func() {
+	key := agentID + "/" + sha
+	r.shaMu.Lock()
+	l := r.shaLocks[key]
+	if l == nil {
+		l = &shaLock{}
+		r.shaLocks[key] = l
+	}
+	l.refs++
+	r.shaMu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		r.shaMu.Lock()
+		if l.refs--; l.refs == 0 {
+			delete(r.shaLocks, key)
+		}
+		r.shaMu.Unlock()
+	}
+}
+
+// PurgeStaging supprime les fichiers .part plus anciens que maxAge (transferts abandonnés).
+func (r *Registry) PurgeStaging(maxAge time.Duration) int {
+	n := 0
+	_ = filepath.WalkDir(r.stage, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".part") {
+			return nil
+		}
+		if info, ierr := d.Info(); ierr == nil && r.now().Sub(info.ModTime()) > maxAge {
+			if os.Remove(p) == nil {
+				n++
+			}
+		}
+		return nil
+	})
+	return n
+}
+
+// dropParts supprime les .part des envois en attente d'un travail terminé, sauf ceux qu'un autre travail
+// encore actif du même agent attend (même empreinte).
+func (r *Registry) dropParts(ctx context.Context, agentID, taskID string) {
+	rows, err := r.db().QueryContext(ctx, `SELECT sha256 FROM agent_uploads WHERE task_id=? AND state='pending'`, taskID)
+	if err != nil {
+		return
+	}
+	var shas []string
+	for rows.Next() {
+		var s string
+		if rows.Scan(&s) == nil {
+			shas = append(shas, s)
+		}
+	}
+	rows.Close()
+	for _, sha := range shas {
+		var other int
+		_ = r.db().QueryRowContext(ctx, `SELECT COUNT(*) FROM agent_uploads u JOIN agent_tasks t ON t.id=u.task_id
+			WHERE u.agent_id=? AND u.sha256=? AND u.state='pending' AND u.task_id<>? AND t.state IN ('queued','assigned','running','unknown')`, agentID, sha, taskID).Scan(&other)
+		if other == 0 {
+			unlock := r.lockSHA(agentID, sha)
+			_ = os.Remove(r.partPath(agentID, sha))
+			unlock()
+		}
+	}
 }
 
 func (r *Registry) uploadRows(ctx context.Context, taskID, sha string) ([]uploadRow, error) {
-	rows, err := r.db().QueryContext(ctx, `SELECT size_bytes,target,root_label,rel_path,state FROM agent_uploads WHERE task_id=? AND sha256=?`, taskID, sha)
+	rows, err := r.db().QueryContext(ctx, `SELECT size_bytes,target,root_label,rel_path,state,name FROM agent_uploads WHERE task_id=? AND sha256=?`, taskID, sha)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +177,7 @@ func (r *Registry) uploadRows(ctx context.Context, taskID, sha string) ([]upload
 	var out []uploadRow
 	for rows.Next() {
 		var u uploadRow
-		if err := rows.Scan(&u.Size, &u.Target, &u.Root, &u.Rel, &u.State); err != nil {
+		if err := rows.Scan(&u.Size, &u.Target, &u.Root, &u.Rel, &u.State, &u.Name); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -138,6 +213,9 @@ func (r *Registry) authorizeUpload(ctx context.Context, a Agent, taskID, sha str
 		if name == "." || name == "/" {
 			name = "artefact"
 		}
+		if _, err := allowedUpload(t.Kind, TargetArtifact, name); err != nil {
+			return nil, err
+		}
 		if _, err := r.db().ExecContext(ctx, `INSERT OR IGNORE INTO agent_uploads(agent_id,task_id,sha256,size_bytes,target,root_label,rel_path,name,state,updated_at)
 			VALUES(?,?,?,?, 'artifact','','',?, 'pending', ?)`, a.ID, taskID, sha, size, name, store.FormatTime(r.now())); err != nil {
 			return nil, err
@@ -151,8 +229,26 @@ func (r *Registry) authorizeUpload(ctx context.Context, a Agent, taskID, sha str
 		if u.Size != size {
 			return nil, errf(http.StatusConflict, CodeConflict, "taille annoncée %d différente de la taille autorisée %d", size, u.Size)
 		}
+		// Format selon le type de travail, et taille maximale selon le type de fichier.
+		ext, err := allowedUpload(t.Kind, u.Target, u.name())
+		if err != nil {
+			return nil, err
+		}
+		if max := MaxSizeFor(ext, r.cfg.MaxUploadBytes); u.Size > max {
+			return nil, errf(http.StatusRequestEntityTooLarge, CodeInvalid, "fichier %s de %d octets : maximum %d pour ce type", ext, u.Size, max)
+		}
 	}
 	return rows, nil
+}
+
+// contentExt renvoie l'extension à contrôler pour les lignes d'un envoi (la première reconnue).
+func contentExt(rows []uploadRow) string {
+	for _, u := range rows {
+		if e := fileExt(u.name()); e != "" {
+			return e
+		}
+	}
+	return ""
 }
 
 // BeginUpload ouvre ou reprend un transfert : renvoie l'offset à partir duquel envoyer.
@@ -161,6 +257,8 @@ func (r *Registry) BeginUpload(ctx context.Context, a Agent, b UploadBegin) (Upl
 	if err != nil {
 		return UploadStatus{}, err
 	}
+	unlock := r.lockSHA(a.ID, b.SHA256)
+	defer unlock()
 	done := true
 	for _, u := range rows {
 		if u.State != "done" {
@@ -170,7 +268,12 @@ func (r *Registry) BeginUpload(ctx context.Context, a Agent, b UploadBegin) (Upl
 	if done {
 		return UploadStatus{Offset: b.Size, Size: b.Size, Complete: true}, nil
 	}
-	if r.d.Blobs.Has(b.SHA256) { // contenu déjà au magasin : rien à retransférer
+	if r.d.Blobs.Has(b.SHA256) { // contenu déjà au magasin : rien à retransférer (format re-contrôlé)
+		if p, perr := r.d.Blobs.Path(b.SHA256); perr == nil {
+			if err := checkContent(p, contentExt(rows)); err != nil {
+				return UploadStatus{}, err
+			}
+		}
 		if err := r.finishUpload(ctx, a, b.TaskID, b.SHA256); err != nil {
 			return UploadStatus{}, err
 		}
@@ -182,6 +285,10 @@ func (r *Registry) BeginUpload(ctx context.Context, a Agent, b UploadBegin) (Upl
 		if off > b.Size {
 			_ = os.Remove(r.partPath(a.ID, b.SHA256))
 			off = 0
+		} else if off == b.Size {
+			// Le .part est complet (interruption entre le dernier octet et la finalisation) : on finalise
+			// maintenant au lieu de laisser l'agent croire qu'il reste quelque chose à envoyer.
+			return r.finalizePart(ctx, a, b.TaskID, b.SHA256, b.Size, rows)
 		}
 	}
 	return UploadStatus{Offset: off, Size: b.Size}, nil
@@ -195,6 +302,8 @@ func (r *Registry) PutChunk(ctx context.Context, a Agent, taskID, sha string, st
 	if err != nil {
 		return UploadStatus{}, err
 	}
+	unlock := r.lockSHA(a.ID, sha)
+	defer unlock()
 	allDone := true
 	for _, u := range rows {
 		if u.State != "done" {
@@ -238,7 +347,14 @@ func (r *Registry) PutChunk(ctx context.Context, a Agent, taskID, sha string, st
 	if now < total {
 		return UploadStatus{Offset: now, Size: total}, nil
 	}
-	// Dernier octet reçu : vérification complète de l'empreinte.
+	// Dernier octet reçu : finalisation (empreinte, format, publication).
+	return r.finalizePart(ctx, a, taskID, sha, total, rows)
+}
+
+// finalizePart vérifie l'empreinte et le format du .part complet, le publie dans le magasin de blobs puis
+// marque le transfert terminé. Appelée sous le verrou (agent, sha).
+func (r *Registry) finalizePart(ctx context.Context, a Agent, taskID, sha string, total int64, rows []uploadRow) (UploadStatus, error) {
+	part := r.partPath(a.ID, sha)
 	got, err := fileSHA(part)
 	if err != nil {
 		return UploadStatus{}, err
@@ -246,6 +362,10 @@ func (r *Registry) PutChunk(ctx context.Context, a Agent, taskID, sha string, st
 	if got != sha {
 		_ = os.Remove(part)
 		return UploadStatus{Offset: 0, Size: total}, errf(http.StatusUnprocessableEntity, CodeHashMismatch, "empreinte reçue %s différente de l'empreinte annoncée %s : transfert rejeté, à recommencer", got, sha)
+	}
+	if err := checkContent(part, contentExt(rows)); err != nil {
+		_ = os.Remove(part)
+		return UploadStatus{Offset: 0, Size: total}, err
 	}
 	pf, err := os.Open(part)
 	if err != nil {
@@ -551,15 +671,22 @@ func (r *Registry) SelectForUpload(ctx context.Context, agentID string, in Selec
 	return SelectResult{Task: t, Files: len(ents), Bytes: total}, nil
 }
 
-// onTaskFinished : après un envoi de fichiers, import catalogue en arrière-plan.
+// onTaskFinished : après un envoi de fichiers, import catalogue en arrière-plan, avec le contexte d'arrêt
+// du registre (Shutdown l'annule et l'attend).
 func (r *Registry) onTaskFinished(t TaskInfo, _ TaskResult) {
 	if t.Kind != KindUploadFiles || r.d.Catalog == nil {
 		return
 	}
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return
+	}
 	r.wg.Add(1)
+	r.mu.Unlock()
 	go func() {
 		defer r.wg.Done()
-		r.importInbox(context.Background(), t.AgentID)
+		r.importInbox(r.bgCtx, t.AgentID)
 	}()
 }
 

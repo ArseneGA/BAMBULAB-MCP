@@ -65,7 +65,14 @@ func New(o Options) (*Agent, error) {
 	}
 	cl := o.Client
 	if cl == nil {
-		cl = agentlink.NewClient(o.Config.ServerURL, o.Secret)
+		c2, err := agentlink.NewClientWithOptions(o.Config.ServerURL, o.Secret, agentlink.ClientOptions{ServerFingerprint: o.Config.ServerFingerprint})
+		if err != nil {
+			return nil, err
+		}
+		cl = c2
+		if w := agentlink.InsecureTransportWarning(o.Config.ServerURL); w != "" {
+			o.Log.Warn(w)
+		}
 	}
 	jr, err := OpenJournal(o.Config.stateDir())
 	if err != nil {

@@ -375,36 +375,61 @@ func (r *Registry) Complete(ctx context.Context, a Agent, id string, res TaskRes
 		note = "réconcilié : l'agent a rapporté l'issue après sa reconnexion"
 	}
 	now := store.FormatTime(r.now())
-	if _, err := r.db().ExecContext(ctx, `UPDATE agent_tasks SET state=?, result=?, error=?, note=CASE WHEN ?='' THEN note ELSE ? END,
-		progress=CASE WHEN ?='succeeded' THEN 1 ELSE progress END, finished_at=?, updated_at=? WHERE id=?`,
-		res.State, rj, ej, note, note, res.State, now, now, id); err != nil {
+	// Garde d'état : seul un travail non terminé et déjà remis à l'agent peut recevoir son rapport. Un
+	// changement concurrent (annulation, remplacement) est détecté par RowsAffected.
+	up, err := r.db().ExecContext(ctx, `UPDATE agent_tasks SET state=?, result=?, error=?, note=CASE WHEN ?='' THEN note ELSE ? END,
+		progress=CASE WHEN ?='succeeded' THEN 1 ELSE progress END, finished_at=?, updated_at=? WHERE id=? AND state IN ('assigned','running','unknown')`,
+		res.State, rj, ej, note, note, res.State, now, now, id)
+	if err != nil {
 		return t, err
 	}
+	if n, _ := up.RowsAffected(); n != 1 {
+		cur, gerr := r.GetTask(ctx, id)
+		if gerr == nil && cur.State == res.State && cur.State != StateCancelled {
+			return cur, nil // rapport identique déjà enregistré en parallèle
+		}
+		return t, errf(http.StatusConflict, CodeConflict, "le travail a changé d'état pendant le rapport (%s) : rapport refusé", cur.State)
+	}
 	_ = r.d.Store.Audit(ctx, "agent", "agent_task.finish", "agent_task", id, map[string]any{"state": res.State})
+	r.dropParts(ctx, a.ID, id)
 	r.onTaskFinished(t, res)
 	return r.GetTask(ctx, id)
 }
 
-// CancelTask : en file = immédiat ; remis/en cours = demande relayée par heartbeat.
+// CancelTask : en file = immédiat ; remis/en cours = demande relayée par heartbeat. Chaque mise à jour est
+// gardée par l'état lu (RowsAffected) : si le travail change d'état entre la lecture et l'écriture, on relit
+// (au plus 3 fois) au lieu d'écraser un état plus récent.
 func (r *Registry) CancelTask(ctx context.Context, id string) (TaskInfo, error) {
-	t, err := r.GetTask(ctx, id)
-	if err != nil {
-		return t, err
+	for attempt := 0; attempt < 3; attempt++ {
+		t, err := r.GetTask(ctx, id)
+		if err != nil {
+			return t, err
+		}
+		now := store.FormatTime(r.now())
+		var res sql.Result
+		switch t.State {
+		case StateQueued:
+			res, err = r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', finished_at=?, updated_at=?, note='annulé avant remise à l''agent' WHERE id=? AND state='queued'`, now, now, id)
+		case StateAssigned, StateRunning:
+			res, err = r.db().ExecContext(ctx, `UPDATE agent_tasks SET cancel_requested=1, updated_at=? WHERE id=? AND state IN ('assigned','running')`, now, id)
+		case StateUnknown:
+			res, err = r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', cancel_requested=1, finished_at=?, updated_at=?, note='annulé alors que l''issue était inconnue' WHERE id=? AND state='unknown'`, now, now, id)
+		default:
+			return t, nil // terminé : sans effet
+		}
+		if err != nil {
+			return t, err
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			continue // l'état a changé entre la lecture et l'écriture : on relit
+		}
+		if t.State == StateQueued || t.State == StateUnknown {
+			r.dropParts(ctx, t.AgentID, id)
+		}
+		r.broadcast()
+		return r.GetTask(ctx, id)
 	}
-	now := store.FormatTime(r.now())
-	switch t.State {
-	case StateQueued:
-		_, err = r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', finished_at=?, updated_at=?, note='annulé avant remise à l''agent' WHERE id=? AND state='queued'`, now, now, id)
-	case StateAssigned, StateRunning:
-		_, err = r.db().ExecContext(ctx, `UPDATE agent_tasks SET cancel_requested=1, updated_at=? WHERE id=?`, now, id)
-	case StateUnknown:
-		_, err = r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', cancel_requested=1, finished_at=?, updated_at=?, note='annulé alors que l''issue était inconnue' WHERE id=? AND state='unknown'`, now, now, id)
-	}
-	if err != nil {
-		return t, err
-	}
-	r.broadcast()
-	return r.GetTask(ctx, id)
+	return TaskInfo{}, errf(http.StatusConflict, CodeConflict, "le travail change d'état en continu : réessayer l'annulation")
 }
 
 // Requeue recrée un travail (nouvel identifiant) à la place d'un travail
@@ -441,7 +466,21 @@ func (r *Registry) Requeue(ctx context.Context, id string) (TaskInfo, error) {
 		return t, err
 	}
 	now := store.FormatTime(r.now())
-	_, _ = r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', cancel_requested=1, finished_at=COALESCE(finished_at,?), updated_at=?, note=? WHERE id=? AND state IN ('unknown','failed','cancelled')`,
+	up, err := r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', cancel_requested=1, finished_at=COALESCE(finished_at,?), updated_at=?, note=? WHERE id=? AND state IN ('unknown','failed','cancelled')`,
 		now, now, "remplacé par "+nt.ID, id)
-	return nt, nil
+	if n := int64(0); err == nil {
+		n, _ = up.RowsAffected()
+		if n == 1 {
+			return nt, nil
+		}
+	}
+	// L'ancien travail a changé d'état pendant la recréation (l'agent a rapporté, par exemple) : le remplaçant
+	// est annulé, aucune double exécution.
+	_, _ = r.db().ExecContext(ctx, `UPDATE agent_tasks SET state='cancelled', cancel_requested=1, finished_at=?, updated_at=?, note=? WHERE id=? AND state IN ('queued','assigned')`,
+		now, now, "annulé : le travail d'origine "+id+" a changé d'état pendant le remplacement", nt.ID)
+	r.broadcast()
+	if err != nil {
+		return t, err
+	}
+	return t, errf(http.StatusConflict, CodeConflict, "le travail %s a changé d'état pendant le remplacement : rien n'a été recréé", id)
 }
