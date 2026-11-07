@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Plus, RefreshCw, ScanSearch, ShieldCheck } from 'lucide-react';
-import { Button, EmptyState, Field, Input, List, Panel, Select, StatusDot, Tag, useToast } from '../components';
+import { Button, EmptyState, Field, Input, List, Panel, Select, StatusDot, Tabs, Tag, Toggle, useToast } from '../components';
 import { api, assetUrl, describeError } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
-import type { CancelOutput, ConfirmationView, ReconcileOutput, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
+import type { HistoryView, JobProgress, CancelOutput, ConfirmationView, ReconcileOutput, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
 import { Async, Dialog, Notice, fmtDate } from './common';
 import { CompletedBox } from './CompletedBox';
 import { CameraPanel } from './CameraPanel';
@@ -30,15 +30,24 @@ export function PrintPage() {
   const [pid, setPid] = useState<string>('');
   const [jid, setJid] = useState<string>('');
   const printers = useAsync((s) => api.printers(s), []);
-  const jobs = useAsync((s) => api.printJobs(s), []);
+  const [view, setView] = useState<HistoryView>('all');
+  const [grouped, setGrouped] = useState(false);
+  const jobs = useAsync((s) => api.printJobs(s, view, grouped), [view, grouped]);
   const reloadJobs = useRef(jobs.reload); reloadJobs.current = jobs.reload;
-  const busy = jobs.data?.print_jobs.some((j) => transient(j.state));
+  const busy = jobs.data?.print_jobs.some((j) => transient(j.state) || j.state === 'PREPARED');
   useEffect(() => { if (!busy) return; const t = window.setInterval(() => reloadJobs.current(), 3000); return () => window.clearInterval(t); }, [busy]);
   const [addOpen, setAddOpen] = useState(false);
 
   const plist = printers.data?.printers ?? [];
   const printer = plist.find((p) => p.id === pid) ?? plist[0];
   const job = jobs.data?.print_jobs.find((j) => j.id === jid);
+  const toast = useToast();
+  const prog = jobs.data?.progress ?? {};
+  const counts = jobs.data?.counts ?? {};
+  const history = async (action: 'archive' | 'trash' | 'restore', ids: string[]) => {
+    try { const r = await api.printHistory(action, ids); toast('ok', r.note); jobs.reload(); } catch (e) { toast('err', describeError(e)); }
+  };
+  const failedIds = (jobs.data?.print_jobs ?? []).filter((j) => ['FAILED', 'CANCELLED'].includes(j.state)).map((j) => j.id);
 
   return (
     <>
@@ -60,9 +69,21 @@ export function PrintPage() {
         <div className="prt-col prt-wide">
           <NewJob printers={plist} defaultPrinter={printer?.id} onCreated={(j) => { setJid(j.id); jobs.reload(); }} />
           <Panel title="Impressions" actions={<Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} onClick={jobs.reload}>Actualiser</Button>}>
-            <Async state={jobs} label="Chargement des impressions" empty={(d) => d.print_jobs.length === 0 ? <p className="hint" style={{ margin: 0 }}>Aucune impression. Découpez un modèle pour une imprimante ci-dessus.</p> : null}>
-              {(d) => <List label="Impressions" items={d.print_jobs} getKey={(j) => j.id} selectedKey={jid} onSelect={(j) => setJid(j.id)}
-                render={(j) => <span className="prt-job"><strong>{j.name ?? j.id}</strong><Tag tone={STATE_LABEL[j.state]?.tone}>{STATE_LABEL[j.state]?.label ?? j.state}</Tag><span className="mono dim">{fmtDate(j.updated_at)}</span></span>} />}
+            <Tabs<HistoryView> label="Filtrer les impressions" value={view} onChange={setView} tabs={[
+              { value: 'all', label: `Toutes (${counts.all ?? 0})` }, { value: 'active', label: `Actives (${counts.active ?? 0})` }, { value: 'finished', label: `Terminées (${counts.finished ?? 0})` },
+              { value: 'failed', label: `Échecs (${counts.failed ?? 0})` }, { value: 'archived', label: `Archivées (${counts.archived ?? 0})` }, { value: 'trash', label: `Corbeille (${counts.trash ?? 0})` }]} />
+            <div className="prt-bar" style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '8px 0', flexWrap: 'wrap' }}>
+              <Toggle checked={grouped} onChange={setGrouped} label="Grouper par modèle" />
+              {view === 'failed' && failedIds.length > 0 && <Button size="sm" onClick={() => history('archive', failedIds)}>Archiver les {failedIds.length} échec(s)</Button>}
+            </div>
+            <Async state={jobs} label="Chargement des impressions" empty={(d) => d.print_jobs.length === 0 ? <p className="hint" style={{ margin: 0 }}>Aucune impression dans cette vue. Découpez un modèle pour une imprimante ci-dessus.</p> : null}>
+              {(d) => grouped && d.groups ? (
+                <>{d.groups.map((g) => (
+                  <details key={g.model_id || 'none'} open>
+                    <summary><strong>{g.model_name}</strong> · {g.count} impression(s){g.failed > 0 && ` · ${g.failed} échec(s)`}</summary>
+                    <JobRows jobs={g.jobs} jid={jid} setJid={setJid} prog={prog} history={history} />
+                  </details>))}</>
+              ) : <JobRows jobs={d.print_jobs} jid={jid} setJid={setJid} prog={prog} history={history} />}
             </Async>
           </Panel>
           {job && <JobDetail key={job.id} job={job} printer={plist.find((p) => p.id === job.printer_id)} onChange={jobs.reload} />}
@@ -70,6 +91,34 @@ export function PrintPage() {
       </div>
       <AddPrinter open={addOpen} onClose={() => setAddOpen(false)} onAdded={(p) => { setAddOpen(false); setPid(p.id); printers.reload(); }} />
     </>
+  );
+}
+
+function stateText(j: PrintJob, p?: JobProgress): string {
+  if (j.state === 'PREPARED' || j.state === 'SLICING') {
+    if (p?.queue_position != null) return `en file (position ${p.queue_position})`;
+    if (p?.stalled) return 'découpe bloquée ?';
+    return p ? `découpe en cours · ${p.percent} %` : (STATE_LABEL[j.state]?.label ?? j.state);
+  }
+  if (j.state === 'UPLOADING' && p) return `envoi en cours · ${p.percent} %`;
+  if (j.state === 'PRINTING' && p) return `en cours d'impression · ${p.percent} %`;
+  if (j.state === 'CANCELLED' && j.stopped_by_user) return 'arrêtée par vous';
+  return STATE_LABEL[j.state]?.label ?? j.state;
+}
+
+function JobRows({ jobs, jid, setJid, prog, history }: { jobs: PrintJob[]; jid: string; setJid: (id: string) => void; prog: Record<string, JobProgress>; history: (a: 'archive' | 'trash' | 'restore', ids: string[]) => void }) {
+  return (
+    <List label="Impressions" items={jobs} getKey={(j) => j.id} selectedKey={jid} onSelect={(j) => setJid(j.id)}
+      render={(j) => (
+        <span className="prt-job">
+          <strong>{j.name ?? j.id}</strong>
+          <Tag tone={STATE_LABEL[j.state]?.tone}>{stateText(j, prog[j.id])}</Tag>
+          <span className="mono dim">{fmtDate(j.updated_at)}</span>
+          {['COMPLETED', 'FAILED', 'CANCELLED'].includes(j.state) && (j.archived || j.trashed
+            ? <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); history('restore', [j.id]); }}>Restaurer</Button>
+            : <><Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); history('archive', [j.id]); }}>Archiver</Button>
+              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); history('trash', [j.id]); }}>Corbeille</Button></>)}
+        </span>)} />
   );
 }
 
@@ -92,7 +141,8 @@ function PrinterCard({ p }: { p: PrinterView }) {
       <div className="prt-status" role="status">
         {st.error && !d ? <StatusDot status="offline" label="Statut indisponible" /> : !d ? <span className="hint">Lecture de l'état…</span> : (
           <>
-            <StatusDot status={d.reachable ? 'online' : 'offline'} label={d.reachable ? `Joignable · ${d.state}` : 'Injoignable'} />
+            <StatusDot status={d.reachable ? 'online' : 'offline'} label={d.display ?? (d.reachable ? `Joignable · ${d.state}` : 'Injoignable')} />
+            {d.explanation && <p className="hint" style={{ margin: 0 }}>{d.explanation}</p>}
             {d.error && <p className="hint" style={{ margin: 0 }}>{d.error}</p>}
             {d.reachable && <p className="hint mono" style={{ margin: 0 }}>buse {Math.round(d.temps.nozzle)}/{Math.round(d.temps.nozzle_target)} °C · plateau {Math.round(d.temps.bed)}/{Math.round(d.temps.bed_target)} °C{d.total_layers > 0 && ` · couche ${d.layer}/${d.total_layers}`}{d.hms_count > 0 && ` · ${d.hms_count} alerte(s) HMS`}</p>}
             {d.updated_at && <p className="hint" style={{ margin: 0 }}>Relevé à {fmtDate(d.updated_at)} : un état ancien n'autorise jamais un lancement.</p>}

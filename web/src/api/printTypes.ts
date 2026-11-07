@@ -13,7 +13,13 @@ export interface PrinterStatus {
   printer_id: string; reachable: boolean; error?: string; state: string; gcode_state?: string; progress_percent: number; layer: number; total_layers: number;
   remaining_minutes: number; temps: { nozzle: number; nozzle_target: number; bed: number; bed_target: number; chamber: number }; print_error: number; hms_count: number;
   fail_reason?: string; current_file?: string; firmware?: string; updated_at?: string;
+  hms_codes?: string[]; display?: string; explanation?: string;
+  last_job?: { print_job_id: string; name: string; state: PrintState; stopped_by_user?: boolean; at: string };
 }
+export type HistoryView = 'all' | 'active' | 'finished' | 'failed' | 'archived' | 'trash';
+export interface JobProgress { job_id: string; state: string; percent: number; phase?: string; message?: string; bytes_done?: number; bytes_total?: number; eta_seconds?: number; queue_position?: number; running_ahead?: number; stalled?: boolean; estimated?: boolean }
+export interface ModelGroup { model_id: string; model_name: string; count: number; failed: number; jobs: PrintJob[] }
+export interface HistoryReply { print_jobs: PrintJob[]; view: HistoryView; counts: Record<string, number>; groups?: ModelGroup[]; progress?: Record<string, JobProgress> }
 
 export type PrintState = 'DRAFT' | 'PREPARED' | 'SLICING' | 'VALIDATED' | 'UPLOADING' | 'UPLOADED' | 'AWAITING_PRINT_CONFIRMATION' | 'START_REQUESTED' | 'PRINTING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'START_UNKNOWN';
 export interface FilamentAssignment { filament_slot: number; tray: string; material_id: string }
@@ -23,6 +29,7 @@ export interface PrintJob {
   id: string; state: PrintState; printer_id: string; model_id?: string; version_id?: string; name?: string; artifact_sha256?: string; plate?: number;
   assignments?: FilamentAssignment[]; use_ams: boolean; summary?: { printer_model?: string; machine_preset?: string; process?: string; filament_presets?: string[]; nozzles?: string[]; bed_type?: string };
   validation?: ValidationReport; confirmation_id?: string; print?: { percent: number; layer: number; total_layers: number; remaining_minutes: number; printer_state: string; observed_at: string };
+  archived?: boolean; trashed?: boolean; stopped_by_user?: boolean;
   last_error?: string; events?: Array<{ at: string; event: string; from: string; to: string; note?: string }>; created_at: string; updated_at: string; next?: string;
 }
 export interface PromptDetails { file: string; printer_name: string; printer_model: string; sha256: string; plate: number; materials: FilamentAssignment[] }
