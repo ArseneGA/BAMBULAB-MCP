@@ -4,7 +4,7 @@ Vous parlez normalement ; Claude choisit les outils. Les noms d'outils entre par
 
 Trois règles à garder en tête :
 
-1. **Rien ne part sur l'imprimante sans votre clic** sur une page web, depuis un navigateur enregistré. Claude prépare, dépose, demande ; il ne peut pas approuver.
+1. **Rien ne part sur l'imprimante sans votre accord**, donné soit par un clic sur une page web depuis un navigateur enregistré, soit dans la vue de Claude avec votre **code de lancement personnel** (§ 4 bis). Claude prépare, dépose, demande ; il ne peut pas approuver.
 2. **Les originaux ne bougent pas.** Toute modification crée une nouvelle version ; vous pouvez revenir en arrière.
 3. **Claude distingue le mesuré, le calculé et le supposé.** Un critère qu'on ne peut pas évaluer (aspect de surface, tenue réelle) est signalé comme « à essayer », pas noté.
 
@@ -86,7 +86,7 @@ Pour affiner un profil à la main : « Passe les parois à 4 » → `modify_slic
 Si ça se passe mal :
 
 - **« Liaison perdue après la commande »** (`start_unknown`) : Claude **ne relance pas**. Il lit l'état réel de l'imprimante (`reconcile_print`) et vous dit si l'impression a démarré ou non.
-- **Arrêter** : au bouton de l'imprimante, toujours. Via Claude : « Arrête l'impression » → `cancel_print` crée une demande d'arrêt et vous donne un lien `…/stop/…` à valider dans le navigateur enregistré.
+- **Arrêter** : au bouton de l'imprimante, toujours. Via Claude : « Arrête l'impression » → `cancel_print` crée une demande d'arrêt et vous donne un lien `…/stop/…` à valider dans le navigateur enregistré, ou une vue d'arrêt où vous saisissez votre code de lancement (§ 4 bis).
 - **Changer d'avis** sur la matière ou l'imprimante après avoir été interrogé : la confirmation devient invalide, il faut en redemander une.
 - **Deux impressions de suite avec le même accord** : impossible, chaque accord est à usage unique et lié à *cette* impression.
 
@@ -109,6 +109,22 @@ Ce qu'il faut savoir :
 - Sans Bambu Studio, le rangement est **estimé** par rectangles englobants (prudent, annoncé comme tel) ; la disposition exacte se fait alors à la découpe.
 - L'aperçu du plateau (`capture_preview`, mode `plate`) marche avant découpe (depuis le plan) et après (depuis le 3MF découpé : positions et orientations réelles). Mode `layers` : une couche du G-code.
 - Limites : la pièce est posée comme dans sa version du catalogue (orientez-la avant avec « pose-la à plat ») ; la jupe, la bordure et le temps **par pièce** ne sont pas dessinés (le temps est celui de la plaque).
+
+## 4 bis. Lancer et arrêter sans quitter Claude (code de lancement personnel)
+
+Dans Claude Desktop, la confirmation s'affiche **dans la conversation** : résumé (fichier, imprimante, empreinte, plateau, matières), températures lues dans le G-code et « G-code de démarrage : profil officiel ✓ », photo du plateau si la caméra est configurée, case « le plateau est vide et dégagé », champ **code de lancement** et bouton « Lancer l'impression ». L'arrêt (« Arrête l'impression ») affiche la même chose avec un bouton « Arrêter l'impression ».
+
+1. **Définir son code une fois** : dans un navigateur enregistré, ouvrez `http://…:7878/setup/launch-code` et choisissez un code de **6 à 8 chiffres** (pas de suite ni de chiffres identiques). Il est stocké haché (argon2id), jamais affiché, jamais renvoyé, jamais journalisé. Changez-le ou révoquez-le sur la même page.
+2. **Lancer** : dans la vue, cochez « plateau vide », tapez votre code, cliquez « Lancer l'impression ». L'accord vaut pour **cette impression et 2 minutes** ; dites ensuite à Claude « c'est fait », il appelle `start_print` comme d'habitude.
+3. **Trois mauvais codes verrouillent tout** (même le bon code est alors refusé, pour le lancement comme pour l'arrêt). Deux essais doivent être espacés de quelques secondes. Déverrouillage : bouton « Déverrouiller » de la page `/setup/launch-code`, ou `bambud launch-code --unlock`.
+4. **Code oublié** : `bambud launch-code --reset` supprime le code (puis on en définit un autre sur la page). `bambud launch-code` seul affiche l'état (défini, verrouillé).
+5. **Sans code défini** (ou verrouillé), la vue affiche le **lien du navigateur** (`/confirm/…`, `/stop/…`), comme avant : il reste toujours disponible, y compris quand le code fonctionne.
+
+> **Ne tapez JAMAIS ce code dans la conversation avec Claude.** Il se saisit uniquement dans le champ de la vue. Claude a pour consigne de ne jamais vous le demander ; s'il le fait quand même, ne répondez pas, et si vous l'avez écrit dans la conversation, changez-le tout de suite sur `/setup/launch-code`. Le serveur ne peut pas empêcher cette erreur (voir `docs/SECURITY.md` § 12).
+
+Claude Code (terminal) n'affiche pas les vues : utilisez le lien du navigateur.
+
+---
 
 ## 5. Depuis le PC Windows (renfort)
 
@@ -375,6 +391,45 @@ Toutes ces séries sont des **petites pièces, une par valeur**, avec — quand 
 **Calibrations de Bambu Studio** : Bambu Studio possède ses propres étalonnages (menu Calibration : *Flow Dynamics*, *Flow Rate*, débit volumétrique max, température, rétraction...). Ils passent par l'**interface graphique** et envoient leurs réglages à l'imprimante ; bambud ne peut ni les piloter ni relire leurs résultats (le binaire installé n'affiche aucune aide en ligne de commande et aucune option d'étalonnage n'est utilisée par bambud). L'avance de pression (K) est le cas typique : les profils Bambu n'exposent pas la clé, donc seul *Flow Dynamics* ou un réglage manuel dans Studio l'applique. Les séries de bambud servent quand on veut des pièces au catalogue, des profils découpables reproductibles et un historique par bobine.
 
 **Limites** : le facteur de retrait est calculé et affiché mais pas appliqué automatiquement aux gabarits (le trou et l'arbre rétrécissent ensemble ; une mise à l'échelle globale fausserait les compensations) — l'appliquer au besoin avec `modify_geometry` (échelle) et préférer les décalages de contour/trou issus de `shrink_sizes`. Avec seulement deux tailles on ne vérifie pas la linéarité (une troisième taille le permet). La tour de température demande d'insérer les changements `M104` à la main dans Bambu Studio (hauteurs fournies) ; la série de pièces est plus simple et se découpe avec les profils créés. Les valeurs retenues viennent de lectures humaines (pied à coulisse, œil) : elles valent pour cette bobine, cette buse et cette imprimante. Les filetages M3/M4 sont limités par la résolution FDM (avertissement) ; la poignée et le support mural demandent un essai de charge réel.
+
+## 14. Exporter un projet (archive à partager)
+
+Pour donner ou publier un projet (une collection, ou quelques modèles) : « Exporte le projet *Support téléphone* avec la licence CC BY-NC 4.0, quantité 2 pour la base, et joins mes photos » (`export_project`, puis `get_project_export` pour redemander le lien). Sur le web : **Bibliothèque → choisir une collection → « Exporter le projet »** (formulaire : titre, description, licence, notice d'assemblage, quincaillerie, options). Rien n'est publié : vous obtenez un **zip** à télécharger.
+
+**Contenu de l'archive**
+
+| Entrée | Rôle |
+|---|---|
+| `README.md` | en français : description, tableau des pièces (quantités, matière, dimensions), réglages par pièce, temps / masse / coût **estimés** si une découpe existe, notice d'assemblage et quincaillerie (champs libres), licence (défaut « non précisée »), photos |
+| `files/<pièce>/…` | fichiers sources **d'origine** (STL, STEP, 3MF, OBJ) de la dernière version (ou de la version choisie par pièce), copiés tels quels ; leur sha256 est recalculé à l'écriture et comparé au catalogue |
+| `sources/<pièce>/parametrique.json` | pour une pièce générée par un gabarit : gabarit, version, paramètres demandés et résolus, calculs, calibration utilisée |
+| `profiles/<pièce>.json` | réglages de découpe effectifs : **uniquement les clés surchargées** (révision de profil appliquée, lignée comprise) et la référence aux préréglages officiels de Bambu Studio ; **jamais de G-code** |
+| `printer-specific/<pièce>/….gcode.3mf` | **en option, désactivé par défaut** : seulement les archives découpées *validées* ; spécifiques à une imprimante, une buse et des réglages |
+| `images/<pièce>/photo-NN.jpg` | en option : photos de fin d'impression du journal (JPEG sans EXIF ni GPS ; photos d'alerte d'échec exclues) |
+| `manifest.json` | versions, sha256 et taille de chaque fichier, provenance (source, auteur, URL), date, avertissements, éléments laissés de côté |
+
+La structure (`files/`, `images/`, `README.md`) correspond à ce que demandent les dépôts MakerWorld et Printables.
+
+**Garanties**
+
+- **Aucun secret ni donnée d'imprimante** : pas d'adresse, de numéro de série ni de code d'accès, et **aucun chemin du serveur ou de votre disque** (le chemin d'origine d'un import n'est jamais exporté). Les textes générés (README, JSON) passent par un filtre qui remplace ces valeurs, y compris si vous les avez collées dans une description. Un fichier `.3mf` (d'origine ou découpé) qui contient l'adresse ou le numéro de série d'une imprimante déclarée, ou un chemin du serveur, **n'est pas joint** : il est signalé dans `manifest.json` et dans la réponse.
+- **Streaming et taille bornée** : l'archive est construite par un travail asynchrone, fichier par fichier, sans jamais charger un fichier entier en mémoire. Limite par défaut 1 Gio décompressé (réglable jusqu'à 4 Gio avec `max_bytes`), 200 pièces au plus ; un dépassement est refusé **avant** d'écrire quoi que ce soit.
+- **Téléchargement par lien signé à durée limitée** : `/api/exports/<id>.zip?exp=…&sig=…` valable **10 minutes**, lisible sans jeton (comme les aperçus 3D) mais impossible à modifier ou à réutiliser pour un autre export. Redemandez un lien à tout moment (`get_project_export`, ou le bouton). L'archive reste **24 h** sur le serveur (20 archives au plus), puis expire ; le dossier `exports/` du dossier de données n'est pas sauvegardé.
+- Si une pièce vient d'un site tiers (provenance avec URL), un avertissement rappelle de vérifier sa licence avant de la republier.
+
+**Ce qu'il reste à faire à la main pour publier** (aucune publication automatique, volontairement) :
+
+1. Relire et compléter le `README.md` (description, photos, notice d'assemblage).
+2. Choisir la licence si elle est « non précisée » ; vérifier le droit de republier les pièces issues d'ailleurs.
+3. Créer la page du projet vous-même sur MakerWorld ou Printables, puis y déposer le contenu de `files/`, les images de `images/` et le texte du README.
+4. Renseigner dans le formulaire du site la catégorie, les étiquettes, l'image de couverture et les réglages conseillés (les `profiles/*.json` listent seulement ce qui diffère des préréglages officiels).
+5. Pour MakerWorld, joindre de préférence un 3MF de projet enregistré depuis Bambu Studio (plateau et réglages inclus) : l'archive ne le remplace pas.
+6. Ne publier les `.gcode.3mf` que s'ils sont voulus (propres à une imprimante).
+7. Vérifier une dernière fois les photos (arrière-plan, informations personnelles).
+
+**Limites** : les fichiers dont l'original n'est copié que sur Windows ne sont pas exportables (signalés, laissés de côté) ; les estimations de temps, de masse et de coût viennent de la dernière découpe enregistrée de la pièce (sans découpe, ces lignes sont absentes) et ne sont pas une facture ; les photos PNG et WebP sont jointes telles quelles (seul l'EXIF des JPEG est retiré).
+
+---
 
 ## 13. Clés de profil que Claude peut modifier (surcharges)
 

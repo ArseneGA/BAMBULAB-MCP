@@ -31,7 +31,8 @@ func New(c *core.Core) *mcp.Server {
 		&mcp.ServerOptions{
 			Logger: c.Log,
 			Instructions: "Atelier 3D pour imprimantes Bambu Lab. Les travaux longs renvoient un job_id : " +
-				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite.",
+				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
+				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation.",
 		})
 	h := &handlers{c: c}
 	roAnn := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
@@ -87,12 +88,16 @@ func New(c *core.Core) *mcp.Server {
 	if c.Printing != nil {
 		AddPrintTools(s, c.Printing) // chaîne d'impression (print_tools.go)
 		AddPlateTools(s, c.Printing) // plateau multi-pièces (plate_tools.go)
+		AddLaunchTools(s, c)         // approbation par code de lancement depuis la vue (launch_tools.go)
 	}
 	if c.Camera != nil && c.Notify != nil {
 		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)
 	}
 	if c.Filament != nil {
 		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
+	}
+	if c.Export != nil {
+		AddExportTools(s, c) // export de projet : archive zip partageable (export_tools.go)
 	}
 	return s
 }

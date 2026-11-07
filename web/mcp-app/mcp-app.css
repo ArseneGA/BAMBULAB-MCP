@@ -43,3 +43,16 @@ body { margin: 0; }
 .primary { height: var(--control-h); padding: 0 var(--sp-3); background: var(--accent); color: var(--on-accent); border: 0; border-radius: var(--r-2); font-weight: 500; cursor: pointer; }
 .primary:disabled { opacity: .45; cursor: not-allowed; }
 .primary:focus-visible { outline: none; box-shadow: var(--focus); }
+.ok-line { display: flex; gap: var(--sp-2); align-items: center; color: var(--ok); }
+.safety { display: grid; gap: var(--sp-1); }
+.plate { margin: 0; display: grid; gap: var(--sp-1); }
+.plate img { max-width: 100%; border: 1px solid var(--line); border-radius: var(--r-3); }
+.codeform { display: grid; gap: var(--sp-2); }
+.codefield { display: grid; gap: var(--sp-1); font-size: var(--fs-sm); }
+.codefield input { height: var(--control-h); max-width: 14rem; padding: 0 var(--sp-2); background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); border-radius: var(--r-2); font: 500 var(--fs-lg)/1 var(--font-mono); letter-spacing: .3em; }
+.codefield input:focus-visible { outline: none; box-shadow: var(--focus); }
+.code-warn { display: flex; gap: var(--sp-2); align-items: flex-start; padding: var(--sp-2) var(--sp-3); background: var(--warn-soft); color: var(--text); border-left: 2px solid var(--warn); }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.linkbtn:focus-visible { outline: none; box-shadow: var(--focus); }
+.alt { font-size: var(--fs-sm); }
+.alt summary { cursor: pointer; color: var(--text-2); margin-bottom: var(--sp-2); }
