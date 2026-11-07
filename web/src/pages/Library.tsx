@@ -9,6 +9,7 @@ import type { CollectionInfo, ModelSummary, Operation } from '../api/types';
 import { Async, Dialog, FormatBadge, fmtBytes, fmtDims } from './common';
 import { ExportSelected } from './ModelTools';
 import { ImportDialog } from './ImportDialog';
+import { UploadLauncher } from './UploadLauncher';
 import { OperationFlow } from './OperationFlow';
 import { Field, Input } from '../components';
 import './library.css';
@@ -133,6 +134,7 @@ export function Library() {
       <div className="page-head lib-head">
         <div><span className="eyebrow">Espace</span><h1>Bibliothèque</h1><p>Recherche, collections et fichiers du catalogue de bambud. Les originaux importés ne sont jamais modifiés.</p></div>
         <div className="lib-head-acts">
+          <UploadLauncher onUploaded={() => setRefresh((n) => n + 1)} />
           <Link to="/corbeille"><Button size="sm" icon={<Trash2 size={14} />}>Corbeille</Button></Link>
           <Button variant="primary" icon={<Upload size={15} />} onClick={() => setImportOpen(true)}>Importer</Button>
         </div>

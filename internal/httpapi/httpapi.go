@@ -71,10 +71,14 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	human.RegisterPages(mux)
 
 	registerCatalog(mux, c)
+	registerUpload(mux, c) // envoi de fichiers, import par lien (upload.go)
 	registerAgent(mux, c, human)
 	registerGoals(mux, c)
 	registerMaterials(mux, c)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
+	registerCamera(mux, c, human)   // caméra, détection d'échec, notifications (camera.go)
+	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)
+	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
 
 	registerOAuth(mux, c, human, &opts) // jetons OAuth sur /mcp, métadonnées et pages (oauth.go) ; renseigne opts pour la garde
 

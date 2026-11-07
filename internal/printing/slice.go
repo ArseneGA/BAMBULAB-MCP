@@ -229,47 +229,59 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 		return fail("bad_job", errors.New("paramètres de découpe absents"))
 	}
 	jc.Progress(0.1, "préparation du modèle")
-	f, err := s.d.Blobs.Open(spec.SourceSHA)
-	if err != nil {
-		return fail("model_unreadable", err)
-	}
-	data, err := readAll(f, 512<<20)
-	f.Close()
-	if err != nil {
-		return fail("model_unreadable", err)
-	}
-	if got := mesh.SHA256Hex(data); got != spec.SourceSHA {
-		return fail("model_corrupt", fmt.Errorf("empreinte %s ≠ %s", got, spec.SourceSHA))
-	}
-	work, err := os.MkdirTemp(s.workRoot(), "pj-")
-	if err != nil {
-		return fail("workdir", err)
-	}
-	defer os.RemoveAll(work)
-	in := filepath.Join(work, cleanStem(spec.SourceName)+"."+spec.SourceFmt)
-	var arrange *bool
-	if spec.Orientation != nil {
-		md, err := mesh.Parse(spec.SourceName, data)
+	var req slicer.Request
+	if spec.Plan != nil { // plan multi-pièces : le 3MF est reconstruit depuis le projet figé
+		r, perr := s.planRequest(spec)
+		if perr != nil {
+			return fail("model_unreadable", perr)
+		}
+		req = r
+		req.ID, req.Label, req.Plate = cleanStem(j.ID), strings.TrimSuffix(j.Name, ".gcode.3mf"), spec.Plate
+		req.Machine, req.Process, req.Filaments, req.Overrides = spec.Machine, spec.Process, spec.Filaments, spec.Overrides
+		jc.Progress(0.2, "découpe par Bambu Studio")
+	} else {
+		f, err := s.d.Blobs.Open(spec.SourceSHA)
 		if err != nil {
 			return fail("model_unreadable", err)
 		}
-		m := md.Combined().Transform(mesh.Matrix(spec.Orientation.Rotation))
-		b := m.Bounds()
-		m = m.Transform(mesh.Translation(-b.Min.X, -b.Min.Y, -b.Min.Z))
-		stl, err := mesh.STLBytes(m)
+		data, err := readAll(f, 512<<20)
+		f.Close()
 		if err != nil {
-			return fail("orientation", err)
+			return fail("model_unreadable", err)
 		}
-		in, data = filepath.Join(work, cleanStem(spec.SourceName)+"_oriente.stl"), stl
-		t := true
-		arrange = &t
+		if got := mesh.SHA256Hex(data); got != spec.SourceSHA {
+			return fail("model_corrupt", fmt.Errorf("empreinte %s ≠ %s", got, spec.SourceSHA))
+		}
+		work, err := os.MkdirTemp(s.workRoot(), "pj-")
+		if err != nil {
+			return fail("workdir", err)
+		}
+		defer os.RemoveAll(work)
+		in := filepath.Join(work, cleanStem(spec.SourceName)+"."+spec.SourceFmt)
+		var arrange *bool
+		if spec.Orientation != nil {
+			md, err := mesh.Parse(spec.SourceName, data)
+			if err != nil {
+				return fail("model_unreadable", err)
+			}
+			m := md.Combined().Transform(mesh.Matrix(spec.Orientation.Rotation))
+			b := m.Bounds()
+			m = m.Transform(mesh.Translation(-b.Min.X, -b.Min.Y, -b.Min.Z))
+			stl, err := mesh.STLBytes(m)
+			if err != nil {
+				return fail("orientation", err)
+			}
+			in, data = filepath.Join(work, cleanStem(spec.SourceName)+"_oriente.stl"), stl
+			t := true
+			arrange = &t
+		}
+		if err := os.WriteFile(in, data, 0o644); err != nil {
+			return fail("workdir", err)
+		}
+		jc.Progress(0.2, "découpe par Bambu Studio")
+		req = slicer.Request{ID: cleanStem(j.ID), Label: strings.TrimSuffix(j.Name, ".gcode.3mf"), Model: in, Machine: spec.Machine,
+			Process: spec.Process, Filaments: spec.Filaments, Plate: spec.Plate, Arrange: arrange, Overrides: spec.Overrides}
 	}
-	if err := os.WriteFile(in, data, 0o644); err != nil {
-		return fail("workdir", err)
-	}
-	jc.Progress(0.2, "découpe par Bambu Studio")
-	req := slicer.Request{ID: cleanStem(j.ID), Label: strings.TrimSuffix(j.Name, ".gcode.3mf"), Model: in, Machine: spec.Machine,
-		Process: spec.Process, Filaments: spec.Filaments, Plate: spec.Plate, Arrange: arrange, Overrides: spec.Overrides}
 	if spec.Machine == "" {
 		req.Printer, req.Nozzle = spec.Printer, spec.Nozzle
 	}
@@ -308,6 +320,11 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	}
 	if res.Archive != nil {
 		sum.PrinterModel, sum.BedType, sum.Nozzles = res.Archive.PrinterModel, res.Archive.BedType, res.Archive.Nozzles
+	}
+	if spec.Plan != nil {
+		if perr := s.checkPlateObjects(spec, res, sum); perr != nil {
+			return fail("plate_mismatch", perr)
+		}
 	}
 	base := filepath.Base(res.ArtifactPath)
 	_, err = s.transition(bg, j.ID, contracts.EvSliceOK, "artefact "+sha[:12]+" validé par l'archive", func(x *Job) error {

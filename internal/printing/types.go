@@ -106,6 +106,8 @@ type ArtifactSummary struct {
 	Nozzles       []string             `json:"nozzles,omitempty"`
 	BedType       string               `json:"bed_type,omitempty"`
 	StudioVersion string               `json:"studio_version,omitempty"`
+	// Objects : matière et couches par pièce de la plaque (lues dans le G-code), pour un plan multi-pièces.
+	Objects []slicer.ObjectUse `json:"objects,omitempty"`
 }
 
 // Job est un PrintJob enrichi : état contracts.PrintState + tout ce qui lie l'impression
@@ -154,6 +156,8 @@ type SliceSpec struct {
 	SourceName  string                 `json:"source_name"`
 	SourceFmt   string                 `json:"source_format"`
 	Plate       int                    `json:"plate"`
+	// Plan : découpe d'une plaque d'un plan multi-pièces (plan_plate) ; SourceSHA en est alors l'empreinte.
+	Plan *PlateSliceSpec `json:"plate_plan,omitempty"`
 }
 
 // ToContract projette vers contracts.PrintJob.

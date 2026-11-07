@@ -73,6 +73,7 @@ func New(c *core.Core) *mcp.Server {
 		Meta:        AppToolMeta(AtelierURI),
 	}, h.showAtelier)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
+	registerUploadTools(s, c)
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
 	registerAgentTools(s, c)
 	if c.Goals != nil {
@@ -80,6 +81,13 @@ func New(c *core.Core) *mcp.Server {
 	}
 	if c.Printing != nil {
 		AddPrintTools(s, c.Printing) // chaîne d'impression (print_tools.go)
+		AddPlateTools(s, c.Printing) // plateau multi-pièces (plate_tools.go)
+	}
+	if c.Camera != nil && c.Notify != nil {
+		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)
+	}
+	if c.Filament != nil {
+		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
 	}
 	return s
 }

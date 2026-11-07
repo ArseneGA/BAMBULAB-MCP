@@ -150,6 +150,18 @@ Les flags de `bambud` acceptent `-flag` ou `--flag`, avec `--flag=valeur`. **Pri
 | `UV_*`, `TMPDIR`, `HOME`, `PATH` | héritées : `exec.Command` sans `Env` (`slicer.go:549-551`, `catalog/worker.go:80`) | pilotent `uv` et Studio (§ 3.4, § 5) |
 | Tests | `BAMBU_PROFILES_DIR`, `BAMBU_TEST_WORKROOT`, `BAMBU_TEST_REAL_WORKER`, `BAMBU_GEN_TESTDATA`, `AGENT_REAL_3MF`, `FAKE_STUDIO` | jamais en production |
 
+#### Envoi de fichiers et import par lien (`internal/catalog/upload.go`, `urlimport.go`)
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `BAMBU_MAX_UPLOAD_MB` | `512` | taille maximale d'un fichier envoyé (`upload_file`, glisser-déposer) ; STEP plafonné à 256 Mo ; reste borné par la limite d'import (2 Gio) |
+| `BAMBU_UPLOAD_TTL` | `1h` | inactivité au bout de laquelle une session d'envoi est purgée (durée Go : `30m`, `2h`) |
+| `BAMBU_URL_IMPORT` | actif | `off` désactive `import_from_url` et la route `POST /api/import-url` |
+| `BAMBU_URL_IMPORT_ALLOW` | `makerworld.com,bblmw.com,printables.com` | liste (virgules) des domaines autorisés, sous-domaines compris ; **remplace** la liste par défaut ; les adresses IP sont ignorées |
+| `BAMBU_URL_IMPORT_TIMEOUT` | `120s` | durée maximale d'un import par lien (redirections et téléchargement compris) |
+
+Les morceaux en cours s'accumulent dans `$BAMBU_DATA_DIR/uploads/` (fichiers nommés par le service, purgés au démarrage et à l'expiration) avant d'entrer dans `blobs/` : prévoir de l'espace libre pour la taille maximale × 8 sessions simultanées. L'import par lien est le seul accès réseau sortant déclenché par un outil MCP : HTTPS port 443, résolution DNS vérifiée (aucune adresse privée, loopback, lien local ou réservée), pas de proxy d'environnement. Routes ajoutées (même régime que `/api/*` : Bearer, ou cookie de navigateur enregistré + `X-Atelier-Request`) : `POST /api/uploads`, `PUT|GET|DELETE /api/uploads/{id}`, `POST /api/uploads/{id}/finish`, `POST /api/import-url`.
+
 ### 3.2 Sous-commandes de `bambud`
 
 Elles s'exécutent sur le terminal de l'humain / un timer, ouvrent la base **directement** (SQLite WAL) et ne passent par aucune route HTTP. **`store.Open` applique les migrations** (`internal/store/store.go:81`) : voir § 4.4 avant de les lancer avec un binaire plus récent que le service en marche.
@@ -494,7 +506,15 @@ Constats d'origine vérifiés, **traités dans l'ordre** par les commits ci-dess
 9. **Retour arrière** : sûr par remplacement du binaire tant que `schema_version` est inchangé (130 → 130) ; sinon restaurer la sauvegarde d'avant (`bambud restore --force`). Ne pas lancer `atelier-enroll`/`backup` avec le nouveau binaire avant le redémarrage si une migration est possible.
 10. **Reste ouvert** : `/agent/v1/*` hors garde Host et sans limite de débit (point 13), aucun TLS natif (point 14) — rester sur LAN + Tailscale.
 
+
 ## Annexe : connecteur distant de Claude (OAuth) et Docker
 
 - Exposer bambud à claude.ai / au mobile **sans jeton collé** : OAuth 2.1 intégré, `docs/OAUTH.md` (Funnel : n'exposer que `/mcp`, `/.well-known/*`, `/oauth/*` ; `BAMBU_PUBLIC_URL` en https ; `bambud oauth --list|--revoke`). Migration ajoutée : `0190_oauth.sql` (le `schema_version` de `/health` passe à 190 ou plus : retour arrière = restaurer la sauvegarde d'avant mise à jour, voir plus haut).
 - Alternative sans installation sur l'hôte : image Docker, `docs/QUICKSTART.md`.
+
+## Caméra et notifications (chantier D)
+
+- **Flux sortants** : le serveur ouvre en plus **TCP 6000** vers chaque P1/A1 (caméra, TLS, mêmes identifiants `bblp` + code d'accès), et ce qu'il faut pour les canaux choisis : HTTPS vers le serveur ntfy ou le webhook, SMTP (587 STARTTLS ou 465) vers le serveur de messagerie.
+- **Variables** : `BAMBU_CAMERA_PORT` (simulateur seulement : port caméra différent de 6000) ; `BAMBU_NOTIFY_<CANAL>_URL`, `_HMAC_KEY`, `_TOKEN`, `_PASSWORD` et leurs variantes `_FILE` (chemin d'un fichier en 0600 contenant la valeur) ; elles l'emportent sur le coffre. Nom du canal en majuscules, non alphanumériques remplacés par `_`.
+- **Empreinte** : la caméra réutilise l'empreinte épinglée pour MQTT. Si la vraie P1S présente un autre certificat sur le port 6000, ouvrir `/setup/camera/{id}` (navigateur enregistré) et épingler l'empreinte de la caméra.
+- Migration `0170_camera_notify.sql` ; les photos sont des blobs (sauvegardées si référencées par `camera_photos`).

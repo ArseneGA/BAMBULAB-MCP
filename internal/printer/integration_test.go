@@ -175,8 +175,8 @@ func TestStatusIdleAndFirmware(t *testing.T) {
 	if st.GcodeState != "IDLE" || !st.Connected || !st.FullReportSeen {
 		t.Fatalf("unexpected status %+v", st)
 	}
-	deadline := time.Now().Add(3 * time.Second)
-	for st.Firmware == "" && time.Now().Before(deadline) {
+	deadline := time.Now().Add(15 * time.Second)
+	for (st.Firmware == "" || st.Temps.Nozzle <= 0 || !st.FullReportSeen) && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 		st, _ = e.ad.Status(context.Background())
 	}

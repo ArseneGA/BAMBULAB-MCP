@@ -16,10 +16,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/filament"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
@@ -47,6 +50,10 @@ type Config struct {
 	// AllowAnyPrinterHost lève la restriction des hôtes d'imprimante aux adresses privées / lien local /
 	// .local (option serveur --allow-any-printer-host ; tests avec le simulateur en loopback).
 	AllowAnyPrinterHost bool
+	// CameraPort remplace le port 6000 de la caméra des P1/A1 (simulateur) ; 0 = BAMBU_CAMERA_PORT puis 6000.
+	CameraPort int
+	// CameraMinInterval : plus petit intervalle d'instantanés accepté (secondes ; 0 = 5). Réservé aux tests.
+	CameraMinInterval float64
 }
 
 // Core regroupe les composants.
@@ -71,6 +78,11 @@ type Core struct {
 	Goals *goals.Service
 	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
 	Printing *printing.Service
+	// Camera : instantanés, détection d'échec, photos ; Notify : notifications (ntfy, webhook, e-mail). Observent, n'agissent jamais.
+	Camera *camera.Service
+	Notify *notify.Service
+	// Filament : bobines, AMS, multicolore, file d'attente (jamais de lancement : internal/filament).
+	Filament *filament.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
@@ -180,6 +192,12 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("impression : %w", err)
 	}
 	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
+	if c.Filament, err = filament.New(filament.Deps{Store: st, Blobs: blobs, Printing: pr, Log: cfg.Logger}); err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("bobines et file d'attente : %w", err)
+	}
+	c.AddRunHook(c.Filament.Run)                                // préparation de la file d'attente (ne lance jamais d'impression)
 	c.AddRunHook(func(context.Context) { c.Catalog.WarmCAD() }) // vérifie CadQuery (ping) dès le démarrage, sans bloquer
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
@@ -191,6 +209,11 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("reprise des travaux : %w", err)
 	}
 	c.Recovery = rep
+	if err := c.wireCamera(); err != nil {
+		st.Close()
+		lock.release()
+		return nil, err
+	}
 	pr.Recover(ctx) // lancement interrompu -> START_UNKNOWN ; suivi des impressions actives
 	if n := len(rep.Requeued) + len(rep.Unknown) + len(rep.Cancelled) + len(rep.Failed); n > 0 {
 		cfg.Logger.Warn("reprise après interruption", "remis_en_file", len(rep.Requeued), "inconnus", len(rep.Unknown),
@@ -244,6 +267,9 @@ func (c *Core) Close() error {
 	c.hookMu.Unlock()
 	for _, f := range hooks {
 		f()
+	}
+	if c.Filament != nil {
+		c.Filament.Close()
 	}
 	if c.Printing != nil {
 		_ = c.Printing.Close()

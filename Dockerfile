@@ -55,6 +55,8 @@ RUN mkdir -p /opt/bambustudio && \
       chmod +x /tmp/studio.AppImage && cd /tmp && ./studio.AppImage --appimage-extract >/dev/null && \
       cp -a /tmp/squashfs-root/. /opt/bambustudio/ && rm -rf /tmp/squashfs-root /tmp/studio.AppImage ; \
     fi
+# L'AppImage extrait a des dossiers en 0700 : lisibles par l'utilisateur non root de l'image.
+RUN chmod -R a+rX /opt/bambustudio
 
 # ---------------------------------------------------------------- 4. exécution
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
@@ -85,7 +87,9 @@ RUN uv sync --frozen --no-dev --extra cad --project /opt/atelier/workers/geometr
 COPY deploy/docker/entrypoint.sh /usr/local/bin/atelier-entrypoint
 RUN chmod 0755 /usr/local/bin/atelier-entrypoint
 
-ENV HOME=/data/home \
+# UV_NO_SYNC : image immuable, `uv run` ne resynchronise pas l'environnement (non inscriptible) à chaque appel.
+ENV UV_NO_SYNC=1 \
+    HOME=/data/home \
     TMPDIR=/data/tmp \
     BAMBU_DATA_DIR=/data/atelier \
     BAMBU_ADDR=0.0.0.0:7878 \
