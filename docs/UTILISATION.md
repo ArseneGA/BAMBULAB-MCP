@@ -129,9 +129,25 @@ L'interface est servie par `bambud` lui-même (même adresse que l'API, par exem
 
 Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serveur seulement), saisir le code d'accès de l'imprimante (page `/setup`), joindre des photos à un retour d'expérience, renommer ou déplacer physiquement des fichiers (le catalogue seul est modifié).
 
+## 8. Envoyer un fichier à l'Atelier (upload) et importer depuis un lien
+
+Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient de générer** (script OpenSCAD/CadQuery, maillage, 3MF modifié) entre au catalogue avec l'outil `upload_file` ; un fichier **sur votre PC** se dépose par glisser-déposer dans la Bibliothèque.
+
+**Exemples à dire à Claude**
+- « Génère un support de caméra en STL puis envoie-le dans la collection *Photo* avec l'étiquette *prototype*. » Claude calcule la taille et le sha256, découpe en morceaux base64 de 75 000 octets (≤ 100 000 caractères) et enchaîne les appels `upload_file` ; le dernier répond `status: complete` avec le modèle créé.
+- « Renvoie la version corrigée de `support.stl` » : même nom dans la même collection = **nouvelle version** du modèle (l'ancienne reste disponible). Même contenu qu'un fichier déjà présent = **doublon**, rien n'est ajouté.
+- « Qu'est-ce que je peux envoyer ? » : `get_capabilities` (section `upload`) donne les dossiers d'import du serveur, la taille maximale (globale et par format), la taille de morceau et les domaines autorisés pour les liens.
+- « Importe ce modèle : https://www.printables.com/model/… » : outil `import_from_url`. La provenance (site, URL, auteur) et la licence, quand la page les expose, sont enregistrées. Si le site exige une connexion, Claude reçoit la marche à suivre : télécharger le fichier dans votre navigateur connecté, puis le déposer (ou `upload_file`).
+
+**Ce que le service contrôle** : nom sans chemin (jamais de dossier fourni par le client), taille annoncée et maximale par format, signature (STL binaire/ASCII, OBJ texte, 3MF = zip avec `3D/3dmodel.model`, STEP `ISO-10303-21`), empreinte sha256 **recalculée** (un envoi dont l'empreinte diffère est refusé et rien n'est stocké), puis stockage dans le magasin de blobs. Reprise : `get_upload_status` donne `next_offset` ; un morceau rejoué est ignoré. Une session inactive expire (`BAMBU_UPLOAD_TTL`, 1 h par défaut) et ses octets temporaires sont purgés ; `cancel_upload` l'abandonne.
+
+**Glisser-déposer** : dans la Bibliothèque, déposez des fichiers n'importe où sur la page ou cliquez « Envoyer des fichiers » : collection, étiquettes et licence optionnelles, barre de progression par fichier, résultat (ajouté, nouvelle version, doublon) avec lien vers la fiche. Le même dialogue propose « Depuis un lien ».
+
+**Limites** : 512 Mo par fichier par défaut (STEP : 256 Mo), 8 envois simultanés. L'import par lien n'accepte que HTTPS et les domaines autorisés (par défaut `makerworld.com`, `bblmw.com` — CDN de fichiers de MakerWorld —, `printables.com`), sans redirection hors liste ni adresse privée. MakerWorld et Printables exigent presque toujours une connexion pour télécharger : le téléchargement manuel puis l'envoi reste le cas courant. Les domaines CDN par défaut sont ceux connus des deux sites et n'ont pas pu être vérifiés ici avec un vrai lien : ajuster `BAMBU_URL_IMPORT_ALLOW` si un téléchargement réel est refusé pour son domaine.
+
 ---
 
-## 8. Bobines, AMS, couleurs et file d'attente
+## 9. Bobines, AMS, couleurs et file d'attente
 
 Outils : `list_spools`, `update_spool`, `get_ams_state`, `check_filament_for_print`, `set_filament_margin`, `plan_colors`, `queue_print`, `list_print_queue`, `reorder_queue`, `remove_from_queue`. Écran web : **Bobines et file** (onglets Bobines et AMS, Multicolore, File d'attente).
 

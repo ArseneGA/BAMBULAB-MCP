@@ -21,6 +21,8 @@ type Capabilities struct {
 	Agents []AgentStatus `json:"agents,omitempty"`
 	// Studio : Bambu Studio du serveur et profils réellement chargés (vérifiable sans lancer de découpe).
 	Studio *StudioInfo `json:"studio,omitempty"`
+	// Upload : envoi de fichiers, dossiers d'import autorisés, import par lien.
+	Upload *UploadInfo `json:"upload,omitempty"`
 }
 
 // StudioInfo décrit l'installation de Bambu Studio utilisée par le service et les profils chargés.
