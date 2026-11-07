@@ -292,7 +292,7 @@ func TestOverrides(t *testing.T) {
 		{Key: "nozzle_temperature", Value: []int{230}}, // filament, liste
 		{Key: "retraction_length", Value: "1.5", Target: "machine"},
 	}
-	ap, err := applyOverrides(m, p, []*profiles.Resolved{f}, ok)
+	ap, err := applyOverrides(st, m, p, []*profiles.Resolved{f}, ok)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestOverrides(t *testing.T) {
 		"type non supporté":     {Key: "layer_height", Value: struct{}{}},
 	}
 	for name, o := range bad {
-		if _, err := applyOverrides(m, p, []*profiles.Resolved{f}, []Override{o}); !errors.Is(err, ErrOverride) {
+		if _, err := applyOverrides(st, m, p, []*profiles.Resolved{f}, []Override{o}); !errors.Is(err, ErrOverride) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
