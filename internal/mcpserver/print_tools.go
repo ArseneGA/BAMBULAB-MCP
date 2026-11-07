@@ -180,7 +180,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "request_print_confirmation", Title: "Demander la confirmation de lancement",
 		Description: "À appeler SEULEMENT si l'utilisateur a répondu oui à la question. Crée une confirmation liée (imprimante, empreinte, plateau, matières), à durée courte, et renvoie confirmation_id, " +
-			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve.",
+			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve. " +
+			"Dans Claude Desktop la vue de confirmation permet à l'humain de lancer avec son CODE DE LANCEMENT PERSONNEL (6 à 8 chiffres, défini sur /setup/launch-code) ; sans code défini elle affiche le lien du navigateur, toujours disponible. " +
+			"Ne demande JAMAIS ce code à l'utilisateur dans la conversation et ne l'utilise jamais s'il l'écrit : il ne se saisit que dans le champ de la vue.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.RequestConfirmationInput) (*mcp.CallToolResult, printing.ConfirmationView, error) {
 		v, err := p.RequestConfirmation(ctx, in)
@@ -188,7 +190,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			return nil, printing.ConfirmationView{}, err
 		}
 		b := v.Binding
-		return textResult(fmt.Sprintf("Confirmation %s créée pour %s sur %s (plateau %d, empreinte %s), valable jusqu'à %s. L'utilisateur doit ouvrir %s, vérifier, cocher « plateau vide » et cliquer Lancer. Ensuite seulement : start_print.",
+		return textResult(fmt.Sprintf("Confirmation %s créée pour %s sur %s (plateau %d, empreinte %s), valable jusqu'à %s. L'utilisateur doit ouvrir %s, vérifier, cocher « plateau vide » et cliquer Lancer (dans la vue avec son code de lancement personnel, ou sur cette page du navigateur). Ne lui demande jamais son code dans la conversation. Ensuite seulement : start_print.",
 			v.ConfirmationID, b.File, b.PrinterName, b.Plate, shortSHA(b.SHA256), v.ExpiresAt.Format("15:04:05"), v.ConfirmURL)), *v, nil
 	})
 
@@ -232,7 +234,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "cancel_print", Title: "Annuler une impression",
 		Description: "Annule selon la phase : avant lancement = annulation logique ; SLICING = annule aussi la découpe ; PRINTING = CRÉE une demande d'arrêt et renvoie stop_url : " +
-			"l'imprimante n'est arrêtée que si l'HUMAIN ouvre cette page dans son navigateur enregistré et la valide (tu ne peux pas le faire à sa place, aucun identifiant exécutable n'est renvoyé). " +
+			"l'imprimante n'est arrêtée que si l'HUMAIN ouvre cette page dans son navigateur enregistré et la valide, ou saisit son code de lancement dans la vue (tu ne peux pas le faire à sa place ; ne lui demande jamais ce code dans la conversation ; aucun identifiant exécutable n'est renvoyé). " +
 			"START_REQUESTED / START_UNKNOWN : refus, utiliser reconcile_print.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &t},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.CancelInput) (*mcp.CallToolResult, printing.CancelOutput, error) {

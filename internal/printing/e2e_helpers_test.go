@@ -86,7 +86,7 @@ func newRig(t *testing.T, studio string) *rig {
 	t.Helper()
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
-	c, err := core.Open(ctx, core.Config{DataDir: dir, Logger: quiet(), StudioPath: studio, Catalog: catalog.Config{Worker: fakeWorker},
+	c, err := core.Open(ctx, core.Config{DataDir: dir, Logger: captureLogger(), StudioPath: studio, Catalog: catalog.Config{Worker: fakeWorker},
 		PollInterval: 20 * time.Millisecond, HeartbeatInterval: 100 * time.Millisecond, AllowAnyPrinterHost: true /* simulateur en loopback */})
 	if err != nil {
 		t.Fatal(err)
@@ -185,6 +185,7 @@ func (r *rig) raw(name string, args map[string]any) (map[string]any, string, boo
 	r.t.Helper()
 	res, err := r.cs.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
 	if err != nil {
+		leakSinkAdd(err.Error(), nil)
 		return nil, err.Error(), true
 	}
 	var txt strings.Builder
@@ -198,6 +199,7 @@ func (r *rig) raw(name string, args map[string]any) (map[string]any, string, boo
 		b, _ := json.Marshal(res.StructuredContent)
 		_ = json.Unmarshal(b, &m)
 	}
+	leakSinkAdd(txt.String(), m)
 	return m, txt.String(), res.IsError
 }
 
