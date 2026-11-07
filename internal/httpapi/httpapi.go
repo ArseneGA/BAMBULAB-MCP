@@ -82,6 +82,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerCamera(mux, c, human)   // caméra, détection d'échec, notifications (camera.go)
 	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)
 	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
+	registerExport(mux, c)          // export de projet : archive zip partageable (export.go)
 
 	registerOAuth(mux, c, human, &opts) // jetons OAuth sur /mcp, métadonnées et pages (oauth.go) ; renseigne opts pour la garde
 

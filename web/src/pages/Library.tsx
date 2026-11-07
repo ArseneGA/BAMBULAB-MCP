@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { FolderInput, Tags, Trash2, Upload } from 'lucide-react';
+import { FolderInput, PackageOpen, Tags, Trash2, Upload } from 'lucide-react';
 import { Button, EmptyState, Panel, SearchInput, Segmented, Select, StatusDot, Tag, Tree } from '../components';
 import type { TreeNode } from '../components';
 import { api } from '../api/client';
@@ -9,6 +9,7 @@ import type { CollectionInfo, ModelSummary, Operation } from '../api/types';
 import { Async, Dialog, FormatBadge, fmtBytes, fmtDims } from './common';
 import { ExportSelected } from './ModelTools';
 import { ImportDialog } from './ImportDialog';
+import { ExportDialog } from './ExportDialog';
 import { UploadLauncher } from './UploadLauncher';
 import { OperationFlow } from './OperationFlow';
 import { Field, Input } from '../components';
@@ -83,6 +84,7 @@ export function Library() {
   const [selected, setSelected] = useState<string[]>([]);
   useEffect(() => { setSelected([]); }, [q, coll, fmt, avail, page, tags.join('|')]);
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [ops, setOps] = useState<Operation[] | null>(null);
   const [opTitle, setOpTitle] = useState('');
   const [ask, setAsk] = useState<'tag' | 'move' | null>(null);
@@ -135,6 +137,7 @@ export function Library() {
         <div><span className="eyebrow">Espace</span><h1>Bibliothèque</h1><p>Recherche, collections et fichiers du catalogue de bambud. Les originaux importés ne sont jamais modifiés.</p></div>
         <div className="lib-head-acts">
           <UploadLauncher onUploaded={() => setRefresh((n) => n + 1)} />
+          {coll !== 'all' && <Button size="sm" icon={<PackageOpen size={14} />} onClick={() => setExportOpen(true)}>Exporter le projet</Button>}
           <Link to="/corbeille"><Button size="sm" icon={<Trash2 size={14} />}>Corbeille</Button></Link>
           <Button variant="primary" icon={<Upload size={15} />} onClick={() => setImportOpen(true)}>Importer</Button>
         </div>
@@ -190,6 +193,8 @@ export function Library() {
       </div>
 
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={() => setRefresh((n) => n + 1)} />
+      <ExportDialog open={exportOpen && coll !== 'all'} onClose={() => setExportOpen(false)} collection={coll}
+        collectionName={cols.data?.collections.find((c) => c.id === coll)?.name ?? 'collection'} />
       <OperationFlow title={opTitle} operations={ops} onClose={() => setOps(null)} onApplied={() => { setSelected([]); setRefresh((n) => n + 1); }} />
       <Dialog open={ask !== null} onClose={() => setAsk(null)} title={ask === 'tag' ? 'Ajouter une étiquette' : 'Déplacer vers une collection'}
         footer={<><Button onClick={() => setAsk(null)}>Annuler</Button><Button variant="primary" disabled={!askVal.trim()} onClick={() => {

@@ -1,6 +1,6 @@
 # Backlog — lot « v2 » (lancé le 2026-11-07)
 
-Retenus par l'utilisateur : 1 à 11, 13, 16 à 21. Écartés (faisables directement dans Claude) : 12 photo → pièce, 14 réparation, 15 gravure ; 22 export de projet reporté.
+Retenus par l'utilisateur : 1 à 11, 13, 16 à 21. Écartés (faisables directement dans Claude) : 12 photo → pièce, 14 réparation, 15 gravure ; 22 export de projet (repris et fait, voir plus bas).
 Règle commune : tout est utilisable depuis Claude (outil MCP + rendu texte/image, vue MCP App quand elle existe) et depuis l'interface web ; lancer et arrêter une impression restent des gestes humains sur les pages /confirm et /stop (docs/SECURITY.md).
 
 | # | Chantier | Agent | Migration |
@@ -49,4 +49,8 @@ Piste retenue : vue MCP App de confirmation (résumé, températures, photo du p
 Prérequis : vue MCP App réellement affichée dans Claude Desktop (point 3).
 **Fait (2026-11-07, à éprouver dans un vrai Claude Desktop)** : code de lancement personnel (`/setup/launch-code`, `bambud launch-code --unlock|--reset`), vue de confirmation et d'arrêt avec champ de code, outils app-only `approve_print_with_code` / `approve_stop_with_code`, verrouillage après 3 échecs. Voir `docs/SECURITY.md` § 12 (risque résiduel : code tapé dans la conversation) et `docs/UTILISATION.md` § 4 bis. Reste ouvert : passkey/WebAuthn dans la vue.
 
-Restent ouverts hors lot : ponts Windows signés (`bambu-mcp.exe`, `bambu-agent.exe`), licence du dépôt (choix utilisateur), 22 export de projet.
+## 22. Export de projet — fait
+
+`export_project` / `get_project_export` (paquet `internal/export`, outils `internal/mcpserver/export_tools.go`, routes `/api/exports` dans `internal/httpapi/export.go`, bouton « Exporter le projet » sur une collection de la Bibliothèque, migration 0250). Archive zip (originaux vérifiés par sha256, sources paramétriques, profils effectifs sans G-code, `.gcode.3mf` validés en option, README en français, manifest.json, photos en option), construite en flux par un travail asynchrone, taille bornée, téléchargée par URL signée de 10 minutes, conservée 24 h. Aucune publication automatique : la réponse liste ce qu'il reste à faire à la main (voir `docs/UTILISATION.md` § 14).
+
+Restent ouverts hors lot : ponts Windows signés (`bambu-mcp.exe`, `bambu-agent.exe`), licence du dépôt (choix utilisateur).

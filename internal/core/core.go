@@ -20,6 +20,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/export"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/filament"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
@@ -91,6 +92,8 @@ type Core struct {
 	Notify *notify.Service
 	// Filament : bobines, AMS, multicolore, file d'attente (jamais de lancement : internal/filament).
 	Filament *filament.Service
+	// Export : archives zip partageables d'un projet (internal/export, export.go).
+	Export *export.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
@@ -229,6 +232,12 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 	c.Filament.SetCostFunc(c.Insights.MaterialCost)             // le coût de purge (plan_colors) suit les réglages de prix
 	c.AddRunHook(c.Filament.Run)                                // préparation de la file d'attente (ne lance jamais d'impression)
 	c.AddRunHook(func(context.Context) { c.Catalog.WarmCAD() }) // vérifie CadQuery (ping) dès le démarrage, sans bloquer
+	// export de projet (export.go) : enregistré avant la reprise des travaux
+	if err := c.wireExport(); err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("export de projet : %w", err)
+	}
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,
 	})

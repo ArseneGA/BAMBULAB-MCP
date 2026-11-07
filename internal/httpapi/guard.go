@@ -86,9 +86,16 @@ func isSignedAsset(r *http.Request) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
 	}
-	p, ok := strings.CutPrefix(r.URL.Path, "/api/assets/")
 	q := r.URL.Query()
-	return ok && strings.HasSuffix(p, ".glb") && !strings.Contains(p, "/") && q.Get("sig") != "" && q.Get("exp") != ""
+	if q.Get("sig") == "" || q.Get("exp") == "" {
+		return false
+	}
+	// archives d'export de projet : même principe (HMAC à portée « export », expiration courte, vérifiés par le handler)
+	if p, ok := strings.CutPrefix(r.URL.Path, "/api/exports/"); ok {
+		return strings.HasSuffix(p, ".zip") && !strings.Contains(p, "/")
+	}
+	p, ok := strings.CutPrefix(r.URL.Path, "/api/assets/")
+	return ok && strings.HasSuffix(p, ".glb") && !strings.Contains(p, "/")
 }
 
 // MinTokenLen : longueur minimale d'un jeton d'API.
