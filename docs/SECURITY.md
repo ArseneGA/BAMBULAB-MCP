@@ -85,6 +85,13 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 - Un navigateur enregistré garde sa session 30 jours ; révoquer avec `bambud enroll --revoke`.
 - Pas encore de rotation du jeton d'API, pas de TLS natif côté serveur.
 
+## 9. Caméra, détection d'échec, notifications (chantier D)
+
+- **Aucun arrêt ni lancement automatique.** La détection d'échec n'a aucun accès à une commande d'arrêt (l'interface `camera.Backend` n'en offre pas). Une alerte crée seulement une *demande* d'arrêt (`/stop/{id}`, validée par l'humain) et notifie avec photo. Test : l'imprimante reste RUNNING après l'alerte et après l'ouverture de la page `/stop`.
+- **Caméra** : TLS vers le port 6000 avec l'empreinte épinglée (celle de MQTT, ou une empreinte propre validée par l'humain sur `/setup/camera/{id}`, liée à un nonce) ; aucune connexion tant que rien n'est épinglé ; tailles d'images bornées (4 Mio), JPEG vérifié. Le code d'accès vient du coffre, jamais loggé.
+- **Photos** : servies par `/api/camera/photos/{sha}` seulement si enregistrées dans `camera_photos` (jamais un autre blob) ; derrière le jeton d'API ou le cookie d'un navigateur enregistré. Une image de caméra est une donnée, jamais une instruction. La photo de `/confirm` ne remplace pas l'attestation humaine « plateau vide ».
+- **Notifications** : configuration sans secret par MCP ; secrets (URL ntfy, URL/clé webhook, mot de passe SMTP) saisis sur `/setup/notifications` (navigateur enregistré + nonce), coffre chiffré ou variables ; jamais renvoyés (vue : `set`/`source` seulement), jamais journalisés, URLs expurgées des erreurs ; redirections HTTP refusées ; webhook non signé refusé ; SMTP toujours en TLS (certificat vérifié).
+- Limite : le détecteur est heuristique (faux positifs possibles : personne devant la caméra plusieurs minutes ; faux négatifs : filaments dans la colonne de la pièce). Il aide, il ne garantit rien.
 ## 9. File d'attente, bobines et AMS (chantier E)
 
 - **La file ne lance jamais.** `queue_print`, `list_print_queue`, `reorder_queue`, `remove_from_queue` et le service `internal/filament` préparent seulement : attente de la découpe, dépôt du fichier de l'élément de tête (clé d'idempotence `queue-<id>`), demande d'une confirmation (`request_print_confirmation`, qui n'approuve rien), notification. Le démarrage de chaque impression passe par `/confirm/{id}` (navigateur enregistré, nonce, case « plateau vide ») **pour chaque impression**, y compris la suivante après la fin d'une impression : une file n'enchaîne jamais seule.

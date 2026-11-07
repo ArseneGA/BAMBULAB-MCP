@@ -109,6 +109,11 @@ type Service struct {
 
 	// confirmTransition : passage AWAITING -> START_REQUESTED après consommation (substituable en test).
 	confirmTransition func(ctx context.Context, jobID, confID string) error
+
+	// Abonnés aux transitions et photo du plateau (events.go).
+	evMu       sync.Mutex
+	evSubs     []func(Event)
+	platePhoto func(ctx context.Context, printerID string) PlatePhoto
 }
 
 type adapterEntry struct {
@@ -852,8 +857,10 @@ func (s *Service) update(ctx context.Context, id string, mutate func(*Job) error
 
 // transition applique un événement de la machine d'états (refus si illégal) puis mutate.
 func (s *Service) transition(ctx context.Context, id string, ev contracts.PrintEvent, note string, mutate func(*Job) error) (Job, error) {
+	var was contracts.PrintState
 	out, err := s.update(ctx, id, func(j *Job) error {
 		from := j.State
+		was = from
 		next, err := contracts.Transition(from, ev)
 		if err != nil {
 			return fmt.Errorf("%w : %v", ErrState, err)
@@ -866,7 +873,8 @@ func (s *Service) transition(ctx context.Context, id string, ev contracts.PrintE
 		return nil
 	})
 	if err == nil {
-		s.fireJobEnd(out) // observateurs de fin d'impression (ams.go)
+		s.emit(out, ev, was, note) // observateurs (caméra, notifications) : lecture seule
+		s.fireJobEnd(out)          // observateurs de fin d'impression (ams.go)
 	}
 	return out, err
 }

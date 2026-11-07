@@ -585,6 +585,7 @@ func referencedBlobs(ctx context.Context, db *sql.DB) (shas map[string]string, w
 		{"dérivé", `SELECT blob_sha FROM derived_assets WHERE blob_sha IS NOT NULL AND blob_sha<>''`},
 		{"artefact de candidat", `SELECT artifact_sha FROM experiment_candidates WHERE artifact_sha IS NOT NULL AND artifact_sha<>''`},
 		{"aperçu", `SELECT sha256 FROM print_previews`},
+		{"photo caméra", `SELECT sha256 FROM camera_photos`},
 	} {
 		rows, err := db.QueryContext(ctx, q.sql)
 		if err != nil {
