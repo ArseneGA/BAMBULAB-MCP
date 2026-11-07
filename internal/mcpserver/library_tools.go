@@ -119,7 +119,8 @@ func registerLibraryTools(s *mcp.Server, c *core.Core) {
 		Name: "generate_calibration_set", Title: "Générer des pièces de calibration",
 		Description: "Génère, pour un couple imprimante + buse + matériau (+ bobine), des pièces de calibration enregistrées au catalogue : peigne de jeux 0,1 à 0,6 mm (fit_comb), trous/arbres aux diamètres nominaux (hole_shaft), " +
 			"cube de retrait de 50 mm (shrink_cube), ponts et surplombs (bridge_overhang), température (une petite pièce par température, ou une tour). Renvoie, par pièce, quoi mesurer, et un squelette de mesures. " +
-			"Avec `base` (machine/process/filament), une révision de profil découpable est créée pour chaque température. Après impression et mesure au pied à coulisse : record_calibration.",
+			"Séries d'extrusion (sur demande, une petite pièce PAR VALEUR, sans G-code personnalisé) : shrink_sizes (tubes de 20 et 80 mm : échelle et décalage de contour séparés), flow_ratio, retraction, volumetric_speed, first_layer, pressure_advance (réglage manuel : aucune clé de profil BBL). " +
+			"Avec `base` (machine/process/filament), une révision de profil découpable bornée est créée pour chaque pièce qui porte des surcharges, et les températures suivent nozzle_temperature_range_low/high du profil filament. Après impression et mesure : record_calibration.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in calibration.GenerateInput) (*mcp.CallToolResult, calibration.GenerateOutput, error) {
 		o, err := cal.Generate(ctx, in)
@@ -138,8 +139,8 @@ func registerLibraryTools(s *mcp.Server, c *core.Core) {
 	addTool(s, &mcp.Tool{
 		Name: "record_calibration", Title: "Enregistrer des mesures de calibration",
 		Description: "Enregistre les mesures de l'utilisateur sur ses pièces de calibration (jeu glissant/serré, trous et arbres mesurés au pied à coulisse, cube de retrait 50 mm, meilleure température, ponts, surplombs) " +
-			"et en déduit des corrections : jeu effectif, compensation de trou (droite d'ajustement par orientation), facteurs de retrait XY/Z, meilleure température. Elles sont stockées pour (imprimante, buse, matériau, bobine) et " +
-			"utilisées en priorité par create_from_template et les calculs d'ingénierie, avec la provenance « calibré le ... ». Mesures implausibles refusées. Les mesures sont conservées (journal immuable).",
+			"et en déduit des corrections : jeu effectif, compensation de trou (droite d'ajustement par orientation), facteurs de retrait XY/Z (un cube) ou échelle + décalages xy_contour_compensation / xy_hole_compensation (shrink_sizes, deux tailles), meilleure température, et la valeur retenue d'une série d'extrusion (débit, rétraction, débit volumétrique, première couche, avance de pression). Elles sont stockées pour (imprimante, buse, matériau, bobine) et " +
+			"utilisées en priorité par create_from_template et les calculs d'ingénierie, avec la provenance « calibré le ... ». Les valeurs de profil (`proposals`) sont seulement PROPOSÉES, jamais appliquées : les passer à modify_slicing_profile après accord. Mesures implausibles refusées. Les mesures sont conservées (journal immuable).",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in calibration.RecordInput) (*mcp.CallToolResult, calibration.RecordOutput, error) {
 		o, err := cal.Record(ctx, in)
@@ -152,7 +153,7 @@ func registerLibraryTools(s *mcp.Server, c *core.Core) {
 	addTool(s, &mcp.Tool{
 		Name: "get_calibration", Title: "Calibration applicable",
 		Description: "Calibration active pour (imprimante, buse, matériau, bobine) : valeurs mesurées, leur provenance et les clés utilisées (du plus général au plus spécifique), ou « valeurs génériques » si aucune calibration n'existe. " +
-			"Inclut l'historique des mesures de ce matériau et de cette buse.",
+			"Inclut les valeurs de profil proposées (`proposals`, jamais appliquées automatiquement) et l'historique des mesures de ce matériau et de cette buse.",
 		Annotations: ro,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in GetCalibrationInput) (*mcp.CallToolResult, GetCalibrationOutput, error) {
 		r, err := cal.Resolve(ctx, in.Key)

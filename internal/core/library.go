@@ -13,6 +13,7 @@ func (c *Core) wireLibrary() error {
 	cd := calibration.Deps{Store: c.Store, Blobs: c.Blobs, Catalog: c.Catalog, WorkRoot: filepath.Join(c.Cfg.DataDir, "work", "calibration")}
 	if c.Goals != nil {
 		cd.Profiles = c.Goals
+		cd.Ranges = c.Goals // plage de température lue dans le profil filament de base
 	}
 	cal, err := calibration.New(cd)
 	if err != nil {

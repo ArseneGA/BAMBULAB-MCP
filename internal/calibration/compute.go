@@ -38,11 +38,52 @@ type Measures struct {
 	BestTempC       *float64          `json:"best_temp_c,omitempty" jsonschema:"température de buse de la pièce / de l'étage le plus propre"`
 	BridgeMaxSpanMM *float64          `json:"bridge_max_span_mm,omitempty" jsonschema:"plus grande portée de pont sans affaissement"`
 	OverhangMaxDeg  *float64          `json:"overhang_max_deg,omitempty" jsonschema:"plus grand angle de surplomb propre, depuis la verticale"`
+
+	// Retrait sur deux tailles ou plus (kind shrink_sizes) : sépare le facteur d'échelle du décalage de contour.
+	ShrinkSizes []SizeMeasure `json:"shrink_sizes,omitempty" jsonschema:"tubes carrés de tailles différentes (au moins 2, 20 mm d'écart) : facteur d'échelle ET décalages xy_contour_compensation / xy_hole_compensation proposés (jamais appliqués)"`
+	// Calibrations d'extrusion (séries une pièce par valeur).
+	Flow                   *FlowMeasure       `json:"flow,omitempty" jsonschema:"série de débit : épaisseur de paroi mesurée par pièce et paroi visée"`
+	BestFlowRatio          *float64           `json:"best_flow_ratio,omitempty" jsonschema:"débit retenu à l'oeil (filament_flow_ratio), [0,85 ; 1,10]"`
+	BestPressureAdvance    *float64           `json:"best_pressure_advance,omitempty" jsonschema:"avance de pression K retenue, [0 ; 0,2] ; aucune clé de profil BBL : à régler dans Bambu Studio"`
+	BestRetractionMM       *float64           `json:"best_retraction_mm,omitempty" jsonschema:"plus courte rétraction sans fils, [0 ; 3] mm"`
+	BestMaxVolumetricSpeed *float64           `json:"best_max_volumetric_speed,omitempty" jsonschema:"plus grand débit volumétrique encore régulier, [1 ; 40] mm³/s"`
+	FirstLayer             *FirstLayerMeasure `json:"first_layer,omitempty" jsonschema:"première couche retenue : paramètre (height|speed|line_width|temperature) et valeur de la pièce la plus régulière"`
+}
+
+// SizeMeasure : un tube carré du kind shrink_sizes (mesures en mm, pièce refroidie, à mi-hauteur).
+type SizeMeasure struct {
+	NominalMM      float64  `json:"nominal_mm" jsonschema:"côté extérieur nominal"`
+	XMM            float64  `json:"x_mm"`
+	YMM            float64  `json:"y_mm"`
+	ZMM            float64  `json:"z_mm" jsonschema:"hauteur mesurée (nominale = côté)"`
+	InnerNominalMM float64  `json:"inner_nominal_mm,omitempty" jsonschema:"côté intérieur nominal (affiché par la pièce), requis avec inner_x_mm / inner_y_mm"`
+	InnerXMM       *float64 `json:"inner_x_mm,omitempty"`
+	InnerYMM       *float64 `json:"inner_y_mm,omitempty"`
+}
+
+// FlowPoint : une pièce de la série de débit.
+type FlowPoint struct {
+	Ratio  float64 `json:"ratio" jsonschema:"filament_flow_ratio de la pièce"`
+	WallMM float64 `json:"wall_mm" jsonschema:"épaisseur de paroi mesurée (moyenne de 4 points)"`
+}
+
+// FlowMeasure : série de débit (paroi d'une ligne en mode vase).
+type FlowMeasure struct {
+	Series       []FlowPoint `json:"series"`
+	TargetWallMM float64     `json:"target_wall_mm" jsonschema:"largeur de ligne visée (ex. outer_wall_line_width, 0,42 pour une buse de 0,4)"`
+}
+
+// FirstLayerMeasure : la valeur retenue d'une série de première couche.
+type FirstLayerMeasure struct {
+	Param string  `json:"param" jsonschema:"height | speed | line_width | temperature"`
+	Value float64 `json:"value"`
 }
 
 func (m *Measures) empty() bool {
 	return m.FitSlidesGapMM == nil && m.FitSnugGapMM == nil && len(m.Holes) == 0 && len(m.Shafts) == 0 &&
-		len(m.CubeMM) == 0 && m.BestTempC == nil && m.BridgeMaxSpanMM == nil && m.OverhangMaxDeg == nil
+		len(m.CubeMM) == 0 && m.BestTempC == nil && m.BridgeMaxSpanMM == nil && m.OverhangMaxDeg == nil &&
+		len(m.ShrinkSizes) == 0 && m.Flow == nil && m.BestFlowRatio == nil && m.BestPressureAdvance == nil &&
+		m.BestRetractionMM == nil && m.BestMaxVolumetricSpeed == nil && m.FirstLayer == nil
 }
 
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
@@ -144,6 +185,11 @@ func Compute(m Measures) (cal engineering.Calibration, notes []string, err error
 		cal.OverhangMaxDeg = m.OverhangMaxDeg
 		notes = append(notes, fmt.Sprintf("Surplomb propre jusqu'à %.0f° depuis la verticale.", v))
 	}
+	n2, err := computeExtrusion(m, &cal)
+	if err != nil {
+		return cal, nil, err
+	}
+	notes = append(notes, n2...)
 	return cal, notes, nil
 }
 
@@ -234,6 +280,43 @@ func Merge(base, over *engineering.Calibration) *engineering.Calibration {
 	}
 	if o.BestTempC != nil {
 		out.BestTempC = o.BestTempC
+	}
+	if o.ContourCompMM != nil {
+		out.ContourCompMM = o.ContourCompMM
+	}
+	if o.HoleCompMM != nil {
+		out.HoleCompMM = o.HoleCompMM
+	}
+	if o.BestFlowRatio != nil {
+		out.BestFlowRatio = o.BestFlowRatio
+	}
+	if o.BestPressureAdvance != nil {
+		out.BestPressureAdvance = o.BestPressureAdvance
+	}
+	if o.BestRetractionMM != nil {
+		out.BestRetractionMM = o.BestRetractionMM
+	}
+	if o.BestMaxVolumetricSpeed != nil {
+		out.BestMaxVolumetricSpeed = o.BestMaxVolumetricSpeed
+	}
+	if o.FirstLayer != nil {
+		fl := engineering.FirstLayerCal{}
+		if out.FirstLayer != nil {
+			fl = *out.FirstLayer
+		}
+		if o.FirstLayer.HeightMM != nil {
+			fl.HeightMM = o.FirstLayer.HeightMM
+		}
+		if o.FirstLayer.SpeedMMS != nil {
+			fl.SpeedMMS = o.FirstLayer.SpeedMMS
+		}
+		if o.FirstLayer.LineWidthMM != nil {
+			fl.LineWidthMM = o.FirstLayer.LineWidthMM
+		}
+		if o.FirstLayer.TempC != nil {
+			fl.TempC = o.FirstLayer.TempC
+		}
+		out.FirstLayer = &fl
 	}
 	if o.BridgeMaxSpanMM != nil {
 		out.BridgeMaxSpanMM = o.BridgeMaxSpanMM

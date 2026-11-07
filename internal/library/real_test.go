@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
 
@@ -306,5 +308,76 @@ func TestRealCalibrationEndToEnd(t *testing.T) {
 	got := o.Params["inner_diameter"].(float64)
 	if math.Abs(got-6.16) > 0.01 { // décalage ≈ 0,16 mm mesuré (écart 0,15 à 0,17 selon la droite)
 		t.Fatalf("diamètre calibré %v", got)
+	}
+}
+
+// Séries d'extrusion avec le VRAI worker : pièces étanches, une par valeur, surcharges bornées, mesures -> propositions.
+func TestRealExtrusionSeriesEndToEnd(t *testing.T) {
+	r := realWorker(t)
+	ctx := context.Background()
+	key := calibration.Key{Printer: "P1S série", NozzleMM: 0.4, Material: "PETG", Filament: "bobine série"}
+	out, err := r.cal.Generate(ctx, calibration.GenerateInput{Key: key,
+		Kinds:      []string{"shrink_sizes", "flow_ratio", "retraction", "first_layer", "pressure_advance"},
+		FlowRatios: []float64{0.96, 1.0}, RetractionsMM: []float64{0.4, 0.8}, FirstLayerVals: []float64{0.2, 0.24}, PressureAdvance: []float64{0.03}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := map[string]int{}
+	for _, p := range out.Pieces {
+		count[p.Kind]++
+		for _, part := range p.Parts {
+			if part["valid"] != true {
+				t.Errorf("%s : pièce invalide %v", p.Name, part)
+			}
+		}
+		for _, o := range append(append([]slicer.Override{}, p.Overrides...), p.OptionalOver...) {
+			if strings.HasSuffix(o.Key, "_gcode") {
+				t.Errorf("%s : surcharge G-code %s", p.Name, o.Key)
+			}
+		}
+		if p.Kind == "pressure_advance" && (len(p.Overrides) != 0 || len(p.ManualSettings) != 1) {
+			t.Errorf("avance de pression : %+v", p)
+		}
+	}
+	if count["shrink_sizes"] != 2 || count["flow_ratio"] != 2 || count["retraction"] != 2 || count["first_layer"] != 2 || count["pressure_advance"] != 1 {
+		t.Fatalf("pièces : %v", count)
+	}
+	// le tube de 80 mm fait bien 80 mm et annonce son côté intérieur
+	for _, p := range out.Pieces {
+		if p.Kind == "shrink_sizes" && p.SeriesValue != nil && *p.SeriesValue == 80 {
+			sz := p.BBoxMM["size"].([]any)
+			if math.Abs(sz[0].(float64)-80) > 0.01 || p.Info["inner_nominal_mm"].(float64) != 68 {
+				t.Fatalf("tube 80 : %v %v", sz, p.Info)
+			}
+		}
+	}
+	// mesures simulées d'une machine qui imprime 0,3 % trop petit avec un contour trop gros de 0,18 mm
+	_, err = r.cal.Record(ctx, calibration.RecordInput{Key: key, SetID: out.SetID, Measures: calibration.Measures{
+		ShrinkSizes: []calibration.SizeMeasure{
+			{NominalMM: 20, XMM: 20.12, YMM: 20.12, ZMM: 19.94, InnerNominalMM: 12, InnerXMM: f64(11.80), InnerYMM: f64(11.80)},
+			{NominalMM: 80, XMM: 79.94, YMM: 79.94, ZMM: 79.76, InnerNominalMM: 68, InnerXMM: f64(67.64), InnerYMM: f64(67.64)}},
+		Flow:             &calibration.FlowMeasure{TargetWallMM: 0.42, Series: []calibration.FlowPoint{{Ratio: 0.96, WallMM: 0.40}, {Ratio: 1.0, WallMM: 0.44}}},
+		BestRetractionMM: f64(0.6)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := r.cal.Resolve(ctx, key)
+	if err != nil || res.Proposals == nil {
+		t.Fatalf("%v %+v", err, res)
+	}
+	got := map[string]string{}
+	for _, o := range res.Proposals.Overrides {
+		got[o.Key] = o.Value
+	}
+	if got["filament_flow_ratio"] != "0.98" || got["retraction_length"] != "0.6" || got["xy_contour_compensation"] == "" || got["xy_hole_compensation"] == "" {
+		t.Fatalf("propositions : %v", got)
+	}
+	if !strings.Contains(res.Proposals.Note, "n'applique jamais") {
+		t.Fatalf("note : %q", res.Proposals.Note)
+	}
+	// une autre bobine n'hérite d'aucune valeur
+	other, _ := r.cal.Resolve(ctx, calibration.Key{Printer: "P1S série", NozzleMM: 0.4, Material: "PETG", Filament: "autre bobine"})
+	if other.Calibration != nil && other.Calibration.BestFlowRatio != nil {
+		t.Fatalf("héritage entre bobines : %+v", other.Calibration)
 	}
 }

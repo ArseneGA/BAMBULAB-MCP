@@ -30,11 +30,11 @@ Règle commune : tout est utilisable depuis Claude (outil MCP + rendu texte/imag
 1. ~~Liste blanche des surcharges, `*_gcode` interdits, bornes~~ + scan thermique du G-code et températures sur /confirm — **en cours**.
 2. Premier essai sur la vraie P1S : URL de `project_file`, `md5`, `bed_leveling`/`bed_levelling` (session de branchement).
 3. CI GitHub Actions : `go vet`, `go test -short`, pytest avec CadQuery, `npm run build`.
-4. Calibrations d'extrusion (débit, avance de pression, rétraction, vitesse volumétrique, première couche) ou pilotage des calibrations natives de Studio.
-5. Retrait mesuré sur deux tailles (séparer échelle et décalage de paroi) ou `xy_contour_compensation`.
-6. Filetages : tessellation ≤ 0,02 mm, chanfrein de pointe ; engrenages : plus de points de flanc, congé de pied ; charnière print-in-place : axe en goutte.
+4. ~~Calibrations d'extrusion~~ — **fait** (séries de pièces par valeur, débit, rétraction, débit volumétrique, première couche ; avance de pression : réglage manuel, pas de clé BBL). Le pilotage des calibrations natives de Studio reste impossible par CLI (interface graphique).
+5. ~~Retrait sur deux tailles~~ — **fait** (`shrink_sizes`, `xy_contour_compensation` / `xy_hole_compensation` proposés).
+6. ~~Filetages, engrenages, charnière~~ — **fait** (maillage fin, chanfreins, 24 points par flanc, congé 0,38·m, axe en goutte).
 7. Fabricabilité : volumes et zones d'exclusion lus depuis les profils Studio pour toutes les imprimantes (H2D, X1E, P2S…) au lieu de 5 en dur ; seuil de surplomb lu dans le profil.
 8. Réparation de maillage minimale avec rapport avant/après ; détection d'auto-intersections.
-9. Golden files des gabarits, maillages « sales » de test, benchmarks gros maillages ; température de calibration selon le matériau (pas seulement PLA) ; `FitClearance` selon la dimension.
+9. Golden files des gabarits, maillages « sales » de test, benchmarks gros maillages  ; ~~température de calibration selon le matériau~~ et ~~`FitClearance` selon la dimension~~ — **faits**.
 
 Restent ouverts hors lot : ponts Windows signés (`bambu-mcp.exe`, `bambu-agent.exe`), licence du dépôt (choix utilisateur), 22 export de projet.
