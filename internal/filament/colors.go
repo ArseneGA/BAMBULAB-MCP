@@ -222,7 +222,7 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 
 	var totalWaste float64
 	var costSum float64
-	costKnown, allPriced := false, true
+	costKnown, allPriced, usedSettings := false, true, false
 	for _, f := range fils {
 		w := wishes[f.Slot]
 		sl := ColorSlotPlan{FilamentSlot: f.Slot, Parts: w.Part, WantedColor: orStr(normHex(w.ColorHex), normHex(f.Color)), WantedType: orStr(w.Material, f.Type),
@@ -259,7 +259,8 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 			// coût de la matière jetée
 			if sl.PurgeG > 0 {
 				totalWaste += sl.PurgeG
-				if c, ok := s.purgeCost(ctx, pid, sl); ok {
+				if c, viaSettings, ok := s.purgeCost(ctx, pid, sl); ok {
+					usedSettings = usedSettings || viaSettings
 					sl.PurgeCost = &c
 					costSum += c
 					costKnown = true
@@ -279,11 +280,8 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 			c := round2(costSum)
 			pc.Cost = &c
 			pc.Basis = "spool_price_per_kg"
-			s.mu.Lock()
-			cf := s.costFn
-			s.mu.Unlock()
-			if cf != nil {
-				pc.Basis = "cost_service"
+			if usedSettings {
+				pc.Basis = "cost_service" // au moins un emplacement chiffré aux réglages de prix (bobine sans prix)
 			}
 		}
 		if purge.WastePercent >= 40 {
@@ -308,21 +306,24 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 	return plan, nil
 }
 
-func (s *Service) purgeCost(ctx context.Context, printerID string, sl ColorSlotPlan) (float64, bool) {
+// purgeCost chiffre la purge d'un emplacement avec la même priorité que estimate_cost : prix/kg réel de la bobine
+// proposée d'abord, puis (bobine sans prix ou absente) les réglages de prix de l'utilisateur (famille de la matière).
+// Le second résultat vaut true quand ce sont les réglages qui ont servi.
+func (s *Service) purgeCost(ctx context.Context, printerID string, sl ColorSlotPlan) (float64, bool, bool) {
+	if sl.SpoolID != "" {
+		if pr, ok := s.PriceForSpool(ctx, sl.SpoolID); ok && pr.PricePerKg > 0 {
+			return round2(sl.PurgeG / 1000 * pr.PricePerKg), false, true
+		}
+	}
 	s.mu.Lock()
 	cf := s.costFn
 	s.mu.Unlock()
 	if cf != nil {
 		if c, ok := cf(ctx, sl.WantedType, sl.PurgeG); ok {
-			return round2(c), true
+			return round2(c), true, true
 		}
 	}
-	if sl.SpoolID != "" {
-		if pr, ok := s.PriceForSpool(ctx, sl.SpoolID); ok {
-			return round2(sl.PurgeG / 1000 * pr.PricePerKg), true
-		}
-	}
-	return 0, false
+	return 0, false, false
 }
 
 // candidates : bacs lus sur l'imprimante rapprochés de l'inventaire ; à défaut, bobines inscrites.
