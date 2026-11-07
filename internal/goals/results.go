@@ -34,6 +34,12 @@ type ResultInput struct {
 	ActualSettings map[string]any `json:"actual_settings,omitempty" jsonschema:"réglages réellement utilisés quand ils diffèrent du plan, ex. {\"process.layer_height\":\"0.16\"}"`
 	Filament       string         `json:"filament,omitempty" jsonschema:"bobine ou référence réellement utilisée si différente du profil de base"`
 	Machine        string         `json:"machine,omitempty" jsonschema:"preset machine réellement utilisé si différent du profil de base"`
+	// Champs du journal des impressions (tous facultatifs : un appel qui ne les fournit pas se comporte comme avant).
+	PrintJobID    string   `json:"print_job_id,omitempty" jsonschema:"impression (print job) à laquelle ce résultat se rattache : alimente sa fiche du journal"`
+	Rating        int      `json:"rating,omitempty" jsonschema:"note de 1 à 5 (0 ou omis : non noté)"`
+	Defects       []string `json:"defects,omitempty" jsonschema:"défauts constatés : warping, stringing, layer_lines, delamination, adhesion, dimensions, elephant_foot, under_extrusion, over_extrusion, blobs, supports, overhang, layer_shift, surface, other"`
+	ActualMassG   float64  `json:"actual_mass_g,omitempty" jsonschema:"masse de filament réellement consommée, en grammes (pesée)"`
+	ActualMinutes float64  `json:"actual_duration_minutes,omitempty" jsonschema:"durée réelle d'impression en minutes"`
 }
 
 // Deviation est un écart entre réglage prévu et réglage réel.
@@ -66,6 +72,11 @@ type PrintResult struct {
 	PlannedSettings    map[string]any `json:"planned_settings" jsonschema:"réglages effectifs prévus pour le candidat (relevés à la découpe)"`
 	Deviations         []Deviation    `json:"deviations,omitempty"`
 	CandidateSignature string         `json:"candidate_signature,omitempty"`
+	PrintJobID         string         `json:"print_job_id,omitempty"`
+	Rating             int            `json:"rating,omitempty"`
+	Defects            []string       `json:"defects,omitempty"`
+	ActualMassG        float64        `json:"actual_mass_g,omitempty"`
+	ActualMinutes      float64        `json:"actual_duration_minutes,omitempty"`
 	Context            ResultContext  `json:"context"`
 	Reuse              string         `json:"reuse_conditions"`
 }
@@ -80,8 +91,22 @@ func (s *Service) RecordResult(ctx context.Context, in ResultInput) (*PrintResul
 	default:
 		return nil, invalid("outcome %q inconnu (success, partial, failed)", in.Outcome)
 	}
-	if strings.TrimSpace(in.Observations) == "" && len(in.Measurements) == 0 && len(in.Photos) == 0 {
-		return nil, invalid("fournir au moins une observation, une mesure ou une photo")
+	if in.Rating < 0 || in.Rating > 5 {
+		return nil, invalid("rating : entre 1 et 5 (0 ou omis : non noté)")
+	}
+	if len(in.Defects) > 16 {
+		return nil, invalid("defects : 16 défauts au plus")
+	}
+	for _, d := range in.Defects {
+		if d = strings.TrimSpace(d); d == "" || len([]rune(d)) > 40 {
+			return nil, invalid("defects : identifiants courts attendus (ex. stringing)")
+		}
+	}
+	if in.ActualMassG < 0 || in.ActualMassG > 100000 || in.ActualMinutes < 0 || in.ActualMinutes > 60*24*30 {
+		return nil, invalid("actual_mass_g / actual_duration_minutes : valeurs positives plausibles attendues")
+	}
+	if strings.TrimSpace(in.Observations) == "" && len(in.Measurements) == 0 && len(in.Photos) == 0 && in.Rating == 0 && len(in.Defects) == 0 {
+		return nil, invalid("fournir au moins une observation, une mesure, une photo, une note ou un défaut")
 	}
 	exp, err := s.GetExperiment(ctx, in.ExperimentID)
 	if err != nil {
@@ -105,6 +130,7 @@ func (s *Service) RecordResult(ctx context.Context, in ResultInput) (*PrintResul
 		ID: contracts.NewID("res"), ExperimentID: exp.ID, CandidateID: cand.ID, CreatedAt: s.now(), Outcome: in.Outcome,
 		Observations: in.Observations, Photos: in.Photos, Measurements: in.Measurements, PlannedSettings: map[string]any{},
 		CandidateSignature: candSig(cand.Candidate), Reuse: reuseText,
+		PrintJobID: in.PrintJobID, Rating: in.Rating, Defects: in.Defects, ActualMassG: in.ActualMassG, ActualMinutes: in.ActualMinutes,
 	}
 	if cand.Metrics != nil {
 		r.PlannedSettings = cand.Metrics.Effective

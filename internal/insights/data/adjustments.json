@@ -1,0 +1,177 @@
+{
+ "version": "2026-11-07",
+ "level": "heuristic",
+ "note": "Règles explicites défaut -> réglage à essayer. Niveau HEURISTIQUE : ce sont des pratiques courantes de calibration et de dépannage, pas des mesures sur votre machine ni des valeurs de fiche fabricant. Chaque règle donne le sens et l'ordre de grandeur d'un changement à partir de la valeur ACTUELLE du profil, sa justification et son compromis. Rien n'est appliqué automatiquement : changer un réglage à la fois (modify_slicing_profile ou create_experiment) puis refaire une pièce comparable.",
+ "sources": {
+  "bambu_wiki": {"title": "Bambu Lab Wiki : dépannage et calibration (articles de qualité d'impression)", "url": "https://wiki.bambulab.com/", "verified": false},
+  "prusa_kb": {"title": "Prusa Knowledge Base : dépannage de la qualité d'impression", "url": "https://help.prusa3d.com/", "verified": false},
+  "orca_wiki": {"title": "OrcaSlicer Wiki : calibration (flux, avance de pression, température)", "url": "https://github.com/SoftFever/OrcaSlicer/wiki", "verified": false}
+ },
+ "source_status": "Ces sources sont citées comme provenance générale des pratiques ; elles n'ont pas été re-consultées ligne à ligne pour cette version (verified=false).",
+ "rules": [
+  {
+   "defect": "stringing",
+   "summary": "Fils entre les parties : la buse suinte pendant les déplacements.",
+   "adjustments": [
+    {"key": "nozzle_temperature", "target": "filament", "direction": "decrease", "amount": "5 à 10", "unit": "°C", "why": "Une matière moins fluide suinte moins ; à faire par pas de 5 °C."},
+    {"key": "retraction_length", "target": "machine", "direction": "increase", "amount": "0,2 à 0,4", "unit": "mm", "why": "Une rétraction plus longue aspire davantage de matière avant le déplacement.", "families": ["PLA", "PLA-CF", "PETG", "PETG-CF", "ABS", "ASA", "PC", "PA", "PA-CF", "PET"]},
+    {"key": "retraction_length", "target": "machine", "direction": "increase", "amount": "0,1 à 0,2 au plus", "unit": "mm", "why": "Le TPU souple se comprime dans l'extrudeur : une rétraction trop longue provoque des bourrages.", "families": ["TPU"]}
+   ],
+   "other_actions": ["Sécher la bobine : l'humidité est une cause fréquente de fils (PETG, TPU, PA, PVA surtout).", "Vérifier que la bobine tourne librement."],
+   "tradeoffs": "Baisser la température réduit l'adhérence entre couches et peut provoquer de la sous-extrusion ; allonger la rétraction augmente le risque de bouchon.",
+   "sources": ["prusa_kb", "bambu_wiki"]
+  },
+  {
+   "defect": "warping",
+   "summary": "Coins ou bords qui se soulèvent : retrait différentiel de la matière qui refroidit.",
+   "adjustments": [
+    {"key": "textured_plate_temp", "target": "filament", "direction": "increase", "amount": "5", "unit": "°C", "why": "Un plateau plus chaud retarde le retrait des premières couches. Utiliser la clé du plateau réellement monté : cool_plate_temp, eng_plate_temp, hot_plate_temp ou textured_plate_temp."},
+    {"key": "brim_type", "target": "process", "direction": "set", "amount": "outer_only (bordure extérieure)", "unit": "", "why": "Une bordure augmente la surface collée et retient les coins."},
+    {"key": "brim_width", "target": "process", "direction": "set", "amount": "5 à 8", "unit": "mm", "why": "Largeur suffisante pour tenir les angles qui se soulèvent."},
+    {"key": "close_fan_the_first_x_layers", "target": "filament", "direction": "increase", "amount": "3 à 5", "unit": "couches", "why": "Couper le ventilateur sur les premières couches limite le refroidissement brutal.", "families": ["PETG", "PETG-CF", "ABS", "ASA", "PC", "PA", "PA-CF", "PET"]}
+   ],
+   "other_actions": ["Imprimer en enceinte fermée pour ABS, ASA, PC et PA ; écarter tout courant d'air.", "Dégraisser le plateau (eau chaude et liquide vaisselle).", "Arrondir ou chanfreiner les angles vifs de la pièce ; orienter la plus grande face à plat."],
+   "tradeoffs": "Une bordure se retire et laisse une trace en pied de pièce ; un plateau plus chaud peut aggraver la patte d'éléphant.",
+   "sources": ["prusa_kb", "bambu_wiki"]
+  },
+  {
+   "defect": "layer_lines",
+   "summary": "Couches trop visibles.",
+   "adjustments": [
+    {"key": "layer_height", "target": "process", "direction": "decrease", "amount": "0,04 à 0,08 (ex. 0,20 vers 0,12 ou 0,16)", "unit": "mm", "why": "Des couches plus fines rendent les marches moins marquées."},
+    {"key": "outer_wall_speed", "target": "process", "direction": "decrease", "amount": "30 à 40 % de la valeur actuelle", "unit": "", "why": "La paroi extérieure plus lente est plus régulière."},
+    {"key": "seam_position", "target": "process", "direction": "set", "amount": "back (couture à l'arrière) ou aligned", "unit": "", "why": "Regrouper la couture la masque sur une arête."}
+   ],
+   "other_actions": ["Des stries régulières et serrées indiquent une cause mécanique (vibrations, courroies, tige Z) plutôt qu'un réglage : vérifier la maintenance de la machine."],
+   "tradeoffs": "Le temps d'impression augmente à peu près en proportion inverse de la hauteur de couche ; une paroi plus lente rallonge aussi l'impression.",
+   "sources": ["bambu_wiki"]
+  },
+  {
+   "defect": "delamination",
+   "summary": "Couches qui se décollent ou se fendent : fusion insuffisante entre couches.",
+   "adjustments": [
+    {"key": "nozzle_temperature", "target": "filament", "direction": "increase", "amount": "5 à 10", "unit": "°C", "why": "Une matière plus chaude fusionne mieux avec la couche précédente."},
+    {"key": "fan_max_speed", "target": "filament", "direction": "decrease", "amount": "20 à 30 points de pourcentage", "unit": "%", "why": "Moins de refroidissement garde la couche inférieure assez chaude pour souder.", "families": ["PETG", "PETG-CF", "ABS", "ASA", "PC", "PA", "PA-CF", "PET"]},
+    {"key": "filament_max_volumetric_speed", "target": "filament", "direction": "decrease", "amount": "10 à 20 % de la valeur actuelle", "unit": "", "why": "Un débit plus faible laisse le temps de chauffer la matière."}
+   ],
+   "other_actions": ["Sécher la bobine.", "Fermer l'enceinte pour ABS, ASA, PC et PA ; éviter les courants d'air.", "Orienter la pièce pour que l'effort ne s'applique pas entre couches."],
+   "tradeoffs": "Plus chaud et moins ventilé dégrade les surplombs et les ponts, et peut augmenter les fils.",
+   "sources": ["prusa_kb", "bambu_wiki"]
+  },
+  {
+   "defect": "adhesion",
+   "summary": "La première couche n'accroche pas.",
+   "adjustments": [
+    {"key": "initial_layer_speed", "target": "process", "direction": "decrease", "amount": "30 à 50 mm/s", "unit": "mm/s", "why": "Une première couche lente s'écrase et colle mieux."},
+    {"key": "nozzle_temperature_initial_layer", "target": "filament", "direction": "increase", "amount": "5", "unit": "°C", "why": "Matière plus fluide sur la première couche."},
+    {"key": "textured_plate_temp", "target": "filament", "direction": "increase", "amount": "5", "unit": "°C", "why": "Plateau plus chaud, meilleure adhérence. Utiliser la clé du plateau réellement monté (cool_plate_temp, eng_plate_temp, hot_plate_temp, textured_plate_temp)."}
+   ],
+   "other_actions": ["Laver le plateau à l'eau chaude et au liquide vaisselle (l'alcool seul n'enlève pas les graisses).", "Choisir le plateau adapté à la matière ; pour PETG sur plateau lisse, utiliser un bâton de colle comme agent de séparation (le PETG peut arracher le revêtement du plateau lisse).", "Refaire l'étalonnage automatique de la première couche."],
+   "tradeoffs": "Un plateau plus chaud favorise la patte d'éléphant ; une première couche trop écrasée la déforme.",
+   "sources": ["bambu_wiki", "prusa_kb"]
+  },
+  {
+   "defect": "dimensions",
+   "summary": "Dimensions hors tolérance.",
+   "adjustments": [
+    {"key": "xy_contour_compensation", "target": "process", "direction": "set", "amount": "la moitié de l'écart mesuré, par côté, de signe opposé à l'écart", "unit": "mm", "why": "Corrige le contour extérieur ; vérifier le sens du signe sur une pièce d'essai, il dépend de la version du slicer."},
+    {"key": "xy_hole_compensation", "target": "process", "direction": "set", "amount": "la moitié de l'écart mesuré sur le diamètre, de signe adapté", "unit": "mm", "why": "Les trous sortent généralement plus petits que prévu ; corriger séparément du contour."},
+    {"key": "filament_shrink", "target": "filament", "direction": "set", "amount": "pourcentage mesuré du retrait (100 % = aucun)", "unit": "%", "why": "Pour ABS, ASA, PC, PA : compense le retrait global de la matière.", "families": ["ABS", "ASA", "PC", "PA", "PA-CF", "PET"]}
+   ],
+   "other_actions": ["Mesurer la pièce refroidie (plusieurs heures) avec un pied à coulisse ; noter les écarts avec record_print_result (mesures).", "Prévoir dans la conception un jeu de 0,1 à 0,2 mm pour les ajustements.", "Imprimer une pièce de calibration plutôt que de corriger à l'aveugle."],
+   "tradeoffs": "Les compensations XY modifient toutes les pièces du profil : les valider sur une pièce d'essai.",
+   "sources": ["orca_wiki", "bambu_wiki"]
+  },
+  {
+   "defect": "elephant_foot",
+   "summary": "Base élargie sur les premières couches.",
+   "adjustments": [
+    {"key": "elefant_foot_compensation", "target": "process", "direction": "increase", "amount": "0,1 à 0,2", "unit": "mm", "why": "Rétrécit les premières couches pour compenser l'écrasement (la clé s'écrit ainsi dans les profils)."},
+    {"key": "textured_plate_temp", "target": "filament", "direction": "decrease", "amount": "5", "unit": "°C", "why": "Un plateau un peu moins chaud limite l'affaissement de la base. Utiliser la clé du plateau monté."}
+   ],
+   "other_actions": ["Vérifier l'étalonnage de la première couche (buse trop proche du plateau)."],
+   "tradeoffs": "Une compensation trop forte réduit l'adhérence de la pièce ; un plateau moins chaud augmente le risque de décollement.",
+   "sources": ["bambu_wiki", "prusa_kb"]
+  },
+  {
+   "defect": "under_extrusion",
+   "summary": "Couches maigres, trous, surfaces peu remplies.",
+   "adjustments": [
+    {"key": "filament_flow_ratio", "target": "filament", "direction": "increase", "amount": "0,01 à 0,02", "unit": "", "why": "Davantage de matière par mouvement ; idéalement à partir d'un étalonnage du débit de cette bobine."},
+    {"key": "nozzle_temperature", "target": "filament", "direction": "increase", "amount": "5 à 10", "unit": "°C", "why": "Une matière plus fluide s'écoule plus facilement."},
+    {"key": "filament_max_volumetric_speed", "target": "filament", "direction": "decrease", "amount": "10 à 20 % de la valeur actuelle", "unit": "", "why": "La buse ne suit pas un débit trop élevé."}
+   ],
+   "other_actions": ["Sécher la bobine.", "Vérifier un début de bouchon (traction à froid), l'engrenage d'extrusion encrassé et le tube PTFE.", "Lancer l'étalonnage du débit de la machine pour cette bobine."],
+   "tradeoffs": "Plus de débit sans étalonnage peut tourner en sur-extrusion ; moins de débit rallonge l'impression.",
+   "sources": ["orca_wiki", "bambu_wiki"]
+  },
+  {
+   "defect": "over_extrusion",
+   "summary": "Excès de matière, surfaces bombées, dimensions trop grandes.",
+   "adjustments": [
+    {"key": "filament_flow_ratio", "target": "filament", "direction": "decrease", "amount": "0,01 à 0,02", "unit": "", "why": "Moins de matière par mouvement ; idéalement à partir d'un étalonnage du débit de cette bobine."},
+    {"key": "pressure_advance", "target": "filament", "direction": "set", "amount": "valeur issue de l'étalonnage de l'avance de pression", "unit": "", "why": "Une avance de pression mal réglée gonfle les angles et les arrêts de ligne."}
+   ],
+   "other_actions": ["Lancer l'étalonnage du débit et de l'avance de pression de la machine pour cette bobine.", "Vérifier le diamètre réel du filament."],
+   "tradeoffs": "Trop réduire le débit crée des trous : changer par très petits pas.",
+   "sources": ["orca_wiki"]
+  },
+  {
+   "defect": "blobs",
+   "summary": "Boutons, points et couture marquée.",
+   "adjustments": [
+    {"key": "seam_position", "target": "process", "direction": "set", "amount": "back ou aligned", "unit": "", "why": "Regroupe la couture sur une arête ou à l'arrière."},
+    {"key": "pressure_advance", "target": "filament", "direction": "set", "amount": "valeur issue de l'étalonnage", "unit": "", "why": "Évite l'excès de matière au début et à la fin des lignes."},
+    {"key": "retraction_length", "target": "machine", "direction": "increase", "amount": "0,1 à 0,2", "unit": "mm", "why": "Réduit le suintement qui forme des points.", "families": ["PLA", "PLA-CF", "PETG", "PETG-CF", "ABS", "ASA", "PC", "PA", "PA-CF", "PET"]}
+   ],
+   "other_actions": ["Sécher la bobine."],
+   "tradeoffs": "Une couture alignée est visible comme une ligne ; plus de rétraction augmente le risque de bouchon.",
+   "sources": ["prusa_kb", "orca_wiki"]
+  },
+  {
+   "defect": "supports",
+   "summary": "Supports difficiles à retirer ou qui abîment la surface.",
+   "adjustments": [
+    {"key": "support_top_z_distance", "target": "process", "direction": "increase", "amount": "0,05 à 0,1", "unit": "mm", "why": "Un écart plus grand entre support et pièce facilite le retrait."},
+    {"key": "support_threshold_angle", "target": "process", "direction": "decrease", "amount": "5 à 10", "unit": "°", "why": "Supporter moins de surfaces, seulement les plus inclinées."}
+   ],
+   "other_actions": ["Réorienter la pièce pour supprimer des supports.", "Essayer les supports en arbre (organiques) pour limiter les points de contact.", "Utiliser un matériau d'interface soluble (PVA) si l'imprimante a un AMS."],
+   "tradeoffs": "Un écart plus grand laisse une face inférieure plus rugueuse ; trop peu de supports affaisse les surplombs.",
+   "sources": ["bambu_wiki"]
+  },
+  {
+   "defect": "overhang",
+   "summary": "Surplombs affaissés ou rugueux.",
+   "adjustments": [
+    {"key": "overhang_fan_speed", "target": "filament", "direction": "set", "amount": "100", "unit": "%", "why": "Un refroidissement maximal fige la matière en surplomb.", "families": ["PLA", "PLA-CF", "PETG", "PETG-CF", "TPU"]},
+    {"key": "layer_height", "target": "process", "direction": "decrease", "amount": "0,04", "unit": "mm", "why": "Des couches plus fines réduisent le porte-à-faux entre couches."}
+   ],
+   "other_actions": ["Réorienter la pièce ou ajouter des supports (support_threshold_angle).", "Pour ABS, ASA, PC, PA : trop de ventilation nuit à l'adhérence entre couches ; préférer réorienter."],
+   "tradeoffs": "Plus de ventilation réduit la résistance entre couches sur les matières techniques.",
+   "sources": ["bambu_wiki", "prusa_kb"]
+  },
+  {
+   "defect": "layer_shift",
+   "summary": "Décalage de couches : la tête a perdu sa position.",
+   "adjustments": [
+    {"key": "default_acceleration", "target": "process", "direction": "decrease", "amount": "30 % de la valeur actuelle", "unit": "", "why": "Moins d'à-coups réduit le risque de pas perdus."},
+    {"key": "travel_speed", "target": "process", "direction": "decrease", "amount": "30 % de la valeur actuelle", "unit": "", "why": "Un déplacement plus lent heurte moins les bords relevés."}
+   ],
+   "other_actions": ["Cause le plus souvent mécanique : courroies, poulies, tiges lisses, collision avec une pièce relevée (activer l'évitement des surplombs recourbés).", "Faire la maintenance de la machine (tension des courroies, lubrification des tiges) selon la documentation du modèle."],
+   "tradeoffs": "Vitesses réduites rallongent l'impression sans traiter la cause mécanique.",
+   "sources": ["bambu_wiki"]
+  },
+  {
+   "defect": "surface",
+   "summary": "Surface rugueuse ou irrégulière.",
+   "adjustments": [
+    {"key": "outer_wall_speed", "target": "process", "direction": "decrease", "amount": "30 % de la valeur actuelle", "unit": "", "why": "Une paroi plus lente est plus régulière."},
+    {"key": "ironing_type", "target": "process", "direction": "set", "amount": "top (repassage des surfaces supérieures)", "unit": "", "why": "Lisse les faces supérieures planes."},
+    {"key": "nozzle_temperature", "target": "filament", "direction": "decrease", "amount": "5", "unit": "°C", "why": "Une matière moins fluide limite l'aspect gras et les bavures."}
+   ],
+   "other_actions": ["Sécher la bobine : l'humidité rend la surface mate et rugueuse.", "Nettoyer ou remplacer la buse si elle est usée (matières chargées de fibres)."],
+   "tradeoffs": "Le repassage rallonge l'impression.",
+   "sources": ["bambu_wiki"]
+  }
+ ]
+}
