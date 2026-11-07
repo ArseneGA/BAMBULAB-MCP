@@ -258,18 +258,34 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	var pickNotes []string
 	processName := req.Process
 	if processName == "" {
-		processName, _ = rm.String("default_print_profile")
+		// le défaut déclaré par la machine est souvent hérité d'un X1C : on préfère le preset de la machine
+		if c, perr := s.profiles.PickProcess(machineName); perr == nil {
+			processName = c.Name
+			if c.Note != "" {
+				pickNotes = append(pickNotes, "process "+c.Name+" : "+c.Note)
+			}
+		} else {
+			processName, _ = rm.String("default_print_profile")
+		}
 	}
 	if processName == "" {
 		return nil, fmt.Errorf("%w: aucun process fourni et la machine n'en déclare pas par défaut", ErrInvalidRequest)
 	}
 	filNames := req.Filaments
 	if len(filNames) == 0 {
-		filNames = rm.Strings("default_filament_profile")
-		if len(filNames) > 1 {
-			filNames = filNames[:1]
+		if c, perr := s.profiles.PickFilament(machineName); perr == nil {
+			filNames = []string{c.Name}
+			if c.Note != "" {
+				pickNotes = append(pickNotes, "filament "+c.Name+" : "+c.Note)
+			}
+		} else {
+			filNames = rm.Strings("default_filament_profile")
+			if len(filNames) > 1 {
+				filNames = filNames[:1]
+			}
 		}
 	}
 	if len(filNames) == 0 {
@@ -359,7 +375,8 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 			return nil, err
 		}
 	}
-	res := &Result{JobID: id, WorkDir: work, BinaryPath: s.bin.Path, BinaryVersion: s.bin.Version, ReturnCode: 1, BedX: variant.BedX, BedY: variant.BedY}
+	res := &Result{JobID: id, WorkDir: work, BinaryPath: s.bin.Path, BinaryVersion: s.bin.Version, ReturnCode: 1, BedX: variant.BedX, BedY: variant.BedY,
+		Warnings: pickNotes}
 
 	if len(req.Objects) > 0 {
 		pm, err := writeProject(work, req.Objects, req.PlateOrigin, variant, cm, cp, cfs)
@@ -379,13 +396,18 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	res.InputPath, res.InputSHA256 = inputAbs, sum
 
 	var inputVolume float64
+	var partSizes []mesh.Vec3 // dimensions des pièces de la plaque, pour expliquer un refus de placement
 	for _, o := range req.Objects { // projet : volume des seuls objets de la plaque tranchée
 		if (req.Plate > 0 && o.Plate != req.Plate) || o.Mesh == nil {
 			continue
 		}
 		inputVolume += math.Abs(mesh.Analyze(o.Mesh, mesh.AnalyzeOptions{}).Volume)
+		partSizes = append(partSizes, o.Mesh.Bounds().Size)
 	}
 	if m, err := mesh.ReadFile(inputAbs); err == nil {
+		if len(req.Objects) == 0 {
+			partSizes = append(partSizes, m.Combined().Bounds().Size)
+		}
 		if v := math.Abs(mesh.Analyze(m.Combined(), mesh.AnalyzeOptions{}).Volume); v > 0 && inputVolume == 0 {
 			inputVolume = v
 		}
@@ -508,7 +530,11 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 		return res, fmt.Errorf("%w (code de sortie %d, stderr: %s)", ErrNoResult, res.ExitCode, tail(res.Stderr, 300))
 	}
 	if sr.ReturnCode != 0 {
-		return res, newStudioError(sr.ReturnCode, sr.ErrorString)
+		se := newStudioError(sr.ReturnCode, sr.ErrorString)
+		if ex := explainPlacement(se, variant.MeshTarget(variantModel(cm)), partSizes); ex != nil {
+			return res, ex
+		}
+		return res, se
 	}
 	if res.ExitCode != 0 {
 		return res, fmt.Errorf("%w: code de sortie %d alors que result.json annonce un succès", ErrInvalidOutput, res.ExitCode)
@@ -534,6 +560,7 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	}
 	pm, _ := cm.String("printer_model")
 	exp := Expect{
+		LayerHeight: parseF(firstStr(cp, "layer_height")), FirstLayerHeight: parseF(firstStr(cp, "initial_layer_print_height")),
 		PrinterModel: pm, MachineName: machineName, Nozzle: nozzle, ProcessName: processName,
 		Filaments: filNames, BedArea: variant.BedArea, PrintableZ: variant.PrintableZ,
 		InputVolume: inputVolume, InputIsMesh: ext != ".3mf", BinaryVersion: s.bin.Version, Studio: sr, Trust: s.trust,
@@ -712,4 +739,9 @@ func fileSHA(p string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func firstStr(r *profiles.Resolved, key string) string {
+	v, _ := r.String(key)
+	return v
 }

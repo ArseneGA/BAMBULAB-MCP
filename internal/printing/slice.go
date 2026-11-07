@@ -151,12 +151,21 @@ func (s *Service) ExecuteHeadlessSlice(ctx context.Context, in SliceInput) (*Job
 	if m, err := s.d.Store.GetModel(ctx, in.ModelID); err == nil {
 		name = m.Name
 	}
+	// fabricabilité AVANT découpe : refuse tôt, avec les dimensions et la zone utile réelle de la machine
+	fabWarn, ferr := s.checkFabricable(ctx, spec)
+	if ferr != nil {
+		return nil, ferr
+	}
 	j, err := s.createJob(ctx, Job{PrinterID: in.PrinterID, ModelID: in.ModelID, VersionID: ver.ID, ProfileRevision: revID,
 		Plate: in.Plate, Name: cleanStem(name) + ".gcode.3mf", Slice: spec})
 	if err != nil {
 		return nil, err
 	}
-	if j, err = s.transition(ctx, j.ID, contracts.EvPrepare, "préparation de la découpe", nil); err != nil {
+	prepNote := "préparation de la découpe"
+	if fabWarn != "" {
+		prepNote += " — " + fabWarn
+	}
+	if j, err = s.transition(ctx, j.ID, contracts.EvPrepare, prepNote, nil); err != nil {
 		return nil, err
 	}
 	params, _ := json.Marshal(map[string]string{"print_job_id": j.ID})
@@ -274,6 +283,20 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 			in, data = filepath.Join(work, cleanStem(spec.SourceName)+"_oriente.stl"), stl
 			t := true
 			arrange = &t
+		}
+		// pièce qui ne tient dans la zone sûre qu'une fois tournée de 90° : on la tourne nous-mêmes (Studio ne le fait pas)
+		if spec.Orientation == nil && spec.SourceFmt != "3mf" {
+			if md, perr := mesh.Parse(spec.SourceName, data); perr == nil {
+				m := md.Combined()
+				if tg, terr := s.targetOf(sl, spec); terr == nil && tg.CheckFootprint(m.Bounds().Size).SafeNeedsRotation {
+					m = rotZ90(m)
+					b := m.Bounds()
+					m = m.Transform(mesh.Translation(-b.Min.X, -b.Min.Y, -b.Min.Z))
+					if stl, serr := mesh.STLBytes(m); serr == nil {
+						in, data = filepath.Join(work, cleanStem(spec.SourceName)+"_tourne.stl"), stl
+					}
+				}
+			}
 		}
 		if err := os.WriteFile(in, data, 0o644); err != nil {
 			return fail("workdir", err)
