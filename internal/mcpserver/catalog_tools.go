@@ -78,6 +78,11 @@ func registerCatalogTools(s *mcp.Server, c *catalogHandlers) {
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
 	}, c.analyzeGeometry)
 	addTool(s, &mcp.Tool{
+		Name: "repair_mesh", Title: "Réparer le maillage",
+		Description: "Réparation minimale d'un maillage : soudure des sommets, suppression des triangles dégénérés et dupliqués, orientation cohérente des normales, comblement des petits trous (max_hole_edges, défaut 32), suppression facultative des petits composants flottants (remove_floating). Renvoie le rapport avant/après (étanchéité, volume, défauts). Crée une NOUVELLE version immuable (STL en mm) : l'original et les versions précédentes ne sont jamais modifiés ; aucune version si rien n'est réparable. dry_run=true ne fait que le rapport. Ne corrige ni les arêtes non manifold, ni les auto-intersections, ni les grands trous.",
+		Annotations: additive,
+	}, c.repairMesh)
+	addTool(s, &mcp.Tool{
 		Name: "get_preview_asset", Title: "Aperçu 3D d'un modèle",
 		Description: "Référence de l'aperçu GLB (viewer) avec une URL HTTP locale signée qui expire ; pas de contenu en base64. L'aperçu est dérivé et simplifié : il ne remplace jamais l'original de fabrication.",
 		Annotations: revers,
@@ -189,6 +194,15 @@ func (h *catalogHandlers) analyzeGeometry(ctx context.Context, _ *mcp.CallToolRe
 	if r.Note != "" {
 		txt += " " + r.Note
 	}
+	return textResult(txt), *r, nil
+}
+
+func (h *catalogHandlers) repairMesh(ctx context.Context, _ *mcp.CallToolRequest, in catalog.RepairInput) (*mcp.CallToolResult, catalog.RepairOutput, error) {
+	r, err := h.svc.RepairMesh(ctx, in)
+	if err != nil {
+		return nil, catalog.RepairOutput{}, err
+	}
+	txt := fmt.Sprintf("Réparation : défauts %d -> %d, étanche : %v -> %v. %s", r.Report.Before.Defects, r.Report.After.Defects, r.Report.Before.Watertight, r.Report.After.Watertight, r.Note)
 	return textResult(txt), *r, nil
 }
 
