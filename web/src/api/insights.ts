@@ -26,7 +26,7 @@ export interface LogEntry {
   settings: { machine?: string; process?: string; filaments?: string[]; nozzle_mm?: number; overrides?: Array<{ key: string; value: unknown; target?: string }>; orientation?: string; layers?: number; supports?: boolean; deviations?: Array<{ key: string; planned?: unknown; actual: unknown }> };
   estimated: { seconds?: number; grams?: number }; actual: { seconds?: number; grams?: number; basis?: string };
   duration_delta_pct?: number; mass_delta_pct?: number; planned_cost?: CostEstimate; actual_cost?: CostEstimate;
-  photos?: string[]; rating?: number; comment?: string; defects?: string[]; experiment_id?: string; candidate_id?: string; result_ids?: string[];
+  photos?: string[]; camera_photos?: Array<{ id: string; kind: 'final' | 'alert'; sha256: string; taken_at: string }>; rating?: number; comment?: string; defects?: string[]; experiment_id?: string; candidate_id?: string; result_ids?: string[];
   created_at: string; updated_at: string;
 }
 export interface LogList { entries: LogEntry[]; total: number; created_from_finished_prints: number; defect_catalog: Array<{ id: string; label: string }> }

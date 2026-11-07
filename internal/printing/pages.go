@@ -45,6 +45,7 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 <dt>Matières</dt><dd>{{range .V.Binding.Materials}}filament {{.FilamentSlot}} &rarr; {{.Tray}} : {{.MaterialID}}<br>{{end}}</dd>
 {{if .V.Binding.EstimatedMin}}<dt>Durée estimée</dt><dd>{{printf "%.0f" .V.Binding.EstimatedMin}} min (estimation du slicer){{if .V.Binding.WeightG}}, {{printf "%.1f" .V.Binding.WeightG}} g{{end}}</dd>{{end}}
 <dt>Valable jusqu'à</dt><dd>{{.V.ExpiresAt.Format "15:04:05 (02/01/2006)"}}</dd></dl>
+{{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" style="max-width:100%;border:1px solid #888;border-radius:6px"><figcaption>Photo du plateau prise à {{.Photo.TakenAt.Format "15:04:05 (02/01/2006)"}} par la caméra de l'imprimante, à l'ouverture de cette page. Vérifie sur cette image que le plateau est vide et dégagé.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>{{end}}
 {{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}">
@@ -187,7 +188,8 @@ func closedMsg(err error) string {
 
 func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, _, err := s.confirmable(r.Context(), id); err != nil {
+	_, cj, err := s.confirmable(r.Context(), id)
+	if err != nil {
 		s.render(w, http.StatusGone, "confirm", map[string]any{"Title": "Confirmation", "Closed": closedMsg(err)})
 		return
 	}
@@ -200,7 +202,11 @@ func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusOK, "done", map[string]any{"Title": "Déjà confirmée", "Msg": "Tu as déjà autorisé cette impression. Retourne dans Claude : il peut lancer (l'accord vaut 2 minutes)."})
 		return
 	}
-	s.render(w, http.StatusOK, "confirm", map[string]any{"Title": "Confirmation de lancement", "V": v, "Nonce": s.issueNonce(id)})
+	d := map[string]any{"Title": "Confirmation de lancement", "V": v, "Nonce": s.issueNonce(id)}
+	if ph := s.platePhotoFor(r.Context(), cj.PrinterID); ph != nil {
+		d["Photo"] = ph
+	}
+	s.render(w, http.StatusOK, "confirm", d)
 }
 
 func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {

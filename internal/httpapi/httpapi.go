@@ -77,6 +77,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerMaterials(mux, c)
 	registerInsights(mux, c)        // coût, journal, tableau de bord, post-traitement (insights.go)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
+	registerCamera(mux, c, human)   // caméra, détection d'échec, notifications (camera.go)
 	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)
 	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
 

@@ -76,6 +76,14 @@ type EffectiveSettings struct {
 	Deviations  []goals.Deviation `json:"deviations,omitempty" jsonschema:"écarts entre réglages prévus et réellement utilisés (record_print_result)"`
 }
 
+// CameraPhoto est une photo prise par la caméra (table camera_photos) pour cette impression.
+type CameraPhoto struct {
+	ID      string    `json:"id"`
+	Kind    string    `json:"kind" jsonschema:"final | alert"`
+	SHA256  string    `json:"sha256"`
+	TakenAt time.Time `json:"taken_at"`
+}
+
 // LogEntry est la fiche de journal d'une impression terminée, échouée ou annulée.
 type LogEntry struct {
 	ID             string            `json:"id"`
@@ -100,6 +108,7 @@ type LogEntry struct {
 	PlannedCost    *CostEstimate     `json:"planned_cost,omitempty"`
 	ActualCost     *CostEstimate     `json:"actual_cost,omitempty"`
 	Photos         []string          `json:"photos,omitempty" jsonschema:"références de blobs (sha256) des photos de la pièce"`
+	CameraPhotos   []CameraPhoto     `json:"camera_photos,omitempty" jsonschema:"photos de la caméra de l'imprimante rattachées à cette impression (fin, alerte) : lues, jamais copiées"`
 	Rating         int               `json:"rating,omitempty" jsonschema:"note de 1 à 5 (0 : non noté)"`
 	Comment        string            `json:"comment,omitempty"`
 	Defects        []string          `json:"defects,omitempty"`
@@ -241,7 +250,9 @@ func (s *Service) insertEntry(ctx context.Context, e *LogEntry) (bool, error) {
 
 func (s *Service) saveEntry(ctx context.Context, e *LogEntry, audit string, detail any) error {
 	e.UpdatedAt = s.now()
-	doc, _ := json.Marshal(e)
+	stored := *e
+	stored.CameraPhotos = nil // lues à la demande dans camera_photos, jamais copiées
+	doc, _ := json.Marshal(&stored)
 	return s.cfg.Store.Tx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `UPDATE print_logs SET printer_id=?, model_id=?, material_family=?, outcome=?, finished_at=?, doc=?, updated_at=? WHERE id=?`,
 			e.PrinterID, e.ModelID, e.MaterialFamily, e.Outcome, store.FormatTime(e.FinishedAt), string(doc), store.FormatTime(e.UpdatedAt), e.ID)
@@ -472,7 +483,14 @@ func (s *Service) ListLogs(ctx context.Context, q ListQuery) (*ListOutput, error
 			out.Entries = append(out.Entries, e)
 		}
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	for i := range out.Entries {
+		s.attachCamera(ctx, &out.Entries[i])
+	}
+	return out, nil
 }
 
 // GetLog renvoie une fiche par son identifiant ou par celui de l'impression.
@@ -493,6 +511,9 @@ func (s *Service) findEntry(ctx context.Context, id string) (*LogEntry, error) {
 	}
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, fmt.Errorf("fiche %q (ni fiche ni impression terminée de ce nom) : %w", id, store.ErrNotFound)
+	}
+	if err == nil {
+		s.attachCamera(ctx, e)
 	}
 	return e, err
 }
@@ -780,7 +801,7 @@ func (s *Service) OpenPhoto(ctx context.Context, id, sha string) (*os.File, stri
 	if err != nil {
 		return nil, "", err
 	}
-	if !hasStr(e.Photos, sha) || s.cfg.Blobs == nil {
+	if (!hasStr(e.Photos, sha) && !hasCamera(e.CameraPhotos, sha)) || s.cfg.Blobs == nil {
 		return nil, "", fmt.Errorf("photo %q de la fiche %s : %w", sha, id, store.ErrNotFound)
 	}
 	f, err := s.cfg.Blobs.Open(sha)
@@ -806,4 +827,32 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(ks)
 	return ks
+}
+
+func hasCamera(l []CameraPhoto, sha string) bool {
+	for _, p := range l {
+		if p.SHA256 == sha {
+			return true
+		}
+	}
+	return false
+}
+
+// attachCamera rattache à la fiche les photos de fin et d'alerte que la caméra a prises pour cette impression
+// (lecture de camera_photos ; le contenu reste dans le magasin de blobs, rien n'est copié).
+func (s *Service) attachCamera(ctx context.Context, e *LogEntry) {
+	e.CameraPhotos = nil
+	rows, err := s.cfg.Store.DB().QueryContext(ctx, `SELECT id, kind, sha256, taken_at FROM camera_photos WHERE print_job_id=? AND kind IN ('final','alert') ORDER BY taken_at, id`, e.PrintJobID)
+	if err != nil {
+		return // table absente ou illisible : la fiche reste valable sans photos de caméra
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p CameraPhoto
+		var at string
+		if rows.Scan(&p.ID, &p.Kind, &p.SHA256, &at) == nil {
+			p.TakenAt, _ = store.ParseTime(at)
+			e.CameraPhotos = append(e.CameraPhotos, p)
+		}
+	}
 }

@@ -111,8 +111,8 @@ function Sheet({ e, defects, onChanged }: { e: LogEntry; defects: Array<{ id: st
         </div>
       </Panel>
       <Panel title="Photos" actions={<><input ref={file} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(ev) => upload(ev.target.files?.[0])} /><Button size="sm" icon={<Camera size={13} aria-hidden />} onClick={() => file.current?.click()} disabled={busy}>Ajouter une photo</Button></>}>
-        {(e.photos?.length ?? 0) === 0 ? <p className="hint" style={{ margin: 0 }}>Aucune photo. JPEG, PNG ou WebP, 12 Mio au plus.</p> : (
-          <div className="ins-photos">{e.photos!.map((p) => <a key={p} href={insightsApi.photoUrl(e.id, p)} target="_blank" rel="noreferrer"><img src={insightsApi.photoUrl(e.id, p)} alt={`Photo de ${e.name ?? e.print_job_id}`} loading="lazy" /></a>)}</div>
+        {(e.photos?.length ?? 0) + (e.camera_photos?.length ?? 0) === 0 ? <p className="hint" style={{ margin: 0 }}>Aucune photo. JPEG, PNG ou WebP, 12 Mio au plus.</p> : (
+          <div className="ins-photos">{[...(e.photos ?? []), ...(e.camera_photos ?? []).map((c) => c.sha256)].map((p) => <a key={p} href={insightsApi.photoUrl(e.id, p)} target="_blank" rel="noreferrer"><img src={insightsApi.photoUrl(e.id, p)} alt={`Photo de ${e.name ?? e.print_job_id}`} loading="lazy" /></a>)}</div>
         )}
       </Panel>
       <Adjust logId={e.id} />
