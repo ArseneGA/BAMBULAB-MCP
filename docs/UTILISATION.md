@@ -4,7 +4,7 @@ Vous parlez normalement ; Claude choisit les outils. Les noms d'outils entre par
 
 Trois règles à garder en tête :
 
-1. **Rien ne part sur l'imprimante sans votre clic** sur une page web, depuis un navigateur enregistré. Claude prépare, dépose, demande ; il ne peut pas approuver.
+1. **Rien ne part sur l'imprimante sans votre accord**, donné soit par un clic sur une page web depuis un navigateur enregistré, soit dans la vue de Claude avec votre **code de lancement personnel** (§ 4 bis). Claude prépare, dépose, demande ; il ne peut pas approuver.
 2. **Les originaux ne bougent pas.** Toute modification crée une nouvelle version ; vous pouvez revenir en arrière.
 3. **Claude distingue le mesuré, le calculé et le supposé.** Un critère qu'on ne peut pas évaluer (aspect de surface, tenue réelle) est signalé comme « à essayer », pas noté.
 
@@ -86,7 +86,7 @@ Pour affiner un profil à la main : « Passe les parois à 4 » → `modify_slic
 Si ça se passe mal :
 
 - **« Liaison perdue après la commande »** (`start_unknown`) : Claude **ne relance pas**. Il lit l'état réel de l'imprimante (`reconcile_print`) et vous dit si l'impression a démarré ou non.
-- **Arrêter** : au bouton de l'imprimante, toujours. Via Claude : « Arrête l'impression » → `cancel_print` crée une demande d'arrêt et vous donne un lien `…/stop/…` à valider dans le navigateur enregistré.
+- **Arrêter** : au bouton de l'imprimante, toujours. Via Claude : « Arrête l'impression » → `cancel_print` crée une demande d'arrêt et vous donne un lien `…/stop/…` à valider dans le navigateur enregistré, ou une vue d'arrêt où vous saisissez votre code de lancement (§ 4 bis).
 - **Changer d'avis** sur la matière ou l'imprimante après avoir été interrogé : la confirmation devient invalide, il faut en redemander une.
 - **Deux impressions de suite avec le même accord** : impossible, chaque accord est à usage unique et lié à *cette* impression.
 
@@ -109,6 +109,22 @@ Ce qu'il faut savoir :
 - Sans Bambu Studio, le rangement est **estimé** par rectangles englobants (prudent, annoncé comme tel) ; la disposition exacte se fait alors à la découpe.
 - L'aperçu du plateau (`capture_preview`, mode `plate`) marche avant découpe (depuis le plan) et après (depuis le 3MF découpé : positions et orientations réelles). Mode `layers` : une couche du G-code.
 - Limites : la pièce est posée comme dans sa version du catalogue (orientez-la avant avec « pose-la à plat ») ; la jupe, la bordure et le temps **par pièce** ne sont pas dessinés (le temps est celui de la plaque).
+
+## 4 bis. Lancer et arrêter sans quitter Claude (code de lancement personnel)
+
+Dans Claude Desktop, la confirmation s'affiche **dans la conversation** : résumé (fichier, imprimante, empreinte, plateau, matières), températures lues dans le G-code et « G-code de démarrage : profil officiel ✓ », photo du plateau si la caméra est configurée, case « le plateau est vide et dégagé », champ **code de lancement** et bouton « Lancer l'impression ». L'arrêt (« Arrête l'impression ») affiche la même chose avec un bouton « Arrêter l'impression ».
+
+1. **Définir son code une fois** : dans un navigateur enregistré, ouvrez `http://…:7878/setup/launch-code` et choisissez un code de **6 à 8 chiffres** (pas de suite ni de chiffres identiques). Il est stocké haché (argon2id), jamais affiché, jamais renvoyé, jamais journalisé. Changez-le ou révoquez-le sur la même page.
+2. **Lancer** : dans la vue, cochez « plateau vide », tapez votre code, cliquez « Lancer l'impression ». L'accord vaut pour **cette impression et 2 minutes** ; dites ensuite à Claude « c'est fait », il appelle `start_print` comme d'habitude.
+3. **Trois mauvais codes verrouillent tout** (même le bon code est alors refusé, pour le lancement comme pour l'arrêt). Deux essais doivent être espacés de quelques secondes. Déverrouillage : bouton « Déverrouiller » de la page `/setup/launch-code`, ou `bambud launch-code --unlock`.
+4. **Code oublié** : `bambud launch-code --reset` supprime le code (puis on en définit un autre sur la page). `bambud launch-code` seul affiche l'état (défini, verrouillé).
+5. **Sans code défini** (ou verrouillé), la vue affiche le **lien du navigateur** (`/confirm/…`, `/stop/…`), comme avant : il reste toujours disponible, y compris quand le code fonctionne.
+
+> **Ne tapez JAMAIS ce code dans la conversation avec Claude.** Il se saisit uniquement dans le champ de la vue. Claude a pour consigne de ne jamais vous le demander ; s'il le fait quand même, ne répondez pas, et si vous l'avez écrit dans la conversation, changez-le tout de suite sur `/setup/launch-code`. Le serveur ne peut pas empêcher cette erreur (voir `docs/SECURITY.md` § 12).
+
+Claude Code (terminal) n'affiche pas les vues : utilisez le lien du navigateur.
+
+---
 
 ## 5. Depuis le PC Windows (renfort)
 
