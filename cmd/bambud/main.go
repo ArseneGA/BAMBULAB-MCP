@@ -87,11 +87,14 @@ func main() {
 	anyHost := fs.Bool("allow-any-printer-host", os.Getenv("BAMBU_ALLOW_ANY_PRINTER_HOST") == "1", "lève la restriction des hôtes d'imprimante aux adresses privées / lien local / .local")
 	studioBin := fs.String("studio-bin", "", "exécutable ou AppImage de Bambu Studio (défaut : env BAMBU_STUDIO_BIN, puis détection) ; un chemin donné mais introuvable est une erreur de démarrage")
 	studioWrap := fs.String("studio-wrapper", os.Getenv("BAMBU_STUDIO_WRAPPER"), "commande préfixe du slicer, ex. \"xvfb-run -a\" (jamais activée implicitement) ; \"none\" ou vide : aucune (env BAMBU_STUDIO_WRAPPER)")
+	oauthRedirects := fs.String("oauth-redirects", os.Getenv("BAMBU_OAUTH_REDIRECTS"), "URI de redirection OAuth exactes supplémentaires, séparées par des virgules (en plus des callbacks de Claude et de la boucle locale ; env BAMBU_OAUTH_REDIRECTS)")
 	version := fs.Bool("version", false, "affiche la version")
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "seed-demo":
 			os.Exit(seedDemoMain(os.Args[2:]))
+		case "oauth":
+			os.Exit(oauthMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "enroll":
 			os.Exit(enrollMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "backup":
@@ -143,7 +146,7 @@ func main() {
 	if len(urls) > 0 {
 		first = urls[0]
 	}
-	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: first, PublicURLs: urls, TrustedProxies: proxies},
+	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: first, PublicURLs: urls, TrustedProxies: proxies, OAuthRedirects: splitPublicURLs(*oauthRedirects)},
 		RequireToken: *requireToken, DrainTimeout: *drain}
 	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log,
 		Catalog: catalogConfig(*roots, *uvPath, *geomDir), AllowAnyPrinterHost: *anyHost,

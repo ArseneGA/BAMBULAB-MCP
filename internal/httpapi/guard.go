@@ -36,6 +36,14 @@ type Options struct {
 	// TrustedProxies : adresses/réseaux dont X-Forwarded-For et X-Forwarded-Proto sont crus. nil : loopback
 	// seulement ; liste vide non nil : aucun. Voir ParseTrustedProxies.
 	TrustedProxies []netip.Prefix
+	// OAuthRedirects : URI de redirection exactes acceptées par le serveur OAuth intégré en plus des callbacks de
+	// Claude et de la boucle locale (voir internal/oauth).
+	OAuthRedirects []string
+
+	// Renseignés par NewHandlerWithOptions (serveur OAuth intégré) : jeton d'accès OAuth valide sur /mcp, et
+	// valeur de WWW-Authenticate du 401 de /mcp (pointeur resource_metadata, RFC 9728).
+	extraBearer func(*http.Request) bool
+	challenge   func(*http.Request) string
 }
 
 // isHumanPath : pages HTML du canal humain et leur état de session. Elles ne passent PAS par le jeton
@@ -45,7 +53,7 @@ func isHumanPath(p string) bool {
 	switch {
 	case p == "/enroll" || strings.HasPrefix(p, "/enroll/"), p == "/api/session",
 		strings.HasPrefix(p, "/confirm/"), strings.HasPrefix(p, "/stop/"), strings.HasPrefix(p, "/setup/"),
-		p == "/agents/pair":
+		p == "/agents/pair", strings.HasPrefix(p, "/oauth/consent/"):
 		return true
 	}
 	return false
@@ -155,7 +163,7 @@ func ValidateListen(addr, token string) error { return ValidateServe(addr, token
 
 // authFail écrit un refus JSON.
 func authFail(w http.ResponseWriter, status int, code, msg string) {
-	if status == http.StatusUnauthorized {
+	if status == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="bambud"`)
 	}
 	writeJSON(w, status, map[string]string{"error": msg, "code": code, "enroll_url": "/enroll"})
@@ -233,8 +241,9 @@ func guard(opts Options, isSession func(*http.Request) bool, next http.Handler) 
 		if opts.APIToken != "" {
 			p := r.URL.Path
 			open := ((r.Method == http.MethodGet || r.Method == http.MethodHead) && p == "/health") ||
-				isHumanPath(p) || isPublicStatic(r) || isSignedAsset(r)
-			if !open && !bearerOK(r) {
+				isHumanPath(p) || isPublicStatic(r) || isOAuthOpen(r) || isSignedAsset(r)
+			// /mcp accepte aussi un jeton d'accès OAuth émis par bambud (mêmes droits que le Bearer statique).
+			if !open && !bearerOK(r) && !(p == "/mcp" && opts.extraBearer != nil && opts.extraBearer(r)) {
 				// Session d'un navigateur enregistré : valable pour /api/* seulement (jamais /mcp).
 				if strings.HasPrefix(p, "/api/") && isSession != nil && isSession(r) {
 					if r.Method != http.MethodGet && r.Method != http.MethodHead && !browserWriteOK(r) {
@@ -242,6 +251,9 @@ func guard(opts Options, isSession func(*http.Request) bool, next http.Handler) 
 						return
 					}
 				} else {
+					if p == "/mcp" && opts.challenge != nil {
+						w.Header().Set("WWW-Authenticate", opts.challenge(r))
+					}
 					authFail(w, http.StatusUnauthorized, "unauthorized", "jeton d'API requis, ou navigateur enregistré (/enroll) pour l'interface web")
 					return
 				}

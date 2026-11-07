@@ -76,6 +76,8 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerMaterials(mux, c)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
 
+	registerOAuth(mux, c, human, &opts) // jetons OAuth sur /mcp, métadonnées et pages (oauth.go) ; renseigne opts pour la garde
+
 	server := mcpserver.New(c)
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Logger: c.Log,
