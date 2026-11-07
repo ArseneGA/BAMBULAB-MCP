@@ -172,6 +172,12 @@ func TestCatalogToolsEndToEnd(t *testing.T) {
 		t.Fatalf("analyze : %v", an)
 	}
 
+	// repair_mesh : un cube sain n'a rien à réparer, aucune version n'est créée.
+	rp := structured(t, call(t, cs, "repair_mesh", map[string]any{"model_id": id}))
+	if rp["created"] != false || rp["report"] == nil || len(arr(t, rp, "caveats")) == 0 {
+		t.Fatalf("repair_mesh : %v", rp)
+	}
+
 	// find_exact_duplicates : le doublon n'a pas été ré-importé, donc aucun groupe ; contrôle par chemin.
 	dup := structured(t, call(t, cs, "find_exact_duplicates", map[string]any{}))
 	if dup["total_groups"].(float64) != 0 {

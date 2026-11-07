@@ -6,7 +6,7 @@ import (
 )
 
 func TestFitsBed(t *testing.T) {
-	r, err := Fabricability(Cube(10), FabOptions{Target: TargetP1S})
+	r, err := Fabricability(Cube(10), FabOptions{Target: testTarget})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -16,18 +16,18 @@ func TestFitsBed(t *testing.T) {
 	near(t, "marge x", r.MarginMM.X, 246, 1e-9)
 
 	big := Box(0, 0, 0, 300, 100, 50)
-	r, _ = Fabricability(big, FabOptions{Target: TargetP1S, SkipOrientation: true})
+	r, _ = Fabricability(big, FabOptions{Target: testTarget, SkipOrientation: true})
 	if r.FitsBed || r.FitsBedRotatedZ || !containsStr(r.Warnings, "dépasse") {
 		t.Errorf("trop grand : %+v", r)
 	}
 	// Tient seulement tournée : 200×250 sur A1 mini (180) ne tient pas ; 250×200 sur P1S tient directement ;
 	// utilisons une cible rectangulaire.
-	tgt := Target{"rect", 300, 100, 100, 0.4}
+	tgt := Target{Name: "rect", BedX: 300, BedY: 100, BedZ: 100, Nozzle: 0.4}
 	r, _ = Fabricability(Box(0, 0, 0, 90, 280, 10), FabOptions{Target: tgt, SkipOrientation: true})
 	if r.FitsBed || !r.FitsBedRotatedZ || !containsStr(r.Warnings, "90°") {
 		t.Errorf("rotation : %+v", r)
 	}
-	r, _ = Fabricability(Box(0, 0, 0, 100, 100, 300), FabOptions{Target: TargetP1S, SkipOrientation: true})
+	r, _ = Fabricability(Box(0, 0, 0, 100, 100, 300), FabOptions{Target: testTarget, SkipOrientation: true})
 	if r.FitsBed {
 		t.Error("hauteur 300 > 256")
 	}
@@ -45,7 +45,7 @@ func TestOverhangT(t *testing.T) {
 	}
 	// Volume = fût 4×10 profil + barre 20×3, profondeur 10.
 	near(t, "volume T", a.Volume, (4*10+20*3)*10, 1e-6)
-	r, err := Fabricability(m, FabOptions{Target: TargetP1S, SkipOrientation: true})
+	r, err := Fabricability(m, FabOptions{Target: testTarget, SkipOrientation: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestNoOverhangShapes(t *testing.T) {
 
 func TestThinWalls(t *testing.T) {
 	plate := Box(0, 0, 0, 20, 20, 0.5)
-	r, _ := Fabricability(plate, FabOptions{Target: TargetP1S, SkipOrientation: true})
+	r, _ := Fabricability(plate, FabOptions{Target: testTarget, SkipOrientation: true})
 	near(t, "épaisseur min", r.Thin.MinMM, 0.5, 1e-6)
 	near(t, "médiane pondérée par l'aire", r.Thin.MedianMM, 0.5, 1e-6)
 	if r.Thin.ThinFraction < 0.9 || !containsStr(r.Warnings, "épaisseur estimée") {
@@ -96,7 +96,7 @@ func TestThinWalls(t *testing.T) {
 	}
 	r, _ = Fabricability(Cube(10), FabOptions{SkipOrientation: true})
 	near(t, "cube médiane", r.Thin.MedianMM, 10, 1e-6)
-	if r.Thin.ThinCount != 0 || r.Thin.Confidence != "medium" { // 12 échantillons : confiance moyenne
+	if r.Thin.ThinCount != 0 || r.Thin.Confidence != "high" { // 2000 échantillons au prorata de l'aire, rayons concordants : confiance haute
 		t.Errorf("cube : %+v", r.Thin)
 	}
 	// Cube troué : paroi de 3 mm sur les faces du trou.
@@ -126,7 +126,7 @@ func TestThinWalls(t *testing.T) {
 
 func TestOrientationT(t *testing.T) {
 	m := TShape(4, 10, 20, 3, 10)
-	r, err := Fabricability(m, FabOptions{Target: TargetP1S})
+	r, err := Fabricability(m, FabOptions{Target: testTarget})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestOrientationT(t *testing.T) {
 func TestOrientationHullFaces(t *testing.T) {
 	// Un prisme incliné : la coque a une grande face oblique absente des 6 axes.
 	tilt := Cube(10).Transform(Matrix{1, 0, 0, 0, 0.8, 0.6, 0, -0.6, 0.8, 0, 0, 0})
-	r, _ := Fabricability(tilt, FabOptions{Target: TargetP1S})
+	r, _ := Fabricability(tilt, FabOptions{Target: testTarget})
 	hull := 0
 	for _, c := range r.Orientation.Candidates {
 		if c.Source == "hull" {
@@ -217,14 +217,14 @@ func TestOrientationHullFaces(t *testing.T) {
 
 func TestOrientationTooBig(t *testing.T) {
 	// Poutre 300×20×20 : ne tient qu'avec Z en largeur ; aucune orientation ne tient sur A1 mini.
-	r, _ := Fabricability(Box(0, 0, 0, 300, 20, 20), FabOptions{Target: TargetA1Mini})
+	r, _ := Fabricability(Box(0, 0, 0, 300, 20, 20), FabOptions{Target: Target{Name: "A1 mini", BedX: 180, BedY: 180, BedZ: 180, Nozzle: 0.4}})
 	for _, c := range r.Orientation.Candidates {
 		if c.Fits {
 			t.Errorf("%s ne devrait pas tenir", c.Label)
 		}
 	}
 	// Sur P1S (256) : elle ne tient pas non plus en 300 ; en diagonale non plus (heuristique, axes seuls).
-	r, _ = Fabricability(Box(0, 0, 0, 20, 20, 300), FabOptions{Target: TargetP1S})
+	r, _ = Fabricability(Box(0, 0, 0, 20, 20, 300), FabOptions{Target: testTarget})
 	if r.FitsBed {
 		t.Error("hauteur 300")
 	}
@@ -233,7 +233,7 @@ func TestOrientationTooBig(t *testing.T) {
 		t.Error("une poutre de 300 mm ne tient pas sur P1S")
 	}
 	// Mais une poutre 240×20×20 debout (240 < 256) tient, et la meilleure orientation tient.
-	r, _ = Fabricability(Box(0, 0, 0, 20, 20, 240), FabOptions{Target: TargetP1S})
+	r, _ = Fabricability(Box(0, 0, 0, 20, 20, 240), FabOptions{Target: testTarget})
 	if !r.Orientation.Candidates[0].Fits {
 		t.Error("la meilleure doit tenir")
 	}

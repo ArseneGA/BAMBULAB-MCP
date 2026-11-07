@@ -202,7 +202,7 @@ func genInput(t *testing.T, st *profiles.Store, goal *Goal, count int) GenInput 
 		t.Skip(err)
 	}
 	return GenInput{Goal: goal, Rules: mustRules(t), Process: proc.Clone(), Filament: fil.Clone(), Family: "PLA", Nozzle: 0.4, Count: count, MaxFactors: 3,
-		Mesh: mesh.TShape(30, 40, 60, 8, 20), Bed: mesh.TargetP1S}
+		Mesh: mesh.TShape(30, 40, 60, 8, 20), Bed: mesh.Target{Name: "test", BedX: 256, BedY: 256, BedZ: 256, Nozzle: 0.4}}
 }
 
 func TestGenerateThreeVariants(t *testing.T) {

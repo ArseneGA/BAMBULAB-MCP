@@ -4,25 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
-)
-
-// Target décrit la machine visée (volume utile et buse). Valeurs nominales : à vérifier
-// sur la machine réelle (zones d'exclusion, purge, bords du plateau).
-type Target struct {
-	Name   string  `json:"name"`
-	BedX   float64 `json:"bed_x_mm"`
-	BedY   float64 `json:"bed_y_mm"`
-	BedZ   float64 `json:"bed_z_mm"`
-	Nozzle float64 `json:"nozzle_mm"`
-}
-
-// Cibles nominales Bambu Lab.
-var (
-	TargetP1S    = Target{"P1S", 256, 256, 256, 0.4}
-	TargetP1P    = Target{"P1P", 256, 256, 256, 0.4}
-	TargetX1C    = Target{"X1C", 256, 256, 256, 0.4}
-	TargetA1     = Target{"A1", 256, 256, 256, 0.4}
-	TargetA1Mini = Target{"A1 mini", 180, 180, 180, 0.4}
+	"time"
 )
 
 // FabOptions règle l'analyse de fabricabilité.
@@ -37,6 +19,33 @@ type FabOptions struct {
 	// SkipOrientation désactive la proposition d'orientation.
 	SkipOrientation bool
 	WeldTol         float64
+	// SupportThresholdDeg : seuil des profils process Bambu (support_threshold_angle), pente mesurée depuis
+	// l'HORIZONTALE (0° = plafond plat ; 30° par défaut dans Bambu Studio) ; équivaut à un surplomb de
+	// 90° − seuil depuis la verticale. Ignoré si OverhangAngleDeg est fixé. ThresholdSource dit d'où il vient.
+	SupportThresholdDeg float64
+	ThresholdSource     string
+	// MaxFullTriangles : au-delà (défaut 1 000 000), la notation des orientations travaille sur un échantillon
+	// de triangles, annoncé dans FabReport.Sampling.
+	MaxFullTriangles int
+	// SelfIntersectBudget : durée maximale du contrôle des auto-intersections (défaut 5 s) ;
+	// SkipSelfIntersections le désactive.
+	SelfIntersectBudget   time.Duration
+	SkipSelfIntersections bool
+
+	overhangSource string
+}
+
+// Integrity résume l'état topologique du maillage analysé en même temps que la fabricabilité.
+type Integrity struct {
+	Watertight          bool    `json:"watertight"`
+	OpenEdges           int     `json:"open_edges"`
+	NonManifoldEdges    int     `json:"non_manifold_edges"`
+	InconsistentEdges   int     `json:"inconsistent_edges"`
+	DegenerateTriangles int     `json:"degenerate_triangles"`
+	DuplicateTriangles  int     `json:"duplicate_triangles"`
+	FloatingFragments   int     `json:"floating_fragments"`
+	Components          int     `json:"components"`
+	VolumeMM3           float64 `json:"volume_mm3"`
 }
 
 // OverhangRegion est un groupe de triangles en surplomb connexes.
@@ -49,11 +58,14 @@ type OverhangRegion struct {
 
 // OverhangReport : géométrie des surplombs dans l'orientation donnée.
 type OverhangReport struct {
-	ThresholdDeg float64          `json:"threshold_deg"`
-	AreaMM2      float64          `json:"area_mm2"`
-	Fraction     float64          `json:"fraction_of_surface"`
-	Regions      []OverhangRegion `json:"regions"` // 20 plus grandes
-	RegionCount  int              `json:"region_count"`
+	ThresholdDeg float64 `json:"threshold_deg"` // depuis la verticale (0° = paroi, 90° = plafond)
+	// SupportThresholdDeg : le même seuil dans la convention des profils Bambu (pente depuis l'horizontale).
+	SupportThresholdDeg float64          `json:"support_threshold_angle_deg"`
+	Source              string           `json:"threshold_source,omitempty"` // d'où vient le seuil (profil process, réglage, défaut)
+	AreaMM2             float64          `json:"area_mm2"`
+	Fraction            float64          `json:"fraction_of_surface"`
+	Regions             []OverhangRegion `json:"regions"` // 20 plus grandes
+	RegionCount         int              `json:"region_count"`
 }
 
 // ThinReport : épaisseur estimée par lancers de rayons opposés à la normale.
@@ -69,7 +81,13 @@ type ThinReport struct {
 	ThinPoints   []Vec3  `json:"thin_points,omitempty"` // jusqu'à 10 exemples
 	Confidence   string  `json:"confidence"`            // low|medium|high
 	Level        string  `json:"level"`                 // toujours "heuristic"
-	Note         string  `json:"note"`
+	// Rays : rayons par échantillon (axe + cône) ; ConeHalfAngleDeg : demi-angle du cône ; Agreement : part des
+	// échantillons où le cône et le rayon axial s'accordent à 25 % près ; Sampling : mode de tirage.
+	Rays             int     `json:"rays_per_sample"`
+	ConeHalfAngleDeg float64 `json:"cone_half_angle_deg"`
+	Agreement        float64 `json:"ray_agreement"`
+	Sampling         string  `json:"sampling"`
+	Note             string  `json:"note"`
 }
 
 // OrientationCandidate est une orientation d'impression proposée (heuristique).
@@ -107,227 +125,16 @@ type FabReport struct {
 	Overhang        OverhangReport     `json:"overhang"`
 	Thin            ThinReport         `json:"thin_walls"`
 	Orientation     *OrientationReport `json:"orientation,omitempty"`
-	Warnings        []string           `json:"warnings,omitempty"`
+	// Integrity et SelfIntersections : défauts du maillage constatés pendant l'analyse (réparer avant impression).
+	Integrity         *Integrity              `json:"integrity,omitempty"`
+	SelfIntersections *SelfIntersectionReport `json:"self_intersections,omitempty"`
+	// Sampled et Sampling : étapes réalisées sur un échantillon (gros maillage), avec la raison.
+	Sampled  bool     `json:"sampled,omitempty"`
+	Sampling []string `json:"sampling,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 const orientationFormula = "0,6·fraction_surplomb + 0,25·hauteur/diagonale + 0,15·(1 − min(1, contact/(10 % de la surface)))"
-
-func (o *FabOptions) defaults() {
-	if o.Target.BedX == 0 {
-		o.Target = TargetP1S
-	}
-	if o.OverhangAngleDeg <= 0 {
-		o.OverhangAngleDeg = 45
-	}
-	if o.Target.Nozzle <= 0 {
-		o.Target.Nozzle = 0.4
-	}
-	if o.ThinThresholdMM <= 0 {
-		o.ThinThresholdMM = 2 * o.Target.Nozzle
-	}
-	if o.RaySamples <= 0 {
-		o.RaySamples = 2000
-	}
-}
-
-// Fabricability analyse la pièce posée telle quelle (Z vers le haut, plan Z=min sur le plateau)
-// pour la cible donnée. Les surplombs, épaisseurs et orientations sont des heuristiques.
-func Fabricability(m *Mesh, opt FabOptions) (*FabReport, error) {
-	opt.defaults()
-	if len(m.T) == 0 {
-		return nil, ErrEmpty
-	}
-	if err := m.Validate(); err != nil {
-		return nil, err
-	}
-	bb := m.Bounds()
-	r := &FabReport{Target: opt.Target, Size: bb.Size}
-	t := opt.Target
-	r.FitsBed = bb.Size.X <= t.BedX && bb.Size.Y <= t.BedY && bb.Size.Z <= t.BedZ
-	r.FitsBedRotatedZ = bb.Size.Y <= t.BedX && bb.Size.X <= t.BedY && bb.Size.Z <= t.BedZ
-	r.MarginMM = Vec3{t.BedX - bb.Size.X, t.BedY - bb.Size.Y, t.BedZ - bb.Size.Z}
-	switch {
-	case r.FitsBed:
-	case r.FitsBedRotatedZ:
-		r.Warnings = append(r.Warnings, "la pièce ne tient que tournée de 90° autour de Z")
-	default:
-		r.Warnings = append(r.Warnings, fmt.Sprintf("la pièce (%.1f × %.1f × %.1f mm) dépasse le volume %s (%.0f × %.0f × %.0f mm) dans cette orientation : réorienter, découper ou changer de machine",
-			bb.Size.X, bb.Size.Y, bb.Size.Z, t.Name, t.BedX, t.BedY, t.BedZ))
-	}
-
-	tol := opt.WeldTol
-	if tol <= 0 {
-		tol = math.Max(1e-6, 1e-6*bb.Size.Len())
-	}
-	remap, nw := Weld(m, tol)
-	up := Vec3{0, 0, 1}
-	r.Overhang = overhangs(m, remap, nw, up, opt.OverhangAngleDeg, true)
-	if r.Overhang.Fraction > 0.05 {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("%.0f %% de la surface en surplomb > %.0f° : supports probables", 100*r.Overhang.Fraction, opt.OverhangAngleDeg))
-	}
-
-	rep := Analyze(m, AnalyzeOptions{WeldTol: tol})
-	r.Thin = thickness(m, rep, opt)
-	if r.Thin.ThinFraction > 0.02 {
-		r.Warnings = append(r.Warnings, fmt.Sprintf("épaisseur estimée < %.2f mm sur %.0f %% des échantillons : parois possiblement trop minces pour la buse %.1f mm (confiance %s)",
-			opt.ThinThresholdMM, 100*r.Thin.ThinFraction, t.Nozzle, r.Thin.Confidence))
-	}
-	if !rep.Watertight {
-		r.Warnings = append(r.Warnings, "maillage non étanche : épaisseurs et volume peu fiables, réparation nécessaire avant impression")
-	}
-	if !opt.SkipOrientation {
-		r.Orientation = proposeOrientations(m, remap, nw, opt)
-	}
-	return r, nil
-}
-
-// overhangs calcule les surplombs pour une direction "haut" donnée. Les triangles posés sur le plateau
-// (tous sommets à moins de 0,05 mm du minimum) ne sont pas des surplombs.
-func overhangs(m *Mesh, remap []int, nw int, up Vec3, thrDeg float64, regions bool) OverhangReport {
-	rep := OverhangReport{ThresholdDeg: thrDeg}
-	minH := math.Inf(1)
-	for _, v := range m.V {
-		minH = math.Min(minH, v.Dot(up))
-	}
-	var total float64
-	over := make([]bool, len(m.T))
-	angle := make([]float64, len(m.T))
-	areas := make([]float64, len(m.T))
-	thr := math.Sin(thrDeg * math.Pi / 180)
-	for i, t := range m.T {
-		n, a := m.Normal(i)
-		total += a
-		if a == 0 {
-			continue
-		}
-		s := -n.Dot(up) // composante vers le bas
-		if s <= thr {
-			continue
-		}
-		if m.V[t[0]].Dot(up) <= minH+0.05 && m.V[t[1]].Dot(up) <= minH+0.05 && m.V[t[2]].Dot(up) <= minH+0.05 {
-			continue
-		}
-		over[i] = true
-		angle[i] = math.Asin(math.Min(1, s)) * 180 / math.Pi
-		areas[i] = a
-		rep.AreaMM2 += a
-	}
-	if total > 0 {
-		rep.Fraction = rep.AreaMM2 / total
-	}
-	if !regions {
-		return rep
-	}
-	ds := newDSU(nw)
-	for i, t := range m.T {
-		if !over[i] {
-			continue
-		}
-		ds.union(remap[t[0]], remap[t[1]])
-		ds.union(remap[t[1]], remap[t[2]])
-	}
-	groups := map[int][]int{}
-	for i, t := range m.T {
-		if over[i] {
-			groups[ds.find(remap[t[0]])] = append(groups[ds.find(remap[t[0]])], i)
-		}
-	}
-	for _, tris := range groups {
-		reg := OverhangRegion{Triangles: len(tris)}
-		sub := &Mesh{V: m.V}
-		for _, i := range tris {
-			reg.AreaMM2 += areas[i]
-			reg.MaxAngleDeg = math.Max(reg.MaxAngleDeg, angle[i])
-			sub.T = append(sub.T, m.T[i])
-		}
-		reg.BBox = sub.usedBounds()
-		rep.Regions = append(rep.Regions, reg)
-	}
-	rep.RegionCount = len(rep.Regions)
-	sort.Slice(rep.Regions, func(a, b int) bool { return rep.Regions[a].AreaMM2 > rep.Regions[b].AreaMM2 })
-	if len(rep.Regions) > 20 {
-		rep.Regions = rep.Regions[:20]
-	}
-	return rep
-}
-
-// thickness estime l'épaisseur locale par un rayon partant du centre du triangle, dirigé contre la normale.
-func thickness(m *Mesh, rep *Report, opt FabOptions) ThinReport {
-	tr := ThinReport{ThresholdMM: opt.ThinThresholdMM, Level: "heuristic"}
-	tr.Note = "Distance au premier triangle rencontré contre la normale ; surestime les parois obliques, sous-estime près des arêtes ; n'est pas une mesure de conception."
-	flip := rep.Volume < 0
-	b := buildBVH(m)
-	diag := m.Bounds().Size.Len()
-	eps := 1e-6 * math.Max(diag, 1)
-	step := 1
-	if len(m.T) > opt.RaySamples {
-		step = len(m.T) / opt.RaySamples
-	}
-	type sample struct{ d, w float64 }
-	var ds []sample
-	var wAll, wThin float64
-	for i := 0; i < len(m.T); i += step {
-		n, a := m.Normal(i)
-		if a == 0 {
-			continue
-		}
-		if flip {
-			n = n.Scale(-1)
-		}
-		tr.Samples++
-		wAll += a
-		o := b.centroid(i).Sub(n.Scale(eps))
-		d, _, ok := b.nearest(o, n.Scale(-1), i)
-		if !ok {
-			continue
-		}
-		d += eps // l'origine a été décalée de eps vers l'intérieur
-		tr.Hits++
-		ds = append(ds, sample{d, a})
-		if d < opt.ThinThresholdMM {
-			tr.ThinCount++
-			wThin += a
-			if len(tr.ThinPoints) < 10 {
-				tr.ThinPoints = append(tr.ThinPoints, b.centroid(i))
-			}
-		}
-	}
-	if len(ds) > 0 {
-		sort.Slice(ds, func(i, j int) bool { return ds[i].d < ds[j].d })
-		tr.MinMM = ds[0].d
-		var tot float64
-		for _, s := range ds {
-			tot += s.w
-		}
-		var acc float64
-		gotP5, gotMed := false, false
-		for _, s := range ds {
-			acc += s.w
-			if !gotP5 && acc >= 0.05*tot {
-				tr.P5MM, gotP5 = s.d, true
-			}
-			if !gotMed && acc >= 0.5*tot {
-				tr.MedianMM, gotMed = s.d, true
-			}
-		}
-	}
-	if wAll > 0 {
-		tr.ThinFraction = wThin / wAll
-	}
-	hitFrac := 0.0
-	if tr.Samples > 0 {
-		hitFrac = float64(tr.Hits) / float64(tr.Samples)
-	}
-	switch {
-	case rep.Watertight && rep.InconsistentEdges == 0 && hitFrac > 0.9 && tr.Samples >= 50:
-		tr.Confidence = "high"
-	case hitFrac > 0.6 && tr.Samples >= 12:
-		tr.Confidence = "medium"
-	default:
-		tr.Confidence = "low"
-	}
-	return tr
-}
 
 // rotationFor construit la matrice (convention 3MF) qui envoie le vecteur up sur +Z,
 // avec une base arbitraire stable pour X/Y.
@@ -343,7 +150,7 @@ func rotationFor(up Vec3) Matrix {
 	return Matrix{e1.X, e2.X, u.X, e1.Y, e2.Y, u.Y, e1.Z, e2.Z, u.Z, 0, 0, 0}
 }
 
-func proposeOrientations(m *Mesh, remap []int, nw int, opt FabOptions) *OrientationReport {
+func proposeOrientations(m *Mesh, remap []int32, nw int, opt FabOptions, stride int) *OrientationReport {
 	rep := &OrientationReport{
 		Level: "heuristic", ScoreFormula: orientationFormula, Best: -1,
 		Note: "Classement heuristique (surplomb, appui, hauteur) ; ignore la résistance inter-couches, l'aspect des faces visibles et les supports solubles. Les faces de la coque convexe sont approchées par des sommets extrêmes.",
@@ -378,9 +185,9 @@ func proposeOrientations(m *Mesh, remap []int, nw int, opt FabOptions) *Orientat
 		}
 	}
 	var area float64
-	for i := range m.T {
+	for i := 0; i < len(m.T); i += stride {
 		_, a := m.Normal(i)
-		area += a
+		area += a * float64(stride)
 	}
 	diag := m.Bounds().Size.Len()
 	t := opt.Target
@@ -396,16 +203,17 @@ func proposeOrientations(m *Mesh, remap []int, nw int, opt FabOptions) *Orientat
 		}
 		sz := hi.Sub(lo)
 		oc := OrientationCandidate{Label: c.label, Up: c.up, Rotation: R, HeightMM: sz.Z, SizeXMM: sz.X, SizeYMM: sz.Y, Source: c.source}
-		oc.Fits = sz.Z <= t.BedZ && ((sz.X <= t.BedX && sz.Y <= t.BedY) || (sz.Y <= t.BedX && sz.X <= t.BedY))
-		ov := overhangs(m, remap, nw, c.up, opt.OverhangAngleDeg, false)
+		oc.Fits, _ = t.Fits(sz)
+		ov := overhangs(m, remap, nw, c.up, opt.OverhangAngleDeg, false, stride)
 		oc.OverhangMM2, oc.OverhangFrac = ov.AreaMM2, ov.Fraction
-		for i, tr := range m.T {
+		for i := 0; i < len(m.T); i += stride {
+			tr := m.T[i]
 			n, a := m.Normal(i)
 			if a == 0 || -n.Dot(c.up) < cosFlat {
 				continue
 			}
 			if m.V[tr[0]].Dot(c.up) <= lo.Z+0.05 && m.V[tr[1]].Dot(c.up) <= lo.Z+0.05 && m.V[tr[2]].Dot(c.up) <= lo.Z+0.05 {
-				oc.ContactMM2 += a
+				oc.ContactMM2 += a * float64(stride)
 			}
 		}
 		contactTerm := 1.0
