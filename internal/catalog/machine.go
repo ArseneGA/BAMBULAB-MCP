@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
@@ -53,4 +54,33 @@ func (s *Service) machineTarget(name string, nozzle float64) (mesh.Target, strin
 		t.Nozzle = nozzle
 	}
 	return t, id, nil
+}
+
+// applyProcessThreshold règle le seuil de surplomb d'après support_threshold_angle du preset process (celui
+// demandé, sinon le process par défaut de la machine). Retourne une réserve à afficher, vide si tout va bien.
+func (s *Service) applyProcessThreshold(fo *mesh.FabOptions, t mesh.Target, process string) string {
+	if fo.OverhangAngleDeg > 0 {
+		return ""
+	}
+	ps := s.profileStore()
+	if ps == nil {
+		return "seuil de surplomb par défaut (45° depuis la verticale) : profils Bambu Studio indisponibles"
+	}
+	name := strings.TrimSpace(process)
+	if name == "" && t.Profile != "" {
+		name, _ = ps.DefaultProcessOf(t.Profile)
+	}
+	if name == "" {
+		return "seuil de surplomb par défaut (45° depuis la verticale) : aucun preset process"
+	}
+	deg, ok, err := ps.SupportThresholdAngle(name)
+	switch {
+	case err != nil:
+		return fmt.Sprintf("seuil de surplomb par défaut (45° depuis la verticale) : process %q illisible (%v)", name, err)
+	case !ok:
+		return fmt.Sprintf("seuil de surplomb par défaut (45° depuis la verticale) : le process %q ne fixe pas support_threshold_angle (0 = automatique)", name)
+	}
+	fo.SupportThresholdDeg = deg
+	fo.ThresholdSource = fmt.Sprintf("process « %s » (support_threshold_angle = %g°)", name, deg)
+	return ""
 }

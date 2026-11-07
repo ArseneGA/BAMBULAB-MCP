@@ -173,18 +173,20 @@ func registerCatalog(mux *http.ServeMux, c *core.Core) {
 	// Analyse (analyze_geometry) : l'unité confirmée est mémorisée sur le fichier et force le recalcul.
 	mux.HandleFunc("POST /api/models/{id}/analyze", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			FileID    string  `json:"file_id"`
-			Unit      string  `json:"unit"`
-			Machine   string  `json:"machine"`
-			Nozzle    float64 `json:"nozzle_mm"`
-			Recompute bool    `json:"recompute"`
-			SkipFab   bool    `json:"skip_fabricability"`
+			FileID      string  `json:"file_id"`
+			Unit        string  `json:"unit"`
+			Machine     string  `json:"machine"`
+			Nozzle      float64 `json:"nozzle_mm"`
+			Process     string  `json:"process"`
+			OverhangDeg float64 `json:"overhang_angle_deg"`
+			Recompute   bool    `json:"recompute"`
+			SkipFab     bool    `json:"skip_fabricability"`
 		}
 		if r.ContentLength != 0 && !decode(w, r, &in) {
 			return
 		}
 		res, err := svc.AnalyzeGeometry(r.Context(), catalog.AnalyzeInput{ModelID: r.PathValue("id"), FileID: in.FileID, Unit: in.Unit,
-			Machine: in.Machine, Nozzle: in.Nozzle, Recompute: in.Recompute, SkipFab: in.SkipFab})
+			Machine: in.Machine, Nozzle: in.Nozzle, Process: in.Process, OverhangDeg: in.OverhangDeg, Recompute: in.Recompute, SkipFab: in.SkipFab})
 		reply(c, w, res, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/models/{id}/parts", func(w http.ResponseWriter, r *http.Request) {

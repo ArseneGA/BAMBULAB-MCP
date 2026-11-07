@@ -123,13 +123,15 @@ func (s *Service) GetPreviewAsset(ctx context.Context, in PreviewAssetInput) (*P
 
 // AnalyzeInput : analyse géométrique d'un modèle ou d'un fichier.
 type AnalyzeInput struct {
-	ModelID   string  `json:"model_id,omitempty" jsonschema:"modèle (son fichier le plus récent)"`
-	FileID    string  `json:"file_id,omitempty" jsonschema:"fichier source précis"`
-	Unit      string  `json:"unit,omitempty" jsonschema:"unité confirmée des coordonnées pour un STL/OBJ : mm | cm | m | inch ; mémorisée sur le fichier et force le recalcul"`
-	Machine   string  `json:"machine,omitempty" jsonschema:"cible machine pour la fabricabilité : tout modèle Bambu des profils installés (p1s par défaut, h2d, h2s, x1e, p2s, a1, a1mini, x1c…) ; volume, buse et zones d'exclusion lus dans les profils Bambu Studio (double buse : par buse), repli nominal signalé si les profils sont absents"`
-	Nozzle    float64 `json:"nozzle_mm,omitempty" jsonschema:"diamètre de buse en mm (défaut 0.4)"`
-	Recompute bool    `json:"recompute,omitempty" jsonschema:"ignorer l'analyse stockée"`
-	SkipFab   bool    `json:"skip_fabricability,omitempty" jsonschema:"ne pas calculer surplombs / épaisseurs / orientations (heuristiques)"`
+	ModelID     string  `json:"model_id,omitempty" jsonschema:"modèle (son fichier le plus récent)"`
+	FileID      string  `json:"file_id,omitempty" jsonschema:"fichier source précis"`
+	Unit        string  `json:"unit,omitempty" jsonschema:"unité confirmée des coordonnées pour un STL/OBJ : mm | cm | m | inch ; mémorisée sur le fichier et force le recalcul"`
+	Machine     string  `json:"machine,omitempty" jsonschema:"cible machine pour la fabricabilité : tout modèle Bambu des profils installés (p1s par défaut, h2d, h2s, x1e, p2s, a1, a1mini, x1c…) ; volume, buse et zones d'exclusion lus dans les profils Bambu Studio (double buse : par buse), repli nominal signalé si les profils sont absents"`
+	Nozzle      float64 `json:"nozzle_mm,omitempty" jsonschema:"diamètre de buse en mm (défaut 0.4)"`
+	Process     string  `json:"process,omitempty" jsonschema:"preset process Bambu dont lire support_threshold_angle (seuil de surplomb) ; défaut : process par défaut de la machine"`
+	OverhangDeg float64 `json:"overhang_angle_deg,omitempty" jsonschema:"seuil de surplomb explicite, en degrés depuis la verticale (0 = paroi, 90 = plafond) ; prime sur le profil"`
+	Recompute   bool    `json:"recompute,omitempty" jsonschema:"ignorer l'analyse stockée"`
+	SkipFab     bool    `json:"skip_fabricability,omitempty" jsonschema:"ne pas calculer surplombs / épaisseurs / orientations (heuristiques)"`
 }
 
 // AnalyzeOutput : mesures géométriques et heuristiques de fabricabilité.
@@ -230,7 +232,11 @@ func (s *Service) AnalyzeGeometry(ctx context.Context, in AnalyzeInput) (*Analyz
 	if !in.SkipFab {
 		md, _, err := s.loadMesh(p)
 		if err == nil {
-			rep, ferr := mesh.Fabricability(md.Combined(), mesh.FabOptions{Target: target})
+			fo := mesh.FabOptions{Target: target, OverhangAngleDeg: in.OverhangDeg}
+			if note := s.applyProcessThreshold(&fo, target, in.Process); note != "" {
+				out.Caveats = append(out.Caveats, note)
+			}
+			rep, ferr := mesh.Fabricability(md.Combined(), fo)
 			if ferr == nil {
 				out.Fabricability, _ = json.Marshal(rep)
 				out.Caveats = append(out.Caveats, fmt.Sprintf("Fabricabilité = heuristiques (surplombs, épaisseur par rayons, orientations) pour %s (volumes : %s).", target.Name, target.Source))
