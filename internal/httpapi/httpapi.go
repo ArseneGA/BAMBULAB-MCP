@@ -77,6 +77,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerMaterials(mux, c)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
 	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)
+	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
 
 	server := mcpserver.New(c)
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{

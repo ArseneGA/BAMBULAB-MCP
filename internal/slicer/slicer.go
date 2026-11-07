@@ -101,6 +101,16 @@ type Request struct {
 
 	Overrides []Override
 	Timeout   time.Duration // défaut : Config.Timeout
+
+	// Objects : projet multi-objets (plusieurs pièces, plaques et réglages par objet). Quand il est
+	// renseigné, Model est ignoré : le 3MF est écrit dans le répertoire de travail une fois les
+	// profils résolus (Metadata/project_settings.config en dérive). PlateOrigin donne le décalage
+	// monde de la plaque n ; défaut : plaques côte à côte, écart de 20 % de la largeur du plateau.
+	Objects     []mesh.ProjectObject
+	PlateOrigin func(plate int) (x, y float64)
+	// ArrangeOnly : pas de découpe ; Studio dispose les objets (--arrange 1, répartition automatique sur
+	// plusieurs plaques) et exporte le projet 3MF disposé (ArtifactPath). Voir Slicer.Arrange.
+	ArrangeOnly bool
 }
 
 // SliceAll vaut Request.Plate pour trancher toutes les plaques (--slice 0).
@@ -149,6 +159,8 @@ type Result struct {
 	Filaments []EffectiveProfile `json:"filaments"`
 	Overrides []AppliedOverride  `json:"overrides,omitempty"`
 	BedType   string             `json:"bed_type,omitempty"`
+	BedX      float64            `json:"bed_x_mm,omitempty"` // étendue du plateau de la machine
+	BedY      float64            `json:"bed_y_mm,omitempty"`
 
 	Archive    *ArchiveInfo    `json:"archive,omitempty"`
 	Validation *Validation     `json:"validation,omitempty"`
@@ -306,18 +318,21 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrCanceled, err)
 	}
-	st, err := os.Stat(req.Model)
-	if err != nil {
-		return nil, fmt.Errorf("%w: modèle: %v", ErrInvalidRequest, err)
-	}
-	if st.IsDir() {
-		return nil, fmt.Errorf("%w: le modèle est un répertoire", ErrInvalidRequest)
-	}
-	ext := strings.ToLower(filepath.Ext(req.Model))
-	switch ext {
-	case ".stl", ".3mf", ".obj":
-	default:
-		return nil, fmt.Errorf("%w: extension %q non supportée (stl, obj, 3mf)", ErrInvalidRequest, ext)
+	ext := ".3mf"
+	if len(req.Objects) == 0 {
+		st, err := os.Stat(req.Model)
+		if err != nil {
+			return nil, fmt.Errorf("%w: modèle: %v", ErrInvalidRequest, err)
+		}
+		if st.IsDir() {
+			return nil, fmt.Errorf("%w: le modèle est un répertoire", ErrInvalidRequest)
+		}
+		ext = strings.ToLower(filepath.Ext(req.Model))
+		switch ext {
+		case ".stl", ".3mf", ".obj":
+		default:
+			return nil, fmt.Errorf("%w: extension %q non supportée (stl, obj, 3mf)", ErrInvalidRequest, ext)
+		}
 	}
 	id := sanitize(req.ID, "")
 	if id == "" {
@@ -332,8 +347,15 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 			return nil, err
 		}
 	}
-	res := &Result{JobID: id, WorkDir: work, BinaryPath: s.bin.Path, BinaryVersion: s.bin.Version, ReturnCode: 1}
+	res := &Result{JobID: id, WorkDir: work, BinaryPath: s.bin.Path, BinaryVersion: s.bin.Version, ReturnCode: 1, BedX: variant.BedX, BedY: variant.BedY}
 
+	if len(req.Objects) > 0 {
+		pm, err := writeProject(work, req.Objects, req.PlateOrigin, variant, cm, cp, cfs)
+		if err != nil {
+			return res, err
+		}
+		req.Model = pm
+	}
 	base := sanitize(strings.TrimSuffix(filepath.Base(req.Model), filepath.Ext(req.Model)), "model")
 	inputRel := base + ext
 	inputAbs := filepath.Join(work, filepath.FromSlash(inputRel))
@@ -345,8 +367,14 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	res.InputPath, res.InputSHA256 = inputAbs, sum
 
 	var inputVolume float64
+	for _, o := range req.Objects { // projet : volume des seuls objets de la plaque tranchée
+		if (req.Plate > 0 && o.Plate != req.Plate) || o.Mesh == nil {
+			continue
+		}
+		inputVolume += math.Abs(mesh.Analyze(o.Mesh, mesh.AnalyzeOptions{}).Volume)
+	}
 	if m, err := mesh.ReadFile(inputAbs); err == nil {
-		if v := math.Abs(mesh.Analyze(m.Combined(), mesh.AnalyzeOptions{}).Volume); v > 0 {
+		if v := math.Abs(mesh.Analyze(m.Combined(), mesh.AnalyzeOptions{}).Volume); v > 0 && inputVolume == 0 {
 			inputVolume = v
 		}
 		if len(m.Objects) == 0 || (len(m.Objects) == 1 && m.Objects[0].Mesh != nil && len(m.Objects[0].Mesh.T) == 0) {
@@ -397,8 +425,14 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	}
 	artifactName := sanitize(req.Label, base) + ".gcode.3mf"
 	args := append([]string(nil), s.bin.Args...)
+	if req.ArrangeOnly {
+		artifactName = "arranged.3mf"
+		on := true
+		req.Arrange = &on
+	} else {
+		args = append(args, "--slice", sliceArg)
+	}
 	args = append(args,
-		"--slice", sliceArg,
 		"--load-settings", "profiles/machine.json;profiles/process.json",
 		"--load-filaments", strings.Join(filFiles, ";"),
 		"--allow-newer-file",
@@ -466,6 +500,14 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	}
 	if res.ExitCode != 0 {
 		return res, fmt.Errorf("%w: code de sortie %d alors que result.json annonce un succès", ErrInvalidOutput, res.ExitCode)
+	}
+
+	if req.ArrangeOnly {
+		res.ArtifactPath = filepath.Join(work, "out", artifactName)
+		if _, err := os.Stat(res.ArtifactPath); err != nil {
+			return res, fmt.Errorf("%w: projet disposé absent: %v", ErrInvalidOutput, err)
+		}
+		return res, nil
 	}
 
 	// ---- 6. validation de l'archive ----

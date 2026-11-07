@@ -8,6 +8,7 @@ import type { Goal, GoalCriteriaCatalog, CriterionInfo, CriterionInput } from '.
 import { GlbView } from '../viewer/LazyGlbView';
 import { Async, Notice, PendingBanner, fmtDims } from './common';
 import { PartsPanel, SettingsPanel } from './PrepareParts';
+import { PlatePanel } from './PlatePanel';
 import type { Part } from '../api/extraTypes';
 import './model.css';
 import './prepare.css';
@@ -42,6 +43,7 @@ function PickModel({ onPick }: { onPick: (id: string) => void }) {
           </Panel>
         )}
       </Async>
+      <PlatePanel />
     </>
   );
 }
@@ -109,7 +111,8 @@ function PrepareView({ id }: { id: string }) {
                     : <div className="v3 v3-placeholder"><div className="state" style={{ background: 'var(--surface)' }}><h3>Aperçu indisponible</h3><p>{d.preview.note ?? `État : ${d.preview.state}`}</p></div></div>}
                 </div>
                 {cur && !['stl', 'obj', '3mf'].includes(cur.format) && <Notice title="Format non découpable">Seuls STL, OBJ et 3MF peuvent être découpés pour comparer des variantes (STEP refusé).</Notice>}
-                <p className="hint">Les réglages sont globaux à la pièce : les zones sont notées dans l'objectif mais ne produisent pas de variante par zone.</p>
+                <p className="hint">Les variantes de l'objectif portent sur la pièce entière (les zones sont notées dans l'objectif). Pour des réglages différents par pièce, composez un plateau ci-dessous : chaque pièce y porte les siens, écrits dans le 3MF découpé.</p>
+                <PlatePanel initialModelId={id} />
               </div>
 
               <div className="mdl-side">
