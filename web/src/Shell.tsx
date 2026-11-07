@@ -4,7 +4,7 @@ import { IconButton, StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
 import { useTheme } from './design/theme';
 import { ConnectionProvider, useConnection } from './api/hooks';
-import { EnrollGate, ServerBanner } from './pages/common';
+import { EnrollGate, HttpsBanner, ServerBanner } from './pages/common';
 import './shell.css';
 
 export const spaces = [
@@ -21,13 +21,13 @@ export const spaces = [
 function Pills() {
   const c = useConnection();
   const server: Status = c.server === 'online' ? 'online' : c.server === 'checking' ? 'unavailable' : 'offline';
-  const win: Status = c.windows === 'online' ? 'online' : 'offline';
+  const win: Status = c.windows === 'online' ? 'online' : c.windows === 'unused' ? 'unused' : c.windows === 'unavailable' ? 'unavailable' : 'offline';
   const cad: Status = c.cad === 'online' ? 'online' : 'unavailable';
   return (
     <>
       <span className="pill" title={c.server === 'online' ? `Service bambud ${c.health?.version ?? ''}` : 'Service bambud'}><StatusDot status={server} label={c.server === 'checking' ? 'Connexion' : 'Linux'} /></span>
       {c.browserEnrolled === false && <a className="pill enroll" href="/enroll" title="Les pages de confirmation d'impression exigent un navigateur enregistré (code à usage unique)">Enregistrer ce navigateur</a>}
-      <Link to="/agents" className="pill" title={c.agents.length === 0 ? 'Aucun agent Windows appairé' : c.agents.map((a) => `${a.name} : ${a.online ? 'en ligne' : 'hors ligne'}${a.studio_running ? ', Bambu Studio ouvert' : a.studio_installed ? ', Bambu Studio installé' : ''}`).join(' ; ')}><StatusDot status={win} label={c.agents.length === 0 ? 'Windows' : c.agents.length === 1 ? `Windows : ${c.agents[0].name}` : `Windows ×${c.agents.length}`} /></Link>
+      <Link to="/agents" className="pill" title={c.agents.length === 0 ? 'Windows : non utilisé (aucun agent appairé ; le mode Linux seul est normal)' : c.agents.map((a) => `${a.name} : ${a.online ? 'en ligne' : 'hors ligne'}${a.studio_running ? ', Bambu Studio ouvert' : a.studio_installed ? ', Bambu Studio installé' : ''}`).join(' ; ')}><StatusDot status={win} label={c.agents.length === 0 ? (win === 'unused' ? 'Windows : non utilisé' : 'Windows') : c.agents.length === 1 ? `Windows : ${c.agents[0].name}` : `Windows ×${c.agents.length}`} /></Link>
       <span className="pill" title={c.cad === 'online' ? 'Backend CAO (STEP) disponible' : (c.cadNote ?? 'Backend CAO absent : les fichiers STEP ne sont pas convertis')}><StatusDot status={cad} label="CAO" /></span>
     </>
   );
@@ -46,6 +46,7 @@ export function Shell() {
       <ConnectionProvider>
         <div className="app">
           <ServerBanner />
+          <HttpsBanner />
           <header className="topbar">
             <NavLink to="/" className="brand" end><span className="brand-mark" aria-hidden />Atelier</NavLink>
             <nav className="nav" aria-label="Espaces de travail">

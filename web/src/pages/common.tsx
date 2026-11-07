@@ -4,6 +4,7 @@ import { AlertTriangle, Construction, ServerOff, X } from 'lucide-react';
 import { Button, ErrorState, IconButton, LoadingState } from '../components';
 import { describeError, isOffline, useConnection } from '../api/hooks';
 import type { AsyncState } from '../api/hooks';
+import { insecureOrigin } from '../api/windowsLink';
 import { pendingFor } from '../api/pending';
 import type { PendingNeed } from '../api/pending';
 import './common.css';
@@ -127,6 +128,19 @@ export function EnrollGate() {
 }
 
 /* ---------- pastille « connexion » pour les bandeaux ---------- */
+/** SPA en http hors loopback : les pages humaines (enregistrement, confirmation) exigent https. */
+export function HttpsBanner() {
+  const c = useConnection();
+  if (c.httpsUrl === undefined || !insecureOrigin(window.location)) return null;
+  const href = c.httpsUrl ? c.httpsUrl + window.location.pathname + window.location.search : '';
+  return (
+    <div className="server-banner https-banner" role="status">
+      <span>Connexion non chiffrée : les pages d'enregistrement et de confirmation exigent HTTPS.</span>
+      {href ? <a href={href}>Ouvrir en HTTPS ({c.httpsUrl})</a> : <span>Aucune URL https configurée (BAMBU_PUBLIC_URL) : utilisez <code>tailscale serve</code> ou localhost.</span>}
+    </div>
+  );
+}
+
 export function ServerBanner() {
   const c = useConnection();
   if (c.server !== 'offline') return null;

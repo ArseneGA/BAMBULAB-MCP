@@ -29,7 +29,7 @@ Lancer et arrêter une impression exigent un accord **humain** depuis un navigat
 docker compose exec atelier bambud enroll       # affiche un code à 8 caractères, usage unique
 ```
 
-Ouvrir <http://localhost:7878/enroll>, saisir le code. Le jeton d'API (pour Claude) se lit avec :
+Ouvrir <http://localhost:7878/enroll> (les pages d'enregistrement et de confirmation exigent localhost ou HTTPS, jamais `http://IP`), saisir le code. Le jeton d'API (pour Claude) se lit avec :
 
 ```sh
 docker compose exec atelier cat /data/api-token

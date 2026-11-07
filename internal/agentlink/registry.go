@@ -489,13 +489,13 @@ func (r *Registry) ApplyCapabilities(c *contracts.Capabilities) {
 		}
 		c.Features = append(c.Features, contracts.Feature{ID: id, Available: avail, Note: note})
 	}
-	note := "aucun agent appairé"
+	note := "Windows : non utilisé (aucun agent appairé ; le mode Linux seul est normal)"
 	switch {
 	case online > 0:
 		c.Mode = "linux_renfort_windows"
 		note = fmt.Sprintf("%d agent(s) en ligne : %s", online, strings.Join(names, ", "))
 	case len(st) > 0:
-		note = fmt.Sprintf("%d agent(s) appairé(s), tous hors ligne : le contrôle de la session Studio et les workers Windows attendent leur retour", len(st))
+		note = fmt.Sprintf("Windows : hors ligne (%d agent(s) appairé(s), aucun ne répond) : le contrôle de la session Studio et les workers Windows attendent leur retour", len(st))
 	}
 	set("windows_agent", online > 0, note)
 	set("studio_session", online > 0 && studio, "lecture du projet ouvert (copie du 3MF) et ouverture d'un résultat dans Studio ; la modification en direct n'est pas prise en charge (voir docs/jalons/J8.md)")

@@ -74,10 +74,10 @@ export function Tag({ tone, children, onClick }: { tone?: 'accent' | 'ok' | 'war
 }
 
 /* ---------- StatusDot ---------- */
-export type Status = 'online' | 'offline' | 'unavailable' | 'conflict';
-const statusLabel: Record<Status, string> = { online: 'En ligne', offline: 'Hors ligne', unavailable: 'Indisponible', conflict: 'Conflit de version' };
+export type Status = 'online' | 'offline' | 'unavailable' | 'conflict' | 'unused';
+const statusLabel: Record<Status, string> = { online: 'En ligne', offline: 'Hors ligne', unavailable: 'Indisponible', conflict: 'Conflit de version', unused: 'Non utilisé' };
 export function StatusDot({ status, label }: { status: Status; label?: string }) {
-  return <span className="status"><span className={`dot dot-${status}`} aria-hidden />{label ?? statusLabel[status]}</span>;
+  return <span className={status === 'unused' ? 'status status-unused' : 'status'}><span className={`dot dot-${status}`} aria-hidden />{label ?? statusLabel[status]}</span>;
 }
 
 /* ---------- Tooltip ---------- */

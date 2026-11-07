@@ -23,6 +23,7 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 4. **Pages protégées** (`humanauth.Require`) : `/confirm/{id}`, `/stop/{id}`, `/setup/printer/{id}`, `/agents/pair`.
    - `GET` sans cookie valide → 303 vers `/enroll?next=…` (chemin local uniquement).
    - `POST` : cookie valide **et** `Sec-Fetch-Site: same-origin` **et** `Sec-Fetch-Mode: navigate` (en-tête absent = refus) **et** nonce de formulaire à usage unique lié à la page.
+4bis. **Pages humaines en http hors loopback** : refusées par une page « Cette page exige HTTPS : ouvrez <URL https de BAMBU_PUBLIC_URL> » (403), avant toute autre logique ; la protection cross-origin n'est jamais assouplie (`Origin: null` reste refusé). Seul localhost ou https (TLS, proxy de confiance ou URL publique https) sert ces pages. Test : `TestHumanPageHTTPSRequired`.
 5. **`GET /api/session`** → `{enrolled, session?}` (sans secret, sans jeton d'API) pour la web app.
 6. **Jeton d'API vs cookie** (interface web) : avec `--api-token`,
    - `/mcp` exige **toujours et seulement** le Bearer (le cookie n'y vaut rien : le modèle n'a pas de cookie, et ne doit pas en gagner un) ;

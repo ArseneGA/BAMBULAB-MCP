@@ -242,11 +242,8 @@ func TestSecureCookieForwardedProtoAndMultiplePublicURLs(t *testing.T) {
 	if secureFor(httpapi.Options{TrustedProxies: []netip.Prefix{}}, "", https) {
 		t.Error("« none » devrait ignorer X-Forwarded-Proto")
 	}
-	// Deux URL publiques : le schéma suit l'hôte de la requête.
+	// Deux URL publiques : le schéma suit l'hôte de la requête (l'accès LAN en http est refusé : voir httpsrequired_test.go).
 	two := httpapi.Options{PublicURL: "http://192.168.1.5:7878", PublicURLs: []string{"http://192.168.1.5:7878", "https://bambu.example.ts.net"}}
-	if secureFor(two, "192.168.1.5:7878", nil) {
-		t.Error("accès LAN en http : cookie Secure (il serait perdu)")
-	}
 	if !secureFor(two, "bambu.example.ts.net", nil) {
 		t.Error("accès https : cookie non Secure")
 	}
