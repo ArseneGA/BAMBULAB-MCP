@@ -16,10 +16,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
@@ -47,6 +49,10 @@ type Config struct {
 	// AllowAnyPrinterHost lève la restriction des hôtes d'imprimante aux adresses privées / lien local /
 	// .local (option serveur --allow-any-printer-host ; tests avec le simulateur en loopback).
 	AllowAnyPrinterHost bool
+	// CameraPort remplace le port 6000 de la caméra des P1/A1 (simulateur) ; 0 = BAMBU_CAMERA_PORT puis 6000.
+	CameraPort int
+	// CameraMinInterval : plus petit intervalle d'instantanés accepté (secondes ; 0 = 5). Réservé aux tests.
+	CameraMinInterval float64
 }
 
 // Core regroupe les composants.
@@ -71,6 +77,9 @@ type Core struct {
 	Goals *goals.Service
 	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
 	Printing *printing.Service
+	// Camera : instantanés, détection d'échec, photos ; Notify : notifications (ntfy, webhook, e-mail). Observent, n'agissent jamais.
+	Camera *camera.Service
+	Notify *notify.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
@@ -191,6 +200,11 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("reprise des travaux : %w", err)
 	}
 	c.Recovery = rep
+	if err := c.wireCamera(); err != nil {
+		st.Close()
+		lock.release()
+		return nil, err
+	}
 	pr.Recover(ctx) // lancement interrompu -> START_UNKNOWN ; suivi des impressions actives
 	if n := len(rep.Requeued) + len(rep.Unknown) + len(rep.Cancelled) + len(rep.Failed); n > 0 {
 		cfg.Logger.Warn("reprise après interruption", "remis_en_file", len(rep.Requeued), "inconnus", len(rep.Unknown),

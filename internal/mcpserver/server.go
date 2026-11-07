@@ -81,6 +81,9 @@ func New(c *core.Core) *mcp.Server {
 	if c.Printing != nil {
 		AddPrintTools(s, c.Printing) // chaîne d'impression (print_tools.go)
 	}
+	if c.Camera != nil && c.Notify != nil {
+		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)
+	}
 	return s
 }
 
