@@ -4,6 +4,8 @@
 .pending details { margin-top: var(--sp-2); color: var(--text-2); }
 .pending summary { cursor: pointer; width: fit-content; border-radius: var(--r-1); }
 .pending ul { margin: var(--sp-2) 0 0; padding-left: var(--sp-4); display: grid; gap: var(--sp-1); }
+.https-banner { background: var(--warn-soft); color: var(--warn); border-bottom-color: var(--warn); }
+.https-banner a { color: inherit; text-decoration: underline; }
 .server-banner { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--sp-2); padding: 4px var(--sp-3); background: var(--err-soft); color: var(--err); border-bottom: 1px solid var(--err); font-size: var(--fs-sm); font-weight: 500; }
 .notice { display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3); border: 1px solid var(--line-strong); border-left-width: 3px; border-radius: var(--r-2); background: var(--surface); font-size: var(--fs-sm); }
 .notice > svg { flex: none; margin-top: 2px; }

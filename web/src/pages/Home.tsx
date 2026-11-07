@@ -44,7 +44,7 @@ export function Home() {
           <section className="panel"><header className="panel-head"><h3>Service</h3></header>
             <div className="panel-body home-status">
               <StatusDot status={c.server === 'online' ? 'online' : c.server === 'checking' ? 'unavailable' : 'offline'} label={c.server === 'online' ? `bambud ${c.health?.version ?? ''}` : c.server === 'checking' ? 'Connexion…' : 'bambud injoignable'} />
-              <StatusDot status={c.windows === 'online' ? 'online' : 'offline'} label={c.windows === 'online' ? 'Agent Windows en ligne' : 'Agent Windows hors ligne'} />
+              <StatusDot status={c.windows === 'online' ? 'online' : c.windows === 'unused' ? 'unused' : c.windows === 'unavailable' ? 'unavailable' : 'offline'} label={c.windows === 'online' ? 'Agent Windows en ligne' : c.windows === 'unused' ? 'Windows : non utilisé' : c.windows === 'unavailable' ? 'Agent Windows : état inconnu' : 'Agent Windows hors ligne'} />
               <StatusDot status={c.cad === 'online' ? 'online' : 'unavailable'} label={c.cad === 'online' ? 'Backend CAO disponible' : 'Backend CAO absent (STEP)'} />
               {c.cad !== 'online' && c.cadNote && <p className="hint" style={{ margin: 0 }}>{c.cadNote}</p>}
               {c.server === 'online' && !c.importEnabled && <p className="hint" style={{ margin: 0 }}>{c.importNote}</p>}

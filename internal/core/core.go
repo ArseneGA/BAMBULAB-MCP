@@ -378,7 +378,7 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			{ID: "printer_lan", Available: true, Note: "adaptateur Bambu LAN (MQTT/FTPS) : registre d'imprimantes, dépôt, confirmation humaine, lancement, suivi ; validé contre le simulateur seulement, aucune imprimante réelle contactée"},
 			{ID: "print_chain", Available: true, Note: "découpe headless -> validation -> dépôt -> confirmation humaine -> lancement -> suivi -> réconciliation ; la découpe exige Bambu Studio"},
 			{ID: "cad_worker", Available: cadOK, Note: cadNote},
-			{ID: "windows_agent", Available: false, Note: "aucun agent connecté"},
+			{ID: "windows_agent", Available: false, Note: "Windows : non utilisé (aucun agent appairé ; le mode Linux seul est normal)"},
 		},
 		JobKinds: kinds,
 		Concurrency: map[string]int{

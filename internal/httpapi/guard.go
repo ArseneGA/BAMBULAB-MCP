@@ -245,6 +245,17 @@ func guard(opts Options, isSession func(*http.Request) bool, next http.Handler) 
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "hôte non autorisé"})
 			return
 		}
+		// Pages humaines : exigent https (ou localhost). En http hors loopback, le navigateur n'envoie ni
+		// Sec-Fetch-* ni Origin fiable : la protection cross-origin refuserait la soumission avec une erreur
+		// opaque. On l'explique plutôt que de l'assouplir.
+		if isHumanPage(r.URL.Path) && !isLoopbackHost(host) && !opts.requestHTTPS(r) {
+			opts.httpsRequired(w, r)
+			return
+		}
+		// La SPA (http hors loopback) apprend ainsi qu'il faut proposer l'URL https (bandeau).
+		if r.URL.Path == "/api/session" && !isLoopbackHost(host) && !opts.requestHTTPS(r) {
+			w.Header().Set(HTTPSNeededHeader, opts.firstHTTPSURL())
+		}
 		if opts.APIToken != "" {
 			p := r.URL.Path
 			open := ((r.Method == http.MethodGet || r.Method == http.MethodHead) && p == "/health") ||
