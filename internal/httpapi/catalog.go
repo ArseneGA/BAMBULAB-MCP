@@ -205,7 +205,7 @@ func registerCatalog(mux *http.ServeMux, c *core.Core) {
 			RemoveFloating: in.RemoveFloating, DryRun: in.DryRun, Label: in.Label})
 		reply(c, w, res, err, http.StatusOK)
 	})
-	mux.HandleFunc("GET /api/models/{id}/parts",func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/models/{id}/parts", func(w http.ResponseWriter, r *http.Request) {
 		res, err := svc.ModelParts(r.Context(), r.PathValue("id"))
 		reply(c, w, res, err, http.StatusOK)
 	})
