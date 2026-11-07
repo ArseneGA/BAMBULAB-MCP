@@ -19,6 +19,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 )
 
 func envOr(key, def string) string {
@@ -217,6 +218,9 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 	go func() { serveErr <- srv.Serve(ln) }()
 	c.Catalog.SetBaseURL(publicBase(sc.HTTP.PublicURL, ln.Addr().String())) // jamais « http://[::]:port »
 	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version)
+	if !mcpserver.ViewsBuilt() {
+		log.Warn("vue MCP App non embarquée : Claude affichera « Vue non construite » au lieu du viewer 3D ; construire avec scripts/build.sh release (ou npm run build dans web/) avant go build")
+	}
 	if ready != nil {
 		ready <- ln.Addr().String()
 	}

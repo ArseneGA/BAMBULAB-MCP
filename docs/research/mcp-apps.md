@@ -57,3 +57,24 @@ Sources : https://modelcontextprotocol.io/extensions/apps/overview ; https://git
 - [V] L'`App` est facultatif (protocole postMessage utilisable directement).
 - [?] Non lu : guide design Claude (modes d'affichage, mobile, variables de style) — URL https://claude.com/docs/connectors/building/mcp-apps/design-guidelines.md ; limites de taille du HTML de la ressource ; WebGL dans l'iframe de Desktop sur Windows (l'exemple Three.js suggère que ça marche, non testé ici) ; persistance d'état (réhydratation à la réouverture d'une conversation).
 - [D] Pour notre atelier 3D : construire l'UI en bundle monofichier (Vite + vite-plugin-singlefile) ; un outil `show_*` (visibilité modèle) renvoie `structuredContent` léger + outils `visibility:["app"]` pour charger le maillage/les mises à jour d'état par morceaux (< 150k car. par résultat ; STL/3mf en base64 découpé ou par id) ; polling état imprimante via `callServerTool`.
+
+## 7. Diagnostic : la vue 3D n'apparaît pas dans Claude Desktop via `npx mcp-remote` (2026-11-07, backlog #3)
+
+Expérience : vrai `mcp-remote` (npx) lancé en stdio contre un bambud de test (`--api-token` + catalogue `seed-demo`), piloté comme le ferait Claude Desktop (`initialize` avec `capabilities.extensions["io.modelcontextprotocol/ui"]`, puis `tools/list`, `resources/list`, `resources/read ui://bambu/model.html`, `tools/call search_models`).
+
+| Contrôle | Résultat |
+|---|---|
+| `tools/list` expose `_meta.ui.resourceUri` | **oui** : `search_models` → `ui://bambu/search.html`, `get_model_details` → `ui://bambu/model.html`, `request_print_confirmation`, `show_atelier` ; clé plate historique `ui/resourceUri` émise aussi ; `get_mesh_chunk` / `get_print_confirmation_view` en `visibility:["app"]` |
+| `resources/list` | quatre ressources `ui://bambu/*`, MIME `text/html;profile=mcp-app`, `_meta.ui = {csp:{}, prefersBorder:true}` |
+| `resources/read ui://bambu/model.html` à travers mcp-remote | **oui, intact** : 1 047 815 caractères reçus (bundle complet) ; mcp-remote ne modifie ni `_meta` ni le contenu des ressources, c'est un simple relais JSON-RPC |
+| `tools/call search_models` | `content` texte + `structuredContent` (aucun `_meta` de résultat requis) |
+| Documentation Anthropic | [Get started with MCP Apps](https://claude.com/docs/connectors/building/mcp-apps/getting-started) recommande explicitement `mcp-remote` pour tester un serveur MCP App distant ; format `_meta.ui.resourceUri` + MIME `text/html;profile=mcp-app` = celui du helper officiel (`registerAppTool`/`registerAppResource`, ext-apps 2.x). `openai/outputTemplate` est le format de l'Apps SDK d'OpenAI, pas nécessaire pour Claude. |
+| Authentification | `mcp-remote` sans `--header` retombe en flux OAuth : il a **découvert** bambud (métadonnées RFC 9728/8414), **s'est enregistré** (DCR) et a construit l'URL d'autorisation (voir `docs/OAUTH.md`). Avec `--header "Authorization:${VAR}"` (sans espace dans l'argument, valeur dans une variable d'environnement), la connexion se fait avec le Bearer statique |
+
+**Conclusion** : le format côté serveur est conforme et traverse `mcp-remote`. La cause trouvée côté bambud est un **binaire construit sans la vue** : `internal/mcpserver/ui/views/mcp-app.html` n'est pas versionné (`.gitignore`), un simple `go build` embarque alors une page de repli de 438 caractères « Vue non construite » au lieu du bundle de 1 Mio. Avec le bundle (`npm run build` dans `web/`, ou `scripts/build.ps1 -Task release` / `make release` / l'image Docker), la lecture renvoie la vue complète. Corrections livrées :
+
+- `GET /health` annonce `mcp_app_views: true|false` et bambud journalise un **avertissement au démarrage** quand la vue n'est pas embarquée ;
+- les descriptions de `search_models` et `get_model_details` disent explicitement de les préférer pour « montre-moi / voir en 3D » (viewer interactif), pour que le modèle de langage ne se contente pas d'une description texte ;
+- test `TestViewerToolsPreferredForShowMeIn3D`.
+
+À vérifier côté poste (non reproductible ici, pas de Claude Desktop piloté) si la vue manque encore après ces points : (1) `curl -s http://127.0.0.1:7878/health` → `mcp_app_views:true` sur l'instance réellement jointe par mcp-remote ; (2) Claude Desktop récent (MCP Apps) et `npx -y mcp-remote@latest` ; (3) la permission « Allow / Always allow » d'affichage de l'app apparaît dans la conversation ; (4) Aide > Dépannage > Activer le mode développeur, Ctrl+Maj+I : chercher l'iframe imbriquée (hauteur 0, erreur de console) ; (5) résultat d'outil < ~150 000 caractères (c'est le cas : `get_mesh_chunk` découpe le GLB en tranches de 96 000) ; (6) pour `ui.domain` (connecteur distant), non utilisé ici : inutile tant que la vue n'ouvre pas de flux OAuth propre.

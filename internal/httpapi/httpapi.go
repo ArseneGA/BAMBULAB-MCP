@@ -31,7 +31,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "degraded", "error": "base inaccessible"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": core.Version, "schema_version": v})
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": core.Version, "schema_version": v, "mcp_app_views": mcpserver.ViewsBuilt()})
 	})
 	mux.HandleFunc("GET /api/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, c.Capabilities())
