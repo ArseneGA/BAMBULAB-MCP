@@ -101,6 +101,8 @@ Le dossier `prototype/` est la maquette D0 figée ; `web/` (interface et vues MC
 
 ## Licence
 
-<!-- TODO (visible) : LICENCE NON CHOISIE. Aucune licence n'est déclarée pour ce dépôt ; à décider par le propriétaire avant toute diffusion. Rappel : Bambu Studio (téléchargé dans l'image Docker) est sous AGPL-3.0 et reste distribué par Bambu Lab. -->
+Ce projet est distribué sous **GNU Affero General Public License v3.0** (AGPL-3.0) : voir [LICENSE](LICENSE).
 
-**TODO : choisir une licence** (aucune n'est définie pour l'instant ; ne pas redistribuer avant de l'avoir fixée).
+En résumé : vous pouvez utiliser, modifier et redistribuer ce logiciel, y compris commercialement ; si vous le modifiez et le mettez à disposition d'autres personnes, y compris sous forme de service en réseau, vous devez publier le code source de vos modifications sous la même licence.
+
+Bambu Studio n'est pas inclus dans ce dépôt : il est lancé comme programme externe (et téléchargé lors de la construction de l'image Docker). Il reste distribué par Bambu Lab sous sa propre licence (AGPL-3.0).
