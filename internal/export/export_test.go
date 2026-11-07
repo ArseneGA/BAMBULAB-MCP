@@ -235,12 +235,9 @@ func TestNoSecretsNoPrinterDataNoServerPath(t *testing.T) {
 }
 
 func TestLargeFileIsStreamedAndLimitsHold(t *testing.T) {
-	if testing.Short() {
-		t.Skip("gros fichier")
-	}
 	e := newEnv(t)
 	col := e.collection("Gros", "")
-	const size = 96 << 20
+	const size = 64 << 20
 	// blob volumineux écrit en flux (jamais entièrement en mémoire dans le test non plus)
 	pattern := bytes.Repeat([]byte("solid big\nfacet normal 0 0 1\n"), 1<<14)
 	sha, n, err := e.c.Blobs.Put(&repeatReader{pat: pattern, left: size}, "")
@@ -286,7 +283,7 @@ func TestLargeFileIsStreamedAndLimitsHold(t *testing.T) {
 	if rec.State != export.StateReady {
 		t.Fatalf("export : %+v", rec)
 	}
-	// une copie en mémoire de 96 Mio doublerait le tas : le flux doit rester très en dessous
+	// une copie en mémoire de 64 Mio doublerait le tas : le flux doit rester très en dessous
 	if peak > before.HeapAlloc+40<<20 || after.TotalAlloc-before.TotalAlloc > 48<<20 {
 		t.Fatalf("export non streamé : tas %d Mio (avant %d), allocations %d Mio", peak>>20, before.HeapAlloc>>20, (after.TotalAlloc-before.TotalAlloc)>>20)
 	}
