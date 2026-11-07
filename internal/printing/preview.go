@@ -30,6 +30,8 @@ type PreviewInput struct {
 	Layer      int    `json:"layer,omitempty" jsonschema:"couche à tracer, à partir de 1 (défaut : couche médiane)"`
 	Width      int    `json:"width,omitempty" jsonschema:"largeur en pixels (200 à 2000, défaut 900)"`
 	Height     int    `json:"height,omitempty" jsonschema:"hauteur en pixels (200 à 2000, défaut 700)"`
+	Mode       string `json:"mode,omitempty" jsonschema:"mesh (vue isométrique d'un modèle) | layers (une couche du G-code) | plate (vue de dessus du plateau de l'imprimante avec les pièces à leur position réelle, lues dans le plan ou dans le 3MF découpé) ; défaut déduit des autres champs"`
+	PlanID     string `json:"plan_id,omitempty" jsonschema:"mode plate : plan de plateau (plan_plate), AVANT découpe ; plate choisit la plaque"`
 }
 
 // PreviewOutput décrit l'image et ce qu'elle représente (l'image elle-même est le contenu image du résultat).
@@ -65,7 +67,59 @@ func (s *Service) CapturePreview(ctx context.Context, in PreviewInput) (*Preview
 	w, h := clampDim(in.Width, 900), clampDim(in.Height, 700)
 	var out *PreviewOutput
 	var err error
+	switch in.Mode {
+	case "", "mesh", "layers", "plate":
+	default:
+		return nil, invalidf("mode : mesh, layers ou plate")
+	}
 	switch {
+	case in.Mode == "plate" && in.PlanID == "" && in.ArtifactID == "" && in.PrintJobID == "":
+		return nil, invalidf("mode plate : plan_id, print_job_id ou artifact_id requis")
+	case in.Mode == "layers" && in.ArtifactID == "" && in.PrintJobID == "":
+		return nil, invalidf("mode layers : print_job_id ou artifact_id requis")
+	case in.Mode == "mesh" && in.ModelID == "":
+		return nil, invalidf("mode mesh : model_id requis")
+	case in.PlanID != "" && (in.Mode == "" || in.Mode == "plate"):
+		out, err = s.previewPlanPlate(ctx, in.PlanID, in.Plate, w)
+	case in.Mode == "plate":
+		sha := in.ArtifactID
+		var j Job
+		if in.PrintJobID != "" {
+			if j, err = s.GetJob(ctx, in.PrintJobID); err != nil {
+				return nil, err
+			}
+			sha = j.ArtifactSHA256
+			if in.Plate == 0 {
+				in.Plate = j.Plate
+			}
+		}
+		if sha == "" || !s.d.Blobs.Has(sha) {
+			return nil, fmt.Errorf("%w : artefact absent du stockage", ErrNotFound)
+		}
+		path, perr := s.d.Blobs.Path(sha)
+		if perr != nil {
+			return nil, perr
+		}
+		pid := in.PrinterID
+		if pid == "" {
+			pid = j.PrinterID
+		}
+		if pid == "" {
+			return nil, invalidf("mode plate sur un artefact : printer_id requis (dimensions du plateau)")
+		}
+		rec, e := s.GetPrinterRecord(ctx, pid)
+		if e != nil {
+			return nil, e
+		}
+		pm, e := s.GetPrinterModel(ctx, rec.ModelID)
+		if e != nil {
+			return nil, e
+		}
+		bed, e := s.plateBed(rec, pm)
+		if e != nil {
+			return nil, e
+		}
+		out, err = s.previewArchivePlate(ctx, path, sha, in.Plate, bed, j.Summary, pm.Name, w)
 	case in.ArtifactID != "" || in.PrintJobID != "":
 		sha := in.ArtifactID
 		var j Job

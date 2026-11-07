@@ -44,6 +44,7 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 - **L'accord humain ne vaut que 2 minutes après le clic** ; il est **invalidé après tout `not_sent`** (le jeton n'est pas brûlé, l'humain doit recliquer).
 - Le jeton est consommé **juste avant la publication MQTT** (`printer.Start` : fichier distant vérifié → relecture d'état fraîche et contrôle idle → vérification/consommation de la preuve → publication).
 - Si la confirmation est consommée mais que le passage en `START_REQUESTED` ne peut pas être enregistré : état terminal sûr **`START_ABORTED_BEFORE_SEND`** (rien n'a été envoyé).
+- Plateau multi-pièces (`plan_plate`, `execute_plate_slice`) : ces outils ne font que planifier et découper ; **une impression = une plaque**, chacune avec sa propre confirmation liée à l'empreinte de SON archive (qui ne contient que cette plaque) et à son numéro de plaque.
 - Aucun outil MCP n'approuve : `confirm_print_from_app` a été **supprimé** ; `get_print_confirmation_view` est en lecture seule (ni jeton ni nonce). Test : `TestNoMCPToolCanApproveAConfirmation` énumère tous les outils (schémas d'entrée sans champ d'approbation, appels forgés, la confirmation reste non approuvée).
 
 ## 4. Arrêt d'une impression
@@ -84,3 +85,13 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 - Navigateurs sans `Sec-Fetch-*` (très anciens) : les `POST` des pages humaines sont refusés.
 - Un navigateur enregistré garde sa session 30 jours ; révoquer avec `bambud enroll --revoke`.
 - Pas encore de rotation du jeton d'API, pas de TLS natif côté serveur.
+
+## 9. File d'attente, bobines et AMS (chantier E)
+
+- **La file ne lance jamais.** `queue_print`, `list_print_queue`, `reorder_queue`, `remove_from_queue` et le service `internal/filament` préparent seulement : attente de la découpe, dépôt du fichier de l'élément de tête (clé d'idempotence `queue-<id>`), demande d'une confirmation (`request_print_confirmation`, qui n'approuve rien), notification. Le démarrage de chaque impression passe par `/confirm/{id}` (navigateur enregistré, nonce, case « plateau vide ») **pour chaque impression**, y compris la suivante après la fin d'une impression : une file n'enchaîne jamais seule.
+- Garde-fous testés : `TestQueueNeverStartsAutomatically` (trois impressions en file, le simulateur ne reçoit qu'une commande `project_file` par clic humain, jamais davantage), `TestQueueNeverStartsOrApproves` (le code de `internal/filament` ne contient aucun appel de lancement, d'approbation, d'arrêt ni de consommation de jeton), `TestHTTPRoutes` (aucune route de lancement ou d'approbation sous `/api/print-queue` ni `/api/spools`) ; `TestNoMCPToolCanApproveAConfirmation` couvre aussi les nouveaux outils (aucun champ d'approbation dans leurs schémas).
+- Le lien de confirmation affiché par la file expire comme les autres (10 minutes) ; « nouveau lien » redemande une confirmation, jamais un accord.
+- **L'affectation matière est liée à l'accord** (`bindingSlot` = `f<n>><emplacement>`) : un changement d'affectation après le clic invalide la confirmation (`TestConfirmationBindsMaterialAssignment`).
+- **L'alerte de manque est informative.** Elle s'ajoute au rapport de validation (`filament_short_<n>`) et à la page de confirmation, sans bloquer : un inventaire faux ne doit pas empêcher une impression légitime ; l'humain voit l'alerte avant de cliquer.
+- **Saisie humaine protégée** : la lecture de l'AMS ne modifie que les données observées, l'étiquette RFID (si vide) et un restant qui n'a pas été saisi (`remaining_source` différent de `human`). Les champs saisis sont listés dans `human_fields`.
+- Les points d'accroche `Printing.AddJobEndHook` et `SetFilamentCheck` n'ont aucun pouvoir sur le lancement : ils observent la fin d'une impression (décompte) ou ajoutent des alertes.

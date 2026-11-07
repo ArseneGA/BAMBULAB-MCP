@@ -190,7 +190,7 @@ func (s *Service) buildEntry(ctx context.Context, j *jobDoc, set Settings) *LogE
 		e.PlannedCost = &pc
 		e.MaterialFamily = dominantFamily(cp)
 		e.Estimated.Grams = pc.Grams
-		e.ActualCost = s.actualCost(j, cp, nil, nil, set)
+		e.ActualCost = s.actualCost(ctx, j, cp, nil, nil, set)
 		if e.ActualCost != nil {
 			e.Actual.Grams = e.ActualCost.Grams
 			if j.State == "COMPLETED" {
@@ -641,7 +641,7 @@ func (s *Service) recost(ctx context.Context, e *LogEntry, set Settings) {
 		v := e.Actual.Seconds
 		sec = &v
 	}
-	if ac := s.actualCost(j, cp, g, sec, set); ac != nil {
+	if ac := s.actualCost(ctx, j, cp, g, sec, set); ac != nil {
 		e.ActualCost = ac
 		if g == nil {
 			e.Actual.Grams = ac.Grams

@@ -70,6 +70,7 @@ type Status struct {
 	Stale          bool       `json:"stale"`            // UpdatedAt plus ancien que le seuil de fraîcheur
 	Connected      bool       `json:"connected"`        // session MQTT active
 	FullReportSeen bool       `json:"full_report_seen"` // au moins un pushall complet fusionné
+	AMS            *AMSState  `json:"ams,omitempty"`    // état AMS du dernier rapport (nil si aucun)
 }
 
 // HasError indique une erreur d'imprimante (print_error ou HMS non vide).

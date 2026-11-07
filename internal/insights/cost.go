@@ -88,6 +88,7 @@ type planFilament struct {
 	Family   string
 	Grams    float64
 	Price    float64 // 0 = non saisi
+	PriceSrc string  // origine du prix quand il est fourni ("saisi" par défaut)
 	Label    string
 }
 
@@ -119,7 +120,7 @@ func compute(p costPlan, set Settings) CostEstimate {
 		fc := FilamentCost{Slot: f.Slot, Material: f.Material, Family: f.Family, Grams: round2(f.Grams)}
 		switch {
 		case f.Price > 0:
-			fc.PricePerKg, fc.PriceSource = f.Price, "saisi"
+			fc.PricePerKg, fc.PriceSource = f.Price, orStr(f.PriceSrc, "saisi")
 		default:
 			lbl := strings.ToLower(strings.TrimSpace(f.Label))
 			if v, ok := set.SpoolPerKg[lbl]; ok && lbl != "" {
@@ -249,7 +250,18 @@ func (s *Service) planFromJob(ctx context.Context, j *jobDoc, plateIdx int) (cos
 		} else if preset != "" {
 			name = preset
 		}
-		cp.Filaments = append(cp.Filaments, planFilament{Slot: f.Slot, Material: name, Family: fam, Grams: f.Grams, Label: label})
+		pf := planFilament{Slot: f.Slot, Material: name, Family: fam, Grams: f.Grams, Label: label}
+		if sp := s.spools(); sp != nil {
+			for _, a := range j.Assignments {
+				if a.FilamentSlot != f.Slot {
+					continue
+				}
+				if p, ok := sp.PriceForSlot(ctx, j.PrinterID, a.Tray); ok && p.PricePerKg > 0 {
+					pf.Price, pf.PriceSrc = p.PricePerKg, "bobine de l'inventaire ("+p.Label+")"
+				}
+			}
+		}
+		cp.Filaments = append(cp.Filaments, pf)
 	}
 	if len(cp.Filaments) == 0 && pl.WeightGrams > 0 {
 		fam := ""
@@ -312,7 +324,7 @@ func (s *Service) EstimateCost(ctx context.Context, in EstimateInput) (*Estimate
 		out.PrintJobID = j.ID
 		out.Estimate = compute(cp, set)
 		if isTerminal(j.State) {
-			if a := s.actualCost(j, cp, nil, nil, set); a != nil {
+			if a := s.actualCost(ctx, j, cp, nil, nil, set); a != nil {
 				out.Actual = a
 			}
 		}
@@ -328,7 +340,7 @@ func (s *Service) EstimateCost(ctx context.Context, in EstimateInput) (*Estimate
 
 // actualCost calcule le coût réel d'une impression terminée : durée observée (événements d'état) et masse
 // déclarée (actualGrams) sinon déduite (masse prévue, proportionnelle à l'avancement si l'impression n'est pas allée au bout).
-func (s *Service) actualCost(j *jobDoc, planned costPlan, actualGrams, actualSeconds *float64, set Settings) *CostEstimate {
+func (s *Service) actualCost(ctx context.Context, j *jobDoc, planned costPlan, actualGrams, actualSeconds *float64, set Settings) *CostEstimate {
 	start, end, ok := j.observed()
 	cp := planned
 	cp.Kind = "réel"
@@ -361,9 +373,25 @@ func (s *Service) actualCost(j *jobDoc, planned costPlan, actualGrams, actualSec
 	default:
 		cp.ExtraAssumes = append(cp.ExtraAssumes, "Masse consommée = masse prévue par le slicer (non pesée).")
 	}
+	// masse réellement décomptée par le service des bobines (impression allée au bout), par emplacement
+	used := map[int]float64{}
+	if sp := s.spools(); sp != nil && actualGrams == nil {
+		if us, err := sp.UsageOf(ctx, j.ID); err == nil {
+			for _, u := range us {
+				if !u.Estimated && u.Grams > 0 {
+					used[u.FilamentSlot] += u.Grams
+				}
+			}
+		}
+	}
 	cp.Filaments = nil
 	for _, f := range planned.Filaments {
-		f.Grams *= scale
+		if g, ok := used[f.Slot]; ok {
+			f.Grams = g
+			cp.ExtraAssumes = append(cp.ExtraAssumes, fmt.Sprintf("Emplacement %d : masse décomptée par l'inventaire des bobines (%.1f g).", f.Slot, g))
+		} else {
+			f.Grams *= scale
+		}
 		cp.Filaments = append(cp.Filaments, f)
 	}
 	est := compute(cp, set)
