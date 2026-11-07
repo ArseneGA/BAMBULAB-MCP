@@ -250,6 +250,27 @@ func (s *Store) Resolve(k Kind, name string) (*Resolved, error) {
 	}
 	for i := len(chain) - 1; i >= 0; i-- { // racine -> feuille
 		p := chain[i]
+		// Gabarits de G-code (« include » des machines BBL) : ils s'appliquent par-dessus le parent et
+		// sous les clés propres du profil, comme dans Bambu Studio. Sans eux, le CLI recevrait le G-code
+		// de démarrage générique du profil de base au lieu de celui de l'imprimante.
+		if k == KindMachine {
+			if inc, ok := p.Raw["include"].([]any); ok {
+				for _, e := range inc {
+					n, _ := e.(string)
+					tp, found := s.byKind[k][n]
+					if !found {
+						continue
+					}
+					for key, v := range tp.Raw {
+						if !strings.HasSuffix(key, "_gcode") {
+							continue // les gabarits ne portent que du G-code ; le reste (nom, instantiation) est ignoré
+						}
+						r.Config[key] = cloneValue(v)
+						r.Source[key] = tp.Name
+					}
+				}
+			}
+		}
 		for key, v := range p.Raw {
 			r.Config[key] = cloneValue(v)
 			r.Source[key] = p.Name

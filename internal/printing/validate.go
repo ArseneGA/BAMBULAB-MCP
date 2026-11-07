@@ -250,7 +250,7 @@ func (s *Service) ValidateArtifact(ctx context.Context, in ValidateInput) (*Vali
 	if info != nil {
 		s.compatChecks(ctx, rep, rec, model, info, plate, assign)
 		sum := &ArtifactSummary{Plates: info.Plates, PrinterModel: info.PrinterModel, MachinePreset: info.PrinterProfile, Process: info.ProcessProfile,
-			Filaments: info.FilamentIDs, Nozzles: info.Nozzles, BedType: info.BedType, StudioVersion: info.StudioVersion}
+			Filaments: info.FilamentIDs, Nozzles: info.Nozzles, BedType: info.BedType, StudioVersion: info.StudioVersion, GcodeProfile: info.GcodeProfile}
 		if j.Summary != nil {
 			sum.StudioVersion = firstNonEmpty(sum.StudioVersion, j.Summary.StudioVersion)
 		}

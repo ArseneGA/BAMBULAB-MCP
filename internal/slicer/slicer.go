@@ -42,6 +42,7 @@ type Slicer struct {
 	bin      *Binary
 	profiles *profiles.Store
 	cfg      Config
+	trust    *Trust
 }
 
 // New localise le binaire et charge les profils.
@@ -69,7 +70,7 @@ func New(cfg Config) (*Slicer, error) {
 	if cfg.WorkRoot == "" {
 		cfg.WorkRoot = filepath.Join(os.TempDir(), "bambu-slicer")
 	}
-	return &Slicer{bin: bin, profiles: st, cfg: cfg}, nil
+	return &Slicer{bin: bin, profiles: st, cfg: cfg, trust: NewTrust(st)}, nil
 }
 
 // Binary retourne l'installation utilisée.
@@ -298,9 +299,20 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	for i, rf := range rfs {
 		cfs[i] = rf.Clone()
 	}
-	applied, err := applyOverrides(cm, cp, cfs, req.Overrides)
+	applied, err := applyOverrides(s.profiles, cm, cp, cfs, req.Overrides)
 	if err != nil {
 		return nil, err
+	}
+	// réglages par objet / par plage de hauteur : même liste blanche et mêmes bornes que les surcharges
+	for _, o := range req.Objects {
+		if err := CheckObjectSettings(o.Settings, cm); err != nil {
+			return nil, fmt.Errorf("objet %q : %w", o.Name, err)
+		}
+		for _, r := range o.Ranges {
+			if err := CheckObjectSettings(r.Settings, cm); err != nil {
+				return nil, fmt.Errorf("objet %q, plage %.2f-%.2f mm : %w", o.Name, r.MinZ, r.MaxZ, err)
+			}
+		}
 	}
 	nozzle := 0.0
 	if nz := cm.Strings("nozzle_diameter"); len(nz) > 0 {
@@ -524,7 +536,7 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	exp := Expect{
 		PrinterModel: pm, MachineName: machineName, Nozzle: nozzle, ProcessName: processName,
 		Filaments: filNames, BedArea: variant.BedArea, PrintableZ: variant.PrintableZ,
-		InputVolume: inputVolume, InputIsMesh: ext != ".3mf", BinaryVersion: s.bin.Version, Studio: sr,
+		InputVolume: inputVolume, InputIsMesh: ext != ".3mf", BinaryVersion: s.bin.Version, Studio: sr, Trust: s.trust,
 	}
 	if plate > 0 {
 		exp.Plate = plate

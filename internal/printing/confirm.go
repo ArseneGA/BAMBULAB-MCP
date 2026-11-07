@@ -80,6 +80,7 @@ type ConfirmationView struct {
 	ConfirmURL     string               `json:"confirm_url" jsonschema:"page locale que l'HUMAIN ouvre pour confirmer ; le jeton n'est pas dans ce lien"`
 	Approved       bool                 `json:"approved" jsonschema:"vrai seulement après le clic de l'humain"`
 	Binding        PromptDetails        `json:"binding" jsonschema:"ce que l'humain approuve : fichier, imprimante, empreinte, plateau, matières"`
+	Safety         *SafetyView          `json:"safety" jsonschema:"températures et origine du G-code lues dans l'archive (anomalies à signaler à l'utilisateur)"`
 	Instructions   string               `json:"instructions"`
 	State          contracts.PrintState `json:"state"`
 }
@@ -151,7 +152,7 @@ func (s *Service) confirmationView(j Job, conf contracts.PrintConfirmation) *Con
 	approved := a != nil && a.approved && s.now().Before(a.approvedAt.Add(s.approvalTTL()))
 	s.mu.Unlock()
 	return &ConfirmationView{ConfirmationID: conf.ID, PrintJobID: j.ID, ExpiresAt: conf.ExpiresAt, ConfirmURL: s.BaseURL() + "/confirm/" + conf.ID,
-		Approved: approved, Binding: *d, State: j.State,
+		Approved: approved, Binding: *d, State: j.State, Safety: safetyOf(j),
 		Instructions: "Demande à l'utilisateur d'ouvrir confirm_url dans son navigateur enregistré (sinon bambud enroll puis /enroll), de vérifier le résumé, de cocher « plateau vide » et de cliquer sur Lancer. " +
 			"Tu ne peux pas confirmer à sa place. Son accord ne vaut que 2 minutes ; ensuite appelle start_print avec confirmation_id et une idempotency_key."}
 }
