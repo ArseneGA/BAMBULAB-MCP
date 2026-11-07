@@ -498,6 +498,7 @@ func (s *Sim) onProjectFile(seq string, p map[string]any) {
 		s.respond("project_file", seq, err)
 		return
 	}
+	s.amsOnStart(p)
 	s.respond("project_file", seq, nil)
 	s.publishDelta(false)
 }
