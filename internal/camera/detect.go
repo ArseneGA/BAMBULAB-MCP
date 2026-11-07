@@ -169,6 +169,7 @@ type Detector struct {
 	learn     []*mask // cartes recueillies pour apprendre l'empreinte
 	learnTry  int
 	footprint *mask // cellules de la pièce (intersection des cartes d'apprentissage)
+	ghost     *mask // différences statiques dès le début (ancienne place de la tête, ombre) : ignorées
 	band      struct{ x0, x1, y1 int }
 	footLayer int
 
@@ -193,7 +194,7 @@ func (d *Detector) HasReference() bool { return d.ref != nil }
 func (d *Detector) SetReference(img image.Image) {
 	d.ref = toGrid(img)
 	d.refW = img.Bounds().Dx()
-	d.prev, d.ring, d.learn, d.footprint, d.keepRing = nil, nil, nil, nil, nil
+	d.prev, d.ring, d.learn, d.footprint, d.ghost, d.keepRing = nil, nil, nil, nil, nil, nil
 	d.learnTry = 0
 }
 
@@ -269,6 +270,9 @@ func (d *Detector) Observe(img image.Image, ob Observation) Report {
 				for x := 0; x < gridW; x++ {
 					if x >= d.band.x0 && x <= d.band.x1 && y <= d.band.y1 {
 						continue // colonne au-dessus de l'empreinte : la pièce grandit vers le haut
+					}
+					if d.ghost != nil && d.ghost[y*gridW+x] {
+						continue
 					}
 					out++
 					if persist[y*gridW+x] {
@@ -424,9 +428,29 @@ func (d *Detector) learnFootprint(anom *mask, ob Observation, rep *Report) {
 		}
 	}
 	d.footprint = foot
+	d.ghost = ghostOf(inter, foot)
 	const margin = 4
 	d.band.x0, d.band.x1, d.band.y1 = max(0, x0-margin), min(gridW-1, x1+margin), min(gridH-1, y1+margin)
 	d.footLayer = ob.Layer
+}
+
+// ghostOf : cellules changées dès l'apprentissage mais qui ne sont pas la pièce (dilatées d'une cellule).
+func ghostOf(inter, foot *mask) *mask {
+	g := &mask{}
+	for i := range inter {
+		if !inter[i] || foot[i] {
+			continue
+		}
+		x, y := i%gridW, i/gridW
+		for dy := -1; dy <= 1; dy++ {
+			for dx := -1; dx <= 1; dx++ {
+				if nx, ny := x+dx, y+dy; nx >= 0 && nx < gridW && ny >= 0 && ny < gridH {
+					g[ny*gridW+nx] = true
+				}
+			}
+		}
+	}
+	return g
 }
 
 // components renvoie les composantes connexes (4-voisinage) triées par taille décroissante.

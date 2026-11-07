@@ -483,8 +483,25 @@ func (h *hub) run(ctx context.Context, cl *printer.CameraClient) {
 		h.mu.Unlock()
 		h.cancel()
 	}()
-	st, err := cl.Open(ctx)
-	if err != nil {
+	// La caméra libère un client à retardement : une connexion refusée juste après une autre est retentée une fois.
+	var st *printer.CameraStream
+	var firstJPG []byte
+	for attempt := 0; ; attempt++ {
+		var err error
+		if st, err = cl.Open(ctx); err == nil {
+			if firstJPG, err = st.Next(); err == nil {
+				break
+			}
+			st.Close()
+		}
+		if attempt == 0 && errors.Is(err, printer.ErrCameraAuth) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+			}
+			continue
+		}
 		h.mu.Lock()
 		h.err = h.s.friendly(h.t, err)
 		h.mu.Unlock()
@@ -492,7 +509,12 @@ func (h *hub) run(ctx context.Context, cl *printer.CameraClient) {
 	}
 	defer st.Close()
 	for ctx.Err() == nil {
-		jpg, err := st.Next()
+		jpg, err := firstJPG, error(nil)
+		if firstJPG != nil {
+			firstJPG = nil
+		} else {
+			jpg, err = st.Next()
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				h.mu.Lock()
@@ -554,6 +576,10 @@ func (s *Service) frame(ctx context.Context, t Target, maxAge time.Duration) (Fr
 	cctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	jpg, err := cl.Snapshot(cctx)
+	if errors.Is(err, printer.ErrCameraAuth) { // client précédent pas encore libéré côté caméra : un nouvel essai
+		time.Sleep(500 * time.Millisecond)
+		jpg, err = cl.Snapshot(cctx)
+	}
 	if err != nil {
 		return Frame{}, s.friendly(t, err)
 	}

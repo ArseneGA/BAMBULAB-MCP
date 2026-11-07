@@ -208,3 +208,15 @@ func TestSmallImageDoesNotPanic(t *testing.T) {
 		t.Fatal("note attendue")
 	}
 }
+
+// La tête était garée dans l'image de référence : sa « place vide » ensuite est une différence statique, pas un échec.
+func TestToolheadParkedInTheReferenceIsNotAFailure(t *testing.T) {
+	r := newRun(t, DetectorConfig{})
+	r.d.SetReference(jpegImage(t, sim.Scene{Width: 640, Height: 360, TotalLayers: 100, ToolX: 0.02, ToolY: 0.02, Seed: 3}))
+	for layer := 2; layer <= 40; layer += 2 {
+		rep := r.step(layer, nil, nil)
+		if rep.Alert || rep.Score >= 0.3 {
+			t.Fatalf("couche %d : %+v", layer, rep)
+		}
+	}
+}

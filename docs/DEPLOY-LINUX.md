@@ -493,3 +493,10 @@ Constats d'origine vérifiés, **traités dans l'ordre** par les commits ci-dess
 8. **Sauvegarde** : préférer `bambud backup` + `bambud verify` (cohérent base/blobs/secrets) ; sinon exclure `*.db-wal`, `*.db-shm`, `work/`, `tmp/`, `blobs/tmp/`, `agent-staging/`, `.bambud.lock`, `venvs/` (reconstructible) ; secrets dans le même instantané.
 9. **Retour arrière** : sûr par remplacement du binaire tant que `schema_version` est inchangé (130 → 130) ; sinon restaurer la sauvegarde d'avant (`bambud restore --force`). Ne pas lancer `atelier-enroll`/`backup` avec le nouveau binaire avant le redémarrage si une migration est possible.
 10. **Reste ouvert** : `/agent/v1/*` hors garde Host et sans limite de débit (point 13), aucun TLS natif (point 14) — rester sur LAN + Tailscale.
+
+## Caméra et notifications (chantier D)
+
+- **Flux sortants** : le serveur ouvre en plus **TCP 6000** vers chaque P1/A1 (caméra, TLS, mêmes identifiants `bblp` + code d'accès), et ce qu'il faut pour les canaux choisis : HTTPS vers le serveur ntfy ou le webhook, SMTP (587 STARTTLS ou 465) vers le serveur de messagerie.
+- **Variables** : `BAMBU_CAMERA_PORT` (simulateur seulement : port caméra différent de 6000) ; `BAMBU_NOTIFY_<CANAL>_URL`, `_HMAC_KEY`, `_TOKEN`, `_PASSWORD` et leurs variantes `_FILE` (chemin d'un fichier en 0600 contenant la valeur) ; elles l'emportent sur le coffre. Nom du canal en majuscules, non alphanumériques remplacés par `_`.
+- **Empreinte** : la caméra réutilise l'empreinte épinglée pour MQTT. Si la vraie P1S présente un autre certificat sur le port 6000, ouvrir `/setup/camera/{id}` (navigateur enregistré) et épingler l'empreinte de la caméra.
+- Migration `0170_camera_notify.sql` ; les photos sont des blobs (sauvegardées si référencées par `camera_photos`).
