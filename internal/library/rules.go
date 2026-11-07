@@ -11,8 +11,10 @@ import (
 
 // resolver applique les règles d'ingénierie « auto » du schéma d'un gabarit :
 //
-//	fit:<type>         jeu diamétral d'ajustement (libre|glissant|serré|press), calibré si possible ;
-//	fitside:<type>     idem, par côté (moitié du jeu diamétral) ;
+//	fit:<type>[:<param>]      jeu diamétral d'ajustement (libre|glissant|serré|press), calibré si possible ; avec <param>, la
+//	                          valeur de ce paramètre est la dimension nominale de l'ajustement et le jeu croît légèrement avec
+//	                          elle (engineering.FitDimensionDelta, heuristique) ; sans <param>, référence de 10 mm ;
+//	fitside:<type>[:<param>]  idem, par côté (moitié du jeu diamétral) ;
 //	gap_pip            jeu radial/axial d'une pièce imprimée en place (calibré : jeu glissant mesuré) ;
 //	hole:<orientation> compensation du diamètre nominal d'un trou (vertical|horizontal), même fourni ;
 //	insert:diameter|depth|boss  trou, profondeur et plot d'un insert à chaud pour la vis `screw_size` / `insert_size`.
@@ -30,6 +32,28 @@ func (r *resolver) src(res engineering.Result) string {
 		return "calibration — " + r.cal.Provenance
 	}
 	return "valeur générique (aucune calibration applicable)"
+}
+
+// clampFitDimension ramène une dimension d'ajustement dans le domaine 3–100 mm de engineering.FitClearance (avec avertissement).
+func clampFitDimension(d float64, param string) (float64, string) {
+	switch {
+	case d <= 0:
+		return 0, ""
+	case d < 3:
+		return 3, fmt.Sprintf("%s : dimension d'ajustement %g mm < 3 mm, jeu calculé comme pour 3 mm.", param, d)
+	case d > 100:
+		return 100, fmt.Sprintf("%s : dimension d'ajustement %g mm > 100 mm, jeu calculé comme pour 100 mm (hors domaine de la loi de dimension).", param, d)
+	}
+	return d, ""
+}
+
+func findParam(t TemplateInfo, name string) (ParamSpec, bool) {
+	for _, p := range t.Params {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return ParamSpec{}, false
 }
 
 func toFloat(v any) (float64, bool) {
@@ -77,7 +101,20 @@ func (r *resolver) apply(t TemplateInfo, req map[string]any) (map[string]any, []
 			if len(rule) < 2 {
 				continue
 			}
-			res, err := engineering.FitClearanceCal(engineering.FitParams{Fit: engineering.FitType(rule[1]), Material: r.material, Nozzle: r.nozzle, Orientation: "vertical"}, r.cal)
+			dim, dimWarn := 0.0, ""
+			if len(rule) >= 3 { // fit:<type>:<paramètre> : dimension nominale de l'ajustement = valeur de ce paramètre
+				if d, ok := toFloat(params[rule[2]]); ok {
+					dim, dimWarn = clampFitDimension(d, sp.Name)
+				} else if tp, found := findParam(t, rule[2]); found {
+					if d, ok := toFloat(tp.Default); ok {
+						dim, dimWarn = clampFitDimension(d, sp.Name)
+					}
+				}
+			}
+			if dimWarn != "" {
+				warns = append(warns, dimWarn)
+			}
+			res, err := engineering.FitClearanceCal(engineering.FitParams{Fit: engineering.FitType(rule[1]), Material: r.material, Nozzle: r.nozzle, Orientation: "vertical", Dimension: dim}, r.cal)
 			if err != nil {
 				return nil, nil, nil, nil, wrapEng(err)
 			}
@@ -87,7 +124,7 @@ func (r *resolver) apply(t TemplateInfo, req map[string]any) (map[string]any, []
 			}
 			params[sp.Name] = v
 			autos = append(autos, AutoParam{Param: sp.Name, Rule: sp.Auto, Value: v, Unit: "mm", Level: string(res.Level), Source: r.src(res.Result)})
-			calcs = append(calcs, Calc{Name: "fit_clearance", Param: sp.Name, Result: res.Result, Extra: map[string]any{"fit": rule[1], "diametral_mm": res.Value, "per_side_mm": res.PerSide}})
+			calcs = append(calcs, Calc{Name: "fit_clearance", Param: sp.Name, Result: res.Result, Extra: map[string]any{"fit": rule[1], "diametral_mm": res.Value, "per_side_mm": res.PerSide, "dimension_mm": dim}})
 		case "gap_pip":
 			if given {
 				continue

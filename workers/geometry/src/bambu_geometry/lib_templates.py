@@ -82,7 +82,7 @@ register(Template(
     tags=["tube", "serrage", "fixation"],
     params=[
         P("tube_diameter", "number", 25.0, "Diamètre extérieur du tube à serrer.", "mm", 3, 200),
-        P("clearance", "number", 0.3, "Jeu diamétral ajouté au diamètre du tube.", "mm", -1, 3, auto="fit:glissant"),
+        P("clearance", "number", 0.3, "Jeu diamétral ajouté au diamètre du tube.", "mm", -1, 3, auto="fit:glissant:tube_diameter"),
         P("wall", "number", 3.0, "Épaisseur de paroi du collier.", "mm", 0.8, 20),
         P("width", "number", 15.0, "Largeur du collier (le long du tube).", "mm", 3, 200),
         P("hinge", "enum", "screw", "screw = oreilles + vis ; none = pince en C à clipser.", options=("screw", "none")),
@@ -561,7 +561,7 @@ register(Template(
         P("knuckles", "integer", 5, "Nombre de nœuds.", "", 2, 15),
         P("pin_diameter", "number", 3.0, "Diamètre de l'axe.", "mm", 1.5, 20),
         P("knuckle_wall", "number", 2.0, "Paroi des nœuds autour du perçage.", "mm", 0.8, 10),
-        P("hole_clearance", "number", 0.3, "Jeu diamétral du perçage par rapport à l'axe.", "mm", 0.05, 2, auto="fit:glissant"),
+        P("hole_clearance", "number", 0.3, "Jeu diamétral du perçage par rapport à l'axe.", "mm", 0.05, 2, auto="fit:glissant:pin_diameter"),
         P("axial_gap", "number", 0.4, "Jeu entre nœuds voisins (axial).", "mm", 0.1, 2),
     ],
     build=lambda cq, p, ctx: _hinge(cq, p, ctx, False),
