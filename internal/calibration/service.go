@@ -37,13 +37,19 @@ type ProfileMaker interface {
 	ModifyProfile(ctx context.Context, in goals.ModifyInput) (*goals.ModifyOutput, error)
 }
 
+// FilamentRanger lit la plage de température de buse (nozzle_temperature_range_low/high) d'un profil filament installé.
+type FilamentRanger interface {
+	NozzleTempRange(filament string) (lo, hi float64, ok bool)
+}
+
 // Deps : dépendances du service.
 type Deps struct {
 	Store    *store.Store
 	Blobs    *store.BlobStore
 	Catalog  Catalog
-	Profiles ProfileMaker // facultatif : profils découpables des séries de températures
-	WorkRoot string       // dossier de travail du worker (confiné)
+	Profiles ProfileMaker   // facultatif : profils découpables des séries (température, débit, rétraction...)
+	Ranges   FilamentRanger // facultatif : plages de température lues dans les profils filament
+	WorkRoot string         // dossier de travail du worker (confiné)
 	Now      func() time.Time
 }
 
@@ -118,14 +124,21 @@ func (k Key) label() string {
 // GenerateInput décrit la série de pièces à produire.
 type GenerateInput struct {
 	Key
-	Kinds           []string        `json:"kinds,omitempty" jsonschema:"fit_comb | hole_shaft | shrink_cube | bridge_overhang | temperature (défaut : toutes)"`
+	Kinds           []string        `json:"kinds,omitempty" jsonschema:"fit_comb | hole_shaft | shrink_cube | bridge_overhang | temperature (défaut : ces cinq) ; shrink_sizes | flow_ratio | pressure_advance | retraction | volumetric_speed | first_layer (séries d'extrusion, sur demande)"`
 	ClearanceGaps   []float64       `json:"clearance_gaps,omitempty" jsonschema:"jeux du peigne en mm (défaut 0.1 à 0.6 par 0.1)"`
 	HoleDiameters   []float64       `json:"hole_diameters,omitempty" jsonschema:"diamètres nominaux des trous/arbres en mm (défaut 3,4,5,6,8,10)"`
 	BridgeSpans     []float64       `json:"bridge_spans,omitempty" jsonschema:"portées de ponts en mm (défaut 10 à 50)"`
 	OverhangAngles  []float64       `json:"overhang_angles,omitempty" jsonschema:"angles de surplomb en degrés depuis la verticale (défaut 30 à 70)"`
-	Temperatures    []float64       `json:"temperatures,omitempty" jsonschema:"températures de buse à tester (défaut : 5 valeurs autour de la plage du matériau)"`
+	Temperatures    []float64       `json:"temperatures,omitempty" jsonschema:"températures de buse à tester (défaut : 5 valeurs réparties sur nozzle_temperature_range_low/high du profil filament de base, sinon sur la plage du matériau)"`
 	TemperatureMode string          `json:"temperature_mode,omitempty" jsonschema:"series (une petite pièce par température, défaut) | tower (une tour avec étages ; nécessite des changements de température G-code)"`
-	Base            *goals.BaseSpec `json:"base,omitempty" jsonschema:"profils de départ (machine/process/filament) : si fourni, une révision de profil découpable est créée par pièce de température"`
+	ShrinkSizes     []float64       `json:"shrink_sizes,omitempty" jsonschema:"kind shrink_sizes : côtés des tubes carrés en mm (2 à 4, au moins 20 mm d'écart ; défaut 20 et 80)"`
+	FlowRatios      []float64       `json:"flow_ratios,omitempty" jsonschema:"kind flow_ratio : filament_flow_ratio de chaque pièce, [0,85 ; 1,10] (défaut 0,94 à 1,02)"`
+	PressureAdvance []float64       `json:"pressure_advance_values,omitempty" jsonschema:"kind pressure_advance : K de chaque pièce, [0 ; 0,2] (réglage manuel dans Bambu Studio)"`
+	RetractionsMM   []float64       `json:"retraction_lengths,omitempty" jsonschema:"kind retraction : longueurs de rétraction en mm, [0 ; 3] (défaut 0,2 à 1,4)"`
+	VolumetricSpeed []float64       `json:"volumetric_speeds,omitempty" jsonschema:"kind volumetric_speed : débits max en mm³/s, [1 ; 40] (défaut 8 à 24)"`
+	FirstLayerParam string          `json:"first_layer_param,omitempty" jsonschema:"kind first_layer : height | speed | temperature (défaut height)"`
+	FirstLayerVals  []float64       `json:"first_layer_values,omitempty" jsonschema:"kind first_layer : valeurs du paramètre choisi"`
+	Base            *goals.BaseSpec `json:"base,omitempty" jsonschema:"profils de départ (machine/process/filament) : si fourni, une révision de profil découpable est créée par pièce portant des surcharges ; la plage de température est lue dans le profil filament"`
 	Tags            []string        `json:"tags,omitempty"`
 }
 
@@ -145,6 +158,11 @@ type Piece struct {
 	LayerChanges    []map[string]any  `json:"layer_changes,omitempty"`
 	GcodeHint       []string          `json:"gcode_hint,omitempty"`
 	Overrides       []slicer.Override `json:"slicing_overrides,omitempty" jsonschema:"surcharges de profil à appliquer pour cette pièce (modify_slicing_profile)"`
+	OptionalOver    []slicer.Override `json:"slicing_overrides_optional,omitempty" jsonschema:"surcharges facultatives (ignorées si la clé n'existe pas dans le profil résolu)"`
+	SeriesValue     *float64          `json:"series_value,omitempty" jsonschema:"valeur testée par cette pièce de la série"`
+	SeriesParam     string            `json:"series_param,omitempty"`
+	ManualSettings  []map[string]any  `json:"manual_settings,omitempty" jsonschema:"réglages à faire à la main dans Bambu Studio (aucune clé de profil BBL, ex. avance de pression)"`
+	ProfileKeyAvail *bool             `json:"profile_key_available,omitempty"`
 	ProfileRevision string            `json:"profile_revision,omitempty" jsonschema:"profil découpable déjà créé (si base fourni)"`
 	Warnings        []string          `json:"warnings,omitempty"`
 }
@@ -156,29 +174,42 @@ type GenerateOutput struct {
 	Pieces           []Piece        `json:"pieces"`
 	MeasuresTemplate map[string]any `json:"measures_template" jsonschema:"squelette des mesures à renvoyer à record_calibration"`
 	Instructions     []string       `json:"instructions"`
+	TemperatureRange *TempRange     `json:"temperature_range,omitempty" jsonschema:"plage de température utilisée pour la série et son origine"`
 	Note             string         `json:"note"`
 }
 
-// DefaultTemperatures propose 5 températures autour de la plage usuelle de la famille de matériau.
+// TempRange : plage de température de buse et sa provenance.
+type TempRange struct {
+	LowC   float64 `json:"low_c"`
+	HighC  float64 `json:"high_c"`
+	Source string  `json:"source" jsonschema:"profil filament (nozzle_temperature_range_low/high) ou profils de base Bambu Studio par famille"`
+}
+
+// ResolveTempRange donne la plage de température du matériau : le profil filament de base d'abord (ce que l'utilisateur
+// imprimera réellement), sinon la table par famille d'internal/engineering (lue dans les profils de base de Bambu Studio),
+// sinon la plage historique 190-230 °C.
+func (s *Service) ResolveTempRange(material string, base *goals.BaseSpec) TempRange {
+	if base != nil && s.d.Ranges != nil {
+		for _, f := range base.Filaments {
+			if lo, hi, ok := s.d.Ranges.NozzleTempRange(f); ok {
+				return TempRange{LowC: lo, HighC: hi, Source: "profil filament « " + f + " » (nozzle_temperature_range_low/high)"}
+			}
+		}
+	}
+	if lo, hi, src, ok := engineering.NozzleTempRange(material); ok {
+		return TempRange{LowC: lo, HighC: hi, Source: src.Title + " — famille " + strings.ToUpper(material)}
+	}
+	return TempRange{LowC: 190, HighC: 230, Source: "plage générique 190-230 °C (matériau inconnu : renseigner base.filaments pour lire la plage du profil)"}
+}
+
+// DefaultTemperatures propose 5 températures réparties sur la plage de la famille de matériau (table d'internal/engineering,
+// lue dans les profils de base de Bambu Studio : PLA 190-240, PETG 220-260, ABS/ASA 240-280, TPU 200-250, PC 260-290,
+// PA 260-300 °C), 190-230 °C si la matière est inconnue. Avec un profil filament de base, utiliser Service.ResolveTempRange.
 func DefaultTemperatures(material string) []float64 {
-	fam := strings.ToUpper(material)
-	if m, err := engineering.GetMaterial(material); err == nil && m != nil {
-		fam = strings.ToUpper(m.Family)
+	if lo, hi, _, ok := engineering.NozzleTempRange(material); ok {
+		return engineering.TemperatureSeries(lo, hi, 5)
 	}
-	lo := 190.0
-	switch {
-	case strings.HasPrefix(fam, "PETG"):
-		lo = 220
-	case strings.HasPrefix(fam, "ABS"), strings.HasPrefix(fam, "ASA"):
-		lo = 230
-	case strings.HasPrefix(fam, "TPU"):
-		lo = 205
-	case strings.HasPrefix(fam, "PC"):
-		lo = 260
-	case strings.HasPrefix(fam, "PA"):
-		lo = 250
-	}
-	return []float64{lo, lo + 10, lo + 20, lo + 30, lo + 40}
+	return []float64{190, 200, 210, 220, 230}
 }
 
 var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
@@ -193,8 +224,11 @@ func (s *Service) Generate(ctx context.Context, in GenerateInput) (*GenerateOutp
 		return nil, err
 	}
 	temps := in.Temperatures
+	var tempRange *TempRange
 	if len(temps) == 0 {
-		temps = DefaultTemperatures(key.Material)
+		tr := s.ResolveTempRange(key.Material, in.Base)
+		tempRange = &tr
+		temps = engineering.TemperatureSeries(tr.LowC, tr.HighC, 5)
 	}
 	mode := in.TemperatureMode
 	if mode == "" {
@@ -211,7 +245,12 @@ func (s *Service) Generate(ctx context.Context, in GenerateInput) (*GenerateOutp
 	if len(in.Kinds) > 0 {
 		req["kinds"] = in.Kinds
 	}
-	for k, v := range map[string][]float64{"clearance_gaps": in.ClearanceGaps, "hole_diameters": in.HoleDiameters, "bridge_spans": in.BridgeSpans, "overhang_angles": in.OverhangAngles} {
+	if in.FirstLayerParam != "" {
+		req["first_layer_param"] = in.FirstLayerParam
+	}
+	for k, v := range map[string][]float64{"clearance_gaps": in.ClearanceGaps, "hole_diameters": in.HoleDiameters, "bridge_spans": in.BridgeSpans, "overhang_angles": in.OverhangAngles,
+		"shrink_sizes": in.ShrinkSizes, "flow_ratios": in.FlowRatios, "pressure_advance_values": in.PressureAdvance, "retraction_lengths": in.RetractionsMM,
+		"volumetric_speeds": in.VolumetricSpeed, "first_layer_values": in.FirstLayerVals} {
 		if len(v) > 0 {
 			req[k] = v
 		}
@@ -241,7 +280,12 @@ func (s *Service) Generate(ctx context.Context, in GenerateInput) (*GenerateOutp
 			LayerChange []map[string]any  `json:"layer_changes"`
 			Gcode       []string          `json:"gcode_hint"`
 			Overrides   []slicer.Override `json:"slicing_overrides"`
+			OptionalOv  []slicer.Override `json:"slicing_overrides_optional"`
 			TempC       *float64          `json:"nozzle_temperature_c"`
+			SeriesValue *float64          `json:"series_value"`
+			SeriesParam string            `json:"series_param"`
+			Manual      []map[string]any  `json:"manual_settings"`
+			KeyAvail    *bool             `json:"profile_key_available"`
 		} `json:"pieces"`
 	}
 	// Files utilise des clés minuscules côté worker : décodage dédié
@@ -280,10 +324,21 @@ func (s *Service) Generate(ctx context.Context, in GenerateInput) (*GenerateOutp
 		}
 		pc := Piece{Kind: p.Kind, Name: p.Name, ModelID: m.ID, VersionID: ver.ID, Description: p.Description, Measure: p.Measure,
 			BBoxMM: p.BBox, Info: p.Info, Parts: p.Parts, TemperatureC: p.TempC, Segments: p.Segments, LayerChanges: p.LayerChange,
-			GcodeHint: p.Gcode, Overrides: p.Overrides, Warnings: p.Warnings}
+			GcodeHint: p.Gcode, Overrides: p.Overrides, OptionalOver: p.OptionalOv, SeriesValue: p.SeriesValue, SeriesParam: p.SeriesParam,
+			ManualSettings: p.Manual, ProfileKeyAvail: p.KeyAvail, Warnings: p.Warnings}
 		if in.Base != nil && s.d.Profiles != nil && len(p.Overrides) > 0 {
-			mo, perr := s.d.Profiles.ModifyProfile(ctx, goals.ModifyInput{Base: in.Base, Modifications: p.Overrides,
-				Note: fmt.Sprintf("calibration %s : %s", setID, p.Name)})
+			if err := checkSeriesBounds(p.Overrides); err != nil {
+				return nil, err
+			}
+			note := fmt.Sprintf("calibration %s : %s", setID, p.Name)
+			mo, perr := s.d.Profiles.ModifyProfile(ctx, goals.ModifyInput{Base: in.Base, Modifications: append(append([]slicer.Override{}, p.Overrides...), p.OptionalOv...), Note: note})
+			if perr != nil && len(p.OptionalOv) > 0 {
+				// une clé facultative absente du profil résolu ne doit pas empêcher la révision principale
+				mo, perr = s.d.Profiles.ModifyProfile(ctx, goals.ModifyInput{Base: in.Base, Modifications: p.Overrides, Note: note})
+				if perr == nil {
+					pc.Warnings = append(pc.Warnings, "surcharge facultative ignorée (clé absente du profil résolu) : "+p.OptionalOv[0].Key)
+				}
+			}
 			if perr != nil {
 				pc.Warnings = append(pc.Warnings, "profil découpable non créé : "+perr.Error())
 			} else {
@@ -293,6 +348,7 @@ func (s *Service) Generate(ctx context.Context, in GenerateInput) (*GenerateOutp
 		out.Pieces = append(out.Pieces, pc)
 	}
 	out.MeasuresTemplate = measuresTemplate(out.Pieces)
+	out.TemperatureRange = tempRange
 	out.Instructions = []string{
 		"Imprimer les pièces avec EXACTEMENT les réglages, la buse et la bobine à calibrer (" + key.label() + "), plateau propre, pièces refroidies avant mesure.",
 		"Mesurer au pied à coulisse (deux mesures croisées par cote, moyenne) ou à la main pour les jeux ; noter les valeurs en mm.",
@@ -358,6 +414,24 @@ func measuresTemplate(ps []Piece) map[string]any {
 	if has["temperature"] {
 		t["best_temp_c"] = "température de la pièce / de l'étage le plus propre"
 	}
+	if has["shrink_sizes"] {
+		t["shrink_sizes"] = []map[string]any{{"nominal_mm": 20, "x_mm": "mm", "y_mm": "mm", "z_mm": "mm", "inner_nominal_mm": 12, "inner_x_mm": "mm (facultatif)", "inner_y_mm": "mm (facultatif)"}}
+	}
+	if has["flow_ratio"] {
+		t["flow"] = map[string]any{"series": []map[string]any{{"ratio": 0.98, "wall_mm": "paroi mesurée (mm)"}}, "target_wall_mm": "largeur de ligne visée (ex. 0.42)"}
+	}
+	if has["pressure_advance"] {
+		t["best_pressure_advance"] = "K de la pièce aux angles les plus nets (à régler à la main dans Bambu Studio)"
+	}
+	if has["retraction"] {
+		t["best_retraction_mm"] = "plus courte rétraction sans fils (mm)"
+	}
+	if has["volumetric_speed"] {
+		t["best_max_volumetric_speed"] = "plus grand débit encore régulier (mm³/s) ; 90 % en est proposé"
+	}
+	if has["first_layer"] {
+		t["first_layer"] = map[string]any{"param": "height|speed|temperature", "value": "valeur de la pièce la plus régulière"}
+	}
 	if has["bridge_overhang"] {
 		t["bridge_max_span_mm"] = "plus grande portée sans affaissement"
 		t["overhang_max_deg"] = "plus grand angle propre depuis la verticale"
@@ -383,6 +457,7 @@ type RecordOutput struct {
 	Active      engineering.Calibration `json:"active" jsonschema:"calibration active après fusion avec les mesures antérieures de la même clé"`
 	Explanation []string                `json:"explanation"`
 	Effects     []string                `json:"effects" jsonschema:"ce qui change concrètement dans les gabarits et calculs d'ingénierie"`
+	Proposals   *Proposals              `json:"proposals,omitempty" jsonschema:"valeurs de profil de découpe PROPOSÉES par la calibration active (jamais appliquées automatiquement)"`
 	Note        string                  `json:"note"`
 }
 
@@ -439,7 +514,7 @@ func (s *Service) Record(ctx context.Context, in RecordInput) (*RecordOutput, er
 	if err != nil {
 		return nil, err
 	}
-	return &RecordOutput{RecordID: recID, Key: key, Results: cal, Active: *active, Explanation: notes, Effects: effects(&cal),
+	return &RecordOutput{RecordID: recID, Key: key, Results: cal, Active: *active, Explanation: notes, Effects: effects(&cal), Proposals: ProposalsFor(active),
 		Note: "Mesures conservées (journal immuable). Ces corrections priment désormais sur les valeurs génériques pour " + key.label() +
 			", avec la provenance « " + cal.Provenance + " »."}, nil
 }
@@ -460,6 +535,9 @@ func effects(c *engineering.Calibration) []string {
 	}
 	if c.BestTempC != nil {
 		e = append(e, "Température de buse recommandée mémorisée pour ce matériau.")
+	}
+	if c.ContourCompMM != nil || c.HoleCompMM != nil || c.BestFlowRatio != nil || c.BestRetractionMM != nil || c.BestMaxVolumetricSpeed != nil || c.FirstLayer != nil || c.BestPressureAdvance != nil {
+		e = append(e, "Valeurs de profil de découpe PROPOSÉES (champ proposals) : contour/trou XY, débit, rétraction, débit volumétrique, première couche. Jamais appliquées automatiquement ; à passer à modify_slicing_profile après accord.")
 	}
 	if c.BridgeMaxSpanMM != nil || c.OverhangMaxDeg != nil {
 		e = append(e, "Limites de ponts / surplombs mémorisées (avertissements de conception).")
@@ -492,6 +570,7 @@ func loadProfile(ctx context.Context, q interface {
 type Resolution struct {
 	Calibration *engineering.Calibration `json:"calibration,omitempty"`
 	Matched     []string                 `json:"matched" jsonschema:"clés utilisées, de la plus générale à la plus spécifique"`
+	Proposals   *Proposals               `json:"proposals,omitempty" jsonschema:"valeurs de profil de découpe proposées par cette calibration (jamais appliquées automatiquement) : à passer à modify_slicing_profile après accord"`
 	Note        string                   `json:"note"`
 }
 
@@ -536,6 +615,7 @@ func (s *Service) Resolve(ctx context.Context, k Key) (*Resolution, error) {
 	}
 	merged.Provenance = strings.Join(dedupe(provs), " ; ")
 	res.Calibration = merged
+	res.Proposals = ProposalsFor(merged)
 	res.Note = "Calibration appliquée : " + merged.Provenance
 	return res, nil
 }

@@ -14,7 +14,26 @@ from .cad import require_cadquery
 from .errors import GeometryError
 from .library import Template, _emit
 
-KINDS = ("fit_comb", "hole_shaft", "shrink_cube", "bridge_overhang", "temperature")
+CLASSIC_KINDS = ("fit_comb", "hole_shaft", "shrink_cube", "bridge_overhang", "temperature")
+# Calibrations d'extrusion : une série de petites pièces, UNE PAR VALEUR, chacune avec sa révision de profil bornée.
+# Aucune ne passe par un G-code personnalisé (les surcharges *_gcode sont interdites côté bambud).
+SERIES_KINDS = ("shrink_sizes", "flow_ratio", "pressure_advance", "retraction", "volumetric_speed", "first_layer")
+KINDS = CLASSIC_KINDS + SERIES_KINDS
+# Bornes des valeurs de série (reprises côté Go) : un profil de calibration ne sort jamais de ces plages.
+DEFAULT_SHRINK_SIZES = (20.0, 80.0)
+DEFAULT_FLOW_RATIOS = (0.94, 0.96, 0.98, 1.00, 1.02)
+FLOW_BOUNDS = (0.85, 1.10)
+DEFAULT_PA_VALUES = (0.0, 0.02, 0.04, 0.06, 0.08)
+PA_BOUNDS = (0.0, 0.2)
+DEFAULT_RETRACTIONS = (0.2, 0.5, 0.8, 1.1, 1.4)
+RETRACTION_BOUNDS = (0.0, 3.0)
+DEFAULT_VOLUMETRIC = (8.0, 12.0, 16.0, 20.0, 24.0)
+VOLUMETRIC_BOUNDS = (1.0, 40.0)
+FIRST_LAYER_PARAMS = {  # paramètre -> (clé BBL, cible, bornes, valeurs par défaut)
+    "height": ("initial_layer_print_height", "process", (0.08, 0.4), (0.16, 0.20, 0.24, 0.28)),
+    "speed": ("initial_layer_speed", "process", (5.0, 150.0), (20.0, 30.0, 40.0, 50.0)),
+    "temperature": ("nozzle_temperature_initial_layer", "filament", (150.0, 320.0), (200.0, 210.0, 220.0, 230.0)),
+}
 DEFAULT_GAPS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
 DEFAULT_DIAMETERS = (3.0, 4.0, 5.0, 6.0, 8.0, 10.0)
 DEFAULT_SPANS = (10.0, 20.0, 30.0, 40.0, 50.0)
@@ -154,11 +173,68 @@ def temp_segments(cq: Any, temps: list[float], rank0: int = 0) -> tuple[Any, lis
     return tower, segs
 
 
+def shrink_tube(cq: Any, s: float) -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    """Tube carré de côté s : cote EXTÉRIEURE (contour) et cote INTÉRIEURE (comme un trou) ; deux tailles séparent
+    le facteur d'échelle (proportionnel à s) du décalage de contour (constant)."""
+    wall = 4.0 if s <= 30 else 6.0
+    inner = s - 2 * wall
+    c = _box(cq, 0, 0, 0, s, s, s).cut(_box(cq, wall, wall, -1, inner, inner, s + 2))
+    c = c.cut(_box(cq, s - 3, -1, s - 3, 4, 4, 4))  # repère dans la paroi (sans toucher la cavité) : coin X max / Y min en haut
+    info = {"outer_nominal_mm": s, "inner_nominal_mm": inner, "height_nominal_mm": s, "wall_mm": wall,
+            "mark": "encoche au coin X max / Y min en haut"}
+    return [(f"shrink_tube_{s:g}", c)], info
+
+
+def flow_vase(cq: Any) -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    """Cylindre plein : imprimé en mode vase (spiral_mode), il donne une paroi d'UNE seule ligne à mesurer au pied à coulisse."""
+    d, h = 40.0, 15.0
+    return [("flow_vase", _cyl_z(cq, 0, 0, d / 2, 0, h))], {"diameter_mm": d, "height_mm": h}
+
+
+def pa_corners(cq: Any) -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    """Carré à parois fines et angles vifs : le gonflement / l'arrondi des angles révèle l'avance de pression."""
+    s, w, h = 40.0, 1.2, 20.0
+    body = _box(cq, 0, 0, 0, s, s, h).cut(_box(cq, w, w, -1, s - 2 * w, s - 2 * w, h + 2))
+    return [("pa_corners", body)], {"outer_mm": s, "wall_mm": w, "height_mm": h}
+
+
+def retraction_towers(cq: Any) -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    """Deux tours de Ø6 mm, 30 mm de haut, 38 mm d'écart : les fils entre les tours mesurent la rétraction."""
+    d, h, gap = 6.0, 30.0, 38.0
+    base = _box(cq, -5, -5, 0, d + gap + 4, d + 4, 0.6)
+    base = base.union(_cyl_z(cq, d / 2, d / 2, d / 2, 0, h)).union(_cyl_z(cq, d / 2 + gap, d / 2, d / 2, 0, h))
+    return [("retraction_towers", base)], {"tower_diameter_mm": d, "tower_height_mm": h, "tower_spacing_mm": gap}
+
+
+def volumetric_vase(cq: Any) -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    d, h = 30.0, 25.0
+    return [("volumetric_vase", _cyl_z(cq, 0, 0, d / 2, 0, h))], {"diameter_mm": d, "height_mm": h}
+
+
+def first_layer_plate(cq: Any) -> tuple[list[tuple[str, Any]], dict[str, Any]]:
+    s, t = 50.0, 0.6
+    return [("first_layer_plate", _box(cq, 0, 0, 0, s, s, t))], {"size_mm": s, "thickness_mm": t}
+
+
+def _fmt(v: float) -> str:
+    return f"{v:.4f}".rstrip("0").rstrip(".") if v != int(v) else str(int(v))
+
+
+def _vase_wall_speed(volumetric: float, layer_h: float = 0.2, line_w: float = 0.45) -> int:
+    """Vitesse de paroi qui dépasse la limite volumétrique : c'est alors la limite testée qui plafonne le débit."""
+    return int(min(450, math.ceil(volumetric / (layer_h * line_w)) + 30))
+
+
+def _check_unique(vals: list[float], key: str) -> None:
+    if len(set(vals)) != len(vals):
+        raise GeometryError("invalid_params", f"{key} : valeurs en double.")
+
+
 # --- commande ------------------------------------------------------------------------------------
 
 
 def run(req: dict[str, Any]) -> dict[str, Any]:
-    kinds = req.get("kinds") or list(KINDS)
+    kinds = req.get("kinds") or list(CLASSIC_KINDS)
     if not isinstance(kinds, list) or not kinds or any(k not in KINDS for k in kinds) or len(set(kinds)) != len(kinds):
         raise GeometryError("invalid_params", "kinds doit lister des types distincts parmi " + ", ".join(KINDS) + ".",
                             {"kinds": kinds})
@@ -177,6 +253,22 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
     mode = req.get("temperature_mode", "series")
     if mode not in ("series", "tower"):
         raise GeometryError("invalid_params", "temperature_mode doit valoir 'series' ou 'tower'.")
+    sizes = _numlist(req, "shrink_sizes", DEFAULT_SHRINK_SIZES, 15.0, 150.0, 4)
+    flows = _numlist(req, "flow_ratios", DEFAULT_FLOW_RATIOS, *FLOW_BOUNDS, 9)
+    pas = _numlist(req, "pressure_advance_values", DEFAULT_PA_VALUES, *PA_BOUNDS, 9)
+    rets = _numlist(req, "retraction_lengths", DEFAULT_RETRACTIONS, *RETRACTION_BOUNDS, 9)
+    vols = _numlist(req, "volumetric_speeds", DEFAULT_VOLUMETRIC, *VOLUMETRIC_BOUNDS, 9)
+    fl_param = req.get("first_layer_param", "height")
+    if fl_param not in FIRST_LAYER_PARAMS:
+        raise GeometryError("invalid_params", "first_layer_param doit valoir " + ", ".join(FIRST_LAYER_PARAMS) + ".")
+    fl_key, fl_target, fl_bounds, fl_default = FIRST_LAYER_PARAMS[fl_param]
+    fl_vals = _numlist(req, "first_layer_values", fl_default, fl_bounds[0], fl_bounds[1], 9)
+    for vals, key in ((sizes, "shrink_sizes"), (flows, "flow_ratios"), (pas, "pressure_advance_values"),
+                      (rets, "retraction_lengths"), (vols, "volumetric_speeds"), (fl_vals, "first_layer_values")):
+        _check_unique(vals, key)
+    if len(sizes) >= 2 and max(sizes) - min(sizes) < 20:
+        raise GeometryError("invalid_params", "shrink_sizes : au moins 20 mm d'écart entre la plus petite et la plus grande taille "
+                            "(sinon facteur d'échelle et décalage de contour restent confondus).")
     cq = require_cadquery("cad_backend_missing")
     pieces: list[dict[str, Any]] = []
 
@@ -244,6 +336,69 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
                              ["best_temp_c : température de la pièce la plus propre"],
                              {"temperature_mode": "series", "nozzle_temperature_c": t,
                               "slicing_overrides": [{"key": "nozzle_temperature", "value": str(int(t)), "target": "filament"}]})
+            elif kind == "shrink_sizes":
+                for s in sizes:
+                    parts, info = shrink_tube(cq, s)
+                    emit(kind, f"retrait_{s:g}", parts, info,
+                         f"Tube carré de {s:g} mm de côté (paroi {info['wall_mm']:g} mm, cote intérieure {info['inner_nominal_mm']:g} mm). "
+                         "Imprimer TOUTES les tailles de la série avec les mêmes réglages ; le facteur d'échelle (proportionnel à la taille) "
+                         "se sépare ainsi du décalage de contour (constant), ce qu'un seul cube ne permet pas.",
+                         ["shrink_sizes[] : {nominal_mm, x_mm, y_mm, z_mm} mesurés pièce refroidie, à mi-hauteur / mi-largeur (pas au pied : pied d'éléphant)",
+                          "facultatif : inner_nominal_mm + inner_x_mm, inner_y_mm (cote intérieure, se comporte comme un trou)"],
+                         {"series_value": s})
+            elif kind == "flow_ratio":
+                for r in flows:
+                    parts, info = flow_vase(cq)
+                    emit(kind, f"flow_{r:.3f}", parts, info,
+                         f"Vase Ø40 mm (paroi d'une seule ligne, mode spirale) imprimé avec filament_flow_ratio = {r:g}. "
+                         "Mesurer l'épaisseur de la paroi au pied à coulisse en 4 points à mi-hauteur (moyenne).",
+                         ["flow.series[] : {ratio, wall_mm} pour chaque pièce + flow.target_wall_mm (largeur de ligne visée, ex. 0,42) "
+                          "ou best_flow_ratio si vous choisissez la pièce à l'oeil"],
+                         {"series_value": r, "series_param": "filament_flow_ratio",
+                          "slicing_overrides": [{"key": "filament_flow_ratio", "value": _fmt(r), "target": "filament"},
+                                                {"key": "spiral_mode", "value": "1", "target": "process"}]})
+            elif kind == "pressure_advance":
+                for k in pas:
+                    parts, info = pa_corners(cq)
+                    emit(kind, f"pa_{k:.3f}", parts, info,
+                         f"Carré à angles vifs pour l'avance de pression K = {k:g}. Les profils Bambu n'exposent PAS cette clé "
+                         "(ni pressure_advance ni enable_pressure_advance) : elle ne peut être ni surchargée ni proposée en profil par bambud. "
+                         "Régler K à la main dans Bambu Studio (filament > avance de pression) ou, mieux, utiliser son étalonnage "
+                         "« Flow Dynamics » (interface graphique), puis comparer les angles.",
+                         ["best_pressure_advance : K de la pièce aux angles les plus nets, sans creux ni gonflement"],
+                         {"series_value": k, "series_param": "pressure_advance",
+                          "manual_settings": [{"setting": "Bambu Studio > Filament > Pressure advance (K)", "value": k}],
+                          "profile_key_available": False})
+            elif kind == "retraction":
+                for ln in rets:
+                    parts, info = retraction_towers(cq)
+                    emit(kind, f"retract_{ln:.2f}", parts, info,
+                         f"Deux tours (stringing) imprimées avec une rétraction de {ln:g} mm. Compter / noter les fils entre les tours.",
+                         ["best_retraction_mm : la plus courte rétraction sans fils (les rétractions longues usent le filament et bouchent)"],
+                         {"series_value": ln, "series_param": "retraction_length",
+                          # filament_retraction_length n'est pas surchargeable (liste blanche) : si le profil filament la renseigne
+                          # (autre chose que « nil »), elle prime sur retraction_length de la machine -> à régler dans Studio.
+                          "slicing_overrides": [{"key": "retraction_length", "value": _fmt(ln), "target": "machine"}]})
+            elif kind == "volumetric_speed":
+                for v in vols:
+                    parts, info = volumetric_vase(cq)
+                    emit(kind, f"volspeed_{v:g}", parts, info,
+                         f"Vase Ø30 mm (mode spirale) dont le débit est plafonné à {v:g} mm³/s (filament_max_volumetric_speed). "
+                         "Observer la paroi (trous, bandes mates, extrudeur qui claque).",
+                         ["best_max_volumetric_speed : le plus grand débit encore régulier ; bambud en propose 90 % comme marge"],
+                         {"series_value": v, "series_param": "filament_max_volumetric_speed",
+                          "slicing_overrides": [{"key": "filament_max_volumetric_speed", "value": _fmt(v), "target": "filament"},
+                                                {"key": "spiral_mode", "value": "1", "target": "process"},
+                                                {"key": "outer_wall_speed", "value": str(_vase_wall_speed(v)), "target": "process"}]})
+            elif kind == "first_layer":
+                for v in fl_vals:
+                    parts, info = first_layer_plate(cq)
+                    emit(kind, f"firstlayer_{fl_param}_{_fmt(v)}", parts, info,
+                         f"Plaque 50 x 50 mm de 0,6 mm : première couche avec {fl_key} = {v:g}. Regarder le dessus : lignes jointives et "
+                         "lisses = bon écrasement ; trous = trop haut / trop froid ; bourrelets rugueux = trop bas.",
+                         ["first_layer : {param, value} de la pièce la plus régulière (param = height|speed|temperature)"],
+                         {"series_value": v, "series_param": fl_key, "first_layer_param": fl_param,
+                          "slicing_overrides": [{"key": fl_key, "value": _fmt(v), "target": fl_target}]})
     except GeometryError:
         raise
     except Exception as e:

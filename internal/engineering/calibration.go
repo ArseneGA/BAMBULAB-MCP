@@ -27,9 +27,29 @@ type Calibration struct {
 	ShrinkXY *float64 `json:"shrink_scale_xy,omitempty"`
 	ShrinkZ  *float64 `json:"shrink_scale_z,omitempty"`
 
+	// Retrait mesuré sur DEUX tailles ou plus : le facteur d'échelle (proportionnel à la taille) est séparé du décalage de
+	// contour (constant). Décalages par côté, au sens de xy_contour_compensation / xy_hole_compensation des profils BBL
+	// (positif = le contour / le trou est agrandi). Jamais appliqués automatiquement.
+	ContourCompMM *float64 `json:"xy_contour_compensation_mm,omitempty"`
+	HoleCompMM    *float64 `json:"xy_hole_compensation_mm,omitempty"`
+
 	BestTempC       *float64 `json:"best_temp_c,omitempty"`
 	BridgeMaxSpanMM *float64 `json:"bridge_max_span_mm,omitempty"`
 	OverhangMaxDeg  *float64 `json:"overhang_max_deg,omitempty"`
+
+	// Calibrations d'extrusion : valeur RETENUE sur la série de pièces (une par valeur). Proposées, jamais appliquées.
+	BestFlowRatio          *float64       `json:"best_flow_ratio,omitempty"`
+	BestPressureAdvance    *float64       `json:"best_pressure_advance,omitempty"`
+	BestRetractionMM       *float64       `json:"best_retraction_mm,omitempty"`
+	BestMaxVolumetricSpeed *float64       `json:"best_max_volumetric_speed,omitempty"`
+	FirstLayer             *FirstLayerCal `json:"first_layer,omitempty"`
+}
+
+// FirstLayerCal : réglages de première couche retenus (chaque champ est facultatif, un par série).
+type FirstLayerCal struct {
+	HeightMM *float64 `json:"initial_layer_print_height,omitempty"`
+	SpeedMMS *float64 `json:"initial_layer_speed,omitempty"`
+	TempC    *float64 `json:"nozzle_temperature_initial_layer,omitempty"`
 }
 
 // LinearOffset : décalage en fonction du diamètre nominal d, off = Offset + Slope·d (mm).
@@ -85,6 +105,12 @@ func FitClearanceCal(p FitParams, cal *Calibration) (*FitResult, error) {
 	if axis == AxisHorizontal {
 		v += 0.05
 	}
+	dimNote := "Dimension d'ajustement non fournie : le jeu mesuré à 10 mm (languette du peigne) est utilisé tel quel"
+	if p.Dimension != 0 {
+		dd := FitDimensionDelta(p.Dimension)
+		v += dd
+		dimNote = "Dimension " + ftoa(p.Dimension) + " mm : " + signed(dd) + " mm par rapport au jeu mesuré à 10 mm (loi en ∛D de l'unité de tolérance ISO 286-1, amplitude heuristique)"
+	}
 	v = round(v, 3)
 	out := &FitResult{PerSide: round(v/2, 4)}
 	out.Result = Result{
@@ -92,12 +118,13 @@ func FitClearanceCal(p FitParams, cal *Calibration) (*FitResult, error) {
 		Assumptions: []string{
 			"Calibré : " + how + " (" + cal.Provenance + ")",
 			"Valable pour la même imprimante, buse et bobine ; hors de ce cadre, refaire la calibration",
+			dimNote,
 		},
 		Level: LevelMeasured, Sources: []Source{calSource(cal)},
-		Validity: "Jeu mesuré sur le peigne de jeux imprimé à plat ; extrapolé aux autres dimensions d'ajustement 3–100 mm. " + Disclaimer,
+		Validity: "Jeu mesuré sur le peigne de jeux imprimé à plat ; extrapolé aux autres dimensions d'ajustement 3–100 mm par une loi heuristique (voir FitDimensionDelta). " + Disclaimer,
 	}
-	if fit == FitSnug && cal.SnugGapMM == nil {
-		out.Result.Level = LevelCalculated
+	if (fit == FitSnug && cal.SnugGapMM == nil) || (p.Dimension != 0 && FitDimensionDelta(p.Dimension) != 0) {
+		out.Result.Level = LevelCalculated // partie estimée (serré non mesuré, ou loi de dimension heuristique)
 	}
 	if axis == AxisHorizontal {
 		out.Assumptions = append(out.Assumptions, "Axe horizontal : +0,05 mm (affaissement des voûtes)")

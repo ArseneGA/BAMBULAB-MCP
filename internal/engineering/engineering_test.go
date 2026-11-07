@@ -279,7 +279,7 @@ func TestFitAndHole(t *testing.T) {
 	near(t, "range", f.Range.Max-f.Range.Min, 0.1, 1e-9)
 	f2, _ := FitClearance(FitParams{Fit: FitFree, Nozzle: 0.6, Orientation: "vertical"})
 	near(t, "libre 0.6", f2.Value, 0.45, 1e-9)
-	f3, _ := FitClearance(FitParams{Fit: FitSnug, Nozzle: 0.4, Orientation: "horizontal", Material: "PLA", Dimension: 100})
+	f3, _ := FitClearance(FitParams{Fit: FitSnug, Nozzle: 0.4, Orientation: "horizontal", Material: "PLA", Dimension: 10})
 	near(t, "serré horiz PLA (retrait non ajouté)", f3.Value, 0.10+0.05, 1e-9)
 	f4, _ := FitClearance(FitParams{Fit: FitPress, Nozzle: 0.4, Orientation: "vertical"})
 	if f4.Value >= 0 {
@@ -465,7 +465,7 @@ func TestIsElastomer(t *testing.T) {
 
 func TestFitClearanceIgnoresShrinkageAndChecksDomain(t *testing.T) {
 	a, _ := FitClearance(FitParams{Fit: FitSliding, Nozzle: 0.4, Orientation: "vertical"})
-	b, err := FitClearance(FitParams{Fit: FitSliding, Nozzle: 0.4, Orientation: "vertical", Material: "PLA", Dimension: 100})
+	b, err := FitClearance(FitParams{Fit: FitSliding, Nozzle: 0.4, Orientation: "vertical", Material: "PLA", Dimension: 10})
 	if err != nil || a.Value != b.Value {
 		t.Fatalf("le retrait ne doit pas modifier le jeu : %v %v %v", a.Value, b.Value, err)
 	}

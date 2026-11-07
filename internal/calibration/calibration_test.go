@@ -128,13 +128,13 @@ func TestKeyNormalize(t *testing.T) {
 }
 
 func TestDefaultTemperatures(t *testing.T) {
-	if got := DefaultTemperatures("PLA"); got[0] != 190 || got[4] != 230 {
+	if got := DefaultTemperatures("PLA"); got[0] != 190 || got[4] != 240 {
 		t.Fatal(got)
 	}
 	if got := DefaultTemperatures("PETG-HF"); got[0] != 220 {
 		t.Fatal(got)
 	}
-	if got := DefaultTemperatures("ABS"); got[0] != 230 {
+	if got := DefaultTemperatures("ABS"); got[0] != 240 || got[4] != 280 {
 		t.Fatal(got)
 	}
 	if got := DefaultTemperatures("matière-mystère"); got[0] != 190 {

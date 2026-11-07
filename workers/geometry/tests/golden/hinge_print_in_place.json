@@ -1,8 +1,8 @@
 {
   "template": "hinge_print_in_place",
-  "template_version": "1.0.0",
-  "volume_mm3": 6244.835,
-  "area_mm2": 5097.505,
+  "template_version": "1.1.0",
+  "volume_mm3": 6227.529,
+  "area_mm2": 5113.199,
   "bbox_size_mm": [
     40.003,
     40.0,
@@ -12,5 +12,5 @@
   "solids": 2,
   "components": 2,
   "watertight": true,
-  "fingerprint": "576456d38f445598"
+  "fingerprint": "7fbde3d7a8e2f83e"
 }
