@@ -34,7 +34,7 @@ func registerCamera(mux *http.ServeMux, c *core.Core, human *humanauth.Service) 
 	cam.RegisterPages(mux, human.Require)
 
 	mux.HandleFunc("GET /api/printers/{id}/camera/snapshot", func(w http.ResponseWriter, r *http.Request) {
-		p, err := cam.Capture(r.Context(), r.PathValue("id"), "snapshot", "", 2*time.Second)
+		p, err := cam.Snapshot(r.Context(), r.PathValue("id"))
 		if err != nil {
 			cameraError(c, w, err)
 			return
@@ -42,7 +42,7 @@ func registerCamera(mux *http.ServeMux, c *core.Core, human *humanauth.Service) 
 		serveJPEG(w, p.JPEG)
 	})
 	mux.HandleFunc("GET /api/printers/{id}/camera/stream", func(w http.ResponseWriter, r *http.Request) {
-		st, err := cam.Subscribe(r.Context(), r.PathValue("id"))
+		st, err := cam.Stream(r.Context(), r.PathValue("id"))
 		if err != nil {
 			cameraError(c, w, err)
 			return
@@ -184,6 +184,8 @@ func cameraError(c *core.Core, w http.ResponseWriter, err error) {
 		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, camera.ErrInvalid), errors.Is(err, notify.ErrInvalid):
 		status, code = http.StatusBadRequest, "invalid"
+	case errors.Is(err, camera.ErrRateLimited):
+		status, code = http.StatusTooManyRequests, "rate_limited"
 	case errors.Is(err, camera.ErrUnavailable):
 		status, code = http.StatusServiceUnavailable, "unavailable"
 	}

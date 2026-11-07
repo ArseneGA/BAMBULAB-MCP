@@ -27,8 +27,15 @@ type monitor struct {
 func (s *Service) Run(ctx context.Context) {
 	t := time.NewTicker(s.c.Scan)
 	defer t.Stop()
+	var lastPurge time.Time
 	for {
 		s.scan(ctx)
+		if s.now().Sub(lastPurge) >= time.Hour {
+			lastPurge = s.now()
+			if _, err := s.PurgeOldPhotos(ctx); err != nil {
+				s.log.Warn("purge des photos d'alerte impossible", "err", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -223,6 +230,9 @@ func (s *Service) AnalyzeLatest(ctx context.Context, printerID string) (*Analysi
 	jobID := ""
 	if job != nil {
 		out.PrintJobID, jobID, kind = job.ID, job.ID, "snapshot"
+	}
+	if !s.allow(printerID, "snapshot") {
+		return nil, ErrRateLimited
 	}
 	p, err := s.Capture(ctx, printerID, kind, jobID, 2*time.Second)
 	if err != nil {

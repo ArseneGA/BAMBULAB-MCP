@@ -41,7 +41,7 @@ export function CameraPanel({ printerId }: { printerId: string }) {
         <dt>Détection d'échec</dt>
         <dd>{det ? <>{det.enabled ? <Tag tone="ok">active</Tag> : <Tag tone="warn">désactivée</Tag>} <span className="mono">1 instantané / {det.interval_seconds} s · seuil {det.detector.threshold}</span> <span className="hint">alerte seulement, jamais d'arrêt automatique (réglage : demandez à Claude <code>configure_failure_detection</code>)</span></> : '…'}</dd>
         <dt>Notifications</dt>
-        <dd>{nt ? (nt.channels.length === 0 ? <span className="hint">aucun canal (demandez à Claude <code>configure_notifications</code>)</span> : nt.channels.map((c) => <Tag key={c.name} tone={c.ready && c.enabled ? 'ok' : 'warn'}>{c.name} · {c.kind}{c.ready ? '' : ' · secrets à saisir'}</Tag>)) : '…'}{nt && <> <a href={`${BASE}/setup/notifications`} target="_blank" rel="noreferrer"><ExternalLink size={12} /> saisir les secrets</a></>}</dd>
+        <dd>{nt ? (nt.channels.length === 0 ? <span className="hint">aucun canal (à créer sur la page de saisie)</span> : nt.channels.map((c) => <Tag key={c.name} tone={c.ready && c.enabled ? 'ok' : 'warn'}>{c.name} · {c.kind}{c.ready ? '' : ' · secrets à saisir'}</Tag>)) : '…'}{nt && <> <a href={`${BASE}/setup/notifications`} target="_blank" rel="noreferrer"><ExternalLink size={12} /> canaux et secrets</a></>}</dd>
       </dl>
     </div>
   );

@@ -138,15 +138,26 @@ func TestCameraEndToEnd(t *testing.T) {
 		mu.Unlock()
 	}))
 	defer ntfy.Close()
-	out := r.call("configure_notifications", map[string]any{"channels": []any{map[string]any{"name": "telephone", "kind": "ntfy", "events": []any{"detection_alert", "print_completed"}}}})
+	t.Setenv("BAMBU_NOTIFY_ALLOW_PRIVATE", "1") // ntfy de test sur 127.0.0.1
+	out := r.call("configure_notifications", nil)
 	setupURL := str(out, "setup_url")
 	if !strings.HasSuffix(setupURL, "/setup/notifications") {
 		t.Fatalf("setup_url : %q", setupURL)
 	}
+	// le modèle ne crée aucun canal : champ inconnu refusé, canal inconnu refusé
 	if r.callErr("configure_notifications", map[string]any{"channels": []any{map[string]any{"name": "x", "kind": "ntfy", "url": "http://x"}}}) == "" {
-		// un champ inconnu (secret) doit être refusé par le schéma
-		t.Fatal("un secret passé à l'outil doit être refusé")
+		t.Fatal("un secret ou une destination passés à l'outil doivent être refusés")
 	}
+	if r.callErr("configure_notifications", map[string]any{"channels": []any{map[string]any{"name": "telephone", "enabled": true}}}) == "" {
+		t.Fatal("l'outil ne doit pas créer de canal")
+	}
+	// l'humain crée le canal sur la page
+	_, _, nonce := r.humanGet(setupURL)
+	if st, body := r.humanPost(setupURL, url.Values{"nonce": {nonce}, "action": {"save_channel"}, "name": {"telephone"}, "kind": {"ntfy"}, "enabled": {"yes"},
+		"events": {"detection_alert", "print_completed"}}); st != 200 {
+		t.Fatalf("création du canal par l'humain : %d %s", st, body)
+	}
+	out = r.call("configure_notifications", map[string]any{"channels": []any{map[string]any{"name": "telephone", "events": []any{"detection_alert", "print_completed"}}}})
 	st, page, nonce := r.humanGet(setupURL)
 	chID := regexp.MustCompile(`name="channel" value="([^"]+)"`).FindStringSubmatch(page)
 	if st != 200 || nonce == "" || chID == nil {

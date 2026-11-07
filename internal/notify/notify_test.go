@@ -33,7 +33,7 @@ func newSvc(t *testing.T, mut func(*Deps)) *Service {
 	}
 	t.Cleanup(func() { st.Close() })
 	d := Deps{Store: st, Vault: printing.NewMemorySecretStore(), Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		BaseURL: func() string { return "http://127.0.0.1:7878" }, RetryDelay: time.Millisecond, Retries: 2}
+		BaseURL: func() string { return "http://127.0.0.1:7878" }, RetryDelay: time.Millisecond, Retries: 2, AllowPrivate: true}
 	if mut != nil {
 		mut(&d)
 	}

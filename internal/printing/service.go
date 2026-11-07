@@ -96,8 +96,11 @@ type Service struct {
 
 	// Observateurs et alerte de matière (ams.go) : n'ont aucun pouvoir sur le lancement.
 	hookMu        sync.Mutex
+	hooksClosed   bool // porte fermée avant wg.Wait : plus aucun observateur n'est lancé
 	endHooks      []JobEndHook
 	filamentCheck FilamentCheck
+
+	planLocks sync.Map // plan_id -> *sync.Mutex : une seule découpe de plaques à la fois par plan
 
 	jobMu sync.Mutex // sérialise les mises à jour d'un même PrintJob dans le processus
 
@@ -185,6 +188,9 @@ func New(d Deps) (*Service, error) {
 // Close arrête le suivi et ferme les connexions imprimante.
 func (s *Service) Close() error {
 	s.cancel()
+	s.hookMu.Lock()
+	s.hooksClosed = true
+	s.hookMu.Unlock()
 	s.wg.Wait()
 	s.mu.Lock()
 	defer s.mu.Unlock()

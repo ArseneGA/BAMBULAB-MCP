@@ -15,6 +15,7 @@ import (
 
 // Un évènement de la file d'attente devient une notification queue_event avec le lien de confirmation humaine.
 func TestFilamentEventsAreNotified(t *testing.T) {
+	t.Setenv("BAMBU_NOTIFY_ALLOW_PRIVATE", "1") // ntfy de test sur 127.0.0.1
 	c, err := Open(context.Background(), Config{DataDir: t.TempDir(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)

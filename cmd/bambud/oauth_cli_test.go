@@ -18,7 +18,7 @@ func TestOAuthCLIListAndRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := oauth.New(st, oauth.Options{})
-	if _, e := svc.Register(context.Background(), []byte(`{"client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`)); e != nil {
+	if _, e := svc.Register(context.Background(), []byte(`{"client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`), ""); e != nil {
 		t.Fatal(e)
 	}
 	st.Close()

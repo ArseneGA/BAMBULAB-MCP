@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"sort"
 	"strings"
@@ -39,6 +40,9 @@ const (
 	RefreshTTL = 30 * 24 * time.Hour
 	CodeTTL    = 60 * time.Second
 	PendingTTL = 10 * time.Minute
+
+	// ClientTTL : un client enregistré qui n'a obtenu aucune autorisation est purgé après ce délai.
+	ClientTTL = 15 * time.Minute
 
 	maxClients     = 200
 	maxPending     = 200
@@ -73,16 +77,78 @@ type Options struct {
 	Now func() time.Time
 	// ExtraRedirects : URI de redirection exactes autorisées en plus de DefaultRedirects et de la boucle locale.
 	ExtraRedirects []string
+	// Log reçoit les erreurs d'audit et de mise à jour (défaut : journal par défaut).
+	Log *slog.Logger
+	// Limites de débit PAR ADRESSE (défauts : enregistrement 30 puis un toutes les 3 s ; autorisation 30 puis un toutes les 2 s)
+	// et plafond de clients récents par adresse (défaut 30).
+	RegisterBurst, AuthorizeBurst, MaxClientsPerIP int
+	RegisterEvery, AuthorizeEvery                  time.Duration
+}
+
+type bucket struct {
+	tokens float64
+	at     time.Time
 }
 
 // Service est le serveur d'autorisation.
 type Service struct {
-	st  *store.Store
-	o   Options
-	mu  sync.Mutex
-	pen map[string]*Pending
-	cod map[string]*authCode
-	use map[string]usedCode
+	st   *store.Store
+	o    Options
+	mu   sync.Mutex
+	pen  map[string]*Pending
+	cod  map[string]*authCode
+	use  map[string]usedCode
+	lim  map[string]*bucket
+	regs map[string][]time.Time // enregistrements récents par adresse
+	log  *slog.Logger
+}
+
+// allow applique une limite de débit par adresse et par catégorie.
+func (s *Service) allow(cat, ip string, burst int, every time.Duration) bool {
+	if ip == "" {
+		return true
+	}
+	now := s.now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.lim) > 10000 { // table bornée : on oublie les adresses inactives
+		for k, b := range s.lim {
+			if now.Sub(b.at) > 10*time.Minute {
+				delete(s.lim, k)
+			}
+		}
+		if len(s.lim) > 10000 {
+			s.lim = map[string]*bucket{}
+		}
+	}
+	k := cat + "|" + ip
+	b := s.lim[k]
+	if b == nil {
+		b = &bucket{tokens: float64(burst), at: now}
+		s.lim[k] = b
+	}
+	b.tokens += float64(now.Sub(b.at)) / float64(every)
+	if b.tokens > float64(burst) {
+		b.tokens = float64(burst)
+	}
+	b.at = now
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+func (s *Service) audit(ctx context.Context, actor, action, kind, id string, detail any) {
+	if err := s.st.Audit(ctx, actor, action, kind, id, detail); err != nil {
+		s.log.Error("oauth : écriture du journal d'audit impossible", "action", action, "err", err)
+	}
+}
+
+func (s *Service) exec(ctx context.Context, what, q string, args ...any) {
+	if _, err := s.st.DB().ExecContext(ctx, q, args...); err != nil {
+		s.log.Error("oauth : mise à jour impossible", "what", what, "err", err)
+	}
 }
 
 // New construit le service au-dessus d'une base migrée.
@@ -90,7 +156,26 @@ func New(st *store.Store, o Options) *Service {
 	if o.Now == nil {
 		o.Now = func() time.Time { return st.Now() }
 	}
-	return &Service{st: st, o: o, pen: map[string]*Pending{}, cod: map[string]*authCode{}, use: map[string]usedCode{}}
+	if o.Log == nil {
+		o.Log = slog.Default()
+	}
+	if o.RegisterBurst <= 0 {
+		o.RegisterBurst = 30
+	}
+	if o.RegisterEvery <= 0 {
+		o.RegisterEvery = 3 * time.Second
+	}
+	if o.AuthorizeBurst <= 0 {
+		o.AuthorizeBurst = 30
+	}
+	if o.AuthorizeEvery <= 0 {
+		o.AuthorizeEvery = 2 * time.Second
+	}
+	if o.MaxClientsPerIP <= 0 {
+		o.MaxClientsPerIP = 30
+	}
+	return &Service{st: st, o: o, log: o.Log, pen: map[string]*Pending{}, cod: map[string]*authCode{}, use: map[string]usedCode{},
+		lim: map[string]*bucket{}, regs: map[string][]time.Time{}}
 }
 
 func (s *Service) now() time.Time { return s.o.Now().UTC() }
@@ -107,6 +192,10 @@ type Pending struct {
 	Resource    string
 	Scope       string
 	Expires     time.Time
+	// Éléments affichés à l'humain pour qu'il reconnaisse SA demande.
+	RemoteIP    string
+	RequestedAt time.Time
+	bindHash    string // empreinte du cookie de liaison posé au navigateur qui a ouvert /oauth/authorize
 }
 
 type authCode struct {
@@ -199,7 +288,10 @@ func cleanName(n string) string {
 }
 
 // Register traite un enregistrement dynamique (RFC 7591) et renvoie la réponse JSON.
-func (s *Service) Register(ctx context.Context, body []byte) (map[string]any, *Error) {
+func (s *Service) Register(ctx context.Context, body []byte, ip string) (map[string]any, *Error) {
+	if !s.allow("register", ip, s.o.RegisterBurst, s.o.RegisterEvery) {
+		return nil, oerr(429, "temporarily_unavailable", "trop d'enregistrements depuis cette adresse : réessaie dans un instant")
+	}
 	var req struct {
 		RedirectURIs []string `json:"redirect_uris"`
 		ClientName   string   `json:"client_name"`
@@ -229,10 +321,29 @@ func (s *Service) Register(ctx context.Context, body []byte) (map[string]any, *E
 	c := Client{ID: randToken("bc_", 16), Name: cleanName(req.ClientName), RedirectURIs: req.RedirectURIs, CreatedAt: now}
 	uris, _ := json.Marshal(c.RedirectURIs)
 	err := s.st.Tx(ctx, func(tx *sql.Tx) error {
-		// Enregistrement non authentifié : on borne la table (clients sans autorisation purgés après 1 h).
+		// Enregistrement non authentifié : on borne la table (clients sans autorisation purgés après ClientTTL).
 		if _, e := tx.ExecContext(ctx, `DELETE FROM oauth_clients WHERE created_at < ? AND NOT EXISTS (SELECT 1 FROM oauth_grants g WHERE g.client_id=oauth_clients.client_id)`,
-			store.FormatTime(now.Add(-time.Hour))); e != nil {
+			store.FormatTime(now.Add(-ClientTTL))); e != nil {
 			return e
+		}
+		if ip != "" { // plafond de clients récents par adresse
+			s.mu.Lock()
+			recent := s.regs[ip][:0:0]
+			for _, t := range s.regs[ip] {
+				if now.Sub(t) < ClientTTL {
+					recent = append(recent, t)
+				}
+			}
+			if len(recent) >= s.o.MaxClientsPerIP {
+				s.regs[ip] = recent
+				s.mu.Unlock()
+				return errTooMany
+			}
+			if len(s.regs) > 10000 {
+				s.regs = map[string][]time.Time{}
+			}
+			s.regs[ip] = append(recent, now)
+			s.mu.Unlock()
 		}
 		var n int
 		if e := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM oauth_clients`).Scan(&n); e != nil {
@@ -282,11 +393,18 @@ type AuthzResult struct {
 	RedirectError *Error
 	RedirectURI   string
 	State         string
+	// Limited : trop de demandes depuis cette adresse (HTTP 429).
+	Limited bool
+	// Bind : valeur du cookie de liaison à poser au navigateur qui a ouvert la demande (exigée au consentement).
+	Bind string
 }
 
 // Authorize valide une demande d'autorisation (paramètres de la requête GET). resource est l'identifiant canonique
 // de /mcp pour l'hôte atteint (« https://hôte/mcp »).
-func (s *Service) Authorize(ctx context.Context, q url.Values, resource string) AuthzResult {
+func (s *Service) Authorize(ctx context.Context, q url.Values, resource, ip string) AuthzResult {
+	if !s.allow("authorize", ip, s.o.AuthorizeBurst, s.o.AuthorizeEvery) {
+		return AuthzResult{Limited: true, Fatal: "Trop de demandes depuis cette adresse : réessaie dans un instant."}
+	}
 	cid := q.Get("client_id")
 	c, err := s.client(ctx, cid)
 	if err != nil {
@@ -319,8 +437,9 @@ func (s *Service) Authorize(ctx context.Context, q url.Values, resource string) 
 		return fail("invalid_request", "state trop long")
 	}
 	now := s.now()
+	bind := randToken("", 24)
 	p := &Pending{ID: randToken("", 32), Nonce: randToken("", 24), ClientID: c.ID, ClientName: c.Name, RedirectURI: ru, State: state,
-		Challenge: ch, Resource: CanonResource(resource), Scope: Scope, Expires: now.Add(PendingTTL)}
+		Challenge: ch, Resource: CanonResource(resource), Scope: Scope, Expires: now.Add(PendingTTL), RemoteIP: ip, RequestedAt: now, bindHash: hashOf(bind)}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneLocked(now)
@@ -328,7 +447,13 @@ func (s *Service) Authorize(ctx context.Context, q url.Values, resource string) 
 		return fail("temporarily_unavailable", "trop de demandes en cours")
 	}
 	s.pen[p.ID] = p
-	return AuthzResult{Pending: p}
+	return AuthzResult{Pending: p, Bind: bind}
+}
+
+// Bound dit si le jeton de liaison présenté (cookie) est celui du navigateur qui a ouvert la demande. Sans cette
+// liaison, une page de consentement transmise à un tiers pourrait être approuvée à la place de l'initiateur.
+func (p *Pending) Bound(token string) bool {
+	return token != "" && subtle.ConstantTimeCompare([]byte(hashOf(token)), []byte(p.bindHash)) == 1
 }
 
 func (s *Service) pruneLocked(now time.Time) {
@@ -387,7 +512,7 @@ func ErrorRedirect(redirectURI, state, issuer string, e *Error) string {
 
 // Decide traite la décision de l'humain sur une demande en attente : à usage unique (la demande est retirée).
 // nonce = celui du formulaire ; humanSession = identifiant du navigateur enregistré qui a consenti.
-func (s *Service) Decide(ctx context.Context, id, nonce, issuer, humanSession string, approve bool) (redirectURL string, err error) {
+func (s *Service) Decide(ctx context.Context, id, nonce, issuer, humanSession, bind string, approve bool) (redirectURL string, err error) {
 	s.mu.Lock()
 	p, ok := s.pen[id]
 	if !ok || !s.now().Before(p.Expires) {
@@ -398,17 +523,21 @@ func (s *Service) Decide(ctx context.Context, id, nonce, issuer, humanSession st
 		s.mu.Unlock()
 		return "", errors.New("formulaire invalide")
 	}
+	if !p.Bound(bind) {
+		s.mu.Unlock()
+		return "", errors.New("cette demande a été ouverte dans un autre navigateur : relance la connexion depuis Claude, dans le navigateur où tu l'as lancée")
+	}
 	delete(s.pen, id)
 	if !approve {
 		s.mu.Unlock()
-		_ = s.st.Audit(ctx, "human:web", "oauth.denied", "oauth_client", p.ClientID, nil)
+		s.audit(ctx, "human:web", "oauth.denied", "oauth_client", p.ClientID, nil)
 		return ErrorRedirect(p.RedirectURI, p.State, issuer, oerr(302, "access_denied", "refusé par l'utilisateur")), nil
 	}
 	code := randToken("", 32)
 	s.cod[hashOf(code)] = &authCode{clientID: p.ClientID, redirectURI: p.RedirectURI, challenge: p.Challenge, resource: p.Resource,
 		scope: p.Scope, humanSession: humanSession, expires: s.now().Add(CodeTTL)}
 	s.mu.Unlock()
-	_ = s.st.Audit(ctx, "human:web", "oauth.approved", "oauth_client", p.ClientID, map[string]any{"client_name": p.ClientName})
+	s.audit(ctx, "human:web", "oauth.approved", "oauth_client", p.ClientID, map[string]any{"client_name": p.ClientName})
 	return addQuery(p.RedirectURI, map[string]string{"code": code, "state": p.State, "iss": issuer}), nil
 }
 
@@ -453,8 +582,8 @@ func (s *Service) exchangeCode(ctx context.Context, f url.Values) (map[string]an
 	s.mu.Unlock()
 	if !ok {
 		if wasUsed && used.grantID != "" { // rejeu d'un code déjà échangé : on révoque ce qu'il a produit
-			_, _ = s.st.DB().ExecContext(ctx, `UPDATE oauth_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, store.FormatTime(now), used.grantID)
-			_ = s.st.Audit(ctx, "oauth", "oauth.code_replay_revoked", "oauth_grant", used.grantID, nil)
+			s.exec(ctx, "révocation après rejeu de code", `UPDATE oauth_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, store.FormatTime(now), used.grantID)
+			s.audit(ctx, "oauth", "oauth.code_replay_revoked", "oauth_grant", used.grantID, nil)
 		}
 		return nil, oerr(400, "invalid_grant", "code inconnu, expiré ou déjà utilisé")
 	}
@@ -517,7 +646,9 @@ func (s *Service) refresh(ctx context.Context, f url.Values) (map[string]any, *E
 				if _, e3 := tx.ExecContext(ctx, `UPDATE oauth_grants SET revoked_at=? WHERE id=?`, store.FormatTime(now), pid); e3 != nil {
 					return e3
 				}
-				_ = s.st.AuditTx(ctx, tx, "oauth", "oauth.refresh_replay_revoked", "oauth_grant", pid, nil)
+				if e4 := s.st.AuditTx(ctx, tx, "oauth", "oauth.refresh_replay_revoked", "oauth_grant", pid, nil); e4 != nil {
+					s.log.Error("oauth : audit du rejeu de jeton impossible", "err", e4)
+				}
 			}
 			oe = oerr(400, "invalid_grant", "jeton de rafraîchissement invalide")
 			return nil
@@ -582,7 +713,7 @@ func (s *Service) Verify(ctx context.Context, token, resource string) bool {
 		return false // jeton émis pour une autre ressource (RFC 8707)
 	}
 	if lu, _ := store.ParseTime(lastUsed); now.Sub(lu) > time.Minute {
-		_, _ = s.st.DB().ExecContext(ctx, `UPDATE oauth_grants SET last_used_at=? WHERE id=?`, store.FormatTime(now), gid)
+		s.exec(ctx, "dernier usage", `UPDATE oauth_grants SET last_used_at=? WHERE id=?`, store.FormatTime(now), gid)
 	}
 	return true
 }
@@ -647,7 +778,7 @@ func (s *Service) Revoke(ctx context.Context, id string) error {
 	if _, err := s.st.DB().ExecContext(ctx, `UPDATE oauth_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, store.FormatTime(s.now()), ids[0]); err != nil {
 		return err
 	}
-	_ = s.st.Audit(ctx, "human:cli", "oauth.grant_revoked", "oauth_grant", ids[0], nil)
+	s.audit(ctx, "human:cli", "oauth.grant_revoked", "oauth_grant", ids[0], nil)
 	return nil
 }
 
@@ -659,7 +790,7 @@ func (s *Service) RevokeAll(ctx context.Context) (int64, error) {
 	}
 	n, _ := res.RowsAffected()
 	if n > 0 {
-		_ = s.st.Audit(ctx, "human:cli", "oauth.grants_revoked_all", "oauth_grant", "", map[string]any{"count": n})
+		s.audit(ctx, "human:cli", "oauth.grants_revoked_all", "oauth_grant", "", map[string]any{"count": n})
 	}
 	return n, nil
 }

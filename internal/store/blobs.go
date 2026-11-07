@@ -176,6 +176,18 @@ func (b *BlobStore) Open(sha string) (*os.File, error) {
 	return f, err
 }
 
+// Delete supprime un blob (sans erreur s'il n'existe plus). L'appelant s'assure que plus rien ne le référence.
+func (b *BlobStore) Delete(sha string) error {
+	p, err := b.Path(sha)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
 // Verify relit le blob et vérifie son empreinte.
 func (b *BlobStore) Verify(sha string) error {
 	f, err := b.Open(sha)
