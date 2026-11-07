@@ -93,6 +93,9 @@ func New(c *core.Core) *mcp.Server {
 	if c.Filament != nil {
 		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
 	}
+	if c.Export != nil {
+		AddExportTools(s, c) // export de projet : archive zip partageable (export_tools.go)
+	}
 	return s
 }
 
