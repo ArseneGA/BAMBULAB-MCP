@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@modelcontextprotocol/ext-apps';
-import { AlertTriangle, ArrowLeft, Check } from 'lucide-react';
+import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import '../src/design/tokens.css';
 import '../src/design/base.css';
 import '../src/viewer/viewer.css';
@@ -10,16 +10,18 @@ import { GlbView } from '../src/viewer/GlbView';
 import type { LoadedModel } from '../src/viewer/glbEngine';
 import type { ModelDetails, SearchResult } from '../src/api/types';
 import type { ConfirmationView } from '../src/api/printTypes';
+import { LaunchConfirm, StopConfirm } from './launch';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
  * Aucune I/O réseau : tout passe par app.callServerTool (l'iframe ne peut pas joindre localhost de façon fiable).
  *  - résultat de search_models      -> liste de modèles ;
+ *  - résultat de request_print_confirmation / cancel_print -> confirmation de lancement / d'arrêt par code de lancement (launch.tsx) ;
  *  - résultat de get_model_details  -> fiche compacte + viewer 3D (maillage chargé par tranches via get_mesh_chunk) ;
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'confirm'; data: ConfirmationView } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
 interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string }>; isError?: boolean }
 
@@ -29,6 +31,7 @@ function classify(r: ToolResultLike): View {
   if (r.isError) return { kind: 'error', text: textOf(r) || "L'outil a renvoyé une erreur." };
   const s = r.structuredContent as Record<string, unknown> | undefined;
   if (s && typeof s.confirmation_id === 'string' && typeof s.binding === 'object') return { kind: 'confirm', data: s as unknown as ConfirmationView };
+  if (s && s.outcome === 'stop_requested' && typeof s.stop_url === 'string') return { kind: 'stop', stopUrl: s.stop_url, question: typeof s.question === 'string' ? s.question : undefined };
   if (s && Array.isArray(s.models) && typeof s.total === 'number') return { kind: 'search', data: s as unknown as SearchResult };
   if (s && typeof s.model === 'object' && Array.isArray(s.files)) return { kind: 'model', data: s as unknown as ModelDetails };
   return { kind: 'text', text: textOf(r) || 'Aucun contenu à afficher.' };
@@ -90,7 +93,8 @@ function Root() {
   if (!app) return null;
   if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
   if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
-  if (view.kind === 'confirm') return <Box><Confirm app={app} first={view.data} /></Box>;
+  if (view.kind === 'confirm') return <Box><LaunchConfirm app={app} first={view.data} /></Box>;
+  if (view.kind === 'stop') return <Box><StopConfirm app={app} stopUrl={view.stopUrl} question={view.question} /></Box>;
   if (view.kind === 'search') return <Box><Search app={app} data={view.data} onOpen={(d) => setView({ kind: 'model', data: d, from: view.data })} /></Box>;
   return <Box><Model app={app} data={view.data} onBack={view.from ? () => setView({ kind: 'search', data: view.from! }) : undefined} /></Box>;
 }
@@ -187,55 +191,6 @@ function Model({ app, data, onBack }: { app: App; data: ModelDetails; onBack?: (
       </div>
       <div className="context" role="status"><span className="dim">Sélection transmise au contexte :</span> <strong>{part ? `${label} · ${parts.find((p) => p.id === part)?.label ?? part}` : label}</strong></div>
       {data.analysis.warnings && data.analysis.warnings.length > 0 && <p className="small dim">{data.analysis.warnings[0]}</p>}
-    </>
-  );
-}
-
-/**
- * Confirmation de lancement : vue en LECTURE SEULE. Elle montre ce qui sera imprimé et ouvre la page locale /confirm/{id}
- * dans le navigateur de l'utilisateur (app.openLink) : l'accord ne se donne JAMAIS depuis l'iframe. Elle ne lance rien
- * et n'appelle que get_print_confirmation_view (relecture de l'état d'approbation).
- */
-function Confirm({ app, first }: { app: App; first: ConfirmationView }) {
-  const [c, setC] = useState(first);
-  const [err, setErr] = useState<string>();
-  const b = c.binding;
-  const expired = new Date(c.expires_at).getTime() < Date.now();
-  useEffect(() => {
-    if (c.approved) return;
-    const t = window.setInterval(() => {
-      app.callServerTool({ name: 'get_print_confirmation_view', arguments: { confirmation_id: c.confirmation_id } }).then((r) => { const v = classify(r as ToolResultLike); if (v.kind === 'confirm') setC(v.data); }, () => undefined);
-    }, 3000);
-    return () => window.clearInterval(t);
-  }, [app, c.approved, c.confirmation_id]);
-  const open = async () => {
-    setErr(undefined);
-    try { const r = await app.openLink({ url: c.confirm_url }); if ((r as { isError?: boolean } | undefined)?.isError) setErr("L'hôte a refusé d'ouvrir le lien : copiez l'adresse ci-dessous dans votre navigateur."); }
-    catch { setErr("Ouverture de lien indisponible dans cet hôte : copiez l'adresse ci-dessous dans votre navigateur."); }
-  };
-  return (
-    <>
-      <header className="head"><h1>Confirmation de lancement</h1></header>
-      <dl className="dims mono confirm">
-        <div><dt>Fichier</dt><dd>{b.file}</dd></div>
-        <div><dt>Imprimante</dt><dd>{b.printer_name} ({b.printer_model})</dd></div>
-        <div><dt>Empreinte</dt><dd>{b.sha256.slice(0, 16)}…</dd></div>
-        <div><dt>Plaque</dt><dd>{b.plate}</dd></div>
-        <div><dt>Matières</dt><dd>{b.materials.map((m) => `f${m.filament_slot} → ${m.tray} : ${m.material_id}`).join(' ; ') || '—'}</dd></div>
-        <div><dt>Valable jusqu'à</dt><dd>{new Date(c.expires_at).toLocaleTimeString('fr-FR')}</dd></div>
-      </dl>
-      {c.approved ? (
-        <p className="msg" role="status"><Check size={14} aria-hidden /> Accord enregistré sur la page locale, pour cette impression seulement. Dites à l'assistant que c'est fait : il lancera l'impression.</p>
-      ) : expired ? (
-        <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> Confirmation expirée : demandez-en une nouvelle.</p>
-      ) : (
-        <>
-          <p className="small">{c.instructions}</p>
-          <div className="acts"><button type="button" className="primary" onClick={open}>Ouvrir la page de confirmation</button></div>
-          <p className="small dim">Vous cochez « plateau vide » et confirmez sur cette page locale, dans votre navigateur : cette vue ne peut ni autoriser ni lancer. Adresse : <span className="mono">{c.confirm_url}</span></p>
-        </>
-      )}
-      {err && <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {err}</p>}
     </>
   );
 }
