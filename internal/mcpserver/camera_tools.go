@@ -1,11 +1,9 @@
 package mcpserver
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"image/jpeg"
 	"strings"
 	"time"
 
@@ -32,7 +30,7 @@ type SnapshotOut struct {
 	SizeBytes int       `json:"size_bytes"`
 	Width     int       `json:"width"`
 	Height    int       `json:"height"`
-	PhotoURL  string    `json:"photo_url" jsonschema:"route de l'interface qui sert cette photo (jeton d'API ou navigateur enregistré)"`
+	PhotoURL  string    `json:"photo_url,omitempty" jsonschema:"toujours vide : un instantané à la demande n'est pas conservé (seules les photos de fin et d'alerte le sont)"`
 	Note      string    `json:"note"`
 }
 
@@ -114,12 +112,12 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 		if err != nil {
 			return nil, SnapshotOut{}, err
 		}
-		p, err := c.Camera.Capture(ctx, id, "snapshot", "", 2*time.Second)
+		p, err := c.Camera.Snapshot(ctx, id)
 		if err != nil {
 			return nil, SnapshotOut{}, err
 		}
-		cfg, _ := jpeg.DecodeConfig(bytes.NewReader(p.JPEG))
-		out := SnapshotOut{PrinterID: id, TakenAt: p.TakenAt, SHA256: p.SHA256, SizeBytes: p.Size, Width: cfg.Width, Height: cfg.Height, PhotoURL: p.URL,
+		cfg := struct{ Width, Height int }{p.Width, p.Height}
+		out := SnapshotOut{PrinterID: id, TakenAt: p.TakenAt, SHA256: p.SHA256, SizeBytes: p.Size, Width: cfg.Width, Height: cfg.Height,
 			Note: "Image prise à " + p.TakenAt.Format("15:04:05") + ". Une photo ne prouve pas que le plateau est vide : l'attestation reste humaine (page de confirmation)."}
 		return imageResult(fmt.Sprintf("Instantané de %s pris à %s (%dx%d).", id, p.TakenAt.Format(time.RFC3339), cfg.Width, cfg.Height), p.JPEG), out, nil
 	})
