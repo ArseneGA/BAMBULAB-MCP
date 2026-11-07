@@ -400,20 +400,42 @@ func (s *Service) Revoke(ctx context.Context, id string) (int, error) {
 	if len(ids) > 1 {
 		return 0, fmt.Errorf("%q est ambigu (%d sessions) : donner l'identifiant complet", id, len(ids))
 	}
-	_, err = s.st.DB().ExecContext(ctx, `UPDATE human_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, store.FormatTime(s.now()), ids[0])
+	now := store.FormatTime(s.now())
+	var grants int64
+	err = s.st.Tx(ctx, func(tx *sql.Tx) error {
+		if _, e := tx.ExecContext(ctx, `UPDATE human_sessions SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, now, ids[0]); e != nil {
+			return e
+		}
+		// Les autorisations OAuth accordées depuis ce navigateur tombent avec lui.
+		res, e := tx.ExecContext(ctx, `UPDATE oauth_grants SET revoked_at=? WHERE human_session_id=? AND revoked_at IS NULL`, now, ids[0])
+		if e != nil {
+			return e
+		}
+		grants, _ = res.RowsAffected()
+		return nil
+	})
 	if err == nil {
-		_ = s.st.Audit(ctx, "human:cli", "human.session_revoked", "human_session", ids[0], nil)
+		_ = s.st.Audit(ctx, "human:cli", "human.session_revoked", "human_session", ids[0], map[string]any{"oauth_grants_revoked": grants})
 	}
 	return 1, err
 }
 
 // RevokeAll révoque toutes les sessions actives.
 func (s *Service) RevokeAll(ctx context.Context) (int64, error) {
-	res, err := s.st.DB().ExecContext(ctx, `UPDATE human_sessions SET revoked_at=? WHERE revoked_at IS NULL`, store.FormatTime(s.now()))
+	now := store.FormatTime(s.now())
+	var n int64
+	err := s.st.Tx(ctx, func(tx *sql.Tx) error {
+		res, e := tx.ExecContext(ctx, `UPDATE human_sessions SET revoked_at=? WHERE revoked_at IS NULL`, now)
+		if e != nil {
+			return e
+		}
+		n, _ = res.RowsAffected()
+		_, e = tx.ExecContext(ctx, `UPDATE oauth_grants SET revoked_at=? WHERE revoked_at IS NULL AND human_session_id<>''`, now)
+		return e
+	})
 	if err != nil {
 		return 0, err
 	}
-	n, _ := res.RowsAffected()
 	if n > 0 {
 		_ = s.st.Audit(ctx, "human:cli", "human.sessions_revoked_all", "human_session", "", map[string]any{"count": n})
 	}
