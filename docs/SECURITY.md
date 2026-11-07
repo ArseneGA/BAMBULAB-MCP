@@ -44,6 +44,7 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 - **L'accord humain ne vaut que 2 minutes après le clic** ; il est **invalidé après tout `not_sent`** (le jeton n'est pas brûlé, l'humain doit recliquer).
 - Le jeton est consommé **juste avant la publication MQTT** (`printer.Start` : fichier distant vérifié → relecture d'état fraîche et contrôle idle → vérification/consommation de la preuve → publication).
 - Si la confirmation est consommée mais que le passage en `START_REQUESTED` ne peut pas être enregistré : état terminal sûr **`START_ABORTED_BEFORE_SEND`** (rien n'a été envoyé).
+- Plateau multi-pièces (`plan_plate`, `execute_plate_slice`) : ces outils ne font que planifier et découper ; **une impression = une plaque**, chacune avec sa propre confirmation liée à l'empreinte de SON archive (qui ne contient que cette plaque) et à son numéro de plaque.
 - Aucun outil MCP n'approuve : `confirm_print_from_app` a été **supprimé** ; `get_print_confirmation_view` est en lecture seule (ni jeton ni nonce). Test : `TestNoMCPToolCanApproveAConfirmation` énumère tous les outils (schémas d'entrée sans champ d'approbation, appels forgés, la confirmation reste non approuvée).
 
 ## 4. Arrêt d'une impression

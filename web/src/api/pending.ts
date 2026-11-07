@@ -11,7 +11,7 @@
  * réconciliation d'un lancement incertain (/api/print-jobs/{id}/reconcile) et écran de l'agent Windows (/agents).
  */
 
-export type PendingId = 'zone_overrides';
+export type PendingId = string;
 
 export interface PendingNeed {
   id: PendingId;
@@ -25,13 +25,12 @@ export interface PendingNeed {
   milestone: string;
 }
 
-export const PENDING: PendingNeed[] = [
-  {
-    id: 'zone_overrides', screen: 'Préparation',
-    today: "L'objet ou la sous-partie se sélectionne (sous-parties stables du serveur) et les réglages se modifient à la main avec leur provenance, mais ils valent pour la pièce entière : une zone d'un critère est consignée, sans variante propre.",
-    needs: "Variantes par zone et réglages réellement limités à un objet : un profil de découpe (machine, process, filament) est global ; Bambu Studio porte les réglages par objet dans le projet 3MF (métadonnées d'objet), que ni modify_slicing_profile ni la génération de variantes n'écrivent aujourd'hui. Il faudrait des surcharges ciblées par objet dans les révisions de profil et leur écriture dans le 3MF découpé.",
-    milestone: 'objectifs (suite) : surcharges par objet dans le 3MF',
-  },
-];
+/**
+ * Plus aucune limite connue. `zone_overrides` est retiré : les réglages par objet existent maintenant, via le plateau
+ * multi-pièces (POST /api/plate-plans, internal/printing/plates.go). Ils sont écrits dans Metadata/model_settings.config
+ * du 3MF et relus par Bambu Studio (preuve : TestRealPerObjectInfill / TestRealPerObjectKeys). Reste hors périmètre :
+ * les variantes par zone d'une même pièce dans les expériences d'objectifs (la plage de hauteur par pièce est prise en charge).
+ */
+export const PENDING: PendingNeed[] = [];
 
 export const pendingFor = (screen: PendingNeed['screen']) => PENDING.filter((p) => p.screen === screen);

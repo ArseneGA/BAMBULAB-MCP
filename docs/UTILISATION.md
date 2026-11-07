@@ -90,6 +90,26 @@ Si ça se passe mal :
 - **Changer d'avis** sur la matière ou l'imprimante après avoir été interrogé : la confirmation devient invalide, il faut en redemander une.
 - **Deux impressions de suite avec le même accord** : impossible, chaque accord est à usage unique et lié à *cette* impression.
 
+### Plusieurs pièces sur un plateau
+
+> **Vous** : Mets les 6 pièces de la presse sur le moins de plateaux possible, matrices à 100 %.
+>
+> **Claude** (`search_models`, `plan_plate`) : J'ai retrouvé *matrice* (×4) et *poussoir* (×2). Plan : **TIENT** — 6 pièces sur **1 plateau** de la P1S (256 × 256 mm, disposition réelle calculée par Bambu Studio), empreinte 36 % du plateau, hauteur max 30 mm. Matrices à 100 % de remplissage, poussoirs au profil par défaut. (`capture_preview`, mode `plate` : *je te montre le plateau* — image avec la grille de 10 mm, la zone interdite de la P1S et chaque pièce numérotée à sa place, légende avec les réglages de chacune.)
+>
+> **Vous** : Parfait, découpe.
+>
+> **Claude** (`execute_plate_slice`) : 1 impression en file (une par plaque). *(plus tard)* Découpé : 7 h 29, 554 g de filament ; par pièce, relu dans le G-code : matrice 133,5 g (100 %), poussoir 9,9 g. Validation OK pour la P1S. Je dépose le fichier ? — puis, comme d'habitude, tu valides **sur la page de confirmation**.
+
+Ce qu'il faut savoir :
+
+- **Réglages par pièce** : remplissage (%), motif de remplissage, parois, hauteur de couche, couches du dessus/dessous, bordure, supports ; et des **plages de hauteur** (ex. couches de 0,1 mm jusqu'à 5 mm). Ils sont écrits dans le 3MF et **relus par Bambu Studio** : le résumé de chaque plaque donne la matière et le nombre de couches de chaque pièce, lus dans le G-code, pour que vous voyiez que « 100 % » a bien pesé plus lourd que « 15 % ».
+- **Ça tient ou pas, avant de découper** : `plan_plate` compare l'empreinte et la hauteur de chaque pièce au plateau réel de l'imprimante (profils Bambu, zones interdites comprises) et dit « NE TIENT PAS : *pièce* — empreinte 400 × 20 mm > plateau 256 × 256 mm ». Un plan qui ne tient pas ne peut pas être découpé.
+- **Plusieurs plaques** : si tout ne tient pas sur un plateau, Bambu Studio répartit sur autant de plaques que nécessaire. Chaque plaque est **une impression à part** : elle se valide, se dépose et se confirme séparément (un accord humain par plaque ; l'empreinte et le numéro de plaque sont ceux de la confirmation).
+- « Ne mélange pas des réglages différents sur une même plaque » → l'option `group_by_settings` regroupe les pièces par jeu de réglages.
+- Sans Bambu Studio, le rangement est **estimé** par rectangles englobants (prudent, annoncé comme tel) ; la disposition exacte se fait alors à la découpe.
+- L'aperçu du plateau (`capture_preview`, mode `plate`) marche avant découpe (depuis le plan) et après (depuis le 3MF découpé : positions et orientations réelles). Mode `layers` : une couche du G-code.
+- Limites : la pièce est posée comme dans sa version du catalogue (orientez-la avant avec « pose-la à plat ») ; la jupe, la bordure et le temps **par pièce** ne sont pas dessinés (le temps est celui de la plaque).
+
 ## 5. Depuis le PC Windows (renfort)
 
 - **Importer mes dossiers 3D** : « Inventorie D:\3D » (agent, lecture seule) → « Copie tout sur le serveur » : chaque fichier est copié avec empreinte vérifiée ; les originaux Windows ne sont jamais touchés ; un fichier modifié entre-temps n'est pas envoyé.
