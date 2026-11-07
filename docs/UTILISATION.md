@@ -125,6 +125,67 @@ L'interface est servie par `bambud` lui-même (même adresse que l'API, par exem
 | **Comparaison** | Sans expérience ouverte : la **liste des expériences passées**. Sinon : tableau des variantes (mesures étiquetées « estimation slicer » ou « lecture du G-code »), classement par critère mesurable, application d'une variante (refusée si le modèle a changé), **mémoire des essais comparables** et **« Enregistrer l'essai réel »** (réussite, observations, mesures, réglages réellement utilisés ; les écarts avec le plan sont consignés). |
 | **Matériaux** | Modèles d'imprimantes Bambu connus, parc enregistré, **fiches matériaux** issues des fiches techniques du fabricant (valeur, unité, tolérance, source, date, niveau de confiance, domaine de validité ; une propriété sans valeur est « inconnue »), presets filament de Bambu Studio compatibles avec une machine. |
 | **Impression** | Ajout d'imprimante, découpe, validation, dépôt, demande de confirmation. *Le lancement se décide sur la page `/confirm` du serveur, jamais dans l'interface.* Pendant l'impression : avancement ; « Demander l'arrêt » ouvre la page `/stop` (rien n'est arrêté avant votre validation). Lancement incertain : **« Vérifier l'état réel »** lit l'imprimante sans jamais relancer. Impression terminée : lien vers le formulaire de retour d'expérience. |
+| **Tableau de bord** | Quatre onglets : **Usage** (heures machine, nombre d'impressions, taux de réussite, filament par matière, coût cumulé estimé, par période, imprimante et projet) ; **Journal** (la fiche de chaque impression terminée : réglages effectifs, durée et masse estimées/réelles, note de 1 à 5, défauts à cocher, commentaire, **photos** JPEG/PNG/WebP, ajustements proposés) ; **Prix et coût** (prix du kWh, du kg par matière, usure, puissances mesurées, estimateur) ; **Post-traitement** (ponçage, apprêt, lissage, vernis, recuit, inserts, collage). |
 | **Agent Windows** (pastille « Windows ») | État des agents, inventaire des fichiers encore « Windows seulement », **demande de copie** vers le serveur (taille et empreinte vérifiées), suivi des travaux. L'appairage se fait sur `/agents/pair` (navigateur enregistré). L'agent ne peut ni lancer ni arrêter une impression. |
 
-Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serveur seulement), saisir le code d'accès de l'imprimante (page `/setup`), joindre des photos à un retour d'expérience, renommer ou déplacer physiquement des fichiers (le catalogue seul est modifié).
+Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serveur seulement), saisir le code d'accès de l'imprimante (page `/setup`), renommer ou déplacer physiquement des fichiers (le catalogue seul est modifié).
+
+---
+
+## 8. Coût, journal des impressions, tableau de bord, finition
+
+Tout est disponible dans Claude (outils) et dans l'interface web (écran **Tableau de bord**). Aucun de ces outils ne lance ni n'arrête d'impression.
+
+### Combien coûte cette impression ?
+
+> « Combien va coûter l'impression 3 de la plaque 1 ? » → `estimate_cost` avec `print_job_id`.
+> « Et pour 180 g de PETG pendant 5 h sur la X1C ? » → `estimate_cost` avec `printer_model`, `duration_minutes`, `filaments`.
+
+Le coût est la somme de trois lignes :
+
+- **Filament** : masse de chaque emplacement × prix du kg. Le prix est, dans l'ordre : celui que vous donnez pour cet appel, celui de la bobine (`spool_per_kg`, clé = libellé de la bobine), celui de la famille de matière (PLA, PETG, ABS, ASA, TPU, PC, PA, PA-CF…), sinon une valeur par défaut **indicative**.
+- **Électricité** : (puissance de chauffe × durée de chauffe + puissance d'impression × durée restante) × prix du kWh. La puissance dépend du modèle d'imprimante (P1S, P1P, X1C, X1E, A1, A1 mini, H2D, H2S, P2S) et de la matière (facteur plus fort pour ABS, ASA, PC, PA : plateau et enceinte plus chauds ; chauffe plus longue). **Ces puissances sont des ordres de grandeur non mesurés** : remplacez-les par vos relevés de prise mesurante (`power_overrides`).
+- **Usure** : heures machine × amortissement de la machine + usure de la buse (réglages, **0 par défaut**).
+
+Pour une impression terminée, la réponse contient aussi le **coût réel estimé** : durée observée par le service (début et fin de l'impression), masse déclarée par vous (pesée) ou, à défaut, masse prévue (au prorata de l'avancement si l'impression a été interrompue).
+
+Réglez les prix une fois :
+
+> « Mon kWh est à 0,21 € et mon PLA à 17 €/kg, recalcule l'historique. » → `set_cost_settings` (`apply_to_history`).
+
+**Toujours une estimation.** Chaque réponse porte le mot ESTIMATION et la liste de ses hypothèses (prix par défaut, puissances indicatives, durée du slicer supposée chauffe comprise, purges et ratés non comptés, pas de temps humain ni de consommables). Les prix encore à leur valeur par défaut sont signalés (`defaulted_prices`).
+
+**Par projet** (collection de la bibliothèque) : `get_project_costs` (ou le tableau « Par projet » du tableau de bord) additionne le coût réel estimé des impressions terminées et l'estimation des impressions préparées pas encore terminées.
+
+### Le journal des impressions
+
+Chaque impression terminée, échouée ou annulée a une **fiche** (créée à la demande, la première fois que vous ouvrez le journal ou que Claude le lit). Elle garde les réglages effectifs (profil, buse, surcharges, orientation), la durée et la masse estimées et réelles, le coût, des photos, une note de 1 à 5, un commentaire et des défauts à cocher (gauchissement, fils, couches visibles, décollement de couches, adhérence, dimensions, patte d'éléphant, sous/sur-extrusion, boutons, supports, surplombs, décalage de couches, surface, autre).
+
+> « Note l'impression 3 : 4 sur 5, un peu de fils, 52 g pesés. » → `update_print_log`.
+> « Montre le journal des impressions en PETG ratées. » → `list_print_log`.
+
+- **Photos** : depuis l'interface (« Ajouter une photo » sur la fiche) ou par référence de blob (`photo_blobs`). Seuls JPEG, PNG et WebP sont acceptés (12 Mio au plus, 8 photos par fiche) ; un SVG est refusé.
+- **`record_print_result` est étendu sans changer** : il accepte en plus `print_job_id`, `rating`, `defects`, `actual_mass_g` et `actual_duration_minutes`, et rattache alors le retour à la fiche. Les appels existants se comportent comme avant.
+- **Mémoire des essais** : avec `experiment_id` et `candidate_id`, `update_print_log` verse le retour de la fiche dans la mémoire existante (`get_print_memory`), qui ne réutilise les essais que pour la même matière, la même machine et une géométrie similaire.
+
+### Ajustements proposés pour la prochaine impression
+
+> « La dernière est pleine de fils, que changer ? » → `suggest_print_adjustments` avec la fiche.
+
+Des **règles explicites de niveau heuristique** (fichier `internal/insights/data/adjustments.json`, avec sources) associent chaque défaut à des changements de réglages : clé du profil Bambu Studio, sens, ordre de grandeur à partir de la valeur actuelle, justification et compromis. Un défaut est traité s'il est coché sur la fiche, demandé, ou **récurrent** (au moins deux fiches comparables : même matière, même machine). La meilleure fiche comparable (réussie, notée 4 ou 5) est indiquée comme base de départ.
+
+**Jamais automatique** : rien n'est appliqué. Changez un réglage à la fois (`modify_slicing_profile`, `create_experiment`), refaites une pièce comparable, puis notez le résultat.
+
+### Tableau de bord
+
+> « Où en est ma machine ce mois-ci ? » → `get_usage_dashboard` (texte + image du graphe des heures machine par période).
+
+Heures machine, nombre d'impressions, **taux de réussite** (réussies ÷ réussies + partielles + ratées ; les annulations par vous sont comptées à part), filament consommé par matière, coût cumulé **estimé**, ventilés par période (jour, semaine ou mois), imprimante et projet. Le statut « réussie » vient de la fin de l'impression et se corrige dans la fiche.
+
+### Conseils de post-traitement
+
+> « Je veux une surface lisse sur ma pièce en ABS. » / « Des inserts M3 dans du PETG. » → `post_processing_advice` (matière, finition, géométrie, usage, tailles d'inserts).
+
+Réponse : des **étapes ordonnées** (préparation, ponçage avec les grains, apprêt, lissage chimique quand il est pertinent et avec ses dangers, peinture, vernis ou résine, recuit, inserts thermo-sertis avec les diamètres de trou de `internal/engineering`, collage), les techniques **déconseillées pour cette matière et pourquoi**, les dangers (acétone, poussières de fibres de carbone, résines) et des avertissements selon l'usage (extérieur, chaleur, cotes serrées, contact alimentaire, parois fines). Les données sont embarquées et versionnées (`internal/insights/data/postprocess.json`), de niveau heuristique, avec leurs sources : à essayer sur une pièce témoin.
+
+Honnêteté : le PETG et le polycarbonate imprimés en FDM restent **translucides**, pas transparents ; le PLA ne se lisse pas à l'acétone.
