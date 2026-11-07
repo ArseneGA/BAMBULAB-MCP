@@ -19,6 +19,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
@@ -71,6 +72,8 @@ type Core struct {
 	Goals *goals.Service
 	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
 	Printing *printing.Service
+	// Insights : coût, journal des impressions, tableau de bord, post-traitement (chantier C).
+	Insights *insights.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
@@ -180,6 +183,12 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("impression : %w", err)
 	}
 	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
+	c.Insights, err = insights.New(insights.Config{Store: st, Blobs: blobs, Goals: gs})
+	if err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("journal et coûts : %w", err)
+	}
 	c.AddRunHook(func(context.Context) { c.Catalog.WarmCAD() }) // vérifie CadQuery (ping) dès le démarrage, sans bloquer
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
 		PollInterval: cfg.PollInterval, HeartbeatInterval: cfg.HeartbeatInterval, Logger: cfg.Logger,

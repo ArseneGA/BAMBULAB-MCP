@@ -74,6 +74,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerAgent(mux, c, human)
 	registerGoals(mux, c)
 	registerMaterials(mux, c)
+	registerInsights(mux, c)        // coût, journal, tableau de bord, post-traitement (insights.go)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
 
 	server := mcpserver.New(c)
