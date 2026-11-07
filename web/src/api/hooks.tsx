@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import { api, describeError, ApiError, BASE } from './client';
 import type { Capabilities, Health } from './types';
+import { windowsLink } from './windowsLink';
+import type { WindowsLink } from './windowsLink';
 
 /* ---------- Requête asynchrone avec annulation ---------- */
 export interface AsyncState<T> {
@@ -42,7 +44,10 @@ export interface Connection {
   server: 'checking' | 'online' | 'offline';
   health?: Health;
   capabilities?: Capabilities;
-  windows: Link;
+  /** « unused » : aucun agent jamais appairé (mode Linux seul, normal). */
+  windows: WindowsLink;
+  /** SPA servie en http hors loopback : première URL https publique ("" si aucune configurée) ; undefined sinon. */
+  httpsUrl?: string;
   /** Agents Windows appairés (capabilities.agents) ; vide sans agent. */
   agents: NonNullable<Capabilities['agents']>;
   cad: Link;
@@ -65,6 +70,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   const [caps, setCaps] = useState<Capabilities>();
   const [enrolled, setEnrolled] = useState<boolean>();
   const [authRequired, setAuthRequired] = useState(false);
+  const [httpsUrl, setHttpsUrl] = useState<string>();
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -76,8 +82,10 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
         const c = await api.capabilities(ac.signal).catch((e: unknown) => e as Error);
         if (!alive) return;
         setAuthRequired(c instanceof ApiError && c.status === 401);
-        const sess = await fetch(BASE + '/api/session', { signal: ac.signal, credentials: 'same-origin' }).then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : undefined)).catch(() => undefined);
+        let hu: string | undefined;
+        const sess = await fetch(BASE + '/api/session', { signal: ac.signal, credentials: 'same-origin' }).then((r) => { hu = r.headers.get('X-Atelier-Https-Url') ?? undefined; return r.ok ? (r.json() as Promise<Record<string, unknown>>) : undefined; }).catch(() => undefined);
         if (!alive) return;
+        setHttpsUrl(hu);
         const e = sess?.enrolled ?? sess?.registered;
         setEnrolled(typeof e === 'boolean' ? e : undefined);
         setHealth(h); setCaps(c instanceof Error ? undefined : c); setServer('online');
@@ -93,10 +101,11 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Connection>(() => {
     const feat = (id: string) => caps?.features.find((f) => f.id === id);
-    const win = feat('windows_agent'), cad = feat('cad_worker'), imp = feat('catalog_import');
+    const cad = feat('cad_worker'), imp = feat('catalog_import');
     return {
       server, health, capabilities: caps,
-      windows: server !== 'online' ? 'unavailable' : (caps?.agents?.some((a) => a.online) || win?.available) ? 'online' : 'offline',
+      windows: windowsLink(server === 'online', caps),
+      httpsUrl,
       agents: caps?.agents ?? [],
       cad: server !== 'online' ? 'unavailable' : cad?.available ? 'online' : 'unavailable',
       cadNote: cad?.note,
@@ -104,6 +113,6 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
       importEnabled: !!imp?.available, importNote: imp?.note,
       recheck: () => setTick((t) => t + 1),
     };
-  }, [server, health, caps, enrolled, authRequired]);
+  }, [server, health, caps, enrolled, authRequired, httpsUrl]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

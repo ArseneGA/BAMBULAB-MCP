@@ -134,7 +134,7 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
           )}
           {winOnly && !trashed && (
             <Notice tone="warn" icon={<FileWarning size={16} aria-hidden />} title="Fichier non copié sur le serveur Linux">
-              Ce modèle est connu par son index seulement. Il ne fait pas partie des capacités hors ligne tant qu'il n'est pas copié {conn.windows === 'online' ? "(agent Windows en ligne)." : "(agent Windows hors ligne)."}
+              Ce modèle est connu par son index seulement. Il ne fait pas partie des capacités hors ligne tant qu'il n'est pas copié {conn.windows === 'online' ? "(agent Windows en ligne)." : conn.windows === 'unused' ? "(Windows non utilisé)." : "(agent Windows hors ligne)."}
             </Notice>
           )}
           <div className="mdl-view">{previewBlock(m.preview)}</div>

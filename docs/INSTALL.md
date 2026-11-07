@@ -84,7 +84,7 @@ sudo atelier-admin enroll
 # Code d'enregistrement : ABCD-EFGH   (usage unique, 10 minutes)
 ```
 
-Ouvrez `http://IP:7878/enroll` dans le navigateur (PC, téléphone, tablette du réseau local) et saisissez le code. Répétez pour chaque appareil. **L'interface web (`http://IP:7878/`) a besoin de ce même enregistrement** : le jeton d'API reste sur le serveur, c'est le cookie du navigateur enregistré qui authentifie les appels de l'interface. Un navigateur inconnu voit l'écran « Enregistrer ce navigateur » qui mène à `/enroll`. Gestion : `sudo atelier-admin enroll --list`, `--revoke <id>`, `--revoke-all`.
+Ouvrez `/enroll` en **https** (par exemple `tailscale serve`, première URL https de `BAMBU_PUBLIC_URL`) ou sur `http://localhost` : les pages humaines (`/enroll`, `/confirm`, `/stop`, `/setup/*`, `/agents/pair`) sont refusées en `http://IP:7878` (le navigateur n'y envoie pas ses en-têtes de sécurité ; bambud affiche alors un lien vers l'URL https). L'API JSON et `/mcp` restent utilisables en http avec le jeton. Saisissez le code dans le navigateur (PC, téléphone, tablette). Répétez pour chaque appareil. **L'interface web (`http://IP:7878/`) a besoin de ce même enregistrement** : le jeton d'API reste sur le serveur, c'est le cookie du navigateur enregistré qui authentifie les appels de l'interface. Un navigateur inconnu voit l'écran « Enregistrer ce navigateur » qui mène à `/enroll`. Gestion : `sudo atelier-admin enroll --list`, `--revoke <id>`, `--revoke-all`.
 
 > Le serveur est en HTTP clair sur le réseau local. Acceptable à la maison ; ne l'exposez pas sur Internet. Pour un accès hors LAN, placez un proxy HTTPS devant bambud (alors `--public-url https://…` rend le cookie `Secure`).
 
