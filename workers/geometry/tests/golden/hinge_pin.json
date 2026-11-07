@@ -1,0 +1,16 @@
+{
+  "template": "hinge_pin",
+  "template_version": "1.0.0",
+  "volume_mm3": 5680.485,
+  "area_mm2": 5259.64,
+  "bbox_size_mm": [
+    56.002,
+    40.0,
+    40.001
+  ],
+  "parts": 3,
+  "solids": 3,
+  "components": 3,
+  "watertight": true,
+  "fingerprint": "bc361eb0ca9fdfe9"
+}

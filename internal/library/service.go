@@ -53,6 +53,7 @@ type Deps struct {
 type Service struct {
 	d Deps
 
+	loadMu   sync.Mutex // un seul chargement des gabarits à la fois (hors de mu)
 	mu       sync.Mutex
 	builtins map[string]TemplateInfo
 	order    []string
@@ -98,11 +99,22 @@ func (s *Service) worker(ctx context.Context, cmd string, req map[string]any) (j
 func thumbURL(id string) string { return "/api/library/templates/" + id + "/thumbnail.svg" }
 
 // loadBuiltins interroge le worker (une fois, puis cache).
+//
+// Le chargement se fait HORS du verrou s.mu (le worker peut être long, et les autres appels — vignettes en cache, listes —
+// ne doivent pas l'attendre) ; loadMu fait office de singleflight : un seul appel au worker, les autres attendent son résultat.
 func (s *Service) loadBuiltins(ctx context.Context) (map[string]TemplateInfo, []string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.builtins != nil {
-		return s.builtins, s.order, nil
+	cached := func() (map[string]TemplateInfo, []string, bool) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.builtins, s.order, s.builtins != nil
+	}
+	if m, o, ok := cached(); ok {
+		return m, o, nil
+	}
+	s.loadMu.Lock()
+	defer s.loadMu.Unlock()
+	if m, o, ok := cached(); ok { // un autre appel vient de charger
+		return m, o, nil
 	}
 	raw, err := s.worker(ctx, "library_list", map[string]any{})
 	if err != nil {
@@ -122,7 +134,9 @@ func (s *Service) loadBuiltins(ctx context.Context) (map[string]TemplateInfo, []
 		m[t.ID] = t
 		order = append(order, t.ID)
 	}
+	s.mu.Lock()
 	s.builtins, s.order = m, order
+	s.mu.Unlock()
 	return m, order, nil
 }
 

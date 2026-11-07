@@ -76,6 +76,11 @@ type Config struct {
 	MinInterval float64
 	// Scan : période de recherche des impressions à surveiller (défaut 5 s).
 	Scan time.Duration
+	// RateBurst et RateEvery : limite de débit PAR IMPRIMANTE des instantanés et des ouvertures de flux (défaut : 6 d'affilée,
+	// puis un toutes les 2 s). MaxViewers : spectateurs simultanés d'un flux (défaut 8).
+	RateBurst  int
+	RateEvery  time.Duration
+	MaxViewers int
 }
 
 // Settings : réglages de la détection (non secrets), persistés.
@@ -85,11 +90,13 @@ type Settings struct {
 	DisabledPrinters []string       `json:"disabled_printers,omitempty" jsonschema:"imprimantes exclues de la surveillance"`
 	Detector         DetectorConfig `json:"detector"`
 	AlertCooldownMin int            `json:"alert_cooldown_minutes" jsonschema:"minutes minimum entre deux alertes pour la même impression"`
+	// AlertPhotoRetentionDays : les photos d'alerte plus anciennes sont supprimées (0 = jamais). Les photos de fin sont conservées.
+	AlertPhotoRetentionDays int `json:"alert_photo_retention_days" jsonschema:"jours de conservation des photos d'alerte (0 = illimité, défaut 90) ; les photos de fin d'impression sont conservées"`
 }
 
 // DefaultSettings : valeurs par défaut.
 func DefaultSettings() Settings {
-	return Settings{Enabled: true, IntervalSeconds: 60, Detector: DefaultDetectorConfig(), AlertCooldownMin: 30}
+	return Settings{Enabled: true, IntervalSeconds: 60, Detector: DefaultDetectorConfig(), AlertCooldownMin: 30, AlertPhotoRetentionDays: 90}
 }
 
 // Frame : une image reçue.
@@ -108,6 +115,8 @@ type Photo struct {
 	Size      int       `json:"size_bytes"`
 	TakenAt   time.Time `json:"taken_at"`
 	URL       string    `json:"url" jsonschema:"route de l'interface qui sert l'image (cookie d'un navigateur enregistré ou jeton d'API)"`
+	Width     int       `json:"width,omitempty"`
+	Height    int       `json:"height,omitempty"`
 	JPEG      []byte    `json:"-"`
 }
 
@@ -130,7 +139,96 @@ var (
 	ErrUnavailable = errors.New("caméra indisponible")
 	// ErrInvalid : entrée invalide.
 	ErrInvalid = errors.New("entrée invalide")
+	// ErrRateLimited : trop de demandes pour cette imprimante.
+	ErrRateLimited = errors.New("trop de demandes de caméra pour cette imprimante : réessaie dans quelques secondes")
 )
+
+// MaxJPEGSide : côté maximal accepté d'une image de caméra (au-delà, l'image est refusée avant tout décodage complet).
+const MaxJPEGSide = 4096
+
+// checkJPEG lit seulement l'en-tête (jpeg.DecodeConfig) et refuse une image trop grande ou illisible : jamais de décodage
+// complet d'une image dont les dimensions ne sont pas bornées (bombe de décompression).
+func checkJPEG(b []byte) (image.Config, error) {
+	cfg, err := jpeg.DecodeConfig(bytes.NewReader(b))
+	if err != nil {
+		return cfg, fmt.Errorf("%w : image JPEG illisible", ErrUnavailable)
+	}
+	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > MaxJPEGSide || cfg.Height > MaxJPEGSide {
+		return cfg, fmt.Errorf("%w : image de %dx%d refusée (maximum %dx%d)", ErrUnavailable, cfg.Width, cfg.Height, MaxJPEGSide, MaxJPEGSide)
+	}
+	return cfg, nil
+}
+
+type bucket struct {
+	tokens float64
+	at     time.Time
+}
+
+// allow applique la limite de débit d'une imprimante pour une catégorie (« snapshot », « stream »).
+func (s *Service) allow(printerID, cat string) bool {
+	burst, every := s.c.RateBurst, s.c.RateEvery
+	if burst <= 0 {
+		burst = 6
+	}
+	if every <= 0 {
+		every = 2 * time.Second
+	}
+	now := s.now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rate == nil {
+		s.rate = map[string]*bucket{}
+	}
+	k := cat + "|" + printerID
+	b := s.rate[k]
+	if b == nil {
+		b = &bucket{tokens: float64(burst), at: now}
+		s.rate[k] = b
+	}
+	b.tokens += float64(now.Sub(b.at)) / float64(every)
+	if b.tokens > float64(burst) {
+		b.tokens = float64(burst)
+	}
+	b.at = now
+	if b.tokens < 1 {
+		return false
+	}
+	b.tokens--
+	return true
+}
+
+// Snapshot : instantané demandé de l'extérieur (API HTTP, outils MCP). Limité en débit par imprimante ; l'image n'est
+// JAMAIS conservée (seuls les photos de fin, d'alerte et de confirmation le sont).
+func (s *Service) Snapshot(ctx context.Context, printerID string) (*Photo, error) {
+	if !s.allow(printerID, "snapshot") {
+		return nil, ErrRateLimited
+	}
+	return s.Capture(ctx, printerID, "snapshot", "", 2*time.Second)
+}
+
+// Stream ouvre un abonnement demandé de l'extérieur (relais MJPEG) : limite de débit des ouvertures et nombre maximal de
+// spectateurs simultanés par imprimante.
+func (s *Service) Stream(ctx context.Context, printerID string) (*Stream, error) {
+	if !s.allow(printerID, "stream") {
+		return nil, ErrRateLimited
+	}
+	max := s.c.MaxViewers
+	if max <= 0 {
+		max = 8
+	}
+	s.mu.Lock()
+	h := s.hubs[printerID]
+	s.mu.Unlock()
+	if h != nil {
+		h.mu.Lock()
+		n := len(h.subs)
+		h.mu.Unlock()
+		if n >= max {
+			return nil, ErrRateLimited
+		}
+	}
+	return s.Subscribe(ctx, printerID)
+}
 
 // Service gère les instantanés, le relais MJPEG et la surveillance.
 type Service struct {
@@ -146,6 +244,7 @@ type Service struct {
 	final     map[string]*sync.Mutex
 	nonce     map[string]nonceEntry
 	lastFrame map[string]Frame
+	rate      map[string]*bucket
 	wg        sync.WaitGroup
 
 	setMu    sync.Mutex
@@ -226,6 +325,7 @@ type SettingsPatch struct {
 	StallMinutes     *float64 `json:"stall_minutes,omitempty"`
 	ConsecutiveAlert *int     `json:"consecutive_alerts,omitempty" jsonschema:"1 à 20"`
 	CooldownMinutes  *int     `json:"alert_cooldown_minutes,omitempty"`
+	PhotoRetention   *int     `json:"alert_photo_retention_days,omitempty" jsonschema:"0 (illimité) à 3650 ; défaut 90"`
 	DisablePrinters  []string `json:"disable_printers,omitempty"`
 	EnablePrinters   []string `json:"enable_printers,omitempty"`
 }
@@ -277,6 +377,12 @@ func (s *Service) UpdateSettings(ctx context.Context, p SettingsPatch) (Settings
 			return st, fmt.Errorf("%w : alert_cooldown_minutes entre 1 et 1440", ErrInvalid)
 		}
 		st.AlertCooldownMin = *p.CooldownMinutes
+	}
+	if p.PhotoRetention != nil {
+		if *p.PhotoRetention < 0 || *p.PhotoRetention > 3650 {
+			return st, fmt.Errorf("%w : alert_photo_retention_days entre 0 et 3650", ErrInvalid)
+		}
+		st.AlertPhotoRetentionDays = *p.PhotoRetention
 	}
 	dis := map[string]bool{}
 	for _, id := range st.DisabledPrinters {
@@ -523,6 +629,9 @@ func (h *hub) run(ctx context.Context, cl *printer.CameraClient) {
 			}
 			return
 		}
+		if _, err := checkJPEG(jpg); err != nil {
+			continue // image hors limites : ignorée, jamais relayée ni décodée
+		}
 		f := Frame{JPEG: jpg, At: h.s.now()}
 		h.mu.Lock()
 		h.latest = &f
@@ -583,6 +692,9 @@ func (s *Service) frame(ctx context.Context, t Target, maxAge time.Duration) (Fr
 	if err != nil {
 		return Frame{}, s.friendly(t, err)
 	}
+	if _, err := checkJPEG(jpg); err != nil {
+		return Frame{}, err
+	}
 	f := Frame{JPEG: jpg, At: s.now()}
 	s.remember(t.ID, f)
 	return f, nil
@@ -609,7 +721,19 @@ func (s *Service) Capture(ctx context.Context, printerID, kind, jobID string, ma
 	if err != nil {
 		return nil, err
 	}
-	return s.store(ctx, printerID, kind, jobID, f)
+	cfg, err := checkJPEG(f.JPEG)
+	if err != nil {
+		return nil, err
+	}
+	if kind == "snapshot" { // instantané à la demande : renvoyé, jamais enregistré
+		sum := sha256.Sum256(f.JPEG)
+		return &Photo{PrinterID: printerID, JobID: jobID, Kind: kind, SHA256: hex.EncodeToString(sum[:]), Size: len(f.JPEG), TakenAt: f.At, Width: cfg.Width, Height: cfg.Height, JPEG: f.JPEG}, nil
+	}
+	p, err := s.store(ctx, printerID, kind, jobID, f)
+	if p != nil {
+		p.Width, p.Height = cfg.Width, cfg.Height
+	}
+	return p, err
 }
 
 func (s *Service) store(ctx context.Context, printerID, kind, jobID string, f Frame) (*Photo, error) {
@@ -762,7 +886,56 @@ func (s *Service) Close() {
 	s.wg.Wait()
 }
 
-func decodeJPEG(b []byte) (image.Image, error) { return jpeg.Decode(bytes.NewReader(b)) }
+func decodeJPEG(b []byte) (image.Image, error) {
+	if _, err := checkJPEG(b); err != nil {
+		return nil, err
+	}
+	return jpeg.Decode(bytes.NewReader(b))
+}
+
+// PurgeOldPhotos supprime les photos d'alerte (et d'anciens instantanés) plus vieilles que la rétention réglée, avec leur
+// contenu quand plus rien ne le référence. Les photos de fin d'impression et de confirmation sont conservées.
+func (s *Service) PurgeOldPhotos(ctx context.Context) (int, error) {
+	days := s.Settings(ctx).AlertPhotoRetentionDays
+	if days <= 0 {
+		return 0, nil
+	}
+	cutoff := store.FormatTime(s.now().AddDate(0, 0, -days))
+	rows, err := s.c.Store.DB().QueryContext(ctx, `SELECT id,sha256 FROM camera_photos WHERE kind IN ('alert','snapshot') AND taken_at < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	type row struct{ id, sha string }
+	var old []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.sha); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		old = append(old, r)
+	}
+	rows.Close()
+	n := 0
+	for _, r := range old {
+		if _, err := s.c.Store.DB().ExecContext(ctx, `DELETE FROM camera_photos WHERE id=?`, r.id); err != nil {
+			return n, err
+		}
+		n++
+		_, _ = s.c.Store.DB().ExecContext(ctx, `UPDATE camera_alerts SET photo_sha256=NULL WHERE photo_sha256=? AND at < ?`, r.sha, cutoff)
+		var left int
+		if s.c.Store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM camera_photos WHERE sha256=?`, r.sha).Scan(&left) == nil && left == 0 {
+			_, _ = s.c.Store.DB().ExecContext(ctx, `UPDATE camera_alerts SET photo_sha256=NULL WHERE photo_sha256=?`, r.sha)
+			if err := s.c.Blobs.Delete(r.sha); err != nil {
+				s.log.Warn("purge des photos : contenu non supprimé", "err", err)
+			}
+		}
+	}
+	if n > 0 {
+		_ = s.c.Store.Audit(ctx, "camera", "camera.photos_purged", "camera_photos", "alert", map[string]any{"count": n, "older_than_days": days})
+	}
+	return n, nil
+}
 
 func (s *Service) minInterval() float64 {
 	if s.c.MinInterval > 0 {

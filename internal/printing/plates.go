@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -27,8 +28,14 @@ import (
 // TestRealPerObjectInfill / TestRealPerObjectKeys (internal/slicer).
 
 const (
-	maxPlanObjects  = 200
-	maxPlanTriangle = 3_000_000
+	maxPlanObjects = 200
+	maxPlanBlob    = 64 << 20 // un modèle de plus de 64 Mio n'est pas lu pour un plan
+)
+
+// maxPlanTriangle : plafond des triangles cumulés d'un plan (variable : abaissé par les tests).
+var maxPlanTriangle = 3_000_000
+
+const (
 	defaultMaxPlate = 16
 )
 
@@ -163,20 +170,31 @@ var infillPatterns = map[string]bool{"concentric": true, "zig-zag": true, "grid"
 
 var brimTypes = map[string]bool{"auto_brim": true, "brim_ears": true, "no_brim": true, "outer_only": true, "inner_only": true, "outer_and_inner": true}
 
+// num convertit une valeur de réglage en nombre FINI : NaN et ±Inf (y compris « NaN », « Inf » en chaîne) sont refusés.
 func num(v any) (float64, bool) {
+	var f float64
 	switch t := v.(type) {
 	case float64:
-		return t, true
+		f = t
 	case int:
-		return float64(t), true
+		f = float64(t)
 	case json.Number:
-		f, err := t.Float64()
-		return f, err == nil
+		var err error
+		if f, err = t.Float64(); err != nil {
+			return 0, false
+		}
 	case string:
-		f, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(t), "%")), 64)
-		return f, err == nil
+		var err error
+		if f, err = strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(t), "%")), 64); err != nil {
+			return 0, false
+		}
+	default:
+		return 0, false
 	}
-	return 0, false
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
 }
 
 func fnum(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
@@ -296,14 +314,18 @@ func (s *Service) plateBed(rec PrinterRecord, model contracts.PrinterModel) (Pla
 
 // ---- construction du plan ----
 
+// srcMesh ne garde que les bornes et le nombre de triangles : le maillage lui-même est relâché dès le chargement.
 type srcMesh struct {
-	m         *mesh.Mesh
+	bb        mesh.BBox
+	tris      int
 	sha, nm   string // empreinte et nom du fichier source
 	versionID string
 	name      string // nom du modèle
 }
 
-func (s *Service) loadSource(ctx context.Context, modelID, versionID string) (*srcMesh, error) {
+// loadSource charge un modèle source ; budget cumule les triangles de tout ce qui est chargé pour le plan et le refuse
+// DÈS le dépassement (avant de charger la source suivante).
+func (s *Service) loadSource(ctx context.Context, modelID, versionID string, budget *int) (*srcMesh, error) {
 	ver, src, err := s.sourceFor(ctx, modelID, versionID)
 	if err != nil {
 		return nil, err
@@ -312,19 +334,26 @@ func (s *Service) loadSource(ctx context.Context, modelID, versionID string) (*s
 	if err != nil {
 		return nil, err
 	}
+	if *budget += len(m.T); *budget > maxPlanTriangle {
+		return nil, invalidf("plan trop lourd (plus de %d triangles cumulés) : réduire les quantités ou décimer les modèles", maxPlanTriangle)
+	}
 	name := modelID
 	if mm, e := s.d.Store.GetModel(ctx, modelID); e == nil {
 		name = mm.Name
 	}
-	return &srcMesh{m: m, sha: src.SHA256, nm: src.Name, versionID: ver.ID, name: name}, nil
+	return &srcMesh{bb: m.Bounds(), tris: len(m.T), sha: src.SHA256, nm: src.Name, versionID: ver.ID, name: name}, nil
 }
 
 func (s *Service) meshOfBlob(sha, name string) (*mesh.Mesh, error) {
+	// la taille est contrôlée AVANT toute lecture ou analyse
+	if n, err := s.d.Blobs.Size(sha); err == nil && n > maxPlanBlob {
+		return nil, invalidf("modèle %s trop volumineux pour un plan (%d Mio, maximum %d Mio)", name, n>>20, maxPlanBlob>>20)
+	}
 	f, err := s.d.Blobs.Open(sha)
 	if err != nil {
 		return nil, err
 	}
-	data, err := readAll(f, 512<<20)
+	data, err := readAll(f, maxPlanBlob)
 	f.Close()
 	if err != nil {
 		return nil, err
@@ -385,7 +414,7 @@ func (s *Service) PlanPlate(ctx context.Context, in PlanPlateInput) (*PlatePlan,
 	// 1. pièces : maillages, empreintes, réglages normalisés
 	type srcKey struct{ m, v string }
 	srcs := map[srcKey]*srcMesh{}
-	tri := 0
+	tri, loaded := 0, 0
 	used := map[string]bool{}
 	for ii, it := range in.Items {
 		if it.ModelID == "" {
@@ -416,12 +445,12 @@ func (s *Service) PlanPlate(ctx context.Context, in PlanPlateInput) (*PlatePlan,
 		k := srcKey{it.ModelID, it.VersionID}
 		sm := srcs[k]
 		if sm == nil {
-			if sm, err = s.loadSource(ctx, it.ModelID, it.VersionID); err != nil {
+			if sm, err = s.loadSource(ctx, it.ModelID, it.VersionID, &loaded); err != nil {
 				return nil, err
 			}
 			srcs[k] = sm
 		}
-		bb := sm.m.Bounds()
+		bb := sm.bb
 		label := strings.TrimSpace(labelClean.Replace(it.Label))
 		if label == "" {
 			label = sm.name
@@ -433,7 +462,7 @@ func (s *Service) PlanPlate(ctx context.Context, in PlanPlateInput) (*PlatePlan,
 			if len(plan.Objects) >= maxPlanObjects {
 				return nil, invalidf("au plus %d pièces par plan", maxPlanObjects)
 			}
-			if tri += len(sm.m.T); tri > maxPlanTriangle {
+			if tri += sm.tris; tri > maxPlanTriangle {
 				return nil, invalidf("plan trop lourd (plus de %d triangles cumulés) : réduire les quantités ou décimer les modèles", maxPlanTriangle)
 			}
 			nm := label
@@ -712,6 +741,38 @@ func (s *Service) putPlan(ctx context.Context, p *PlatePlan) error {
 	return err
 }
 
+// savePlanJobs écrit plan.Jobs dans une transaction (relecture du plan, remplacement des seules impressions, écriture) :
+// ni écriture partielle, ni perte des autres champs du plan.
+func (s *Service) savePlanJobs(ctx context.Context, plan *PlatePlan, have map[int]string) error {
+	var jobs []PlanJob
+	for k := 1; k <= len(plan.Plates); k++ {
+		if id, ok := have[k]; ok {
+			jobs = append(jobs, PlanJob{Plate: k, PrintJobID: id})
+		}
+	}
+	err := s.d.Store.Tx(ctx, func(tx *sql.Tx) error {
+		var doc string
+		if err := tx.QueryRowContext(ctx, `SELECT doc FROM plate_plans WHERE id=?`, plan.ID).Scan(&doc); err != nil {
+			return err
+		}
+		var cur PlatePlan
+		if err := json.Unmarshal([]byte(doc), &cur); err != nil {
+			return err
+		}
+		cur.Jobs = jobs
+		b, err := json.Marshal(&cur)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE plate_plans SET doc=? WHERE id=?`, string(b), plan.ID)
+		return err
+	})
+	if err == nil {
+		plan.Jobs = jobs
+	}
+	return err
+}
+
 // GetPlatePlan relit un plan.
 func (s *Service) GetPlatePlan(ctx context.Context, id string) (*PlatePlan, error) {
 	var doc string
@@ -782,6 +843,13 @@ func (p *PlatePlan) sliceSpec(plate int) *PlateSliceSpec {
 // suit la chaîne habituelle (validation, dépôt, accord humain) : son artefact ne contient QUE sa plaque, dont
 // le numéro et l'empreinte sont ceux que la confirmation lie.
 func (s *Service) ExecutePlateSlice(ctx context.Context, in PlateSliceInput) (*PlateSliceOutput, error) {
+	if _, err := s.GetPlatePlan(ctx, in.PlanID); err != nil { // plan inconnu : aucun verrou créé
+		return nil, err
+	}
+	// Un seul appel à la fois par plan : un doublon concurrent attend, relit le plan DÉJÀ mis à jour et renvoie les mêmes impressions.
+	lk, _ := s.planLocks.LoadOrStore(in.PlanID, &sync.Mutex{})
+	lk.(*sync.Mutex).Lock()
+	defer lk.(*sync.Mutex).Unlock()
 	plan, err := s.GetPlatePlan(ctx, in.PlanID)
 	if err != nil {
 		return nil, err
@@ -873,14 +941,11 @@ func (s *Service) ExecutePlateSlice(ctx context.Context, in PlateSliceInput) (*P
 		}
 		out.Jobs = append(out.Jobs, jj)
 		have[k] = jj.ID
-	}
-	plan.Jobs = nil
-	for k := 1; k <= len(plan.Plates); k++ {
-		if id, ok := have[k]; ok {
-			plan.Jobs = append(plan.Jobs, PlanJob{Plate: k, PrintJobID: id})
+		if err := s.savePlanJobs(ctx, plan, have); err != nil { // chaque impression créée est consignée aussitôt
+			return nil, err
 		}
 	}
-	if err := s.putPlan(ctx, plan); err != nil {
+	if err := s.savePlanJobs(ctx, plan, have); err != nil {
 		return nil, err
 	}
 	out.Note = fmt.Sprintf("%d impression(s) créée(s), une par plaque : suivre chacune avec get_print_status ; valider, déposer puis confirmer chaque plaque séparément (un accord humain par impression).", len(out.Jobs))

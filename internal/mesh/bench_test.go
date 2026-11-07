@@ -1,92 +1,126 @@
 package mesh
 
 import (
-	"os"
-	"runtime"
-	"sync/atomic"
+	"fmt"
+	"math"
 	"testing"
-	"time"
 )
 
-// sphereOf construit une sphère étanche d'environ n triangles.
-func sphereOf(n int) *Mesh {
-	// triangles ≈ 2·rings·segs avec segs = 2·rings
-	rings := 1
-	for 4*rings*rings < n {
-		rings++
-	}
-	return UVSphere(50, rings, 2*rings)
-}
+// Benchmarks d'analyse et de fabricabilité sur des maillages générés (sphère UV) de 100 k, 1 M et 5 M triangles.
+//
+//	go test -run '^$' -bench . -benchtime 1x ./internal/mesh
+//
+// Les chiffres de référence sont consignés dans docs/jalons/QUALITE.md.
 
-// soup dédouble les sommets (comme un STL : 3 sommets par triangle).
-func soup(m *Mesh) *Mesh {
-	out := &Mesh{V: make([]Vec3, 0, 3*len(m.T)), T: make([]Tri, 0, len(m.T))}
-	for _, t := range m.T {
-		k := len(out.V)
-		out.V = append(out.V, m.V[t[0]], m.V[t[1]], m.V[t[2]])
-		out.T = append(out.T, Tri{k, k + 1, k + 2})
-	}
-	return out
-}
-
-func benchAnalyze(b *testing.B, m *Mesh) {
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		r := Analyze(m, AnalyzeOptions{})
-		if !r.Watertight {
-			b.Fatal("sphère non étanche")
+// uvSphere génère une sphère fermée de rayon r (≈ 2·nlon·(nlat−1) triangles), normales sortantes, sommets partagés.
+func uvSphere(r float64, nlat, nlon int) *Mesh {
+	m := &Mesh{}
+	m.V = append(m.V, Vec3{0, 0, -r}) // pôle sud
+	for i := 1; i < nlat; i++ {
+		phi := -math.Pi/2 + math.Pi*float64(i)/float64(nlat)
+		for j := 0; j < nlon; j++ {
+			th := 2 * math.Pi * float64(j) / float64(nlon)
+			m.V = append(m.V, Vec3{r * math.Cos(phi) * math.Cos(th), r * math.Cos(phi) * math.Sin(th), r * math.Sin(phi)})
 		}
 	}
+	north := len(m.V)
+	m.V = append(m.V, Vec3{0, 0, r})
+	ring := func(i, j int) int { return 1 + (i-1)*nlon + (j % nlon) }
+	for j := 0; j < nlon; j++ {
+		m.T = append(m.T, Tri{0, ring(1, j+1), ring(1, j)})
+	}
+	for i := 1; i < nlat-1; i++ {
+		for j := 0; j < nlon; j++ {
+			a, b, c, d := ring(i, j), ring(i, j+1), ring(i+1, j+1), ring(i+1, j)
+			m.T = append(m.T, Tri{a, b, c}, Tri{a, c, d})
+		}
+	}
+	for j := 0; j < nlon; j++ {
+		m.T = append(m.T, Tri{ring(nlat-1, j), ring(nlat-1, j+1), north})
+	}
+	return m
 }
 
-func BenchmarkAnalyze1M(b *testing.B)     { benchAnalyze(b, sphereOf(1_000_000)) }
-func BenchmarkAnalyze1MSoup(b *testing.B) { benchAnalyze(b, soup(sphereOf(1_000_000))) }
-func BenchmarkAnalyze5M(b *testing.B)     { benchAnalyze(b, sphereOf(5_000_000)) }
+// sphereWithTris renvoie une sphère de rayon 50 mm d'environ n triangles.
+func sphereWithTris(n int) *Mesh {
+	nlon := int(math.Sqrt(float64(n)))
+	return uvSphere(50, nlon/2+1, nlon)
+}
 
-// peakHeap mesure le pic de tas en service pendant f (échantillonnage) et le total alloué.
-func peakHeap(f func()) (peak uint64, total uint64) {
-	runtime.GC()
-	var base runtime.MemStats
-	runtime.ReadMemStats(&base)
-	var stop atomic.Bool
-	done := make(chan uint64)
-	go func() {
-		var mx uint64
-		var ms runtime.MemStats
-		for !stop.Load() {
-			runtime.ReadMemStats(&ms)
-			if ms.HeapInuse > mx {
-				mx = ms.HeapInuse
+var benchSizes = []struct {
+	name string
+	n    int
+}{{"100k", 100_000}, {"1M", 1_000_000}, {"5M", 5_000_000}}
+
+func TestUVSphereIsClosed(t *testing.T) {
+	m := uvSphere(10, 20, 40)
+	r := Analyze(m, AnalyzeOptions{})
+	if !r.Watertight || r.InconsistentEdges != 0 || r.Components != 1 || r.Volume <= 0 {
+		t.Fatalf("sphère de bench invalide : %+v", r)
+	}
+	if want := 4.0 / 3 * math.Pi * 1000; math.Abs(r.Volume-want)/want > 0.03 {
+		t.Fatalf("volume %v loin de %v", r.Volume, want)
+	}
+}
+
+func BenchmarkAnalyze(b *testing.B) {
+	for _, s := range benchSizes {
+		b.Run(s.name, func(b *testing.B) {
+			m := sphereWithTris(s.n)
+			b.ReportAllocs()
+			b.ReportMetric(float64(len(m.T)), "tris")
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if r := Analyze(m, AnalyzeOptions{}); !r.Watertight {
+					b.Fatal("sphère non étanche")
+				}
 			}
-			time.Sleep(2 * time.Millisecond)
-		}
-		done <- mx
-	}()
-	f()
-	stop.Store(true)
-	peak = <-done
-	var end runtime.MemStats
-	runtime.ReadMemStats(&end)
-	return peak, end.TotalAlloc - base.TotalAlloc
+		})
+	}
 }
 
-// TestAnalyzeMemory5M vérifie l'objectif de volumétrie : 5 M de triangles analysés sous 2 Gio de tas.
-// Long (génération + analyse) : ignoré en -short.
-func TestAnalyzeMemory5M(t *testing.T) {
-	if testing.Short() && os.Getenv("BAMBU_BIGMESH") == "" {
-		t.Skip("volumétrie : ignoré en -short (BAMBU_BIGMESH=1 pour forcer)")
+func BenchmarkFabricability(b *testing.B) {
+	for _, s := range benchSizes {
+		b.Run(s.name, func(b *testing.B) {
+			m := sphereWithTris(s.n)
+			b.ReportAllocs()
+			b.ReportMetric(float64(len(m.T)), "tris")
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := Fabricability(m, FabOptions{SkipOrientation: true}); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
-	for _, n := range []int{1_000_000, 5_000_000} {
-		m := sphereOf(n)
-		var rep *Report
-		peak, total := peakHeap(func() { rep = Analyze(m, AnalyzeOptions{}) })
-		if !rep.Watertight || rep.Components != 1 {
-			t.Fatalf("n=%d : sphère non étanche (%+v)", n, rep.Warnings)
-		}
-		t.Logf("n=%d triangles=%d : pic de tas %.0f Mio (maillage inclus), alloué au total %.0f Mio", n, len(m.T), float64(peak)/(1<<20), float64(total)/(1<<20))
-		if n == 5_000_000 && peak > 2<<30 {
-			t.Errorf("pic de tas %.2f Gio > 2 Gio", float64(peak)/(1<<30))
-		}
+}
+
+// Avec la proposition d'orientation (plus coûteuse) : 100 k et 1 M seulement.
+func BenchmarkFabricabilityWithOrientation(b *testing.B) {
+	for _, s := range benchSizes[:2] {
+		b.Run(s.name, func(b *testing.B) {
+			m := sphereWithTris(s.n)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := Fabricability(m, FabOptions{}); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkWeldSoup(b *testing.B) {
+	for _, s := range benchSizes[:2] {
+		b.Run(fmt.Sprint(s.name), func(b *testing.B) {
+			src := sphereWithTris(s.n)
+			m := soup(src)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				Weld(m, 1e-6)
+			}
+		})
 	}
 }

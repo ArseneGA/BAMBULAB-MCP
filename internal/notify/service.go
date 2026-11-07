@@ -1,8 +1,12 @@
 // Package notify envoie des notifications (fin, échec, alerte de détection, lancement incertain, imprimante hors ligne,
 // file d'attente) par ntfy, webhook signé HMAC ou e-mail SMTP en TLS.
 //
-// Règles de sécurité : la configuration des canaux (nom, type, évènements, hôte SMTP...) est sans secret et peut être
-// posée par l'outil MCP ; les SECRETS (URL du sujet ntfy, URL du webhook, clé HMAC, jeton ntfy, mot de passe SMTP) ne se
+// Règles de sécurité : la destination d'un canal (hôte, port et utilisateur SMTP, destinataires, URL ntfy / webhook) ne se
+// règle QUE sur la page humaine /setup/notifications ; l'outil MCP ne peut qu'activer ou désactiver un canal existant et
+// choisir ses évènements (sinon le modèle pourrait rediriger le mot de passe SMTP et les photos vers un hôte qu'il choisit).
+// Un mot de passe SMTP est lié à (hôte, port, utilisateur) et s'invalide si l'un change. Les destinations non publiques
+// (boucle locale, réseaux privés, lien local) et les ports SMTP inhabituels sont refusés, sauf BAMBU_NOTIFY_ALLOW_PRIVATE=1.
+// Les SECRETS (URL du sujet ntfy, URL du webhook, clé HMAC, jeton ntfy, mot de passe SMTP) ne se
 // saisissent que sur la page humaine /setup/notifications (navigateur enregistré), vivent dans le coffre chiffré ou dans des
 // variables d'environnement / fichiers, et ne sont JAMAIS renvoyés (ni au modèle, ni à l'API, ni au journal). Le contenu
 // d'une notification ne contient aucun secret : un titre, un message, un lien vers une page de l'interface.
@@ -10,8 +14,10 @@ package notify
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +27,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -143,6 +150,9 @@ type Deps struct {
 	// Retries : nombre d'essais par envoi (défaut 3) ; RetryDelay : pause de base (défaut 1 s).
 	Retries    int
 	RetryDelay time.Duration
+	// AllowPrivate autorise les destinations non publiques (ntfy ou SMTP local) et les ports SMTP libres. Défaut : lu dans
+	// BAMBU_NOTIFY_ALLOW_PRIVATE=1 ; sinon refusé.
+	AllowPrivate bool
 }
 
 // Service gère les canaux et les envois.
@@ -174,10 +184,16 @@ func New(d Deps) (*Service, error) {
 	if d.RetryDelay == 0 {
 		d.RetryDelay = time.Second
 	}
-	if d.HTTP == nil {
-		d.HTTP = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	if os.Getenv("BAMBU_NOTIFY_ALLOW_PRIVATE") == "1" {
+		d.AllowPrivate = true
 	}
-	return &Service{d: d, log: d.Log, seen: map[string]time.Time{}, pages: map[string]time.Time{}}, nil
+	s := &Service{d: d, log: d.Log, seen: map[string]time.Time{}, pages: map[string]time.Time{}}
+	if d.HTTP == nil {
+		d.HTTP = &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+			Transport: &http.Transport{DialContext: s.dialer(15 * time.Second).DialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 15 * time.Second}}
+		s.d = d
+	}
+	return s, nil
 }
 
 func (s *Service) now() time.Time { return s.d.Now().UTC() }
@@ -202,7 +218,7 @@ func invalidf(f string, a ...any) error {
 	return fmt.Errorf("%w : %s", ErrInvalid, fmt.Sprintf(f, a...))
 }
 
-func validateInput(in *ChannelInput) error {
+func (s *Service) validateInput(in *ChannelInput) error {
 	in.Name = strings.TrimSpace(in.Name)
 	if !nameRe.MatchString(in.Name) {
 		return invalidf("nom de canal : 1 à 40 caractères (lettres, chiffres, espace, - _)")
@@ -265,6 +281,9 @@ func validateInput(in *ChannelInput) error {
 		if c.SMTPPort < 1 || c.SMTPPort > 65535 {
 			return invalidf("smtp_port hors plage")
 		}
+		if err := s.checkSMTPDestination(c.SMTPHost, c.SMTPPort); err != nil {
+			return err
+		}
 		if _, err := mail.ParseAddress(c.From); err != nil {
 			return invalidf("from : adresse invalide")
 		}
@@ -287,9 +306,10 @@ func channelID(name string) string {
 	return "nc_" + strings.ToLower(strings.NewReplacer(" ", "-", "_", "-").Replace(name))
 }
 
-// UpsertChannel crée ou met à jour un canal (par nom). Aucun secret n'est accepté ici.
+// UpsertChannel crée ou met à jour un canal (par nom) avec sa destination complète. RÉSERVÉ AUX PAGES HUMAINES : l'outil MCP
+// passe par PatchChannel, qui ne touche ni l'hôte, ni le port, ni l'utilisateur, ni les destinataires. Aucun secret n'est accepté ici.
 func (s *Service) UpsertChannel(ctx context.Context, in ChannelInput) (*ChannelView, error) {
-	if err := validateInput(&in); err != nil {
+	if err := s.validateInput(&in); err != nil {
 		return nil, err
 	}
 	id := channelID(in.Name)
@@ -303,8 +323,8 @@ func (s *Service) UpsertChannel(ctx context.Context, in ChannelInput) (*ChannelV
 	}
 	cfg, _ := json.Marshal(in.Config)
 	now := store.FormatTime(s.now())
-	var existing string
-	err := s.d.Store.DB().QueryRowContext(ctx, `SELECT kind FROM notify_channels WHERE id=?`, id).Scan(&existing)
+	var existing, oldCfg string
+	err := s.d.Store.DB().QueryRowContext(ctx, `SELECT kind,config FROM notify_channels WHERE id=?`, id).Scan(&existing, &oldCfg)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		_, err = s.d.Store.DB().ExecContext(ctx, `INSERT INTO notify_channels(id,name,kind,enabled,events,config,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`,
@@ -314,6 +334,13 @@ func (s *Service) UpsertChannel(ctx context.Context, in ChannelInput) (*ChannelV
 			return nil, invalidf("le canal %q existe avec le type %s : le supprimer d'abord pour changer de type", in.Name, existing)
 		}
 		_, err = s.d.Store.DB().ExecContext(ctx, `UPDATE notify_channels SET enabled=?, events=?, config=?, updated_at=? WHERE id=?`, b2i(enabled), string(evs), string(cfg), now, id)
+		var prev ChannelConfig
+		_ = json.Unmarshal([]byte(oldCfg), &prev)
+		if err == nil && in.Kind == KindEmail && bindingOf(prev) != bindingOf(in.Config) {
+			// la destination change : le mot de passe enregistré ne doit pas la suivre
+			s.dropBoundSecret(id)
+			_ = s.d.Store.Audit(ctx, "human:web", "notify.secret_invalidated", "notify_channel", id, map[string]any{"field": "password"})
+		}
 	}
 	if err != nil {
 		return nil, err
@@ -329,6 +356,64 @@ func b2i(b bool) int {
 	return 0
 }
 
+// ChannelPatch : ce que le modèle peut changer sur un canal EXISTANT (jamais sa destination).
+type ChannelPatch struct {
+	Name    string   `json:"name" jsonschema:"nom d'un canal existant"`
+	Enabled *bool    `json:"enabled,omitempty" jsonschema:"activer ou désactiver le canal"`
+	Events  []string `json:"events,omitempty" jsonschema:"évènements abonnés ; [] = tous ; omis = inchangé"`
+}
+
+// PatchChannel active ou désactive un canal existant et choisit ses évènements. Hôte, port, utilisateur, destinataires,
+// URL et secrets sont intouchables ici (page humaine uniquement). Un canal inconnu est refusé : le modèle ne crée rien.
+func (s *Service) PatchChannel(ctx context.Context, p ChannelPatch) (*ChannelView, error) {
+	ch, err := s.find(ctx, strings.TrimSpace(p.Name))
+	if err != nil {
+		return nil, err
+	}
+	enabled := ch.Enabled
+	if p.Enabled != nil {
+		enabled = *p.Enabled
+	}
+	evs := ch.Events
+	if p.Events != nil {
+		known := map[string]bool{}
+		for _, e := range AllEvents {
+			known[e] = true
+		}
+		seen := map[string]bool{}
+		evs = []string{}
+		for _, e := range p.Events {
+			if !known[e] {
+				return nil, invalidf("évènement inconnu %q (connus : %s)", e, strings.Join(AllEvents, ", "))
+			}
+			if !seen[e] {
+				seen[e] = true
+				evs = append(evs, e)
+			}
+		}
+		sort.Strings(evs)
+	}
+	b, _ := json.Marshal(evs)
+	if _, err := s.d.Store.DB().ExecContext(ctx, `UPDATE notify_channels SET enabled=?, events=?, updated_at=? WHERE id=?`, b2i(enabled), string(b), store.FormatTime(s.now()), ch.ID); err != nil {
+		return nil, err
+	}
+	_ = s.d.Store.Audit(ctx, "notify", "notify.channel_patched", "notify_channel", ch.ID, map[string]any{"enabled": enabled, "events": evs})
+	return s.GetChannel(ctx, ch.ID)
+}
+
+// bindingOf : empreinte de la destination (hôte, port, utilisateur) à laquelle un mot de passe SMTP est lié.
+func bindingOf(c ChannelConfig) string {
+	h := sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(c.SMTPHost)) + "|" + strconv.Itoa(c.SMTPPort) + "|" + c.SMTPUser))
+	return hex.EncodeToString(h[:])
+}
+
+func bindKey(channelID string) string { return vaultKey(channelID, "password") + ":bind" }
+
+func (s *Service) dropBoundSecret(channelID string) {
+	_ = s.d.Vault.DeleteAccessCode(vaultKey(channelID, "password"))
+	_ = s.d.Vault.DeleteAccessCode(bindKey(channelID))
+}
+
 // DeleteChannel supprime un canal (par nom ou identifiant) et ses secrets du coffre.
 func (s *Service) DeleteChannel(ctx context.Context, nameOrID string) error {
 	ch, err := s.find(ctx, nameOrID)
@@ -341,6 +426,7 @@ func (s *Service) DeleteChannel(ctx context.Context, nameOrID string) error {
 	for _, f := range secretFields[ch.Kind] {
 		_ = s.d.Vault.DeleteAccessCode(vaultKey(ch.ID, f.Name))
 	}
+	_ = s.d.Vault.DeleteAccessCode(bindKey(ch.ID))
 	_ = s.d.Store.Audit(ctx, "notify", "notify.channel_deleted", "notify_channel", ch.ID, nil)
 	return nil
 }
@@ -445,6 +531,13 @@ func (s *Service) secret(ctx context.Context, ch ChannelView, field string) (str
 	}
 	k := vaultKey(ch.ID, field)
 	if s.d.Vault.HasAccessCode(k) {
+		if ch.Kind == KindEmail && field == "password" {
+			// lié à (hôte, port, utilisateur) : un secret sans liaison valide est ignoré
+			b, err := s.d.Vault.AccessCode(ctx, bindKey(ch.ID))
+			if err != nil || b != bindingOf(ch.Config) {
+				return "", "", nil
+			}
+		}
 		v, err := s.d.Vault.AccessCode(ctx, k)
 		if err != nil {
 			return "", "", err
@@ -487,7 +580,12 @@ func (s *Service) SetSecret(ctx context.Context, channelID, field, value string)
 	}
 	switch field {
 	case "url":
-		if err := checkURL(value); err != nil {
+		if err := s.checkURL(value); err != nil {
+			return err
+		}
+	}
+	if ch.Kind == KindEmail && field == "password" {
+		if err := s.d.Vault.SetAccessCode(ctx, bindKey(ch.ID), bindingOf(ch.Config)); err != nil {
 			return err
 		}
 	}
@@ -501,6 +599,9 @@ func (s *Service) SetSecret(ctx context.Context, channelID, field, value string)
 // ClearSecret retire un secret du coffre.
 func (s *Service) ClearSecret(ctx context.Context, channelID, field string) error {
 	_ = s.d.Vault.DeleteAccessCode(vaultKey(channelID, field))
+	if field == "password" {
+		_ = s.d.Vault.DeleteAccessCode(bindKey(channelID))
+	}
 	_ = s.d.Store.Audit(ctx, "human:web", "notify.secret_cleared", "notify_channel", channelID, map[string]any{"field": field})
 	return nil
 }

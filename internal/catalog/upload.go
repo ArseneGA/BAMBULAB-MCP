@@ -39,7 +39,11 @@ const (
 	defaultMaxUploadBytes  = 512 << 20
 	defaultStepUploadBytes = 256 << 20
 	defaultUploadTTL       = time.Hour
-	defaultMaxSessions     = 8
+	// defaultInFlightBytes : total des octets annoncés par les sessions ouvertes ; defaultUploadLifetime : durée de vie
+	// ABSOLUE d'une session (le TTL d'inactivité se prolonge à chaque morceau, pas celle-ci).
+	defaultInFlightBytes  = 2 << 30
+	defaultUploadLifetime = 6 * time.Hour
+	defaultMaxSessions    = 8
 	// MaxChunkChars : taille maximale d'un morceau base64 d'un appel d'outil MCP.
 	MaxChunkChars = 100_000
 	// MaxChunkBytes : taille maximale d'un morceau binaire de l'API HTTP.
@@ -51,6 +55,10 @@ type UploadOptions struct {
 	MaxBytes    int64         // taille maximale d'un fichier envoyé
 	TTL         time.Duration // inactivité maximale d'une session d'envoi
 	MaxSessions int           // sessions simultanées
+	// MaxInFlightBytes : plafond du total des tailles annoncées par les sessions ouvertes (défaut 2 Gio ; BAMBU_UPLOAD_INFLIGHT_MB).
+	MaxInFlightBytes int64
+	// MaxLifetime : durée de vie absolue d'une session, quelle que soit son activité (défaut 6 h ; BAMBU_UPLOAD_MAX_LIFETIME).
+	MaxLifetime time.Duration
 	URL         URLImportOptions
 }
 
@@ -66,6 +74,7 @@ type uploadSession struct {
 	path     string
 	meta     UploadMeta
 	timer    *time.Timer
+	created  time.Time
 	expires  time.Time
 	closed   bool
 }
@@ -98,6 +107,12 @@ func (s *Service) up() *uploadState {
 		if o.MaxSessions == 0 {
 			o.MaxSessions = env.MaxSessions
 		}
+		if o.MaxInFlightBytes == 0 {
+			o.MaxInFlightBytes = env.MaxInFlightBytes
+		}
+		if o.MaxLifetime == 0 {
+			o.MaxLifetime = env.MaxLifetime
+		}
 		if o.URL.isZero() {
 			o.URL = env.URL
 		}
@@ -122,7 +137,13 @@ func (s *Service) SetUploadOptions(o UploadOptions) {
 }
 
 func uploadOptionsFromEnv() UploadOptions {
-	o := UploadOptions{MaxBytes: defaultMaxUploadBytes, TTL: defaultUploadTTL, MaxSessions: defaultMaxSessions}
+	o := UploadOptions{MaxBytes: defaultMaxUploadBytes, TTL: defaultUploadTTL, MaxSessions: defaultMaxSessions, MaxInFlightBytes: defaultInFlightBytes, MaxLifetime: defaultUploadLifetime}
+	if mb, err := strconv.ParseInt(strings.TrimSpace(os.Getenv("BAMBU_UPLOAD_INFLIGHT_MB")), 10, 64); err == nil && mb > 0 {
+		o.MaxInFlightBytes = mb << 20
+	}
+	if d, err := time.ParseDuration(strings.TrimSpace(os.Getenv("BAMBU_UPLOAD_MAX_LIFETIME"))); err == nil && d > 0 {
+		o.MaxLifetime = d
+	}
 	if mb, err := strconv.ParseInt(strings.TrimSpace(os.Getenv("BAMBU_MAX_UPLOAD_MB")), 10, 64); err == nil && mb > 0 {
 		o.MaxBytes = mb << 20
 	}
@@ -264,6 +285,14 @@ func (s *Service) UploadBegin(_ context.Context, name string, total int64, sha s
 		st.mu.Unlock()
 		return UploadStatus{}, fmt.Errorf("%w : trop d'envois en cours (max %d) ; terminer ou annuler (cancel_upload) l'un d'eux, ou attendre leur expiration", ErrConflict, st.opts.MaxSessions)
 	}
+	var inflight int64
+	for _, o := range st.sess {
+		inflight += o.total
+	}
+	if inflight+total > st.opts.MaxInFlightBytes {
+		st.mu.Unlock()
+		return UploadStatus{}, fmt.Errorf("%w : trop d'octets en cours d'envoi (%d Mio déjà annoncés, plafond %d Mio) ; terminer ou annuler un envoi (BAMBU_UPLOAD_INFLIGHT_MB règle le plafond)", ErrConflict, inflight>>20, st.opts.MaxInFlightBytes>>20)
+	}
 	id := newUploadID()
 	p := filepath.Join(st.dir, id+".part")
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
@@ -274,7 +303,7 @@ func (s *Service) UploadBegin(_ context.Context, name string, total int64, sha s
 		}
 		return UploadStatus{}, fmt.Errorf("session d'envoi : %w", err)
 	}
-	us := &uploadSession{id: id, name: n, format: format, total: total, sha: sha, f: f, path: p, meta: meta}
+	us := &uploadSession{id: id, name: n, format: format, total: total, sha: sha, f: f, path: p, meta: meta, created: time.Now()}
 	st.sess[id] = us
 	st.mu.Unlock()
 	us.mu.Lock()
@@ -299,7 +328,16 @@ func validHex64(s string) bool {
 // touch (verrou de la session tenu) prolonge la session d'un TTL.
 func (s *Service) touch(st *uploadState, us *uploadSession) {
 	ttl := st.opts.TTL
-	us.expires = time.Now().Add(ttl)
+	now := time.Now()
+	us.expires = now.Add(ttl)
+	if st.opts.MaxLifetime > 0 { // durée de vie absolue : l'activité ne la prolonge pas
+		if hard := us.created.Add(st.opts.MaxLifetime); hard.Before(us.expires) {
+			us.expires = hard
+			if ttl = hard.Sub(now); ttl < 0 {
+				ttl = 0
+			}
+		}
+	}
 	if us.timer != nil {
 		us.timer.Stop()
 	}

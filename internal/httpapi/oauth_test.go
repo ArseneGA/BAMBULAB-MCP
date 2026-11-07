@@ -91,7 +91,7 @@ var nonceRe = regexp.MustCompile(`name="nonce" value="([^"]+)"`)
 func (e *oauthEnv) authorize(cid, redirect string, extra url.Values, decision string) string {
 	e.t.Helper()
 	// 1. Navigation venue de Claude (autre site) : pas de cookie SameSite=Strict, page intermédiaire.
-	res, body := e.do("GET", e.authURL(cid, redirect, extra), map[string]string{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate"}, "")
+	res, body := e.human.get(e.srv+e.authURL(cid, redirect, extra), map[string]string{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate"})
 	if res.StatusCode == 303 {
 		return res.Header.Get("Location")
 	}
@@ -384,7 +384,7 @@ func TestOAuthAuthorizeValidation(t *testing.T) {
 		t.Errorf("refus : %s", loc)
 	}
 	// Demande déjà traitée : le consentement ne se rejoue pas.
-	res, body := e.do("GET", e.authURL(cid, claudeCallback, nil), hdr, "")
+	res, body := e.human.get(e.srv+e.authURL(cid, claudeCallback, nil), hdr)
 	m := consentRe.FindStringSubmatch(body)
 	if res.StatusCode != 200 || m == nil {
 		t.Fatal("page intermédiaire attendue")

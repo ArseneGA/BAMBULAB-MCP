@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go (vet + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # internal/webui et internal/mcpserver embarquent des assets construits : on les génère d'abord
+      # si le dépôt ne les versionne pas, pour que go vet compile.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Construire l'interface embarquée
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          mkdir -p ../internal/webui/assets ../internal/mcpserver/ui/views
+          npm run build
+      - run: go vet ./...
+      # -short : les tests réels (Bambu Studio, imprimante) sont ignorés en CI.
+      - run: go test -short ./... -timeout 30m
+
+  python:
+    name: Worker géométrie (pytest + CadQuery)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: workers/geometry/uv.lock
+      - name: Synchroniser (extra cad)
+        working-directory: workers/geometry
+        run: uv sync --extra cad --frozen
+      - name: pytest
+        working-directory: workers/geometry
+        run: uv run --extra cad --frozen python -m pytest
+
+  web:
+    name: Web (build + vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci --no-audit --no-fund
+      - working-directory: web
+        run: npm run build
+      - working-directory: web
+        run: npm test
+
+  docker:
+    name: Image Docker (sans pousser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          build-args: |
+            WITH_STUDIO=0
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -86,7 +86,6 @@ def hole_shaft(cq: Any, dias: list[float]) -> tuple[list[tuple[str, Any]], dict[
     pv = _box(cq, 0, 0, 0, total, 16, pt)
     for cx, d in zip(xs, dias):
         pv = pv.cut(_cyl_z(cq, cx, 8, d / 2, -1, pt + 2))
-        pv = pv.union(_dots(cq, cx, 2.0, pt, 1, r=0.5, h=0.5)) if False else pv
     # plaque à trous horizontaux (axe Y) : bloc debout, trous traversant l'épaisseur 8 mm
     hy0 = 26.0
     ph = _box(cq, 0, hy0, 0, total, 8, 16)

@@ -108,12 +108,9 @@ func (s *Service) CreateParametricModel(ctx context.Context, in CreateParametric
 		if f.path == "" {
 			continue
 		}
-		p := f.path
-		if !filepath.IsAbs(p) {
-			p = filepath.Join(out, p)
-		}
-		if rel, err := filepath.Rel(out, p); err != nil || strings.HasPrefix(rel, "..") {
-			return nil, fmt.Errorf("fichier du worker hors du dossier de travail : %s", p)
+		p, err := confinedPath(out, f.path)
+		if err != nil {
+			return nil, err
 		}
 		fh, err := os.Open(p)
 		if err != nil {
@@ -137,6 +134,24 @@ func (s *Service) CreateParametricModel(ctx context.Context, in CreateParametric
 	return &CreateParametricOutput{ModelID: m.ID, VersionID: ver.ID, Files: files, Template: res.Template, Params: res.Params,
 		Assumptions: nz(res.Assumptions), Warnings: nz(res.Warnings), BBoxMM: res.BBox, Derived: res.Derived, Level: res.Level,
 		Note: "Modèle source paramétrique conservé (STEP + STL). Les dimensions sont des mesures calculées par le worker, pas une validation mécanique."}, nil
+}
+
+// confinedPath résout un fichier annoncé par le worker et refuse tout ce qui sort du dossier de travail. Les deux chemins
+// sont ramenés à leur forme canonique (EvalSymlinks : liens symboliques, noms courts 8.3 de Windows) AVANT la comparaison.
+func confinedPath(work, path string) (string, error) {
+	p := path
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(work, p)
+	}
+	cw, werr := filepath.EvalSymlinks(work)
+	cp, perr := filepath.EvalSymlinks(p)
+	if werr != nil || perr != nil {
+		return "", fmt.Errorf("fichier du worker introuvable : %s", path)
+	}
+	if rel, err := filepath.Rel(cw, cp); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("fichier du worker hors du dossier de travail : %s", path)
+	}
+	return cp, nil
 }
 
 func nz(s []string) []string {

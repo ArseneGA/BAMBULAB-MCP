@@ -1,0 +1,16 @@
+{
+  "template": "mounting_plate",
+  "template_version": "1.0.0",
+  "volume_mm3": 15901.016,
+  "area_mm2": 13223.208,
+  "bbox_size_mm": [
+    100.002,
+    60.002,
+    3.002
+  ],
+  "parts": 1,
+  "solids": 1,
+  "components": 1,
+  "watertight": true,
+  "fingerprint": "04512f1a51180988"
+}
