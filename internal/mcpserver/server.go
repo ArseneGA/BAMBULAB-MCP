@@ -80,8 +80,18 @@ func New(c *core.Core) *mcp.Server {
 	if c.Goals != nil {
 		AddGoalTools(s, c.Goals)
 	}
+	if c.Insights != nil {
+		AddInsightTools(s, c.Insights) // coût, journal, tableau de bord, post-traitement (insight_tools.go)
+	}
 	if c.Printing != nil {
 		AddPrintTools(s, c.Printing) // chaîne d'impression (print_tools.go)
+		AddPlateTools(s, c.Printing) // plateau multi-pièces (plate_tools.go)
+	}
+	if c.Camera != nil && c.Notify != nil {
+		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)
+	}
+	if c.Filament != nil {
+		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
 	}
 	return s
 }

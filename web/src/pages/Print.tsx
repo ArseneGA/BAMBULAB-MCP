@@ -6,6 +6,7 @@ import { useAsync, useConnection } from '../api/hooks';
 import type { CancelOutput, ConfirmationView, ReconcileOutput, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
 import { Async, Dialog, Notice, fmtDate } from './common';
 import { CompletedBox } from './CompletedBox';
+import { CameraPanel } from './CameraPanel';
 import './print.css';
 
 const STATE_LABEL: Record<PrintState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
@@ -87,6 +88,7 @@ function PrinterCard({ p }: { p: PrinterView }) {
         <dt>Code d'accès</dt><dd>{p.access_code_set ? <Tag tone="ok">enregistré</Tag> : <Tag tone="warn">à saisir</Tag>}</dd>
       </dl>
       {!p.access_code_set && p.setup_url && <Notice title="Code d'accès non saisi" actions={<a className="btn btn-secondary btn-sm" href={assetUrl(p.setup_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page de saisie</a>}>La page locale du serveur affiche l'empreinte du certificat présenté par l'imprimante et recueille le code d'accès ; il n'est jamais renvoyé ni affiché dans cette interface. Tant que rien n'est épinglé, aucune connexion n'est tentée (navigateur enregistré requis).</Notice>}
+      {p.access_code_set && <CameraPanel printerId={p.id} />}
       <div className="prt-status" role="status">
         {st.error && !d ? <StatusDot status="offline" label="Statut indisponible" /> : !d ? <span className="hint">Lecture de l'état…</span> : (
           <>

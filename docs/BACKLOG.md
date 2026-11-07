@@ -19,9 +19,9 @@ Règle commune : tout est utilisable depuis Claude (outil MCP + rendu texte/imag
 | 7 | Inventaire des bobines et de l'AMS, alerte de manque | E | 0180 |
 | 17 | Multicolore AMS : couleur par zone, coût de purge | E | 0180 |
 | 9 | File d'attente d'impressions (un accord humain par impression) | E | 0180 |
-| 4 | Accès direct par URL : OAuth 2.1 pour connecteur distant | F | 0190 |
-| 5 | Image Docker + démarrage rapide + doc neutralisée | F | 0190 |
-| 3 | Viewer 3D dans Claude (vues MCP App) | F | — |
+| 4 | Accès direct par URL : OAuth 2.1 pour connecteur distant | F | 0190 (fait : docs/OAUTH.md) |
+| 5 | Image Docker + démarrage rapide + doc neutralisée | F | 0190 (fait : docs/QUICKSTART.md) |
+| 3 | Viewer 3D dans Claude (vues MCP App) | F | — (diagnostic : docs/research/mcp-apps.md § 7) |
 | 10 | Pièces de calibration générées + mesures réinjectées | G (fait : `generate_calibration_set`, `record_calibration`, `get_calibration`) | 0200 |
 | 13 | Bibliothèque de pièces paramétriques extensible | G (fait : 17 gabarits, `list_part_templates`, `describe_part_template`, `create_from_template`, `save_as_template`) | 0200 |
 

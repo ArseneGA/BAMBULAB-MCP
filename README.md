@@ -39,6 +39,8 @@ Deux modes, les deux livrés : **Linux seul** (Windows éteint) et **Linux + ren
 
 ## Démarrage rapide
 
+**Le plus simple : Docker** (image tout-en-un avec Bambu Studio et le worker CAO) : `docs/QUICKSTART.md`. Connecteur distant de Claude (claude.ai, mobile) : `docs/OAUTH.md`.
+
 ### Essayer sur un seul PC (sans imprimante)
 
 Prérequis : Go ≥ 1.26 (développé avec 1.27). PowerShell sous Windows :
@@ -96,3 +98,9 @@ cd workers\geometry ; uv run pytest                            # worker CAO
 ```
 
 Le dossier `prototype/` est la maquette D0 figée ; `web/` (interface et vues MCP App) est développé séparément.
+
+## Licence
+
+<!-- TODO (visible) : LICENCE NON CHOISIE. Aucune licence n'est déclarée pour ce dépôt ; à décider par le propriétaire avant toute diffusion. Rappel : Bambu Studio (téléchargé dans l'image Docker) est sous AGPL-3.0 et reste distribué par Bambu Lab. -->
+
+**TODO : choisir une licence** (aucune n'est définie pour l'instant ; ne pas redistribuer avant de l'avoir fixée).

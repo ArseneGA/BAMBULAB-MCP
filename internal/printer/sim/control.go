@@ -57,6 +57,7 @@ func (s *Sim) startControl() error {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	s.registerAMSControl(mux)
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	s.ctl = &controlHandle{srv: srv}
 	go func() { _ = srv.Serve(ln) }()

@@ -31,7 +31,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "degraded", "error": "base inaccessible"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": core.Version, "schema_version": v})
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": core.Version, "schema_version": v, "mcp_app_views": mcpserver.ViewsBuilt()})
 	})
 	mux.HandleFunc("GET /api/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, c.Capabilities())
@@ -76,7 +76,13 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerGoals(mux, c)
 	registerLibrary(mux, c)
 	registerMaterials(mux, c)
+	registerInsights(mux, c)        // coût, journal, tableau de bord, post-traitement (insights.go)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
+	registerCamera(mux, c, human)   // caméra, détection d'échec, notifications (camera.go)
+	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)
+	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
+
+	registerOAuth(mux, c, human, &opts) // jetons OAuth sur /mcp, métadonnées et pages (oauth.go) ; renseigne opts pour la garde
 
 	server := mcpserver.New(c)
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{

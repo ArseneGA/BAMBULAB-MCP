@@ -79,6 +79,7 @@ func (m *reportMerger) toStatus() Status {
 		GcodeFile:      str(d["gcode_file"]),
 		TaskID:         str(d["task_id"]),
 		FullReportSeen: m.full,
+		AMS:            parseAMS(d),
 	}
 	s.Temps = Temps{
 		Nozzle:       num(d["nozzle_temper"]),

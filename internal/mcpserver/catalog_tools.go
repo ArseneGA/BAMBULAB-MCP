@@ -44,7 +44,7 @@ func registerCatalogTools(s *mcp.Server, c *catalogHandlers) {
 
 	addTool(s, &mcp.Tool{
 		Name: "search_models", Title: "Chercher des modèles",
-		Description: "Recherche paginée dans le catalogue : texte (nom, étiquettes, fichiers), étiquettes, collection, format, disponibilité (linux | windows_only). Renvoie résumé, état d'aperçu et URL d'aperçu signée. Pagination par limit/offset (next_offset).",
+		Description: "Recherche paginée dans le catalogue : texte (nom, étiquettes, fichiers), étiquettes, collection, format, disponibilité (linux | windows_only). Renvoie résumé, état d'aperçu et URL d'aperçu signée. Pagination par limit/offset (next_offset). Pour « montre-moi », « affiche » ou « voir en 3D » un modèle du catalogue, appeler cet outil (liste visuelle cliquable dans Claude) puis get_model_details : ce sont les outils qui affichent le viewer 3D, pas une description textuelle.",
 		Annotations: ro,
 	}, c.searchModels)
 	addTool(s, &mcp.Tool{
@@ -54,7 +54,7 @@ func registerCatalogTools(s *mcp.Server, c *catalogHandlers) {
 	}, c.listCollection)
 	addTool(s, &mcp.Tool{
 		Name: "get_model_details", Title: "Fiche d'un modèle",
-		Description: "Fiche complète : fichiers sources (empreinte, disponibilité), versions immuables, provenance, licence, analyse géométrique résumée, état d'aperçu, modèles de même contenu, dernier journal d'audit.",
+		Description: "Fiche complète : fichiers sources (empreinte, disponibilité), versions immuables, provenance, licence, analyse géométrique résumée, état d'aperçu, modèles de même contenu, dernier journal d'audit. À préférer pour « montre-moi ce modèle en 3D » / « ouvre la fiche » : l'hôte affiche alors le viewer 3D interactif (rotation, vues, sous-parties) ; ne pas se contenter de décrire le modèle en texte.",
 		Annotations: ro,
 	}, c.getModelDetails)
 	addTool(s, &mcp.Tool{

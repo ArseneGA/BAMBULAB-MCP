@@ -3,7 +3,8 @@
 # Claude Desktop ne transmet pas les variables d'environnement de l'utilisateur au serveur MCP :
 # le jeton est donc placé dans un fichier protégé, lu par cmd (set /p) au lancement, jamais écrit
 # dans claude_desktop_config.json.
-param([string]$Server = 'http://atelier.tail4442b5.ts.net:7878/mcp')
+# -Server : URL MCP de votre bambud, p. ex. http://atelier.example.ts.net:7878/mcp (OBLIGATOIRE : aucune valeur par défaut).
+param([Parameter(Mandatory = $true)][string]$Server)
 
 $auth = [Environment]::GetEnvironmentVariable('BAMBU_AUTH', 'User')
 if (-not $auth) {
