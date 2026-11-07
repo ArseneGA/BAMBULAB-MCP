@@ -36,11 +36,12 @@ type model struct {
 	hmsFault   bool
 	wifi       int
 	taskSeq    int
+	ams        *amsModel // AMS simulé (ams.go) ; nil = aucun
 }
 
 func newModel(c Config) *model {
 	return &model{gcodeState: "IDLE", prepareDur: c.PrepareDuration, printDur: c.PrintDuration,
-		totalLayers: c.TotalLayers, nozzle: 25, bed: 25, chamber: 25, wifi: -45}
+		totalLayers: c.TotalLayers, nozzle: 25, bed: 25, chamber: 25, wifi: -45, ams: newAMSModel(DefaultAMSConfig())}
 }
 
 func (m *model) setHMS(on bool) {
@@ -157,6 +158,7 @@ func (m *model) step(now time.Time, fileMissingFault bool, exists func(string) b
 	}
 	m.chamber = approach(m.chamber, ct, 3)
 	m.wifi = -45 - int(now.Unix()%3)
+	m.amsStep()
 }
 
 // report produit le rapport complet ; Sim.publishDelta n'en diffuse que les écarts.
@@ -191,6 +193,7 @@ func (m *model) report(c Config) map[string]any {
 	if m.taskID == "" {
 		r["task_id"] = "0"
 	}
+	m.addAMS(r)
 	return r
 }
 
