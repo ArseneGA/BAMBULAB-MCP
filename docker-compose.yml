@@ -1,0 +1,52 @@
+# Exemple de déploiement (docs/QUICKSTART.md). Adapter les valeurs marquées EXEMPLE.
+#
+#   docker compose build            # construit l'image (Bambu Studio compris, voir Dockerfile)
+#   docker compose up -d
+#   docker compose exec atelier cat /data/api-token     # le jeton d'API généré au premier démarrage
+#   docker compose exec atelier bambud enroll           # code d'enregistrement du navigateur (usage unique)
+#
+# Réseau : bambud se connecte À l'imprimante (MQTT 8883, FTPS 990) : le réseau « bridge » par défaut suffit,
+# l'imprimante n'a pas besoin de joindre le conteneur. Seule la découverte automatique (SSDP) exige le réseau
+# de l'hôte : sous Linux, remplacer `ports:` par `network_mode: host` (Docker Desktop Windows/macOS ne l'offre
+# pas ; on ajoute alors l'imprimante par son adresse IP).
+services:
+  atelier:
+    build: .
+    image: atelier-bambu:local
+    container_name: atelier
+    restart: unless-stopped
+    # Accès local seulement. Pour le LAN : "7878:7878" ET BAMBU_ALLOWED_HOSTS / BAMBU_PUBLIC_URL ci-dessous.
+    ports:
+      - "127.0.0.1:7878:7878"
+    environment:
+      # URL sous laquelle VOUS ouvrez l'atelier (liens /confirm, /stop, cookie Secure si https).
+      # Plusieurs valeurs possibles, séparées par des virgules ; la première sert aux liens.
+      BAMBU_PUBLIC_URL: "http://localhost:7878"
+      # Noms d'hôte acceptés en plus de localhost (garde anti-DNS-rebinding). EXEMPLE pour un accès LAN :
+      # BAMBU_ALLOWED_HOSTS: "atelier-pc.local,192.168.1.50"
+      #
+      # Connecteur distant de Claude (docs/OAUTH.md) : URL https publique de /mcp (Tailscale Funnel…). EXEMPLE :
+      # BAMBU_PUBLIC_URL: "https://atelier.example.ts.net,http://localhost:7878"
+      #
+      # Jeton d'API : laissé vide, il est généré dans /data/api-token. Pour imposer le vôtre :
+      # BAMBU_API_TOKEN: "au-moins-16-caracteres"
+      #
+      # Studio monté depuis l'hôte plutôt que celui de l'image (image construite avec WITH_STUDIO=0) :
+      # BAMBU_STUDIO_BIN: /studio/AppRun
+      BAMBU_LOG_LEVEL: info
+    volumes:
+      - atelier-data:/data
+      # Dossier de modèles 3D de l'hôte, en lecture seule, importable via BAMBU_IMPORT_ROOTS (EXEMPLE) :
+      # - /chemin/vers/mes-modeles:/data/import/modeles:ro
+      # Studio de l'hôte (EXEMPLE) :
+      # - /opt/bambustudio:/studio:ro
+    # Une découpe lourde + un import STEP : prévoir 2 Gio ou plus.
+    mem_limit: 4g
+    # Durcissement : rien n'a besoin de droits supplémentaires.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  atelier-data:

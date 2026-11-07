@@ -130,8 +130,8 @@ Les flags de `bambud` acceptent `-flag` ou `--flag`, avec `--flag=valeur`. **Pri
 | `--import-root` | `BAMBU_IMPORT_ROOTS` | vide | non | racines d'import autorisées, séparées par `:` sous Linux (`filepath.SplitList`). Vide = aucun import de chemin arbitraire. **Refus de démarrer si une racine contient le dossier de données (donc `secrets/`, la base, les blobs) ou s'y trouve** (`e95e4d5`→`77e50b2`, `catalog/roots.go`). NB : le dossier de réception de l'agent Windows `agent-inbox` est **toujours** ajouté comme racine (`internal/agentlink/registry.go`), donc `catalog_import.available` est vrai même sans cette variable. |
 | `--uv-path` | `BAMBU_UV_PATH` | recherche `uv` dans PATH | non | exécutable `uv` du worker CAO ; doit exister. |
 | `--geometry-dir` | `BAMBU_GEOMETRY_DIR` | `workers/geometry` relatif au cwd puis à côté du binaire | non | dossier du projet Python ; doit contenir `pyproject.toml` (`worker.go:26-46`). |
-| `--public-url` | `BAMBU_PUBLIC_URL` | vide → adresse d'écoute (0.0.0.0 devient 127.0.0.1) | recommandé | **une ou plusieurs URL** `http(s)://hôte[:port]` séparées par des virgules (sans chemin ni requête ; hôte non spécifié refusé). La **première** sert aux liens `/confirm`, `/stop`, `/setup` et à `bambud enroll`. Tous les hôtes sont autorisés d'office par le garde Host. L'attribut `Secure` du cookie suit le schéma de l'URL dont l'hôte correspond au `Host` de la requête (ex. `http://192.168.0.8:7878,https://atelier.tail4442b5.ts.net`), sinon celui de la première ; `X-Forwarded-Proto` d'un proxy de confiance l'emporte. Une URL non loopback **exige un jeton**. |
-| `--allow-any-printer-host` | `BAMBU_ALLOW_ANY_PRINTER_HOST` (seule la valeur `1` active) | faux | non | lève la restriction « IP privée / lien local / nom `.local` » des hôtes d'imprimante (`internal/printing/service.go:402-417`). **Inutile ici** (P1S en 192.168.0.x). |
+| `--public-url` | `BAMBU_PUBLIC_URL` | vide → adresse d'écoute (0.0.0.0 devient 127.0.0.1) | recommandé | **une ou plusieurs URL** `http(s)://hôte[:port]` séparées par des virgules (sans chemin ni requête ; hôte non spécifié refusé). La **première** sert aux liens `/confirm`, `/stop`, `/setup` et à `bambud enroll`. Tous les hôtes sont autorisés d'office par le garde Host. L'attribut `Secure` du cookie suit le schéma de l'URL dont l'hôte correspond au `Host` de la requête (ex. `http://192.168.1.50:7878,https://atelier.example.ts.net`), sinon celui de la première ; `X-Forwarded-Proto` d'un proxy de confiance l'emporte. Une URL non loopback **exige un jeton**. |
+| `--allow-any-printer-host` | `BAMBU_ALLOW_ANY_PRINTER_HOST` (seule la valeur `1` active) | faux | non | lève la restriction « IP privée / lien local / nom `.local` » des hôtes d'imprimante (`internal/printing/service.go:402-417`). **Inutile ici** (P1S en 192.168.1.x). |
 | `--studio-bin` | `BAMBU_STUDIO_BIN` | détection (§ 2.3) | non | chemin de Studio. **Corrigé (`e95e4d5`)** : un chemin donné par le flag **ou** par `BAMBU_STUDIO_BIN` mais introuvable (ou dossier) est une **erreur de démarrage** (« --studio-bin/BAMBU_STUDIO_BIN=… : Bambu Studio introuvable »), sans repli silencieux sur une autre installation ; `core.Open` applique la même règle aux usages en bibliothèque (erreur explicite dans `/api/capabilities`). |
 | `--studio-wrapper` | `BAMBU_STUDIO_WRAPPER` | vide = aucun | non | préfixe de commande du slicer, ex. `xvfb-run -a`. **Jamais activé implicitement** (corrigé `e95e4d5`) ; `none` (insensible à la casse), `-` ou vide : aucun préfixe. |
 | `--version` | — | — | — | affiche `bambud <Version>` (`main.go:79-82`). |
@@ -181,8 +181,8 @@ Elles s'exécutent sur le terminal de l'humain / un timer, ouvrent la base **dir
 | `UV_NO_DEV=1` | Plus nécessaire | **Corrigé** : `--no-dev` est passé par bambud. Peut rester sans effet nuisible. |
 | `--extra cad` | OK | sans lui, `step_import` répond `step_backend_missing` et `parametric` `cad_backend_missing` (`workers/geometry/pyproject.toml`). |
 | `BAMBU_IMPORT_ROOTS=/var/lib/atelier/import` | OK | le dossier doit exister et appartenir à `atelier`. **Corrigé (`77e50b2`)** : une racine qui contient `BAMBU_DATA_DIR` (donc `secrets/`) ou qui s'y trouve fait refuser le démarrage. `/var/lib/atelier/import` est **dans** `/var/lib/atelier` : **refusé** si `BAMBU_DATA_DIR=/var/lib/atelier` ; choisir un dossier **hors** du dossier de données (ex. `/srv/atelier/import`). |
-| `BAMBU_ALLOWED_HOSTS=atelier.tail4442b5.ts.net,atelier,lvg-thinkpad-x1-carbon-4th.local,100.65.215.71,192.168.0.8` | **OK** | format correct (sans port, virgules). Vérifié par sonde : `Host: atelier.tail4442b5.ts.net` avec ou sans `:7878` passe, en majuscules aussi, `…ts.net.` (point final) et tout hôte absent de la liste → 403 `hôte non autorisé`. Le nom court `atelier` suppose que les clients résolvent ce nom (MagicDNS). `127.0.0.1`/`localhost` sont toujours acceptés. |
-| `BAMBU_PUBLIC_URL=http://atelier.tail4442b5.ts.net:7878` | OK, avec réserves | l'URL que **l'humain** ouvre (liens `/confirm`, `/setup`, code d'enrôlement affiché). Peut maintenant être une **liste** : `http://atelier.tail4442b5.ts.net:7878,https://atelier.tail4442b5.ts.net` (la première pour les liens ; le cookie est `Secure` pour l'accès https seulement). Une URL non loopback **exige** `BAMBU_API_TOKEN` (déjà le cas ici). **Le code d'accès LAN de l'imprimante saisi sur `/setup` ne doit pas transiter par `http://192.168.0.8:7878`** (clair sur le LAN). |
+| `BAMBU_ALLOWED_HOSTS=atelier.example.ts.net,atelier,atelier-pc.local,100.64.0.10,192.168.1.50` | **OK** | format correct (sans port, virgules). Vérifié par sonde : `Host: atelier.example.ts.net` avec ou sans `:7878` passe, en majuscules aussi, `…ts.net.` (point final) et tout hôte absent de la liste → 403 `hôte non autorisé`. Le nom court `atelier` suppose que les clients résolvent ce nom (MagicDNS). `127.0.0.1`/`localhost` sont toujours acceptés. |
+| `BAMBU_PUBLIC_URL=http://atelier.example.ts.net:7878` | OK, avec réserves | l'URL que **l'humain** ouvre (liens `/confirm`, `/setup`, code d'enrôlement affiché). Peut maintenant être une **liste** : `http://atelier.example.ts.net:7878,https://atelier.example.ts.net` (la première pour les liens ; le cookie est `Secure` pour l'accès https seulement). Une URL non loopback **exige** `BAMBU_API_TOKEN` (déjà le cas ici). **Le code d'accès LAN de l'imprimante saisi sur `/setup` ne doit pas transiter par `http://192.168.1.50:7878`** (clair sur le LAN). |
 | `HOME=/var/lib/atelier` | OK | héberge `~/.config/BambuStudio`, `~/.cache/uv`, `~/.local/share/uv/python` (§ 5.2) ; inscriptible, donc compatible `ProtectSystem=strict`. |
 | `BAMBU_STUDIO_WRAPPER` absente | OK | **Corrigé** : absente = aucun préfixe (plus de défaut `xvfb-run`). `none` reste accepté. |
 | `BAMBU_DRAIN_TIMEOUT` absente | OK (30 s) | existe ; garder `TimeoutStopSec` ≥ 60 s dans l'unité (15 s d'arrêt HTTP + 30 s de drain = 45 s). |
@@ -335,9 +335,9 @@ Sondes (après correctifs, `bambud` de test avec jeton + `--require-token`) : `G
 Les décisions de sécurité reposent sur :
 
 1. **Le jeton** : obligatoire (refus de démarrer sans) si l'écoute n'est pas loopback, si `--require-token`, si `--public-url` désigne un hôte non loopback ou si `--allowed-hosts` contient un nom non loopback. **Derrière un proxy, toujours un jeton** : écouter sur `127.0.0.1` ne protège de rien quand le proxy relaie un nom public. (Corrigé `e95e4d5`.)
-2. **L'en-tête `Host`** : liste blanche (`--allowed-hosts` + hôtes de `--public-url`). Le nom du Funnel (`atelier.tail4442b5.ts.net`) doit y figurer. Le proxy doit **conserver** le `Host` d'origine : la protection CSRF compare `Origin` à `Host`.
+2. **L'en-tête `Host`** : liste blanche (`--allowed-hosts` + hôtes de `--public-url`). Le nom du Funnel (`atelier.example.ts.net`) doit y figurer. Le proxy doit **conserver** le `Host` d'origine : la protection CSRF compare `Origin` à `Host`.
 3. **`/mcp` derrière un proxy loopback** : **corrigé (`e95e4d5`)**. Le SDK MCP (`go-sdk@v1.8.0/mcp/streamable.go:317-326`) répondait 403 `invalid Host header` à tout `Host` non loopback arrivant sur une adresse locale loopback ; `StreamableHTTPOptions.DisableLocalhostProtection` est maintenant positionné, notre garde Host (liste blanche) restant maître. Test : connexion loopback, `Host` public autorisé → 200 ; `Host` étranger → 403 (notre garde).
-4. **Le cookie `Secure`** : `r.TLS`, ou `X-Forwarded-Proto: https` **d'un proxy de confiance**, sinon le schéma de l'URL publique dont l'hôte correspond au `Host` de la requête, sinon celui de la première. Avec deux URL publiques (`http://192.168.0.8:7878,https://atelier.tail4442b5.ts.net`), l'accès LAN en http et l'accès `tailscale serve` en https fonctionnent chacun. (Corrigé `e95e4d5`.)
+4. **Le cookie `Secure`** : `r.TLS`, ou `X-Forwarded-Proto: https` **d'un proxy de confiance**, sinon le schéma de l'URL publique dont l'hôte correspond au `Host` de la requête, sinon celui de la première. Avec deux URL publiques (`http://192.168.1.50:7878,https://atelier.example.ts.net`), l'accès LAN en http et l'accès `tailscale serve` en https fonctionnent chacun. (Corrigé `e95e4d5`.)
 
 **Ce qui deviendrait accessible depuis Internet via Funnel** (tout ce que le LAN voit) :
 
@@ -353,7 +353,7 @@ Les décisions de sécurité reposent sur :
 **Recommandations** :
 - Garder `/agent/v1`, `/enroll`, `/setup`, `/confirm`, `/stop`, `/agents/pair` **sur LAN + Tailscale uniquement**. Si un Funnel est un jour nécessaire, n'y exposer que `/mcp` (les points 2, 3 et 5 sont corrigés ; vérifier `--trusted-proxies` et un jeton) — si l'outil Funnel permet un filtrage par chemin ; sinon placer un reverse proxy qui n'achemine que ce chemin.
 - Ne jamais enlever `BAMBU_API_TOKEN` tant qu'un proxy ou un nom public existe.
-- Accès humain : idéalement `https://atelier.tail4442b5.ts.net` fourni par `tailscale serve` (certificat valide, privé au tailnet), **en premier** dans `BAMBU_PUBLIC_URL` (`https://atelier.tail4442b5.ts.net,http://192.168.0.8:7878` : la première sert aux liens), et abandonner l'accès humain en `http://` clair. La saisie du code d'accès de l'imprimante ne doit pas se faire en HTTP clair sur le LAN.
+- Accès humain : idéalement `https://atelier.example.ts.net` fourni par `tailscale serve` (certificat valide, privé au tailnet), **en premier** dans `BAMBU_PUBLIC_URL` (`https://atelier.example.ts.net,http://192.168.1.50:7878` : la première sert aux liens), et abandonner l'accès humain en `http://` clair. La saisie du code d'accès de l'imprimante ne doit pas se faire en HTTP clair sur le LAN.
 - Connecteur distant Claude (cloud Anthropic) : voir § 8.3.
 
 ### 7.3 L'interface web avec un jeton d'API (corrigé : `e95e4d5`, `430c06e`)
@@ -370,14 +370,14 @@ Protection CSRF des écritures par cookie : `web/src/api/client.ts` envoie `cred
 
 ```bash
 export BAMBU_API_TOKEN="$(sudo grep '^BAMBU_API_TOKEN=' /etc/atelier/atelier.env | cut -d= -f2-)"   # ne pas l'afficher ni le coller dans une conversation
-claude mcp add --transport http bambu http://atelier.tail4442b5.ts.net:7878/mcp \
+claude mcp add --transport http bambu http://atelier.example.ts.net:7878/mcp \
   --header "Authorization: Bearer ${BAMBU_API_TOKEN}"
 ```
 
 Ou dans `.mcp.json` (le jeton reste dans l'environnement de l'utilisateur) :
 
 ```json
-{ "mcpServers": { "bambu": { "type": "http", "url": "http://atelier.tail4442b5.ts.net:7878/mcp",
+{ "mcpServers": { "bambu": { "type": "http", "url": "http://atelier.example.ts.net:7878/mcp",
   "headers": { "Authorization": "Bearer ${BAMBU_API_TOKEN}" } } } }
 ```
 
@@ -389,11 +389,11 @@ Claude Desktop lance `bambu-mcp` (compilé pour le poste, Windows en général) 
 
 ```json
 { "mcpServers": { "bambu-atelier": { "command": "C:\\Users\\VOUS\\AppData\\Local\\BambuAtelier\\bambu-mcp.exe",
-  "args": ["--url", "http://atelier.tail4442b5.ts.net:7878/mcp",
+  "args": ["--url", "http://atelier.example.ts.net:7878/mcp",
            "--api-token-file", "C:\\Users\\VOUS\\AppData\\Local\\BambuAtelier\\api-token.txt"] } } }
 ```
 
-`api-token.txt` : une ligne, droits restreints au compte (`deploy/windows/configure-claude-desktop.ps1` le fait ; `deploy/windows/claude-desktop.md`). Le pont reconnecte seul après un redémarrage du serveur (`--connect-attempts`, `cmd/bambu-mcp/main.go:51,121-139`) et n'écrit rien d'autre que le protocole sur stdout. Le poste doit pouvoir joindre `atelier.tail4442b5.ts.net` (Tailscale installé et connecté).
+`api-token.txt` : une ligne, droits restreints au compte (`deploy/windows/configure-claude-desktop.ps1` le fait ; `deploy/windows/claude-desktop.md`). Le pont reconnecte seul après un redémarrage du serveur (`--connect-attempts`, `cmd/bambu-mcp/main.go:51,121-139`) et n'écrit rien d'autre que le protocole sur stdout. Le poste doit pouvoir joindre `atelier.example.ts.net` (Tailscale installé et connecté).
 
 ### 8.3 Connecteur distant (non recommandé en l'état)
 
@@ -486,10 +486,15 @@ Constats d'origine vérifiés, **traités dans l'ordre** par les commits ci-dess
 1. **Build web obligatoire avant `go build`** : Node ≥ 22.12 (ou ≥ 20.19) ; `cd web && npm ci && npm run build` ; contrôler `internal/webui/assets/index.html` et `internal/mcpserver/ui/views/mcp-app.html` (ignorés par git, sinon « interface non construite »). Ne pas exporter `BAMBU_STUDIO_BIN` pendant `go test -short ./...` (Studio 02.09 vs tests écrits sur 02.08), `TMPDIR="$(mktemp -d)"`.
 2. **Unité systemd** : `BAMBU_API_TOKEN` (EnvironmentFile 600, ≥ 16 car.), `BAMBU_REQUIRE_TOKEN=1` derrière un proxy ; `UV_PROJECT_ENVIRONMENT=/var/lib/atelier/venvs/geometry` **pré-synchronisé** (`uv sync --frozen --no-dev --extra cad`) ; plus besoin de `UV_NO_DEV`/`BAMBU_STUDIO_WRAPPER=none` (aucun xvfb implicite), `UV_FROZEN=1` facultatif ; `TimeoutStopSec=60`, `Restart=on-failure` avec `StartLimitIntervalSec/StartLimitBurst`.
 3. **Chemins** : `BAMBU_IMPORT_ROOTS` **hors** de `BAMBU_DATA_DIR` (ex. `/srv/atelier/import`) sinon refus de démarrer ; `BAMBU_STUDIO_BIN` doit exister (sinon erreur au démarrage, pas de repli) ; `BAMBU_GEOMETRY_DIR` peut rester en lecture seule (bambud n'y écrit jamais).
-4. **Accès** : `BAMBU_ALLOWED_HOSTS` (noms sans port) et `BAMBU_PUBLIC_URL` = liste `https://atelier.tail4442b5.ts.net,http://192.168.0.8:7878` (la première sert aux liens ; le cookie `Secure` suit l'hôte de la requête) ; `BAMBU_TRUSTED_PROXIES` seulement si le proxy n'est pas en loopback ; ne jamais saisir le code d'accès de l'imprimante en `http://` clair sur le LAN.
+4. **Accès** : `BAMBU_ALLOWED_HOSTS` (noms sans port) et `BAMBU_PUBLIC_URL` = liste `https://atelier.example.ts.net,http://192.168.1.50:7878` (la première sert aux liens ; le cookie `Secure` suit l'hôte de la requête) ; `BAMBU_TRUSTED_PROXIES` seulement si le proxy n'est pas en loopback ; ne jamais saisir le code d'accès de l'imprimante en `http://` clair sur le LAN.
 5. **Interface web** : utilisable avec le jeton configuré — enregistrer chaque navigateur une fois (`sudo atelier-enroll` / `bambud enroll`, code saisi sur `/enroll`) ; le cookie dure 30 jours, révocable (`enroll --revoke`). `/mcp` reste Bearer seulement ; les pages `/confirm`, `/stop`, `/setup` sont inchangées.
 6. **Funnel / `tailscale serve`** : `/mcp` fonctionne maintenant derrière un proxy loopback (Host public autorisé) et le jeton est exigé d'office ; n'exposer **jamais** `/agent/v1`, `/enroll`, `/setup`, `/confirm`, `/stop`, `/agents/pair` sur Internet.
 7. **Health check** : `GET` ou `HEAD /health` (sans jeton) ; puis `scripts/smoke-linux.sh --url … --token-file …` (Studio, profils, CadQuery par ping, MCP `tools/list`, profils filament) — attendre jusqu'à 90 s au premier démarrage.
 8. **Sauvegarde** : préférer `bambud backup` + `bambud verify` (cohérent base/blobs/secrets) ; sinon exclure `*.db-wal`, `*.db-shm`, `work/`, `tmp/`, `blobs/tmp/`, `agent-staging/`, `.bambud.lock`, `venvs/` (reconstructible) ; secrets dans le même instantané.
 9. **Retour arrière** : sûr par remplacement du binaire tant que `schema_version` est inchangé (130 → 130) ; sinon restaurer la sauvegarde d'avant (`bambud restore --force`). Ne pas lancer `atelier-enroll`/`backup` avec le nouveau binaire avant le redémarrage si une migration est possible.
 10. **Reste ouvert** : `/agent/v1/*` hors garde Host et sans limite de débit (point 13), aucun TLS natif (point 14) — rester sur LAN + Tailscale.
+
+## Annexe : connecteur distant de Claude (OAuth) et Docker
+
+- Exposer bambud à claude.ai / au mobile **sans jeton collé** : OAuth 2.1 intégré, `docs/OAUTH.md` (Funnel : n'exposer que `/mcp`, `/.well-known/*`, `/oauth/*` ; `BAMBU_PUBLIC_URL` en https ; `bambud oauth --list|--revoke`). Migration ajoutée : `0190_oauth.sql` (le `schema_version` de `/health` passe à 190 ou plus : retour arrière = restaurer la sauvegarde d'avant mise à jour, voir plus haut).
+- Alternative sans installation sur l'hôte : image Docker, `docs/QUICKSTART.md`.

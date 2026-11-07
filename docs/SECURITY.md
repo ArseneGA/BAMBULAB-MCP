@@ -83,3 +83,15 @@ Conséquence de conception : **l'accord humain ne passe que par des pages HTML s
 - Navigateurs sans `Sec-Fetch-*` (très anciens) : les `POST` des pages humaines sont refusés.
 - Un navigateur enregistré garde sa session 30 jours ; révoquer avec `bambud enroll --revoke`.
 - Pas encore de rotation du jeton d'API, pas de TLS natif côté serveur.
+
+## 9. OAuth 2.1 intégré (connecteur distant de Claude) — 2026-11-07
+
+Détail et exigences de Claude : `docs/OAUTH.md`. Ce qui touche au modèle de menace :
+
+- Le **Bearer statique reste valide** sur `/mcp` et `/api/*`, inchangé. S'y ajoute, **sur `/mcp` uniquement**, un jeton d'accès OAuth (`bat_…`, 1 h) émis par bambud pour la portée unique `mcp`. Il n'ouvre **ni `/api/*`, ni les pages humaines** ; sur `/mcp` il n'a pas plus de droits que le Bearer (aucun outil MCP n'approuve un lancement ou un arrêt, voir §3 et §4).
+- **Le consentement est un geste humain** : `/oauth/consent/{id}` est une page humaine (`isHumanPath`, `humanauth.Require` : cookie de navigateur enregistré, `Sec-Fetch-*` de navigation, nonce à usage unique, demande à usage unique de 10 min). `/oauth/authorize` n'accorde rien : il valide la demande (client enregistré, `redirect_uri` exacte, PKCE S256, `resource`) et affiche une page « Continuer » (le cookie `SameSite=Strict` ne suit pas une navigation venue d'un autre site). Le modèle n'a ni cookie ni moyen de produire le consentement.
+- Surface non authentifiée ajoutée : `POST /oauth/register` (clients publics, redirections en liste blanche : callbacks de Claude + boucle locale ; au plus 200 clients, purge des clients sans autorisation après 1 h, corps ≤ 16 Kio), `POST /oauth/token` (code à usage unique 60 s + PKCE ; refresh à rotation ; rejeu d'un code ou d'un refresh révoque l'autorisation ; corps ≤ 16 Kio), `GET /oauth/authorize`, `GET /.well-known/*` (métadonnées). Les autres chemins `/.well-known/` répondent 404 JSON.
+- Jetons et refresh stockés **hachés** (SHA-256) ; jamais journalisés. Révocation : `bambud oauth --list|--revoke|--revoke-all` (effet immédiat) ; audit des événements `oauth.*`.
+- Un jeton est lié à sa ressource (`<url publique>/mcp`, RFC 8707) : valable pour l'hôte public qui l'a émis seulement.
+- `guard.go` : modifications minimales et testées (`isOAuthOpen`, préfixe `/oauth/consent/` dans `isHumanPath`, jeton d'accès accepté sur `/mcp` seulement, `WWW-Authenticate` avec `resource_metadata` sur le 401 de `/mcp`). Tests : `internal/httpapi/oauth_test.go` (PKCE, mauvais verifier, redirection non autorisée, jeton révoqué, refresh et rejeu, consentement sans cookie / cross-site / mauvais nonce, jeton hors `/mcp`, jeton lié à l'hôte) ; les tests existants (garde, cookie, CSRF, `TestNoMCPToolCanApproveAConfirmation`) restent verts.
+- Limites : état en attente (demandes, codes) en mémoire ; pas de CIMD ni de `/oauth/revoke` ; non éprouvé contre un vrai claude.ai (aucune exposition faite).
