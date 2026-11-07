@@ -169,7 +169,8 @@ def _emit(cq: Any, tpl: Template, params: dict[str, Any], parts: list[Part], ctx
             raise GeometryError("invalid_params", "Sortie hors de out_dir refusée.", {"path": str(target)})
     shapes = [wp.val() for _, wp in parts]
     compound = cq.Compound.makeCompound(shapes)
-    meshes = [tessellate(s, *tpl.tess) for s in shapes]
+    tess = tuple(ctx.get("tess") or tpl.tess)
+    meshes = [tessellate(s, *tess) for s in shapes]
     write_binary_stl(stl_path, meshes, name=name)
     cq.exporters.export(cq.Workplane(obj=compound), str(step_path))
     bb = compound.BoundingBox()

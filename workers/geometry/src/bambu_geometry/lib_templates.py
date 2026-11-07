@@ -10,9 +10,10 @@ from typing import Any
 
 from . import parametric as legacy
 from .errors import GeometryError
-from .gears import gear_dims, gear_solid
+from .gears import ROOT_FILLET, gear_dims, gear_solid, gear_warnings, interference_check, space_side
 from .library import P, Template, register
-from .threads import ACROSS_FLATS, COARSE_PITCH, SIZES, hex_prism, nominal, threaded_rod
+from .threads import (ACROSS_FLATS, COARSE_PITCH, SIZES, bolt_tip_chamfer, hex_prism, nominal, nut_entry_chamfer,
+                      thread_depth, thread_tessellation, threaded_rod)
 
 Part = tuple[str, Any]
 
@@ -24,6 +25,34 @@ def _box(cq: Any, x0: float, y0: float, z0: float, dx: float, dy: float, dz: flo
 def _cyl_x(cq: Any, y: float, z: float, r: float, x0: float, length: float) -> Any:
     """Cylindre d'axe X, centre (y, z)."""
     return cq.Workplane("YZ").center(y, z).circle(r).extrude(length).translate((x0, 0, 0))
+
+
+def _teardrop_x(cq: Any, y: float, z: float, r: float, x0: float, length: float, down: bool = True, up: bool = False,
+                flat: float = 1.0) -> Any:
+    """Prisme d'axe X de section « goutte » : cercle de rayon r (centre (y, z)) prolongé par une ou deux pointes à 45°.
+
+    Les pointes (vers le bas et/ou le haut) sont tangentes au cercle et tronquées par un plat horizontal de largeur `flat`
+    (pont court imprimable) : toutes les parois restent à <= 45° de la verticale, donc sans support. down=True suffit pour un axe
+    plein (son dessous est en surplomb) ; un perçage a son plafond en surplomb : up=True (et down=True s'il loge un axe-goutte).
+    """
+    c = r * math.cos(math.radians(45.0))
+    ht = r * math.sqrt(2.0) - flat / 2  # hauteur du plat de troncature par rapport au centre
+    if not (down or up):
+        return _cyl_x(cq, y, z, r, x0, length)
+    # contour parcouru de la droite vers la gauche par le haut : (dessous plat) -> flanc bas droit -> arc droit -> (dessus plat)
+    w = cq.Workplane("YZ")
+    if down:
+        w = w.moveTo(y + flat / 2, z - ht).lineTo(y + c, z - c)
+    else:
+        w = w.moveTo(y + c, z - c)
+    if up:
+        w = w.threePointArc((y + r, z), (y + c, z + c)).lineTo(y + flat / 2, z + ht).lineTo(y - flat / 2, z + ht).lineTo(y - c, z + c)
+        w = w.threePointArc((y - r, z), (y - c, z - c))
+    else:
+        w = w.threePointArc((y, z + r), (y - c, z - c))  # arc par le haut : de (c, -c) à (-c, -c)
+    if down:
+        w = w.lineTo(y - flat / 2, z - ht)
+    return w.close().extrude(length).translate((x0, 0, 0))
 
 
 def _cyl_z(cq: Any, x: float, y: float, r: float, z0: float, height: float) -> Any:
@@ -461,17 +490,32 @@ def _hinge(cq: Any, p: dict[str, Any], ctx: dict[str, Any], pip: bool) -> list[P
     B = b_parts[0]
     for s in b_parts[1:]:
         B = B.union(s)
-    hole = _cyl_x(cq, 0, R, hole_r, -1, L + 2)
     parts: list[Part]
     if pip:
-        A = A.union(_cyl_x(cq, 0, R, pd / 2, 0, L))
-        B = B.cut(hole)
+        flat = 1.0
+        tear = bool(p.get("teardrop", True))
+        ht = hole_r * math.sqrt(2.0) - flat / 2
+        if tear and (R - ht < 0.6 or math.hypot(flat / 2, ht) > R - 0.8):
+            tear = False
+            ctx["warnings"].append("Axe en goutte désactivé : paroi des nœuds trop mince pour loger la pointe à 45° "
+                                   "(augmenter knuckle_wall ou réduire pin_diameter) ; l'axe rond demandera du support ou un pont.")
+        if tear:
+            A = A.union(_teardrop_x(cq, 0, R, pd / 2, 0, L, down=True, up=False, flat=flat))
+            B = B.cut(_teardrop_x(cq, 0, R, hole_r, -1, L + 2, down=True, up=True, flat=flat))
+        else:
+            A = A.union(_cyl_x(cq, 0, R, pd / 2, 0, L))
+            B = B.cut(_cyl_x(cq, 0, R, hole_r, -1, L + 2))
         parts = [("hinge_leaf_a", A), ("hinge_leaf_b", B)]
+        ctx["derived"].update(teardrop=tear, radial_clearance=hole_r - pd / 2)
         ctx["assumptions"].append(
             f"Charnière imprimée en place : axe fusionné avec la lame A, jeu de {gap:g} mm (radial et axial) avec la lame B. "
-            "Imprimer à plat ; ne pas utiliser de bordure/brim reliant les deux lames ; décoller en les faisant pivoter."
+            + ("Axe et perçage en goutte (pointes à 45° tronquées par un plat de 1 mm) : l'axe s'imprime à plat sans support. " if tear else "")
+            + "Le jeu `clearance` est calculé par l'ingénierie : jeu glissant MESURÉ par la calibration (peigne de jeux) quand elle existe "
+              "pour l'imprimante, la buse et la bobine, sinon 0,75 × jeu « libre » générique. "
+            + "Imprimer à plat ; ne pas utiliser de bordure/brim reliant les deux lames ; décoller en les faisant pivoter."
         )
     else:
+        hole = _cyl_x(cq, 0, R, hole_r, -1, L + 2)
         A = A.cut(hole)
         B = B.cut(hole)
         pin = _cyl_z(cq, L + 2 * R + 6, 0, pd / 2, 0, L).union(_cyl_z(cq, L + 2 * R + 6, 0, pd / 2 + 1.2, 0, 1.6))
@@ -501,6 +545,7 @@ register(Template(
         P("pin_diameter", "number", 4.0, "Diamètre de l'axe.", "mm", 1.5, 20),
         P("knuckle_wall", "number", 2.0, "Épaisseur de paroi des nœuds autour de l'axe.", "mm", 0.8, 10),
         P("clearance", "number", 0.3, "Jeu radial et axial entre les pièces mobiles, par côté.", "mm", 0.1, 1.5, auto="gap_pip"),
+        P("teardrop", "boolean", True, "Axe et perçage en goutte (pointes à 45°) pour imprimer à plat sans support ; false = axe rond.", ""),
     ],
     build=lambda cq, p, ctx: _hinge(cq, p, ctx, True),
 ))
@@ -706,8 +751,9 @@ def spur_gear(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
         "Denture droite en développante de cercle, profil de référence 1 module (tête) / 1,25 module (pied) ; "
         "dent amincie de tooth_clearance sur l'arc primitif pour le jeu entre flancs. Imprimer à plat (dents dans le plan des couches)."
     )
-    if z < 17 and a >= 20:
-        ctx["warnings"].append("Moins de 17 dents à 20° : sous-taillage du pied probable, contact moins favorable.")
+    ctx["derived"].update(root_fillet_radius=round(space_side(m, z, a, p["tooth_clearance"])[2], 4), flank_points=24,
+                          nominal_root_fillet=ROOT_FILLET * m)
+    ctx["warnings"].extend(gear_warnings(z, a))
     if m * 2 < 0.8:
         ctx["warnings"].append("Module très petit : dent plus fine que 2 passes de buse.")
     return [("spur_gear", g)]
@@ -761,8 +807,16 @@ def gear_pair(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
     )
     if ca < 1.2:
         ctx["warnings"].append(f"Rapport de conduite {ca:.2f} < 1,2 : engrènement peu continu (augmenter les dents).")
-    if min(z1, z2) < 17 and a >= 20:
-        ctx["warnings"].append("Moins de 17 dents à 20° : sous-taillage du pied probable.")
+    ic = interference_check(m, z1, z2, a)
+    ctx["derived"].update(gear_1_tip_margin_mm=round(ic["gear_1_tip_margin_mm"], 4), gear_2_tip_margin_mm=round(ic["gear_2_tip_margin_mm"], 4),
+                          interference=ic["interference"], undercut_limit_teeth=round(ic["undercut_limit_teeth"], 2),
+                          root_fillet_radius=round(space_side(m, z1, a, bl / 2)[2], 4))
+    if ic["interference"]:
+        ctx["warnings"].append("Interférence de développante : la tête d'une roue dépasse le point de tangence de la ligne d'action "
+                               "(marges : roue 1 %.2f mm, roue 2 %.2f mm) ; augmenter les dents, réduire la tête ou prévoir un déport." %
+                               (ic["gear_1_tip_margin_mm"], ic["gear_2_tip_margin_mm"]))
+    for n, zz in ((1, z1), (2, z2)):
+        ctx["warnings"].extend(f"Roue {n} : {w}" for w in gear_warnings(zz, a))
     return [("gear_1", g1), ("gear_2", g2)]
 
 
@@ -801,6 +855,7 @@ def thread(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
         if L < 2 * pitch:
             _fail("length doit couvrir au moins 2 pas de filet.")
         rod = threaded_rod(cq, D, pitch, L, z0=hh - 0.01)
+        rod = bolt_tip_chamfer(cq, rod, D, pitch, hh - 0.01 + L)
         head = hex_prism(cq, af, hh, chamfer=min(0.5, hh / 4))
         parts.append(("thread_bolt", head.union(rod)))
         ctx["derived"].update(head_height=hh, across_flats=af, major_diameter=D, pitch=pitch,
@@ -810,6 +865,7 @@ def thread(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
         blank = hex_prism(cq, af, nh, chamfer=min(0.5, nh / 4))
         cutter = threaded_rod(cq, D + 2 * clr, pitch, nh + 2, z0=-1)
         nut = blank.cut(cutter)
+        nut = nut_entry_chamfer(cq, nut, D / 2 + clr - thread_depth(pitch), D / 2 + clr, nh)
         if mode == "pair":
             nut = nut.translate((af / math.cos(math.radians(30)) + 4, 0, 0))
         parts.append(("thread_nut", nut))
@@ -829,9 +885,15 @@ def thread(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
             "Chauffer l'insert (≈ 200 °C pour PLA/PETG), l'enfoncer à la main bien droit."
         )
     if mode != "insert_boss":
+        ctx["tess"] = thread_tessellation(D)
+        ctx["derived"].update(thread_depth=round(thread_depth(pitch), 4), tessellation_linear_mm=ctx["tess"][0],
+                              tessellation_angular_rad=round(ctx["tess"][1], 4))
         ctx["assumptions"].append(
-            f"Filetage métrique {size}×{pitch:g} à droite, profil ISO tronqué (profondeur 0,6134 P), imprimé axe Z. "
-            f"Écrou : jeu radial {clr:g} mm sur le filet. Les petits filets (< M5) sont fragiles et peu précis en FDM ; "
+            f"Filetage métrique {size}×{pitch:g} à droite, profil ISO 68-1 de base (flancs 60°, crête plate P/8, profondeur "
+            f"h3 = 0,6134 P = {thread_depth(pitch):.3f} mm, fond plat au lieu du congé), imprimé axe Z, chanfrein d'entrée 45° sur la vis et l'écrou. "
+            f"Jeu imprimable : l'écrou est taillé au profil de la vis agrandi de {clr:g} mm en RADIAL, soit {2 * clr * math.tan(math.radians(30)):.2f} mm "
+            "de jeu axial total entre flancs (cf. classes ISO 6H/6g pour l'usinage, trop serrées en FDM). "
+            "Maillage exporté plus fin que les autres gabarits (flèche <= 0,015 mm). Les petits filets (< M5) sont fragiles et peu précis en FDM ; "
             "préférer un insert pour les assemblages répétés ou très chargés."
         )
         if D < 5:
@@ -842,7 +904,7 @@ def thread(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
 register(Template(
     id="thread", title="Vis / écrou métrique ou plot d'insert", category="fixation",
     description="Vis hexagonale et/ou écrou métriques imprimables (hélice exacte, jeu sur le filet calculé), ou plot cylindrique avec trou pour insert à chaud.",
-    tags=["filetage", "vis", "écrou", "insert"], tess=(0.1, 0.9),
+    tags=["filetage", "vis", "écrou", "insert"],
     params=[
         P("size", "enum", "M6", "Taille métrique (pas gros ISO par défaut).", options=SIZES),
         P("mode", "enum", "pair", "bolt = vis ; nut = écrou ; pair = les deux ; insert_boss = plot pour insert.",
