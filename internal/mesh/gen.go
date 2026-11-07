@@ -172,3 +172,39 @@ func TShape(stem, stemH, bar, barT, depth float64) *Mesh {
 	}
 	return Extrude(prof, depth).Transform(RotateX90).Transform(Translation(0, depth, 0))
 }
+
+// UVSphere génère une sphère fermée et étanche (sommets partagés) d'environ 2·rings·segs triangles.
+// Sert aux bancs d'essai de volumétrie et aux tests.
+func UVSphere(r float64, rings, segs int) *Mesh {
+	if rings < 2 {
+		rings = 2
+	}
+	if segs < 3 {
+		segs = 3
+	}
+	m := &Mesh{V: make([]Vec3, 0, 2+(rings-1)*segs), T: make([]Tri, 0, 2*segs*(rings-1))}
+	m.V = append(m.V, Vec3{0, 0, r}) // pôle nord = 0
+	for i := 1; i < rings; i++ {
+		phi := math.Pi * float64(i) / float64(rings)
+		for j := 0; j < segs; j++ {
+			th := 2 * math.Pi * float64(j) / float64(segs)
+			m.V = append(m.V, Vec3{r * math.Sin(phi) * math.Cos(th), r * math.Sin(phi) * math.Sin(th), r * math.Cos(phi)})
+		}
+	}
+	south := len(m.V)
+	m.V = append(m.V, Vec3{0, 0, -r})
+	ring := func(i, j int) int { return 1 + (i-1)*segs + (j % segs) }
+	for j := 0; j < segs; j++ {
+		m.T = append(m.T, Tri{0, ring(1, j), ring(1, j+1)})
+	}
+	for i := 1; i < rings-1; i++ {
+		for j := 0; j < segs; j++ {
+			a, b, c, d := ring(i, j), ring(i+1, j), ring(i+1, j+1), ring(i, j+1)
+			m.T = append(m.T, Tri{a, b, c}, Tri{a, c, d})
+		}
+	}
+	for j := 0; j < segs; j++ {
+		m.T = append(m.T, Tri{ring(rings-1, j+1), ring(rings-1, j), south})
+	}
+	return m
+}
