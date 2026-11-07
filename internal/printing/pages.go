@@ -46,6 +46,7 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 {{if .V.Binding.EstimatedMin}}<dt>Durée estimée</dt><dd>{{printf "%.0f" .V.Binding.EstimatedMin}} min (estimation du slicer){{if .V.Binding.WeightG}}, {{printf "%.1f" .V.Binding.WeightG}} g{{end}}</dd>{{end}}
 <dt>Valable jusqu'à</dt><dd>{{.V.ExpiresAt.Format "15:04:05 (02/01/2006)"}}</dd></dl>
 {{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" style="max-width:100%;border:1px solid #888;border-radius:6px"><figcaption>Photo du plateau prise à {{.Photo.TakenAt.Format "15:04:05 (02/01/2006)"}} par la caméra de l'imprimante, à l'ouverture de cette page. Vérifie sur cette image que le plateau est vide et dégagé.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>{{end}}
+{{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}">
 <label class="chk"><input type="checkbox" name="plate_clear" value="yes" required> Le plateau est vide et dégagé, l'imprimante est surveillée.</label>

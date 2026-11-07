@@ -34,6 +34,7 @@ type PromptDetails struct {
 	Materials    []FilamentAssignment `json:"materials"`
 	EstimatedMin float64              `json:"estimated_minutes,omitempty"`
 	WeightG      float64              `json:"estimated_grams,omitempty"`
+	Alerts       []string             `json:"alerts,omitempty" jsonschema:"alertes de matière (bobine qui risque de manquer) : à lire avant de lancer"`
 	Reminder     string               `json:"reminder"`
 }
 
@@ -59,6 +60,13 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	}
 	d := &PromptDetails{File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments,
 		Reminder: "Vérifie que le plateau est vide et dégagé : l'imprimante ne peut pas le savoir. Le dépôt du fichier n'a déclenché ni chauffe ni mouvement."}
+	if j.Validation != nil {
+		for _, w := range j.Validation.Warnings {
+			if strings.HasPrefix(w, "filament_") {
+				d.Alerts = append(d.Alerts, w)
+			}
+		}
+	}
 	if j.Summary != nil {
 		for _, p := range j.Summary.Plates {
 			if p.Index == j.Plate {

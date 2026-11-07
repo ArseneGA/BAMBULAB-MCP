@@ -85,6 +85,9 @@ func New(c *core.Core) *mcp.Server {
 	if c.Camera != nil && c.Notify != nil {
 		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)
 	}
+	if c.Filament != nil {
+		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
+	}
 	return s
 }
 

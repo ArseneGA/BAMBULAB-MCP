@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/filament"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 )
@@ -40,6 +41,9 @@ func (c *Core) wireCamera() error {
 	cam.AttachEvents(be.Subscribe)
 	w := notify.NewWatcher(nv, c.Printing, cam)
 	w.Attach(c.Printing)
+	if c.Filament != nil {
+		c.Filament.Subscribe(func(e filament.Event) { nv.Emit(context.Background(), FilamentNotification(nv, e)) })
+	}
 	c.AddRunHook(cam.Run)
 	c.AddRunHook(w.Run)
 	c.AddCloseHook(cam.Close)

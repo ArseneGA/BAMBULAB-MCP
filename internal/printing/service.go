@@ -94,6 +94,11 @@ type Service struct {
 	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN). TTL, purgé.
 	consumedBy map[string]consumedEntry
 
+	// Observateurs et alerte de matière (ams.go) : n'ont aucun pouvoir sur le lancement.
+	hookMu        sync.Mutex
+	endHooks      []JobEndHook
+	filamentCheck FilamentCheck
+
 	jobMu sync.Mutex // sérialise les mises à jour d'un même PrintJob dans le processus
 
 	// Modèles : pas de sync.Once (un ctx annulé ne doit pas figer l'échec) ; on réessaie tant qu'il n'a pas réussi.
@@ -853,7 +858,7 @@ func (s *Service) update(ctx context.Context, id string, mutate func(*Job) error
 // transition applique un événement de la machine d'états (refus si illégal) puis mutate.
 func (s *Service) transition(ctx context.Context, id string, ev contracts.PrintEvent, note string, mutate func(*Job) error) (Job, error) {
 	var was contracts.PrintState
-	j, err := s.update(ctx, id, func(j *Job) error {
+	out, err := s.update(ctx, id, func(j *Job) error {
 		from := j.State
 		was = from
 		next, err := contracts.Transition(from, ev)
@@ -868,9 +873,10 @@ func (s *Service) transition(ctx context.Context, id string, ev contracts.PrintE
 		return nil
 	})
 	if err == nil {
-		s.emit(j, ev, was, note) // observateurs (caméra, notifications) : lecture seule
+		s.emit(out, ev, was, note) // observateurs (caméra, notifications) : lecture seule
+		s.fireJobEnd(out)          // observateurs de fin d'impression (ams.go)
 	}
-	return j, err
+	return out, err
 }
 
 func nextStep(j Job) string {

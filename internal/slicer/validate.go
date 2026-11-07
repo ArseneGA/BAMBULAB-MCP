@@ -474,7 +474,8 @@ type gcodeScan struct {
 var (
 	reTime   = regexp.MustCompile(`total estimated time:\s*(.+)$`)
 	reLayers = regexp.MustCompile(`total layer number:\s*(\d+)`)
-	reWeight = regexp.MustCompile(`total filament weight \[g\]\s*:\s*([\d.]+)`)
+	// Une valeur par filament séparées par des virgules (« 12.98,13.22 ») : le poids de la plaque est leur somme.
+	reWeight = regexp.MustCompile(`total filament weight \[g\]\s*:\s*([\d.,]+)`)
 	reMaxZ   = regexp.MustCompile(`max_z_height:\s*([\d.]+)`)
 	reDur    = regexp.MustCompile(`(\d+)\s*([dhms])`)
 )
@@ -571,7 +572,10 @@ func (s *gcodeScan) line(l []byte, curZ *float64) {
 			}
 		case strings.Contains(str, "total filament weight [g]"):
 			if m := reWeight.FindStringSubmatch(str); m != nil {
-				s.headerWeight = parseF(m[1])
+				s.headerWeight = 0
+				for _, w := range strings.Split(m[1], ",") {
+					s.headerWeight += parseF(w)
+				}
 			}
 		case strings.Contains(str, "max_z_height:"):
 			if m := reMaxZ.FindStringSubmatch(str); m != nil {

@@ -109,7 +109,8 @@ func TestCameraEndToEnd(t *testing.T) {
 	resp.Body.Close()
 	sresp, err := http.Get(r.web.URL + "/api/printers/" + r.printerID + "/camera/stream")
 	if err != nil || sresp.StatusCode != 200 {
-		b0, _ := io.ReadAll(sresp.Body); t.Fatalf("flux : %v %s", err, b0)
+		b0, _ := io.ReadAll(sresp.Body)
+		t.Fatalf("flux : %v %s", err, b0)
 	}
 	_, params, _ := mime.ParseMediaType(sresp.Header.Get("Content-Type"))
 	mr := multipart.NewReader(sresp.Body, params["boundary"])
