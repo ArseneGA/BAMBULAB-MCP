@@ -84,13 +84,16 @@ type Expect struct {
 
 // FilamentUse est la consommation d'un emplacement filament sur une plaque.
 type FilamentUse struct {
-	Slot     int     `json:"slot"`
-	Type     string  `json:"type"`
-	Color    string  `json:"color,omitempty"`
-	TrayInfo string  `json:"tray_info_idx,omitempty"`
-	Meters   float64 `json:"used_m"`
-	Grams    float64 `json:"used_g"`
-	Nozzle   float64 `json:"nozzle_diameter,omitempty"`
+	Slot  int    `json:"slot"`
+	Type  string `json:"type"`
+	Color string `json:"color,omitempty"`
+	// ColorSource : d'où vient Color. Vide = couleur du profil de découpe (valeur par défaut du preset, par exemple
+	// le vert Bambu #00AE42), qui n'est PAS la couleur de la bobine chargée.
+	ColorSource string  `json:"color_source,omitempty"`
+	TrayInfo    string  `json:"tray_info_idx,omitempty"`
+	Meters      float64 `json:"used_m"`
+	Grams       float64 `json:"used_g"`
+	Nozzle      float64 `json:"nozzle_diameter,omitempty"`
 }
 
 // PlateResult regroupe ce qui est lisible d'une plaque tranchée.

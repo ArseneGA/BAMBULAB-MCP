@@ -396,7 +396,7 @@ func (s *Slicer) Slice(ctx context.Context, req Request) (*Result, error) {
 	res.InputPath, res.InputSHA256 = inputAbs, sum
 
 	var inputVolume float64
-	var partSizes []mesh.Vec3 // dimensions des pièces de la plaque, pour expliquer un refus de placement
+	var partSizes []mesh.Vec3       // dimensions des pièces de la plaque, pour expliquer un refus de placement
 	for _, o := range req.Objects { // projet : volume des seuls objets de la plaque tranchée
 		if (req.Plate > 0 && o.Plate != req.Plate) || o.Mesh == nil {
 			continue

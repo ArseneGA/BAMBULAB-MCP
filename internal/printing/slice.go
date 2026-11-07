@@ -131,6 +131,14 @@ func (s *Service) ExecuteHeadlessSlice(ctx context.Context, in SliceInput) (*Job
 	}
 	spec := &SliceSpec{Printer: model.Name, Nozzle: rec.NozzleMM, Process: in.Process, Filaments: in.Filaments,
 		SourceSHA: src.SHA256, SourceName: src.Name, SourceFmt: string(src.Format), Plate: in.Plate}
+	var filNotes []string
+	if len(in.Filaments) > 0 { // noms libres (« PETG transparent ») → presets installés compatibles avec la machine
+		fs, notes, ferr := s.resolveFilamentNames(model.Name, rec.NozzleMM, in.Filaments)
+		if ferr != nil {
+			return nil, ferr
+		}
+		spec.Filaments, filNotes = fs, notes
+	}
 	revID := in.ProfileRevision
 	if revID == "" && s.d.Goals != nil {
 		if applied, _ := s.d.Goals.AppliedFor(ctx, in.ModelID); applied != nil {
@@ -164,6 +172,9 @@ func (s *Service) ExecuteHeadlessSlice(ctx context.Context, in SliceInput) (*Job
 	prepNote := "préparation de la découpe"
 	if fabWarn != "" {
 		prepNote += " — " + fabWarn
+	}
+	for _, n := range filNotes {
+		prepNote += " — " + n
 	}
 	if j, err = s.transition(ctx, j.ID, contracts.EvPrepare, prepNote, nil); err != nil {
 		return nil, err
@@ -344,6 +355,7 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if res.Archive != nil {
 		sum.PrinterModel, sum.BedType, sum.Nozzles = res.Archive.PrinterModel, res.Archive.BedType, res.Archive.Nozzles
 	}
+	clearProfileColors(sum)
 	if spec.Plan != nil {
 		if perr := s.checkPlateObjects(spec, res, sum); perr != nil {
 			return fail("plate_mismatch", perr)

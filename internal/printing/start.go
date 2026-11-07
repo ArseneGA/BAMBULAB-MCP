@@ -565,7 +565,7 @@ func (s *Service) requestStop(jobID string) (string, time.Time) {
 			return id, r.expires
 		}
 	}
-	id := "stp_" + randomNonce()[:20]
+	id := newStopID()
 	exp := s.now().Add(stopTTL)
 	s.stops[id] = stopReq{jobID: jobID, expires: exp}
 	return id, exp
@@ -585,18 +585,16 @@ type StopView struct {
 
 // GetStop relit une demande d'arrêt valide (sans la consommer).
 func (s *Service) GetStop(ctx context.Context, stopID string) (*StopView, error) {
-	s.mu.Lock()
-	r, ok := s.stops[stopID]
-	s.mu.Unlock()
-	if !ok || !s.now().Before(r.expires) {
-		return nil, fmt.Errorf("%w : demande d'arrêt expirée ou inconnue", ErrNotFound)
+	stopID, r, why := s.lookupStop(stopID)
+	if why != "" {
+		return nil, fmt.Errorf("%w : %s", ErrNotFound, why)
 	}
 	j, err := s.GetJob(ctx, r.jobID)
 	if err != nil {
 		return nil, err
 	}
 	if j.State != contracts.PrintPrinting {
-		return nil, fmt.Errorf("%w : l'impression n'est plus en cours (%s)", ErrState, j.State)
+		return nil, fmt.Errorf("%w : %s", ErrState, stopGoneMessage("finished", j.State))
 	}
 	rec, _ := s.GetPrinterRecord(ctx, j.PrinterID)
 	v := &StopView{StopID: stopID, PrintJobID: j.ID, File: j.Name, PrinterName: rec.Name, ExpiresAt: r.expires}
@@ -635,9 +633,13 @@ func (s *Service) ExecuteStop(ctx context.Context, stopID string) (*CancelOutput
 		return nil, fmt.Errorf("arrêt de l'imprimante en échec : %w", err)
 	}
 	s.mu.Lock()
-	delete(s.stops, stopID)
+	delete(s.stops, v.StopID)
+	s.stopGone[v.StopID] = goneStop{reason: "used", at: s.now()}
 	s.mu.Unlock()
-	if _, err = s.transition(ctx, j.ID, contracts.EvCancel, "arrêt validé par l'utilisateur sur la page /stop", nil); err != nil {
+	if _, err = s.transition(ctx, j.ID, contracts.EvCancel, "arrêt validé par l'utilisateur sur la page /stop", func(x *Job) error {
+		x.StoppedByUser = true
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	_ = s.d.Store.Audit(ctx, "human:web", "print.stopped", "print_job", j.ID, nil)

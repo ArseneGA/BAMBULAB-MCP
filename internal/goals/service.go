@@ -291,7 +291,11 @@ func (s *Service) resolveBase(spec BaseSpec, fam string, baseOvs []slicer.Overri
 	}
 	process := spec.Process
 	if process == "" {
-		process, _ = rm.String("default_print_profile")
+		if c, perr := s.prof.PickProcess(machine); perr == nil {
+			process = c.Name
+		} else {
+			process, _ = rm.String("default_print_profile")
+		}
 	}
 	if process == "" {
 		return nil, invalid("base : aucun process fourni et la machine n'en déclare pas par défaut")
@@ -304,6 +308,8 @@ func (s *Service) resolveBase(spec BaseSpec, fam string, baseOvs []slicer.Overri
 				return nil, err
 			}
 			fils = []string{f}
+		} else if c, perr := s.prof.PickFilament(machine); perr == nil {
+			fils = []string{c.Name}
 		} else {
 			fils = rm.Strings("default_filament_profile")
 			if len(fils) > 1 {

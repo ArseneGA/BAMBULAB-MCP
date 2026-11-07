@@ -88,8 +88,9 @@ type Service struct {
 	tracking map[string]context.CancelFunc
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
-	stopping map[string]bool    // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)
-	stops    map[string]stopReq // identifiant de demande d'arrêt -> print job (TTL, purgé)
+	stopping map[string]bool     // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)
+	stops    map[string]stopReq  // identifiant de demande d'arrêt -> print job (TTL, purgé)
+	stopGone map[string]goneStop // demandes d'arrêt expirées ou utilisées (24 h) : pour dire POURQUOI un lien ne marche plus
 	// consumedBy : confirmation -> travail de lancement qui l'a consommée (un autre lancement
 	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN). TTL, purgé.
 	consumedBy map[string]consumedEntry
@@ -99,6 +100,7 @@ type Service struct {
 	hooksClosed   bool // porte fermée avant wg.Wait : plus aucun observateur n'est lancé
 	endHooks      []JobEndHook
 	filamentCheck FilamentCheck
+	spoolSource   SpoolSource
 
 	planLocks sync.Map // plan_id -> *sync.Mutex : une seule découpe de plaques à la fois par plan
 
@@ -155,7 +157,7 @@ func New(d Deps) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{d: d, secrets: secrets, log: d.Log, ctx: ctx, cancel: cancel,
 		adapters: map[string]*adapterEntry{}, tracking: map[string]context.CancelFunc{},
-		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, stopping: map[string]bool{}, consumedBy: map[string]consumedEntry{}}
+		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, stopGone: map[string]goneStop{}, stopping: map[string]bool{}, consumedBy: map[string]consumedEntry{}}
 	s.confirmTransition = s.defaultConfirmTransition
 	if d.CertFetch == nil {
 		s.d.CertFetch = printer.FetchCertInfo

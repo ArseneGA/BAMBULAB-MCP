@@ -35,6 +35,7 @@ type PromptDetails struct {
 	EstimatedMin float64              `json:"estimated_minutes,omitempty"`
 	WeightG      float64              `json:"estimated_grams,omitempty"`
 	Alerts       []string             `json:"alerts,omitempty" jsonschema:"alertes de matière (bobine qui risque de manquer) : à lire avant de lancer"`
+	Colors       []FilamentColor      `json:"colors,omitempty" jsonschema:"couleur de chaque filament d'après la bobine RÉELLEMENT chargée (inventaire, AMS, bobine externe déclarée) ; « inconnue » sinon, jamais la couleur par défaut du profil"`
 	Reminder     string               `json:"reminder"`
 }
 
@@ -58,7 +59,7 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	if short == "" {
 		short = rec.Name
 	}
-	d := &PromptDetails{File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments,
+	d := &PromptDetails{Colors: s.colorsFor(j), File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments,
 		Reminder: "Vérifie que le plateau est vide et dégagé : l'imprimante ne peut pas le savoir. Le dépôt du fichier n'a déclenché ni chauffe ni mouvement."}
 	if j.Validation != nil {
 		for _, w := range j.Validation.Warnings {
@@ -204,11 +205,13 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 		return nil, err
 	}
 	mapping, useAMS := buildAMS(in.Assignments)
+	loaded := s.loadedSpools(in.PrinterID) // lecture hors du verrou des impressions
 	if _, err := s.update(ctx, j.ID, func(x *Job) error {
 		if x.State != contracts.PrintValidated {
 			return fmt.Errorf("%w : %s", ErrState, x.State)
 		}
 		x.Assignments, x.AMSMapping, x.UseAMS, x.Plate, x.PrinterID = in.Assignments, mapping, useAMS, plate, in.PrinterID
+		applyRealColors(x, loaded)
 		return nil
 	}); err != nil {
 		return nil, err

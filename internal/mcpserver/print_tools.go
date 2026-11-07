@@ -40,6 +40,12 @@ type PrinterIDInput struct {
 	PrinterID string `json:"printer_id"`
 }
 
+// ListFilamentsInput : entrée de list_filaments.
+type ListFilamentsInput struct {
+	PrinterID string `json:"printer_id" jsonschema:"imprimante (modèle et buse déterminent les presets compatibles)"`
+	Family    string `json:"family,omitempty" jsonschema:"PLA, PETG, ABS/ASA, TPU, PA/PC, Support : ne lister que cette famille"`
+}
+
 // PrintJobIDInput identifie une impression.
 type PrintJobIDInput struct {
 	PrintJobID string `json:"print_job_id"`
@@ -93,6 +99,20 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			return nil, PrintersOut{}, err
 		}
 		return textResult(fmt.Sprintf("%d imprimante(s).", len(ps))), PrintersOut{Printers: ps, Note: "Le code d'accès LAN n'apparaît jamais ici."}, nil
+	})
+
+	addTool(s, &mcp.Tool{
+		Name: "list_filaments", Title: "Filaments disponibles pour une imprimante",
+		Description: "Presets filament de Bambu Studio COMPATIBLES avec l'imprimante (modèle + buse), regroupés par famille (PLA, PETG, ABS/ASA, TPU, PA/PC, Support), avec le nom exact à utiliser. " +
+			"execute_headless_slice accepte aussi un nom libre en français ou anglais (« PETG transparent », « PLA mat », « PETG translucide ») résolu vers un preset de cette liste ; un nom inconnu renvoie les 5 plus proches. " +
+			"La couleur n'est donnée que si une bobine chargée la fournit (AMS lu ou bobine déclarée avec update_spool, slot « ext » pour la bobine externe) : jamais celle du profil. `family` filtre une famille.",
+		Annotations: ro,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ListFilamentsInput) (*mcp.CallToolResult, printing.FilamentList, error) {
+		l, err := p.ListFilaments(in.PrinterID, in.Family)
+		if err != nil {
+			return nil, printing.FilamentList{}, err
+		}
+		return textResult(fmt.Sprintf("%d filament(s) compatibles avec %s dans %d famille(s).", l.Total, in.PrinterID, len(l.Families))), *l, nil
 	})
 
 	addTool(s, &mcp.Tool{

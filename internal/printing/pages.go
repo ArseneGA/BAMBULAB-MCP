@@ -184,15 +184,20 @@ func closedMsg(err error) string {
 	case errors.Is(err, contracts.ErrConfirmationExpired):
 		return "Cette confirmation a expiré. Demande-en une nouvelle à Claude."
 	case errors.Is(err, contracts.ErrConfirmationMismatch):
+		msg := err.Error()
+		switch {
+		case strings.Contains(msg, "COMPLETED"), strings.Contains(msg, "FAILED"), strings.Contains(msg, "CANCELLED"), strings.Contains(msg, "PRINTING"), strings.Contains(msg, "START_"):
+			return "Cette impression n'attend plus de confirmation (" + msg[strings.LastIndex(msg, "(")+1:] + " : elle est lancée, terminée ou annulée."
+		}
 		return "Cette confirmation ne correspond plus à l'impression (fichier, imprimante, plateau ou matières modifiés, ou nouvelle confirmation émise)."
 	case errors.Is(err, ErrNotFound):
-		return "Confirmation introuvable."
+		return "Lien de confirmation inconnu de ce serveur (identifiant mal recopié, ou service redémarré depuis la demande). Demande-en un nouveau à Claude."
 	}
 	return "Confirmation indisponible."
 }
 
 func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id := trimLinkPunct(r.PathValue("id"))
 	_, cj, err := s.confirmable(r.Context(), id)
 	if err != nil {
 		s.render(w, http.StatusGone, "confirm", map[string]any{"Title": "Confirmation", "Closed": closedMsg(err)})
@@ -215,7 +220,7 @@ func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id := trimLinkPunct(r.PathValue("id"))
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	if err := r.ParseForm(); err != nil {
 		s.render(w, http.StatusBadRequest, "done", map[string]any{"Title": "Requête invalide", "Msg": "Formulaire illisible."})
@@ -242,7 +247,11 @@ func (s *Service) stopGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	v, err := s.GetStop(r.Context(), id)
 	if err != nil {
-		s.render(w, http.StatusGone, "stop", map[string]any{"Title": "Arrêt", "Closed": "Cette demande d'arrêt est expirée, inconnue ou l'impression n'est plus en cours."})
+		msg := err.Error()
+		if i := strings.Index(msg, " : "); i >= 0 {
+			msg = msg[i+3:]
+		}
+		s.render(w, http.StatusGone, "stop", map[string]any{"Title": "Arrêt", "Closed": strings.ToUpper(msg[:1]) + msg[1:] + "."})
 		return
 	}
 	s.render(w, http.StatusOK, "stop", map[string]any{"Title": "Arrêt d'impression", "V": v, "Nonce": s.issueNonce("stop:" + id)})

@@ -138,6 +138,7 @@ type Job struct {
 	Print           *PrintProgress       `json:"print,omitempty"`
 	LastError       string               `json:"last_error,omitempty"`
 	StopConfirmID   string               `json:"stop_confirm_id,omitempty"`
+	StoppedByUser   bool                 `json:"stopped_by_user,omitempty" jsonschema:"vrai si l'impression a été arrêtée par l'humain via la page /stop"`
 	Events          []JobEvent           `json:"events,omitempty"`
 	CreatedAt       time.Time            `json:"created_at"`
 	UpdatedAt       time.Time            `json:"updated_at"`

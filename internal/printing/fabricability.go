@@ -8,7 +8,6 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 )
 
-
 // partMesh lit la pièce de la découpe (orientation de la variante appliquée comprise), posée sur Z=0.
 func (s *Service) partMesh(spec *SliceSpec) (*mesh.Mesh, error) {
 	f, err := s.d.Blobs.Open(spec.SourceSHA)
