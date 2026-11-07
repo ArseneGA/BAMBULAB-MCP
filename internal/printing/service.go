@@ -752,6 +752,20 @@ type PrinterStatus struct {
 	PlateEmpty   string        `json:"plate_empty" jsonschema:"toujours « inconnu » : une imprimante idle ne prouve pas un plateau vide"`
 	Note         string        `json:"note,omitempty"`
 	MaxStartAgeS int           `json:"max_start_age_seconds"`
+	HMSCodes     []string      `json:"hms_codes,omitempty" jsonschema:"codes HMS actifs (16 chiffres hexadécimaux) : à chercher dans la base d'erreurs Bambu"`
+	// Affichage lisible : « Joignable · arrêtée (annulée par vous) » plutôt que le gcode_state brut « failed ».
+	Display     string       `json:"display,omitempty"`
+	Explanation string       `json:"explanation,omitempty" jsonschema:"ce que signifie l'état brut (gcode_state FAILED = annulation OU erreur) et la cause connue"`
+	LastJob     *LastJobInfo `json:"last_job,omitempty"`
+}
+
+// LastJobInfo : dernière impression suivie sur cette imprimante.
+type LastJobInfo struct {
+	ID            string               `json:"print_job_id"`
+	Name          string               `json:"name"`
+	State         contracts.PrintState `json:"state"`
+	StoppedByUser bool                 `json:"stopped_by_user,omitempty"`
+	At            time.Time            `json:"at"`
 }
 
 // StatusFromPrinter normalise le statut d'un adaptateur.
@@ -793,6 +807,10 @@ func (s *Service) GetPrinterStatus(ctx context.Context, printerID string) (*Prin
 		_ = s.d.Store.PutDoc(ctx, actor, "printers", rec.ID, rec)
 	}
 	out.Note = "L'état « idle » ne prouve pas que le plateau est vide : seul l'humain peut l'attester (page de confirmation)."
+	for _, h := range st.HMS {
+		out.HMSCodes = append(out.HMSCodes, h.Code16())
+	}
+	s.describeStatus(ctx, &out, st)
 	return &out, nil
 }
 

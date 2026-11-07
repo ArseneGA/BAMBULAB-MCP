@@ -41,6 +41,20 @@ type PrinterIDInput struct {
 	PrinterID string `json:"printer_id"`
 }
 
+// ListHistoryInput : entrée de list_print_history.
+type ListHistoryInput struct {
+	View         string `json:"view,omitempty" jsonschema:"all (défaut) | active | finished | failed | archived | trash"`
+	ModelID      string `json:"model_id,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	GroupByModel bool   `json:"group_by_model,omitempty"`
+}
+
+// ManageHistoryInput : entrée de manage_print_history.
+type ManageHistoryInput struct {
+	Action      string   `json:"action" jsonschema:"archive | trash | restore"`
+	PrintJobIDs []string `json:"print_job_ids" jsonschema:"impressions terminées (500 au plus)"`
+}
+
 // ListFilamentsInput : entrée de list_filaments.
 type ListFilamentsInput struct {
 	PrinterID string `json:"printer_id" jsonschema:"imprimante (modèle et buse déterminent les presets compatibles)"`
@@ -116,6 +130,33 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			return nil, printing.FilamentList{}, err
 		}
 		return textResult(fmt.Sprintf("%d filament(s) compatibles avec %s dans %d famille(s).", l.Total, in.PrinterID, len(l.Families))), *l, nil
+	})
+
+	addTool(s, &mcp.Tool{
+		Name: "list_print_history", Title: "Historique des impressions",
+		Description: "Historique filtré : view = all (défaut, sans archivées ni corbeille) | active | finished | failed (échecs, annulées) | archived | trash. group_by_model regroupe par modèle (compteurs et échecs par modèle). " +
+			"Renvoie aussi les compteurs par vue et l'avancement (pourcentage, position dans la file) des impressions en cours. Les essais ratés peuvent être rangés avec manage_print_history.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ListHistoryInput) (*mcp.CallToolResult, printing.History, error) {
+		h, err := p.ListHistory(ctx, printing.HistoryFilter{View: in.View, ModelID: in.ModelID, Limit: in.Limit}, in.GroupByModel)
+		if err != nil {
+			return nil, printing.History{}, err
+		}
+		return textResult(fmt.Sprintf("%d impression(s) dans la vue %s (actives %d, terminées %d, échecs %d, archivées %d, corbeille %d).",
+			len(h.Jobs), h.View, h.Counts["active"], h.Counts["finished"], h.Counts["failed"], h.Counts["archived"], h.Counts["trash"])), *h, nil
+	})
+
+	addTool(s, &mcp.Tool{
+		Name: "manage_print_history", Title: "Archiver ou mettre à la corbeille des impressions",
+		Description: "action = archive (masquer de la vue par défaut) | trash (corbeille, récupérable) | restore (remettre dans l'historique) sur des impressions TERMINÉES (réussies, échouées, annulées). " +
+			"Une impression active n'est jamais touchée. Rien n'est supprimé définitivement : le fichier découpé et la trace d'audit restent.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ManageHistoryInput) (*mcp.CallToolResult, printing.HistoryResult, error) {
+		r, err := p.ArchiveJobs(ctx, in.Action, in.PrintJobIDs)
+		if err != nil {
+			return nil, printing.HistoryResult{}, err
+		}
+		return textResult(fmt.Sprintf("%s : %d impression(s) traitée(s), %d ignorée(s). %s", r.Action, len(r.Done), len(r.Skipped), r.Note)), *r, nil
 	})
 
 	addTool(s, &mcp.Tool{

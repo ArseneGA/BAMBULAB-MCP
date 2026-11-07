@@ -60,8 +60,29 @@ func registerPrinting(mux *http.ServeMux, c *core.Core, human *humanauth.Service
 	})
 	mux.HandleFunc("GET /api/print-jobs", func(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-		js, err := p.ListJobs(r.Context(), contracts.PrintState(r.URL.Query().Get("state")), limit)
-		printingReply(c, w, map[string]any{"print_jobs": js}, err, http.StatusOK)
+		q := r.URL.Query()
+		if q.Get("state") != "" { // ancien filtre exact par état
+			js, err := p.ListJobs(r.Context(), contracts.PrintState(q.Get("state")), limit)
+			printingReply(c, w, map[string]any{"print_jobs": js}, err, http.StatusOK)
+			return
+		}
+		h, err := p.ListHistory(r.Context(), printing.HistoryFilter{View: q.Get("view"), ModelID: q.Get("model_id"), Limit: limit}, q.Get("group") == "model")
+		if err != nil {
+			printingReply(c, w, nil, err, http.StatusOK)
+			return
+		}
+		printingReply(c, w, map[string]any{"print_jobs": h.Jobs, "view": h.View, "counts": h.Counts, "groups": h.Groups, "progress": h.Progress}, nil, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/print-jobs/history", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Action      string   `json:"action"`
+			PrintJobIDs []string `json:"print_job_ids"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		res, err := p.ArchiveJobs(r.Context(), in.Action, in.PrintJobIDs)
+		printingReply(c, w, res, err, http.StatusOK)
 	})
 	mux.HandleFunc("POST /api/print-jobs", func(w http.ResponseWriter, r *http.Request) {
 		var in printing.SliceInput
