@@ -98,6 +98,8 @@ func main() {
 			os.Exit(oauthMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "enroll":
 			os.Exit(enrollMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "launch-code":
+			os.Exit(launchCodeMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "backup":
 			os.Exit(backupMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "restore":

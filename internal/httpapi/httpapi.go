@@ -69,6 +69,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	// /confirm, /stop, /setup et /agents/pair exigent leur cookie.
 	human := humanauth.New(c.Store, humanauth.Options{Secure: opts.requestHTTPS, ClientKey: opts.clientAddr})
 	human.RegisterPages(mux)
+	human.RegisterLaunchCodePages(mux) // /setup/launch-code : code de lancement personnel (launchcode_web.go)
 
 	registerCatalog(mux, c)
 	registerUpload(mux, c) // envoi de fichiers, import par lien (upload.go)
