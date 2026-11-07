@@ -319,11 +319,17 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if spec.Machine == "" {
 		req.Printer, req.Nozzle = spec.Printer, spec.Nozzle
 	}
+	stopTick := s.sliceProgress(jc, spec, req)
 	res, err := sl.Slice(ctx, req)
+	stopTick()
 	if res != nil {
 		defer res.Cleanup()
 	}
 	if err != nil {
+		var pe *slicer.PlacementError
+		if errors.As(err, &pe) { // message honnête (dimensions, zone utile) plutôt que le texte anglais de Studio
+			err = errors.New(pe.Message)
+		}
 		code := "slice_failed"
 		switch {
 		case errors.Is(err, slicer.ErrCanceled):
@@ -335,6 +341,7 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 		}
 		return fail(code, err)
 	}
+	jobs.ForgetDetail(jc.Job.ID)
 	if res.Validation != nil && !res.Validation.OK {
 		return fail("invalid_output", fmt.Errorf("validation de l'archive en échec : %v", res.Validation.Failed()))
 	}

@@ -50,6 +50,8 @@ type UploadOutput struct {
 	Details    *PromptDetails       `json:"details,omitempty"`
 	Note       string               `json:"note"`
 	Job        Job                  `json:"job"`
+	JobID      string               `json:"job_id,omitempty" jsonschema:"travail de file à suivre avec get_job_status quand done est faux"`
+	Progress   *jobs.Progress       `json:"progress,omitempty"`
 }
 
 func (s *Service) promptFor(j Job) (string, *PromptDetails) {
@@ -229,7 +231,7 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 			return nil, err
 		}
 	}
-	_, done := s.waitQueue(ctx, qj.ID, 90*time.Second)
+	_, done := s.waitQueue(ctx, qj.ID, s.syncWait())
 	cur, _ := s.GetJob(ctx, j.ID)
 	out := &UploadOutput{PrintJobID: cur.ID, State: cur.State, QueueJobID: qj.ID, Done: done, Replayed: !created, Job: cur}
 	switch cur.State {
@@ -239,7 +241,8 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 	case contracts.PrintFailed:
 		out.Note = "Dépôt en échec : " + cur.LastError
 	default:
-		out.Note = "Dépôt en cours : suivre avec get_print_status."
+		out.Note = "Le dépôt continue en arrière-plan (ne PAS considérer l'appel comme échoué) : suivre avec get_job_status(job_id = queue_job_id) ou get_print_status jusqu'à AWAITING_PRINT_CONFIRMATION."
+		out.Progress = s.progressOfQueue(ctx, qj.ID)
 	}
 	return out, nil
 }
@@ -281,8 +284,11 @@ func (s *Service) uploadHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawM
 		return fail("artifact_unreadable", err)
 	}
 	defer f.Close()
-	jc.Progress(0.2, "envoi FTPS")
-	ref, err := ad.Upload(ctx, f, j.Name, j.ArtifactSize, j.ArtifactSHA256)
+	jc.Progress(0.05, "connexion FTPS à l'imprimante")
+	jc.SetDetail(jobs.Detail{Phase: "connexion FTPS à l'imprimante", BytesTotal: j.ArtifactSize})
+	cr := &countingReader{r: f, total: j.ArtifactSize, jc: jc}
+	ref, err := ad.Upload(ctx, cr, j.Name, j.ArtifactSize, j.ArtifactSHA256)
+	jobs.ForgetDetail(jc.Job.ID)
 	if err != nil {
 		return fail("upload_failed", err)
 	}

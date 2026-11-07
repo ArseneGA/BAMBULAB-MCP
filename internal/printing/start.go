@@ -107,12 +107,12 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 			return nil, err
 		}
 	}
-	q, done := s.waitQueue(ctx, qj.ID, 100*time.Second)
+	q, done := s.waitQueue(ctx, qj.ID, s.syncWait())
 	cur, _ := s.GetJob(ctx, j.ID)
 	out := &StartOutput{PrintJobID: cur.ID, State: cur.State, QueueJobID: qj.ID, Replayed: !created, Job: cur}
 	switch {
 	case !done:
-		out.Outcome, out.Note = "start_requested", "Lancement en cours : suivre avec get_print_status. Ne pas relancer."
+		out.Outcome, out.Note = "start_requested", "Lancement en cours (l'imprimante peut mettre plusieurs dizaines de secondes à accuser réception d'un gros fichier) : suivre avec get_print_status. Ne JAMAIS relancer : si l'issue reste incertaine (START_UNKNOWN), le service la réconcilie seul, en lecture, dès que l'imprimante montre ce fichier en cours."
 	case q.State == contracts.JobFailed && q.Error != nil && q.Error.Code == "not_sent":
 		out.Outcome, out.Note = "not_sent", "Rien n'a été envoyé à l'imprimante : "+q.Error.Message+" L'accord de l'utilisateur est invalidé : il doit confirmer à nouveau sur la page."
 	case q.State == contracts.JobFailed && q.Error != nil && q.Error.Code == "aborted_before_send":
@@ -390,9 +390,10 @@ func sleepCtx(ctx context.Context, d time.Duration) {
 
 // PrintStatus : impression + état de l'imprimante.
 type PrintStatus struct {
-	Job     Job            `json:"job"`
-	Printer *PrinterStatus `json:"printer,omitempty"`
-	Note    string         `json:"note,omitempty"`
+	Job      Job            `json:"job"`
+	Progress *jobs.Progress `json:"progress,omitempty" jsonschema:"avancement de la phase en cours : pourcentage, phase, octets, durée restante, position en file"`
+	Printer  *PrinterStatus `json:"printer,omitempty"`
+	Note     string         `json:"note,omitempty"`
 }
 
 // GetPrintStatus relit l'impression et, si elle est active, rafraîchit depuis l'imprimante.
@@ -402,6 +403,7 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 		return nil, err
 	}
 	out := &PrintStatus{}
+	j = s.CheckConsistency(ctx, j)
 	switch j.State {
 	case contracts.PrintPrinting, contracts.PrintStartRequested, contracts.PrintStartUnknown, contracts.PrintUploaded, contracts.PrintAwaitingConfirmation:
 		if ps, err := s.GetPrinterStatus(ctx, j.PrinterID); err == nil {
@@ -421,9 +423,15 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 		}
 	}
 	if j.State == contracts.PrintStartUnknown {
-		out.Note = "Issue du lancement inconnue : ne pas relancer ; reconcile_print lit l'état réel."
+		if cur, ok := s.passiveReconcile(ctx, j); ok {
+			j = cur
+			out.Note = "Réconciliation automatique (lecture seule) : l'imprimante montre ce fichier en cours, l'impression est suivie. Aucune commande n'a été renvoyée."
+		} else {
+			out.Note = "Issue du lancement inconnue : ne pas relancer ; le service réconcilie seul dès que l'imprimante montre ce fichier en cours ; reconcile_print lit l'état réel."
+		}
 	}
 	out.Job = j
+	out.Progress = s.ProgressFor(ctx, j)
 	return out, nil
 }
 

@@ -35,6 +35,7 @@ import (
 const (
 	FaultOffline        = "offline"          // plus aucune connexion MQTT/FTPS acceptée
 	FaultDropAfterStart = "drop_after_start" // exécute project_file puis coupe sans accuser (une fois)
+	FaultSlowAck        = "slow_ack"         // exécute project_file tout de suite mais n'accuse (réponse + rapport) qu'après Config.SlowAckDelay
 	FaultIgnoreStart    = "ignore_start"     // reçoit project_file et l'ignore (aucun effet, aucun accusé)
 	FaultRejectStart    = "reject_start"     // répond result:fail à project_file
 	FaultHMSError       = "hms_error"        // erreur HMS en cours (pause si impression)
@@ -64,7 +65,9 @@ type Config struct {
 	TotalLayers       int           // défaut 100
 
 	Faults []string // pannes actives au démarrage
-	Logger *slog.Logger
+	// SlowAckDelay : délai d'accusé de la panne slow_ack (défaut 2 s) ; la vraie P1S met plus de 5 s avec un gros fichier.
+	SlowAckDelay time.Duration
+	Logger       *slog.Logger
 }
 
 func (c *Config) defaults() error {
@@ -234,7 +237,7 @@ func (s *Sim) Close() error {
 // SetFault active ou désactive une panne.
 func (s *Sim) SetFault(name string, on bool) error {
 	switch name {
-	case FaultOffline, FaultDropAfterStart, FaultIgnoreStart, FaultRejectStart, FaultHMSError, FaultFileMissing, FaultPlateOccupied:
+	case FaultOffline, FaultDropAfterStart, FaultSlowAck, FaultIgnoreStart, FaultRejectStart, FaultHMSError, FaultFileMissing, FaultPlateOccupied:
 	default:
 		return fmt.Errorf("sim: unknown fault %q", name)
 	}
@@ -499,6 +502,17 @@ func (s *Sim) onProjectFile(seq string, p map[string]any) {
 		return
 	}
 	s.amsOnStart(p)
+	if faults[FaultSlowAck] {
+		d := s.cfg.SlowAckDelay
+		if d <= 0 {
+			d = 2 * time.Second
+		}
+		time.AfterFunc(d, func() {
+			s.respond("project_file", seq, nil)
+			s.publishDelta(false)
+		})
+		return
+	}
 	s.respond("project_file", seq, nil)
 	s.publishDelta(false)
 }

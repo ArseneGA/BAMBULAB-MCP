@@ -21,7 +21,7 @@ type goneStop struct {
 func newStopID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
-	return "stp" + hex.EncodeToString(b)
+	return "stp_" + hex.EncodeToString(b)
 }
 
 // trimLinkPunct retire la ponctuation finale qu'un affichage de chat ou une phrase ajoute ou retire.

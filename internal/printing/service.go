@@ -71,6 +71,13 @@ type Deps struct {
 	CertFetch func(ctx context.Context, hostport string) (printer.CertInfo, error)
 	// ReconcileSettle : délai de stabilisation de la réconciliation (défaut de l'adaptateur : 10 s).
 	ReconcileSettle time.Duration
+	// SyncWait : attente maximale d'un outil long (découpe, dépôt) avant de rendre job_id + état (défaut 20 s).
+	SyncWait time.Duration
+	// StartAckWait : attente de l'accusé / de l'observation après la commande de lancement (défaut 90 s ;
+	// allongée selon la taille du fichier). Voir start.go.
+	StartAckWait time.Duration
+	// PubAckWait : attente de l'accusé de transport MQTT de la commande de lancement (défaut 30 s).
+	PubAckWait time.Duration
 }
 
 // Service est la chaîne d'impression.
@@ -168,7 +175,7 @@ func New(d Deps) (*Service, error) {
 	s.wg.Add(1)
 	go func() { // maintenance : purge des nonces, demandes d'arrêt, approbations et traces expirées
 		defer s.wg.Done()
-		t := time.NewTicker(time.Minute)
+		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -176,6 +183,7 @@ func New(d Deps) (*Service, error) {
 				return
 			case <-t.C:
 				s.purge()
+				s.SweepOrphans(ctx)
 			}
 		}
 	}()
@@ -660,6 +668,7 @@ func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret pr
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
 		Secrets: secret, TLS: printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}, Verifier: verifier, Logger: s.log,
 		AllowStartFromFinish: rec.AllowStartFromFinish, ReconcileSettle: settle,
+		StartObserveTimeout: s.d.StartAckWait, PubAckTimeout: s.d.PubAckWait,
 	})
 }
 

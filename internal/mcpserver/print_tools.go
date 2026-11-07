@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 )
 
@@ -58,8 +59,10 @@ type ConfirmationIDInput struct {
 
 // SliceOut : impression créée.
 type SliceOut struct {
-	Job  printing.Job `json:"job"`
-	Note string       `json:"note"`
+	Job      printing.Job   `json:"job"`
+	JobID    string         `json:"job_id" jsonschema:"travail de découpe : suivre avec get_job_status(job_id)"`
+	Progress *jobs.Progress `json:"progress,omitempty"`
+	Note     string         `json:"note"`
 }
 
 func appOnlyMeta() mcp.Meta { return mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}} }
@@ -151,15 +154,23 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "execute_headless_slice", Title: "Découper pour une imprimante",
 		Description: "Crée une impression (DRAFT -> PREPARED), puis met en file la découpe par Bambu Studio headless (SLICING -> VALIDATED après validation de l'archive). " +
-			"Modèle, imprimante, révision de profil (ou variante appliquée). Suivre avec get_print_status ; l'artefact est conservé par empreinte. Aucun envoi à l'imprimante.",
+			"Modèle, imprimante, révision de profil (ou variante appliquée). Filaments : preset exact OU nom libre (« PETG transparent », « PLA mat »), voir list_filaments. " +
+			"RETOUR IMMÉDIAT avec un job_id : la découpe dure de quelques secondes à plusieurs minutes et continue en arrière-plan (une seule à la fois, les suivantes sont « en file, position n »). " +
+			"Ne JAMAIS considérer l'appel comme échoué parce que la découpe n'est pas finie : suivre avec get_job_status(job_id) (pourcentage estimé, phase, durée restante) ou get_print_status jusqu'à VALIDATED. " +
+			"Refuse tout de suite une pièce qui ne tient pas sur la machine (message avec dimensions et zone utile). L'artefact est conservé par empreinte. Aucun envoi à l'imprimante.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.SliceInput) (*mcp.CallToolResult, SliceOut, error) {
 		j, err := p.ExecuteHeadlessSlice(ctx, in)
 		if err != nil {
 			return nil, SliceOut{}, err
 		}
-		return textResult(fmt.Sprintf("Impression %s : %s. Découpe en file (travail %s).", j.ID, j.State, j.SliceJobID)),
-			SliceOut{Job: *j, Note: "Suivre avec get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
+		pr := p.ProgressFor(ctx, *j)
+		txt := fmt.Sprintf("Impression %s : %s. Découpe mise en file (job_id %s) : elle continue en arrière-plan, suivre avec get_job_status.", j.ID, j.State, j.SliceJobID)
+		if pr != nil && pr.QueuePosition != nil {
+			txt += fmt.Sprintf(" Position %d dans la file.", *pr.QueuePosition)
+		}
+		return textResult(txt),
+			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -182,6 +193,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "upload_print_artifact", Title: "Déposer le fichier sur l'imprimante",
 		Description: "Dépose l'artefact validé sur l'imprimante (FTPS). idempotency_key OBLIGATOIRE ; assignments (filament -> emplacement -> matière) OBLIGATOIRE. " +
+			"Le fichier peut peser des dizaines de Mo : l'envoi dure plusieurs minutes. L'outil attend au plus ~20 s puis rend un job_id (done=false) : l'envoi CONTINUE, ce n'est PAS un échec, suivre avec get_job_status(job_id) (octets envoyés / total, durée restante) ou get_print_status. " +
 			"N'allume rien, ne lance rien. Renvoie la question EXACTE à poser à l'utilisateur (« Le fichier X est envoyé sur la P1S. Veux-tu lancer cette impression ? ») " +
 			"avec imprimante, empreinte, plateau, matières et rappel plateau vide. Pose cette question et attends sa réponse.",
 		Annotations: physUpload,
@@ -190,7 +202,18 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if err != nil {
 			return nil, printing.UploadOutput{}, err
 		}
+		o.JobID = o.QueueJobID
 		txt := o.Note
+		if !o.Done && o.Progress != nil {
+			txt = fmt.Sprintf("Envoi en cours (job_id %s) : %d %%", o.QueueJobID, o.Progress.Percent)
+			if o.Progress.BytesTotal > 0 {
+				txt += fmt.Sprintf(", %.1f / %.1f Mo", float64(o.Progress.BytesDone)/(1<<20), float64(o.Progress.BytesTotal)/(1<<20))
+			}
+			if o.Progress.ETASeconds != nil {
+				txt += fmt.Sprintf(", reste ~%d s", *o.Progress.ETASeconds)
+			}
+			txt += ". L'envoi continue : ce n'est PAS un échec ; suivre avec get_job_status(job_id)."
+		}
 		if o.Question != "" {
 			txt = "QUESTION À POSER À L'UTILISATEUR : « " + o.Question + " » (" + o.Details.PrinterName + ", plateau " + fmt.Sprint(o.Details.Plate) + ", empreinte " + shortSHA(o.Details.SHA256) + "). " + o.Details.Reminder
 		}
