@@ -129,7 +129,7 @@ L'interface est servie par `bambud` lui-même (même adresse que l'API, par exem
 
 Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serveur seulement), saisir le code d'accès de l'imprimante (page `/setup`), joindre des photos à un retour d'expérience, renommer ou déplacer physiquement des fichiers (le catalogue seul est modifié).
 
-## 11. Caméra, détection d'échec et notifications (chantier D)
+## 9. Caméra, détection d'échec et notifications (chantier D)
 
 **Caméra (P1, P1S, A1).** « Montre-moi le plateau » : `get_camera_snapshot` renvoie une image que Claude voit (flux JPEG de l'imprimante, port 6000, avec le code d'accès déjà enregistré). Le X1, le P2 et le H2 exposent du RTSP : non pris en charge (l'outil le dit). Sur la P1S, activer « LAN liveview » dans les réglages réseau de l'écran. Sur la page Impression, la carte de l'imprimante a un bouton Instantané et un flux en direct (relayé par le serveur : une seule connexion à la caméra, quel que soit le nombre de spectateurs).
 
