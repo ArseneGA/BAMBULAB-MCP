@@ -1,0 +1,8 @@
+{
+  "name": "mcp-sdk-validate",
+  "private": true,
+  "type": "module",
+  "description": "Valide le tools/list de bambud avec le validateur zod du SDK MCP TypeScript (celui de Claude Desktop).",
+  "scripts": { "validate": "node validate.mjs" },
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.20.0" }
+}

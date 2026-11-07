@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -105,11 +106,27 @@ func New(c *core.Core) *mcp.Server {
 // addTool pose les schémas depuis contracts (source unique, voir contracts/schema.go).
 func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	t.InputSchema = contracts.MustSchemaFor[In]()
-	t.OutputSchema = contracts.MustSchemaFor[Out]()
+	t.OutputSchema = objectOnly(contracts.MustSchemaFor[Out]())
 	if m, ok := toolViewMeta[t.Name]; ok && t.Meta == nil {
 		t.Meta = m // lien outil -> vue MCP App (app_views.go)
 	}
 	mcp.AddTool(s, t, h)
+}
+
+// objectOnly ramène un schéma de sortie à `type: "object"` exact. Une sortie en
+// pointeur (*T) est générée avec types ["null","object"], que la spec MCP et le SDK
+// TypeScript (Claude Desktop) refusent : tout tools/list est alors rejeté. Le
+// handler ne renvoie jamais nil en succès, donc "null" n'est pas une sortie valide.
+func objectOnly(sc *jsonschema.Schema) *jsonschema.Schema {
+	if sc != nil && sc.Type != "object" {
+		for _, ty := range sc.Types {
+			if ty == "object" {
+				sc.Type, sc.Types = "object", nil
+				break
+			}
+		}
+	}
+	return sc
 }
 
 type handlers struct{ c *core.Core }

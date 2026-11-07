@@ -76,6 +76,38 @@ jobs:
       - working-directory: web
         run: npm test
 
+  mcp-sdk:
+    name: Conformité MCP (validateur du SDK TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            scripts/mcp-sdk-validate/package-lock.json
+      - name: Construire l'interface embarquée
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          mkdir -p ../internal/webui/assets ../internal/mcpserver/ui/views
+          npm run build
+      - run: go build -o "$RUNNER_TEMP/bambud" ./cmd/bambud
+      - name: tools/list validé par ListToolsResultSchema (SDK MCP TS)
+        working-directory: scripts/mcp-sdk-validate
+        env:
+          BAMBUD_BIN: ${{ runner.temp }}/bambud
+        run: |
+          npm ci --no-audit --no-fund
+          node validate.mjs
+
   docker:
     name: Image Docker (sans pousser)
     runs-on: ubuntu-latest
