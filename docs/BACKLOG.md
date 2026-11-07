@@ -22,7 +22,7 @@ Règle commune : tout est utilisable depuis Claude (outil MCP + rendu texte/imag
 | 4 | Accès direct par URL : OAuth 2.1 pour connecteur distant | F | 0190 |
 | 5 | Image Docker + démarrage rapide + doc neutralisée | F | 0190 |
 | 3 | Viewer 3D dans Claude (vues MCP App) | F | — |
-| 10 | Pièces de calibration générées + mesures réinjectées | G | 0200 |
-| 13 | Bibliothèque de pièces paramétriques extensible | G | 0200 |
+| 10 | Pièces de calibration générées + mesures réinjectées | G (fait : `generate_calibration_set`, `record_calibration`, `get_calibration`) | 0200 |
+| 13 | Bibliothèque de pièces paramétriques extensible | G (fait : 17 gabarits, `list_part_templates`, `describe_part_template`, `create_from_template`, `save_as_template`) | 0200 |
 
 Restent ouverts hors lot : ponts Windows signés (`bambu-mcp.exe`, `bambu-agent.exe`), licence du dépôt (choix utilisateur), 22 export de projet.

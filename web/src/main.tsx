@@ -14,6 +14,7 @@ import { MaterialsPage } from './pages/Materials';
 import { PrintPage } from './pages/Print';
 import { AgentsPage } from './pages/Agents';
 import { DesignPage } from './pages/Design';
+import { GabaritsPage } from './pages/Gabarits';
 const PreparePage = lazy(() => import('./pages/Prepare').then((m) => ({ default: m.PreparePage })));
 const ComparePage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ComparePage })));
 
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="comparaison" element={<ComparePage />} />
               <Route path="materiaux" element={<MaterialsPage />} />
               <Route path="impression" element={<PrintPage />} />
+              <Route path="gabarits" element={<GabaritsPage />} />
               <Route path="agents" element={<AgentsPage />} />
               <Route path="design" element={<DesignPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

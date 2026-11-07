@@ -125,6 +125,7 @@ L'interface est servie par `bambud` lui-même (même adresse que l'API, par exem
 | **Comparaison** | Sans expérience ouverte : la **liste des expériences passées**. Sinon : tableau des variantes (mesures étiquetées « estimation slicer » ou « lecture du G-code »), classement par critère mesurable, application d'une variante (refusée si le modèle a changé), **mémoire des essais comparables** et **« Enregistrer l'essai réel »** (réussite, observations, mesures, réglages réellement utilisés ; les écarts avec le plan sont consignés). |
 | **Matériaux** | Modèles d'imprimantes Bambu connus, parc enregistré, **fiches matériaux** issues des fiches techniques du fabricant (valeur, unité, tolérance, source, date, niveau de confiance, domaine de validité ; une propriété sans valeur est « inconnue »), presets filament de Bambu Studio compatibles avec une machine. |
 | **Impression** | Ajout d'imprimante, découpe, validation, dépôt, demande de confirmation. *Le lancement se décide sur la page `/confirm` du serveur, jamais dans l'interface.* Pendant l'impression : avancement ; « Demander l'arrêt » ouvre la page `/stop` (rien n'est arrêté avant votre validation). Lancement incertain : **« Vérifier l'état réel »** lit l'imprimante sans jamais relancer. Impression terminée : lien vers le formulaire de retour d'expérience. |
+| **Gabarits** | Catalogue de pièces paramétriques (vignettes, schéma de paramètres, jeux et compensations calculés, calibration appliquée), création d'un modèle ou d'une nouvelle version, enregistrement de variantes. Onglet **Calibration** : génération des pièces de test, saisie des mesures, calibration active. |
 | **Agent Windows** (pastille « Windows ») | État des agents, inventaire des fichiers encore « Windows seulement », **demande de copie** vers le serveur (taille et empreinte vérifiées), suivi des travaux. L'appairage se fait sur `/agents/pair` (navigateur enregistré). L'agent ne peut ni lancer ni arrêter une impression. |
 
 Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serveur seulement), saisir le code d'accès de l'imprimante (page `/setup`), joindre des photos à un retour d'expérience, renommer ou déplacer physiquement des fichiers (le catalogue seul est modifié).
@@ -144,3 +145,51 @@ Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient 
 **Glisser-déposer** : dans la Bibliothèque, déposez des fichiers n'importe où sur la page ou cliquez « Envoyer des fichiers » : collection, étiquettes et licence optionnelles, barre de progression par fichier, résultat (ajouté, nouvelle version, doublon) avec lien vers la fiche. Le même dialogue propose « Depuis un lien ».
 
 **Limites** : 512 Mo par fichier par défaut (STEP : 256 Mo), 8 envois simultanés. L'import par lien n'accepte que HTTPS et les domaines autorisés (par défaut `makerworld.com`, `bblmw.com` — CDN de fichiers de MakerWorld —, `printables.com`), sans redirection hors liste ni adresse privée. MakerWorld et Printables exigent presque toujours une connexion pour télécharger : le téléchargement manuel puis l'envoi reste le cas courant. Les domaines CDN par défaut sont ceux connus des deux sites et n'ont pas pu être vérifiés ici avec un vrai lien : ajuster `BAMBU_URL_IMPORT_ALLOW` si un téléchargement réel est refusé pour son domaine.
+
+## Gabarits paramétriques (bibliothèque extensible)
+
+La bibliothèque propose des **pièces prêtes à paramétrer** : chacune a un schéma de paramètres typé (unité, bornes, défaut), une description, une version, une vignette et les calculs d'ingénierie associés. Les paramètres « auto » (jeux d'ajustement, diamètres de trous, trous d'inserts) sont **calculés par le moteur d'ingénierie**, avec la **calibration de votre machine** quand elle existe (sinon valeurs génériques signalées comme telles).
+
+| Gabarit | Ce qu'il produit | Calculs associés |
+|---|---|---|
+| `clamp`, `bracket`, `box`, `spacer`, `hook` | collier, équerre, boîte à couvercle, entretoise, crochet (gabarits d'origine) | jeux, trous de vis |
+| `hinge_print_in_place` | charnière dont l'axe s'imprime dans les nœuds de l'autre lame (2 pièces mobiles, aucun assemblage) | jeu radial/axial (jeu glissant mesuré si calibré, sinon 0,75 × jeu « libre ») |
+| `hinge_pin` | charnière à nœuds alternés et axe séparé (tête) | jeu diamétral du perçage (ajustement glissant) |
+| `snap_clip` | clip cantilever à rampe d'insertion + récepteur à fenêtre | **SnapFit** : déformation, déformation admissible du matériau, flèche max, force d'insertion |
+| `enclosure` | boîtier à angles arrondis, couvercle **vissé** (4 plots d'inserts à chaud, fraisurage) ou **clipsé** (ergots) | trou/profondeur/plot d'insert pour M2…M5 (`ScrewBoss`), jeu de couvercle, longueur de vis |
+| `wall_mount` | plaque murale à vis fraisées ou **trous de serrure** | diamètre de vis compensé |
+| `spur_gear`, `gear_pair` | engrenage droit en développante (module, dents, angle de pression, alésage, clavette, moyeu) ; paire à **entraxe calculé** m·(z₁+z₂)/2 avec jeu de flanc | alésage compensé, rapport de conduite, avertissement de sous-taillage |
+| `thread` | vis hexagonale / écrou métriques M3…M12 imprimables (hélice exacte, jeu sur le filet) ou plot pour insert | jeu de l'écrou, dimensions d'insert |
+| `washer`, `handle`, `hook_reinforced`, `mounting_plate` | rondelle chanfreinée, poignée en U, crochet à congé et nervures, plaque perforée (grille ou quinconce) | perçages compensés |
+
+**Exemples à dire à Claude**
+- « Quels gabarits as-tu pour faire des charnières ? » → `list_part_templates` (filtre `category: mécanisme`), puis `describe_part_template` pour les paramètres et leurs bornes.
+- « Fais-moi une charnière imprimée en place de 50 mm avec 7 nœuds, pour mon P1S en PLA. » → `create_from_template` avec `printer`, `material: PLA`, `nozzle_diameter: 0.4`. La réponse indique le jeu utilisé et sa provenance (« calibré le … » ou valeurs génériques), les hypothèses (axe fusionné avec la lame A, pas de bordure reliant les lames...) et vérifie que chaque pièce est étanche.
+- « Un boîtier 80 × 50 × 30 avec couvercle vissé, vis M4, en PETG. » → les trous d'inserts (Ø5,6 × 9,6 mm), plots et longueur de vis viennent de `ScrewBoss`.
+- « Un clip qui tienne 200 cycles en PETG, retour de 1,5 mm. » → `snap_clip` ; le résultat contient la déformation calculée et un avertissement si elle dépasse l'admissible du matériau.
+- « Une paire d'engrenages 12/36 dents module 1,5, alésage 5. » → entraxe, rapport de réduction, rapport de conduite.
+- « Garde ce collier comme "Collier tube 32". » → `save_as_template` : variante nommée, réutilisable ensuite comme `template` (seuls les paramètres demandés sont figés ; les jeux restent recalculés avec la calibration du moment, `frozen: true` fige aussi les valeurs calculées).
+- « Refais le support avec 2 mm d'épaisseur de plus » → `create_from_template` avec `model_id` et `base_version_id` : **nouvelle version** du même modèle (refus si la version de départ est périmée).
+
+Chaque appel renvoie `auto` (paramètres calculés : valeur nominale, valeur utilisée, niveau de confiance, origine), `calcs` (calculs détaillés), `calibration` (appliquée ou non) et `warnings`. Les gabarits sont **versionnés** : la version du gabarit et les paramètres exacts sont conservés avec chaque version de modèle. Interface web : écran **Gabarits** (formulaire généré depuis le schéma, vignettes, résultat détaillé, enregistrement en variante).
+
+## Calibration d'une machine (pièces de test et mesures)
+
+Les valeurs génériques (jeu glissant 0,25 mm, trou −0,15 mm...) sont des ordres de grandeur. Pour un couple **imprimante + buse + matériau (+ bobine)** précis, on imprime des pièces de calibration et on **mesure** :
+
+| Pièce (`kinds`) | À faire | Clé de `record_calibration` |
+|---|---|---|
+| `fit_comb` | encoches de 10 mm + 0,1 → 0,6 mm (1 à 6 points) et une languette : trouver le plus petit jeu où elle **coulisse** (et celui où elle entre en force) | `fit_slides_gap_mm`, `fit_snug_gap_mm` |
+| `hole_shaft` | plaque à trous verticaux, bloc à trous horizontaux et arbres de Ø3 à Ø10 : mesurer au pied à coulisse | `holes[] {nominal, measured, axis}`, `shafts[]` |
+| `shrink_cube` | cube creux de 50 mm : mesurer X, Y, Z (à mi-hauteur, hors pied d'éléphant) | `cube_mm: [X, Y, Z]` |
+| `bridge_overhang` | ponts de 10 à 50 mm et surplombs de 30° à 70° | `bridge_max_span_mm`, `overhang_max_deg` |
+| `temperature` | une petite pièce par température (défaut : 5 valeurs autour de la plage du matériau), ou une tour (`temperature_mode: tower`) avec changements de température à la couche | `best_temp_c` |
+
+**Exemples à dire à Claude**
+- « Génère les pièces de calibration pour mon P1S, buse 0,4, PETG HF noir. » → `generate_calibration_set` : les pièces entrent au catalogue (étiquette *calibration*) ; avec `base` (preset machine/process/filament) Claude crée aussi une **révision de profil découpable par température**. Réponse : quoi mesurer pour chaque pièce et un squelette de mesures.
+- « Mes mesures : ça coulisse à 0,3 ; les trous de 4/6/8 mesurent 3,86/5,85/7,84 ; cube 49,8 × 49,9 × 50,0 ; meilleure température 240. » → `record_calibration` : jeu effectif, **droite de compensation de trou** (décalage = a + b·d), facteurs de retrait ×1,004 / ×1,000, température. Les mesures implausibles (unité, trou bouché, cube à ±10 %) sont refusées.
+- « Quelle calibration utilises-tu pour mon P1S en PETG ? » → `get_calibration` : valeurs, provenance (« calibré le 2026-11-07 (p1s, buse 0.4, PETG, …) »), clés utilisées, historique.
+
+**Priorité** : les corrections mesurées priment sur les valeurs génériques dans `create_from_template` (jeux, trous) et dans les calculs d'ingénierie (`FitClearanceCal`, `HoleCompensationCal`...), avec leur provenance. Résolution du plus général au plus spécifique, champ par champ : (buse, matériau) → + bobine → + imprimante → + imprimante et bobine. Une autre buse, un autre matériau : aucune calibration (valeurs génériques). Les mesures sont conservées dans un journal immuable ; refaire la calibration met à jour la valeur active. Interface web : onglet **Calibration** de l'écran Gabarits.
+
+**Limites** : le facteur de retrait est calculé et affiché mais pas appliqué automatiquement aux gabarits (le trou et l'arbre rétrécissent ensemble ; une mise à l'échelle globale fausserait les compensations) — l'appliquer au besoin avec `modify_geometry` (échelle). La tour de température demande d'insérer les changements `M104` à la main dans Bambu Studio (hauteurs fournies) ; la série de pièces est plus simple et se découpe avec les profils créés. Les filetages M3/M4 sont limités par la résolution FDM (avertissement) ; la poignée et le support mural demandent un essai de charge réel.

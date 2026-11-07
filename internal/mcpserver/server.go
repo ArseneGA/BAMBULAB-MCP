@@ -74,6 +74,7 @@ func New(c *core.Core) *mcp.Server {
 	}, h.showAtelier)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
 	registerUploadTools(s, c)
+	registerLibraryTools(s, c)
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
 	registerAgentTools(s, c)
 	if c.Goals != nil {

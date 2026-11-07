@@ -490,9 +490,16 @@ func (s *Service) putFile(work, path, name string, f contracts.FileFormat) (*cat
 	if !filepath.IsAbs(p) {
 		p = filepath.Join(work, p)
 	}
-	if rel, err := filepath.Rel(work, p); err != nil || strings.HasPrefix(rel, "..") {
+	// formes canoniques (liens symboliques, noms courts 8.3 de Windows) avant de confiner
+	cw, werr := filepath.EvalSymlinks(work)
+	cp, perr := filepath.EvalSymlinks(p)
+	if werr != nil || perr != nil {
+		return nil, fmt.Errorf("fichier du worker introuvable : %s", p)
+	}
+	if rel, err := filepath.Rel(cw, cp); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return nil, fmt.Errorf("fichier du worker hors du dossier de travail : %s", p)
 	}
+	p = cp
 	fh, err := os.Open(p)
 	if err != nil {
 		return nil, err

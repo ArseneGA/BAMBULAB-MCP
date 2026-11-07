@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Boxes, SlidersHorizontal, GitCompare, Layers, Printer, Moon, Sun, Palette, Trash2 } from 'lucide-react';
+import { Shapes, Boxes, SlidersHorizontal, GitCompare, Layers, Printer, Moon, Sun, Palette, Trash2 } from 'lucide-react';
 import { IconButton, StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
 import { useTheme } from './design/theme';
@@ -13,6 +13,7 @@ export const spaces = [
   { path: 'comparaison', label: 'Comparaison', icon: GitCompare, live: true },
   { path: 'materiaux', label: 'Matériaux', icon: Layers, live: true },
   { path: 'impression', label: 'Impression', icon: Printer, live: true },
+  { path: 'gabarits', label: 'Gabarits', icon: Shapes, live: true },
 ] as const;
 
 function Pills() {

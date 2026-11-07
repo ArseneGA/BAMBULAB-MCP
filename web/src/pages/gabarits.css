@@ -1,0 +1,28 @@
+.gab-layout { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: var(--sp-4); align-items: start; }
+@media (max-width: 860px) { .gab-layout { grid-template-columns: minmax(0, 1fr); } }
+.gab-cat h3 { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); margin: var(--sp-3) 0 var(--sp-2); }
+.gab-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.gab-card { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--sp-3); align-items: center; width: 100%; text-align: left; padding: var(--sp-2); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.gab-card:hover { border-color: var(--text-2); }
+.gab-card[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.gab-card img { width: 56px; height: 56px; object-fit: contain; background: var(--surface-2, transparent); border-radius: var(--r-1, 4px); }
+.gab-sum { display: block; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.35; }
+.gab-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-3) var(--sp-4); margin: var(--sp-3) 0; }
+.gab-param { display: grid; gap: 2px; align-content: start; min-width: 0; }
+.gab-hint { color: var(--text-3); font-size: var(--fs-xs); line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
+.gab-err { color: var(--err, #b3261e); font-size: var(--fs-xs); margin: 0; }
+.gab-sub { font-size: var(--fs-sm); color: var(--text-2); margin: var(--sp-3) 0 var(--sp-2); }
+.gab-ctx { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.gab-result { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-4); align-items: start; margin-bottom: var(--sp-3); }
+@media (max-width: 560px) { .gab-result { grid-template-columns: minmax(0, 1fr); } }
+.gab-thumb { border: 1px solid var(--line); border-radius: var(--r-2); max-width: 100%; height: auto; }
+.gab-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); margin: var(--sp-3) 0; }
+.gab-table th, .gab-table td { text-align: left; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line); vertical-align: top; }
+.gab-table thead th { color: var(--text-2); font-weight: 600; border-top: 0; }
+.gab-table .sub { display: block; color: var(--text-3); font-size: var(--fs-xs); font-weight: 400; }
+.gab-details { margin: var(--sp-2) 0 var(--sp-3); font-size: var(--fs-sm); }
+.gab-pieces { list-style: none; margin: var(--sp-3) 0 0; padding: 0; display: grid; gap: var(--sp-2); }
+.gab-pieces li { display: grid; gap: 2px; }
+.gab-rows { border: 1px solid var(--line); border-radius: var(--r-2); padding: var(--sp-3); margin: var(--sp-3) 0; display: grid; gap: var(--sp-2); }
+.gab-rows legend { font-size: var(--fs-sm); color: var(--text-2); padding: 0 var(--sp-1); }
+.gab-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: var(--sp-2); align-items: center; }

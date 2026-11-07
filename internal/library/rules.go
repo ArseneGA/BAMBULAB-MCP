@@ -206,7 +206,14 @@ func sizeParam(t TemplateInfo, params map[string]any) string {
 }
 
 // postCalcs : calculs propres à un gabarit, sur les paramètres finaux.
-func (r *resolver) postCalcs(t TemplateInfo, p map[string]any) ([]Calc, []string) {
+func (r *resolver) postCalcs(t TemplateInfo, given map[string]any) ([]Calc, []string) {
+	p := make(map[string]any, len(t.Params))
+	for _, sp := range t.Params {
+		p[sp.Name] = sp.Default
+	}
+	for k, v := range given {
+		p[k] = v
+	}
 	switch t.ID {
 	case "snap_clip":
 		if r.material == "" {

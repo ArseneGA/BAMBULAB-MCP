@@ -20,6 +20,22 @@ Paramètres (mm) :
 Résultat : `template`, `params`, `parts[]{name,volume_mm3,solids,tessellation}`, `bbox_mm`, `derived`, `assumptions[]`, `warnings[]`, `files{stl,step,source}`, `level:"calculé"`, `validity`.
 Erreurs : `invalid_params`, `cad_backend_missing`, `cad_failure`.
 
+## library_list
+Requête : `{}`. Résultat : `{count, templates[]}`, chaque gabarit : `id, version, schema_hash, title, category, summary, description, tags[], params[]{name,type:"number|integer|enum|boolean",unit,default,min,max,options,description,auto}`.
+Le champ `auto` indique la règle de calcul d'ingénierie appliquée par le côté Go quand le paramètre est omis (`fit:<ajustement>`, `fitside:<ajustement>`, `gap_pip`, `hole:<orientation>`, `insert:diameter|depth|boss`) : voir `internal/library/rules.go`. Ne requiert pas CadQuery.
+
+## library_build
+Requête : `{"template":"<id>","params":{…},"out_dir":"…","name":"…","nozzle_diameter":0.4,"thumbnail":true}`. Tous les paramètres ont un défaut ; un paramètre inconnu, hors bornes, d'un mauvais type ou une combinaison impossible donne `invalid_params`.
+Résultat : `template, template_version, params` (complets), `parts[]{name,volume_mm3,solids,valid,tessellation}`, `bbox_mm`, `derived`, `assumptions[]`, `warnings[]`, `files{stl,step,source,thumbnail}`, `level:"calculé"`. La vignette est un SVG isométrique. Gabarits : `clamp, bracket, box, spacer, hook, washer, mounting_plate, wall_mount, handle, hook_reinforced, hinge_print_in_place, hinge_pin, snap_clip, enclosure, spur_gear, gear_pair, thread`. Un nouveau gabarit = une entrée `register(Template(...))` dans `lib_templates.py` (schéma + fonction de construction) ; incrémenter `version` à chaque changement de géométrie ou de paramètres.
+Erreurs : `invalid_params`, `cad_backend_missing`, `cad_failure`.
+
+## library_thumbnail
+Requête : `{"template":"<id>","params":{…}}`. Résultat : `{template, svg}` (tessellation grossière, aucun fichier écrit).
+
+## calibration_set
+Requête : `{"out_dir":"…","kinds":["fit_comb","hole_shaft","shrink_cube","bridge_overhang","temperature"],"name_prefix":"calib","nozzle_diameter":0.4,"clearance_gaps":[…],"hole_diameters":[…],"bridge_spans":[…],"overhang_angles":[…],"temperatures":[…],"temperature_mode":"series|tower"}` (tout est facultatif).
+Résultat : `pieces[]{kind,name,description,measure[],files{stl,step},parts[],bbox_mm,info,warnings}` ; pièces de température : `nozzle_temperature_c` et `slicing_overrides` (série) ou `segments`, `layer_changes`, `gcode_hint` (tour).
+
 ## ping
 Requête : `{}`. Importe réellement CadQuery/OCP (vérification de santé, utilisée par `GET /api/capabilities`, résultat mis en cache côté bambud).
 Résultat : `{"cadquery":"<version>","python":"<version>"}`. Erreur : `cad_unavailable` (CadQuery/OCP absent ou non chargeable).
