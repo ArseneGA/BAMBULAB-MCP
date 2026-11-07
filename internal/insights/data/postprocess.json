@@ -1,0 +1,238 @@
+{
+ "version": "2026-11-07",
+ "level": "heuristic",
+ "note": "Conseils de post-traitement de pièces FDM (matières Bambu Lab). Niveau HEURISTIQUE : pratiques courantes d'atelier et faits de sécurité usuels, pas des mesures sur vos pièces. Chaque technique doit d'abord être essayée sur une pièce témoin imprimée dans la même matière. Les diamètres d'inserts viennent de internal/engineering (ScrewBoss, niveau heuristique aussi).",
+ "source_status": "Les sources sont citées comme provenance générale des pratiques et des faits de sécurité ; elles n'ont pas été re-consultées ligne à ligne pour cette version (verified=false).",
+ "sources": {
+  "bambu_wiki": {"title": "Bambu Lab Wiki : fiches filaments et conseils d'impression", "url": "https://wiki.bambulab.com/", "verified": false},
+  "prusa_kb": {"title": "Prusa Knowledge Base : post-traitement et lissage", "url": "https://help.prusa3d.com/", "verified": false},
+  "sds_acetone": {"title": "Fiches de données de sécurité de l'acétone : point éclair et limites d'explosivité usuels", "url": "", "verified": false},
+  "manufacturer_tds": {"title": "Fiche technique du filament réellement utilisé (températures, séchage, recuit)", "url": "", "verified": false}
+ },
+ "finish_keywords": {
+  "smooth": ["lisse", "lisser", "lissage", "poli", "polir", "smooth", "polish"],
+  "matte": ["mat", "mate", "matte", "satin", "satine"],
+  "paint": ["peint", "peindre", "peinture", "paint", "couleur"],
+  "gloss": ["brillant", "gloss", "vernis", "vernir", "laque", "lacquer", "varnish", "resine", "epoxy", "epoxyde"],
+  "clear": ["transparent", "transparence", "clair", "translucide", "clear", "cristal"],
+  "anneal": ["recuit", "recuire", "anneal", "annealing", "chaleur", "thermique", "rigide", "durcir"],
+  "bond": ["coller", "collage", "assembler", "assemblage", "glue", "bond"],
+  "inserts": ["insert", "inserts", "filete", "filetage", "vis", "screw", "thread", "taraud"]
+ },
+ "usage_rules": [
+  {"match": ["exterieur", "outdoor", "soleil", "uv", "jardin"], "warning": "Usage extérieur : le PLA vieillit au soleil et ramollit à la chaleur (environ 55 à 60 °C) ; préférer ASA (tenue aux UV) ou protéger par un vernis anti-UV. Un revêtement ne remplace pas le choix de la matière."},
+  {"match": ["alimentaire", "food", "aliment", "cuisine", "boisson"], "warning": "Contact alimentaire : une pièce FDM est poreuse (rainures entre couches où les bactéries s'installent) et les apprêts, peintures et résines courants ne sont pas alimentaires. Aucun conseil de finition de cette liste ne la rend propre au contact alimentaire."},
+  {"match": ["tolerance", "ajustement", "ajuste", "emboitement", "emboiter", "precision", "jeu", "assemblage"], "warning": "Pièce à cotes critiques : ponçage, apprêt, vernis, résine et lissage chimique changent les dimensions (de quelques centièmes à quelques dixièmes de mm). Ne pas traiter les surfaces fonctionnelles, ou les remesurer et les réimprimer avec compensation."},
+  {"match": ["chaleur", "voiture", "moteur", "chaud", "four"], "warning": "Pièce exposée à la chaleur : le PLA standard ramollit vers 55 à 60 °C ; vérifier la tenue thermique de la matière (list_materials / fiche) avant de compter sur un traitement de surface."},
+  {"match": ["flexible", "souple", "charniere", "articule"], "warning": "Pièce qui travaille en flexion : les revêtements rigides (apprêt, vernis, époxy) se fissurent et s'écaillent ; n'utiliser que des produits souples, en couche fine."},
+  {"match": ["charge", "mecanique", "resistant", "porteur", "structurel"], "warning": "Pièce sous charge : le ponçage et le lissage retirent de l'épaisseur de paroi, et un vernis ne renforce pas ; garder une marge d'épaisseur."},
+  {"match": ["mince", "minces", "thin", "paroi", "parois"], "warning": "Parois ou détails fins : le ponçage et le lissage chimique peuvent les percer ou les effacer ; limiter le travail à des grains fins et à de courtes expositions."},
+  {"match": ["detail", "details", "texte", "gravure", "relief"], "warning": "Détails fins : apprêt, vernis et résine comblent les reliefs (texte, trames) ; préférer ponçage léger et couches très fines."},
+  {"match": ["creux", "cavite", "interne", "interieur", "canal", "conduit"], "warning": "Cavités et canaux : le ponçage n'y accède pas, et vapeurs, apprêt ou résine peuvent s'y accumuler ou y rester piégés ; ne traiter que les surfaces accessibles."},
+  {"match": ["plat", "plane", "planes"], "warning": "Grandes surfaces planes : poncer sur un bloc à poncer plat, pas à la main libre, pour ne pas creuser."}
+ ],
+ "general_warnings": [
+  "Essayer chaque technique sur une pièce témoin imprimée dans la même matière avant de traiter la pièce finale.",
+  "Poncer : masque FFP2 et aération ; poncer à l'eau limite la poussière. Les matières chargées de fibres de carbone (CF) émettent une poussière irritante : ponçage à l'eau, masque FFP2 ou FFP3, gants, ne pas balayer à sec.",
+  "Solvants, apprêts, vernis en bombe et résines : aérer fortement, loin de toute flamme ou étincelle, gants et lunettes adaptés à chaque produit (suivre la fiche de sécurité du produit)."
+ ],
+ "families_without_post_processing": {
+  "PVA": "Le PVA est un support soluble dans l'eau : on le dissout, on ne le finit pas."
+ },
+ "techniques": [
+  {
+   "id": "cleanup", "name": "Préparation : retrait des supports et ébavurage", "order": 10,
+   "triggers": ["smooth", "matte", "paint", "gloss", "clear"],
+   "by_family": {
+    "default": {"applies": "yes",
+     "steps": ["Retirer les supports à la main ou à la pince fine, plateau refroidi, en travaillant dans le sens qui ne déchire pas la pièce.", "Ébarber les arêtes, la couture et les bavures au cutter ou au grattoir à ébavurer, lame dirigée à l'opposé des doigts.", "Dépoussiérer et dégraisser à l'alcool isopropylique avant toute autre étape."],
+     "hazards": ["Lame tranchante : plan de travail stable, gants anti-coupure conseillés."]}
+   }
+  },
+  {
+   "id": "sanding", "name": "Ponçage", "order": 20,
+   "triggers": ["smooth", "matte", "paint", "gloss", "clear"],
+   "by_family": {
+    "PLA": {"applies": "yes",
+     "steps": ["Commencer par un grain 120 à 180 seulement si les marches de couche sont marquées, puis 240, 320, 400.", "Au-delà de 400, poncer à l'eau (400, 600, 800, 1000) pour un aspect satiné et limiter la poussière.", "Pression légère, mouvements croisés, passes courtes ; essuyer entre les grains pour contrôler la surface."],
+     "parameters": {"grains": "120-180 (si besoin), 240, 320, 400, puis 600-1000 à l'eau"},
+     "hazards": ["Le PLA ramollit vers 55 à 60 °C : la chaleur de friction le fait coller et fondre ; poncer lentement, de préférence à l'eau."]},
+    "PETG": {"applies": "limited",
+     "steps": ["Poncer à l'eau uniquement : 240, 400, 600, 800 ; changer de papier souvent, il s'encrasse (matière molle et collante).", "Pression très légère et passes courtes pour éviter l'échauffement."],
+     "parameters": {"grains": "240, 400, 600, 800 (à l'eau)"},
+     "notes": ["Le résultat est un fini satiné ou laiteux uniforme ; un aspect poli brillant demande ensuite un vernis ou une résine."]},
+    "ABS": {"applies": "yes",
+     "steps": ["Grains 120 à 180 pour dégrossir si besoin, puis 240, 400, 600 ; le ponçage à sec marche, à l'eau pour les derniers grains.", "L'ABS se ponce proprement : bon candidat au ponçage avant apprêt ou peinture."],
+     "parameters": {"grains": "120-180 (si besoin), 240, 400, 600"}},
+    "ASA": {"applies": "yes",
+     "steps": ["Grains 120 à 180 pour dégrossir si besoin, puis 240, 400, 600 ; à sec ou à l'eau.", "L'ASA se ponce comme l'ABS."],
+     "parameters": {"grains": "120-180 (si besoin), 240, 400, 600"}},
+    "TPU": {"applies": "no", "reason": "Matière souple : le ponçage peluche et n'apporte rien d'utile. Se limiter à l'ébavurage au cutter."},
+    "PC": {"applies": "limited",
+     "steps": ["Matière dure : grains 240, 400, 800 à l'eau, pression légère ; la friction chauffe, laisser refroidir."],
+     "parameters": {"grains": "240, 400, 800 (à l'eau)"}},
+    "PA": {"applies": "limited",
+     "steps": ["Le nylon peluche : poncer à l'eau avec 320 puis 600.", "Matière hygroscopique : laisser sécher la pièce avant peinture ou collage."],
+     "parameters": {"grains": "320, 600 (à l'eau)"}},
+    "PET": {"applies": "limited",
+     "steps": ["Se comporte comme le PETG : poncer à l'eau 240, 400, 600, 800 en changeant souvent de papier."]}
+   }
+  },
+  {
+   "id": "filler_primer", "name": "Apprêt garnissant (bouche-pores) et reprise des lignes de couche", "order": 30,
+   "triggers": ["paint", "smooth", "gloss"],
+   "by_family": {
+    "default": {"applies": "yes",
+     "steps": ["Appliquer 2 à 3 couches fines d'apprêt garnissant en bombe (surfaçant), en respectant le temps entre couches indiqué sur le produit.", "Laisser durcir selon la notice (plusieurs heures), puis poncer à l'eau au grain 320 à 400 jusqu'à effacer les lignes de couche.", "Reboucher les creux restants au mastic fin ou à l'apprêt, poncer, et recommencer jusqu'à une surface uniforme (souvent 2 à 3 cycles)."],
+     "parameters": {"cycles": "2 à 3 cycles couche fine, durcissement, ponçage 320-400", "epaisseur ajoutee": "de l'ordre de 0,1 à 0,3 mm par face au total, variable selon le nombre de cycles"},
+     "hazards": ["Aérosol inflammable et solvants : travailler dehors ou sous forte ventilation, masque à cartouche organique, loin de toute flamme."],
+     "notes": ["C'est la voie recommandée pour obtenir une surface lisse sans lissage chimique (notamment PLA, PETG, PC, PA)."]},
+    "PETG": {"applies": "yes",
+     "steps": ["Dépolir légèrement (grain 320), dégraisser, puis utiliser un apprêt d'accroche pour plastiques avant l'apprêt garnissant : le PETG accroche mal.", "Ensuite 2 à 3 cycles d'apprêt garnissant et de ponçage à l'eau 320-400."],
+     "hazards": ["Aérosol inflammable et solvants : forte ventilation, masque à cartouche organique."]},
+    "TPU": {"applies": "limited",
+     "steps": ["N'utiliser qu'un apprêt ou une peinture souple pour plastiques flexibles, en couche fine : un apprêt rigide se fissure à la flexion."],
+     "hazards": ["Aérosol inflammable et solvants : forte ventilation."]}
+   }
+  },
+  {
+   "id": "chemical_smoothing", "name": "Lissage chimique", "order": 35,
+   "triggers": ["smooth"],
+   "by_family": {
+    "ABS": {"applies": "yes",
+     "steps": ["Dégrossir d'abord les arêtes saillantes au ponçage grossier.", "Dans un récipient étanche résistant à l'acétone, poser la pièce sur un support sans contact avec le liquide ; tapisser le fond de papier absorbant imbibé d'un peu d'acétone.", "Exposer par intervalles courts et contrôler souvent : arrêter dès que la surface devient brillante et lisse, avant que les détails ne s'affaissent.", "Sortir la pièce et la laisser durcir à l'air dans un endroit ventilé (plusieurs heures à plusieurs jours) ; la surface reste molle au début, ne pas la toucher."],
+     "parameters": {"duree": "de quelques minutes à quelques dizaines de minutes selon la taille de la pièce, le volume du récipient, la température et la quantité d'acétone : aller par intervalles et vérifier", "variante": "à la brosse, acétone en fine couche sur surfaces robustes uniquement"},
+     "hazards": ["Acétone extrêmement inflammable (point éclair environ -20 °C) ; ses vapeurs forment un mélange explosif avec l'air entre environ 2,5 et 12,8 % : AUCUNE flamme, étincelle, plaque chauffante ni appareil électrique non protégé à proximité ; ne jamais chauffer l'acétone.", "Vapeurs irritantes (yeux, voies respiratoires) et somnolence : forte ventilation, lunettes, gants adaptés (le nitrile fin est vite traversé par l'acétone).", "Stocker un petit volume, flacon fermé, loin de toute source de chaleur."],
+     "notes": ["Compromis : les arêtes s'adoucissent, les détails fins s'effacent, la pièce perd de l'ordre de quelques dixièmes de mm par face, et les parois fines ou les ponts peuvent s'affaisser. Pour les cotes critiques, ne pas lisser ou prévoir la perte."]},
+    "ASA": {"applies": "limited",
+     "steps": ["L'ASA se lisse aussi à l'acétone, avec un comportement proche de l'ABS ; procéder exactement comme pour l'ABS, par intervalles très courts, et valider sur une pièce témoin."],
+     "hazards": ["Mêmes dangers que pour l'ABS : acétone extrêmement inflammable, vapeurs explosives et irritantes, aucune source d'ignition, forte ventilation."]},
+    "PLA": {"applies": "no", "reason": "L'acétone n'attaque pas le PLA de façon utile ; les solvants qui le lissent (THF, dichlorométhane) sont toxiques et ne sont pas recommandés ici. L'acétate d'éthyle est parfois cité mais le résultat est inégal et il est inflammable : non conseillé sans essais. Voie recommandée : apprêt garnissant et ponçage, puis vernis ou résine."},
+    "PETG": {"applies": "no", "reason": "Le PETG résiste aux solvants courants : il n'existe pas de lissage chimique simple et sûr. Voie recommandée : ponçage à l'eau, apprêt, puis vernis ou résine de finition."},
+    "PC": {"applies": "no", "reason": "Les solvants qui attaquent le polycarbonate sont chlorés et toxiques : non recommandés. Voie recommandée : ponçage à l'eau fin puis vernis ou résine."},
+    "PA": {"applies": "no", "reason": "Le nylon n'a pas de lissage chimique accessible et sûr. Voie recommandée : ponçage à l'eau, puis peinture ou vernis adaptés."},
+    "TPU": {"applies": "no", "reason": "Matière souple, pas de lissage chimique praticable."},
+    "PET": {"applies": "no", "reason": "Comportement proche du PETG : pas de lissage chimique simple et sûr."}
+   }
+  },
+  {
+   "id": "paint", "name": "Peinture", "order": 40,
+   "triggers": ["paint"],
+   "by_family": {
+    "default": {"applies": "yes",
+     "steps": ["Peindre sur pièce apprêtée et poncée : peinture acrylique en bombe ou à l'aérographe, plusieurs couches très fines plutôt qu'une couche épaisse (évite les coulures qui cachent les détails).", "Respecter le temps de séchage entre couches ; ne pas peindre une pièce chaude, froide ou humide.", "Protéger ensuite par un vernis si la pièce est manipulée ou exposée."],
+     "hazards": ["Aérosols et solvants : forte ventilation, masque adapté, loin de toute flamme."]},
+    "PETG": {"applies": "yes",
+     "steps": ["Dépolir (grain 320), dégraisser, appliquer un apprêt d'accroche pour plastiques, puis peindre en couches fines : la peinture accroche mal sur PETG brut.", "Protéger par un vernis."],
+     "hazards": ["Aérosols et solvants : forte ventilation, masque adapté."]},
+    "TPU": {"applies": "limited",
+     "steps": ["Peinture acrylique souple (ou spéciale textile/plastique flexible), couche fine ; elle peut craqueler sur de fortes déformations."],
+     "hazards": ["Aérosols et solvants : forte ventilation."]}
+   }
+  },
+  {
+   "id": "transparent_finish", "name": "Obtenir un aspect transparent ou translucide", "order": 45,
+   "triggers": ["clear"],
+   "by_family": {
+    "PETG": {"applies": "limited",
+     "steps": ["À l'impression (le plus important) : filament naturel ou transparent, température dans le haut de la plage du fabricant, vitesse lente, débit légèrement augmenté, couches fines (0,08 à 0,12 mm), remplissage à 100 %, ventilation réduite : on réduit ainsi les vides et les interfaces qui diffusent la lumière.", "Poncer à l'eau en grains croissants : 400, 600, 800, 1200, 2000 (changer de papier souvent, ne pas échauffer).", "Terminer par une fine couche de vernis acrylique transparent ou de résine époxy/UV transparente, appliquée mince : elle comble les micro-rayures et rend la surface optiquement lisse."],
+     "parameters": {"grains": "400, 600, 800, 1200, 2000 (à l'eau)", "epaisseur ajoutee": "de l'ordre de 0,1 à 0,5 mm selon vernis ou résine"},
+     "notes": ["Voir « honnêteté » : le résultat est translucide, pas transparent comme du verre."]},
+    "PET": {"applies": "limited", "steps": ["Même démarche que le PETG (impression lente et chaude, couches fines, 100 % de remplissage, ponçage à l'eau jusqu'à 2000, vernis ou résine fine)."]},
+    "PC": {"applies": "limited",
+     "steps": ["Même démarche que le PETG, avec les températures du fabricant (le polycarbonate demande une imprimante capable de hautes températures et une enceinte) : impression lente, couches fines, remplissage à 100 %.", "Poncer à l'eau 600, 800, 1200, 2000, puis vernis acrylique transparent ou résine fine."],
+     "notes": ["Voir « honnêteté » : le résultat est translucide, pas transparent comme du verre."]},
+    "PLA": {"applies": "limited",
+     "steps": ["PLA naturel ou transparent : impression lente et chaude, couches fines, remplissage à 100 %, puis ponçage à l'eau jusqu'à 2000 et vernis ou résine fine.", "Le PLA donne un aspect laiteux plus marqué que le PETG et ramollit à 55-60 °C."]},
+    "default": {"applies": "no", "reason": "Matière généralement opaque ou colorée dans la masse : la transparence n'est pas atteignable. Choisir PETG, PC ou un PLA naturel pour un rendu translucide."}
+   }
+  },
+  {
+   "id": "clear_coat", "name": "Vernis ou résine de finition", "order": 50,
+   "triggers": ["gloss", "matte", "paint", "clear", "smooth"],
+   "by_family": {
+    "default": {"applies": "yes",
+     "steps": ["Vernis acrylique en bombe (mat, satiné ou brillant selon le rendu voulu) : 2 à 3 couches fines et croisées, séchage entre couches.", "Pour un brillant épais qui comble les lignes de couche : résine époxy bi-composant ou résine UV de finition, en fine couche au pinceau, pièce à plat pour éviter les coulures ; durcissement selon la notice.", "Pour un fini mat sans produit : ponçage final au grain 800 ou plus, ou tampon abrasif fin."],
+     "parameters": {"epaisseur ajoutee": "vernis : quelques centièmes de mm ; époxy ou résine UV : de l'ordre de 0,1 à 0,5 mm"},
+     "hazards": ["Époxy et résine UV : gants (nitrile), lunettes, ventilation ; sensibilisants cutanés, ne pas laisser sur la peau ; résine UV à durcir sous lampe adaptée.", "Vernis en bombe : forte ventilation, loin de toute flamme."]},
+    "PETG": {"applies": "yes",
+     "steps": ["Dépolir (grain 320) et dégraisser pour l'accroche, puis vernis acrylique en couches fines ou résine de finition en fine couche."],
+     "hazards": ["Époxy et résine UV : gants, lunettes, ventilation.", "Vernis en bombe : forte ventilation."]},
+    "TPU": {"applies": "limited",
+     "steps": ["N'utiliser qu'un vernis souple pour plastiques flexibles, en couche fine : les vernis et résines rigides se fissurent à la flexion."],
+     "hazards": ["Aérosols et solvants : forte ventilation."]}
+   }
+  },
+  {
+   "id": "annealing", "name": "Recuit (tenue en température et cohésion)", "order": 60,
+   "triggers": ["anneal"],
+   "by_family": {
+    "PLA": {"applies": "limited",
+     "steps": ["Le PLA standard ramollit vers 55 à 60 °C ; le recuit le fait cristalliser et améliore sa tenue en température, au prix d'un retrait et d'une déformation de l'ordre de quelques pourcents (à tester sur une pièce témoin).", "Au four dont la température est contrôlée par un thermomètre (les thermostats domestiques dérivent de 10 à 20 °C), chauffer lentement à 80-110 °C selon le filament, maintenir 15 à 60 minutes, puis laisser refroidir dans le four éteint.", "Poser sur du papier cuisson et soutenir les parties creuses (sable fin ou sel) pour limiter les déformations ; prévoir une marge de dimension."],
+     "parameters": {"temperature": "80 à 110 °C", "duree": "15 à 60 min", "retrait et deformation": "quelques % (variable, à tester)"},
+     "hazards": ["Utiliser de préférence un four dédié ; aérer ; la pièce chaude est molle, la manipuler avec précaution."],
+     "notes": ["Les PLA conçus pour le recuit (haute température) se prêtent mieux au procédé que le PLA standard, qui peut se déformer fortement. Consulter la fiche du filament."]},
+    "PETG": {"applies": "no", "reason": "Matière amorphe : le recuit n'apporte pas de gain utile de tenue thermique (limitée par la transition vitreuse, de l'ordre de 70 à 80 °C) et risque de déformer la pièce. Pour plus de tenue en température, choisir ABS, ASA, PC ou un nylon chargé."},
+    "ABS": {"applies": "limited",
+     "steps": ["Matière amorphe : un traitement en dessous de la transition vitreuse (de l'ordre de 100 °C) peut relâcher des contraintes internes et améliorer un peu la cohésion entre couches ; le gain est modeste et la déformation possible. À n'essayer que si nécessaire, sur pièce témoin."],
+     "hazards": ["Ventiler : l'ABS chauffé dégage des vapeurs ; four dédié de préférence."]},
+    "ASA": {"applies": "limited",
+     "steps": ["Même principe que l'ABS : gain modeste, déformation possible ; sur pièce témoin seulement."],
+     "hazards": ["Ventiler ; four dédié de préférence."]},
+    "PA": {"applies": "limited",
+     "steps": ["Le nylon cristallise : un recuit peut améliorer rigidité et stabilité dimensionnelle, mais température et durée dépendent du filament : suivre la fiche du fabricant (non intégrée ici).", "Sécher la pièce et la bobine selon la fiche avant tout traitement ; un retrait est possible."]},
+    "PC": {"applies": "no", "reason": "Matière amorphe : pas de recuit courant utile sans fiche du fabricant ; risque de déformation."},
+    "TPU": {"applies": "no", "reason": "Pas de recuit praticable sur un élastomère."},
+    "PET": {"applies": "no", "reason": "Comportement proche du PETG : pas de gain utile."},
+    "default": {"applies": "no", "reason": "Pas de recuit courant documenté pour cette matière."}
+   }
+  },
+  {
+   "id": "heatset_inserts", "name": "Inserts filetés thermo-sertis", "order": 70,
+   "triggers": ["inserts"],
+   "by_family": {
+    "PLA": {"applies": "yes", "parameters": {"temperature de depart du fer": "environ 200 °C (à ajuster : juste assez chaud pour que l'insert s'enfonce sans effort)"}},
+    "PETG": {"applies": "yes", "parameters": {"temperature de depart du fer": "environ 230 °C (à ajuster)"}},
+    "ABS": {"applies": "yes", "parameters": {"temperature de depart du fer": "environ 230 °C (à ajuster)"}},
+    "ASA": {"applies": "yes", "parameters": {"temperature de depart du fer": "environ 230 °C (à ajuster)"}},
+    "PC": {"applies": "yes", "parameters": {"temperature de depart du fer": "environ 260 °C (à ajuster)"}},
+    "PA": {"applies": "yes", "parameters": {"temperature de depart du fer": "environ 250 °C (à ajuster)"}},
+    "TPU": {"applies": "no", "reason": "Matière souple : l'insert ne tient pas de façon fiable."},
+    "default": {"applies": "limited", "parameters": {"temperature de depart du fer": "un peu au-dessus de la température où la matière devient pâteuse, à trouver par essais"}}
+   },
+   "common": {
+    "steps": ["Choisir la taille d'insert et prévoir le trou au diamètre ci-dessous (à confirmer avec la fiche de l'insert réellement acheté).", "Chauffer le fer à souder muni d'un embout adapté à l'insert à la température de départ, poser l'insert sur le trou.", "Enfoncer lentement, bien droit, jusqu'à ce que l'insert affleure ; aplatir avec un outil plat ; laisser refroidir sans toucher.", "Prévoir au fond du trou une marge de profondeur pour que le plastique refoulé ait où aller, et conserver l'épaisseur de paroi indiquée autour du trou."],
+    "hazards": ["Fer très chaud et vapeurs de plastique : ventiler, poser le fer sur un support."],
+    "notes": ["Les températures sont des points de départ de niveau heuristique : les ajuster sur une pièce témoin."]
+   }
+  },
+  {
+   "id": "bonding", "name": "Collage et assemblage", "order": 80,
+   "triggers": ["bond"],
+   "by_family": {
+    "PLA": {"applies": "yes",
+     "steps": ["Cyanoacrylate (colle instantanée, version gel pour combler un jeu) ou époxy bi-composant pour les assemblages chargés.", "Dépolir les surfaces (grain 120 à 220) et les dégraisser, assembler à sec, puis serrer ou maintenir le temps de prise.", "Ne pas compter sur un solvant : la soudure au solvant ne fonctionne pas avec les produits courants sur le PLA."]},
+    "PETG": {"applies": "yes",
+     "steps": ["Époxy bi-composant, colle polyuréthane ou MS polymère ; la cyanoacrylate tient moyennement.", "Dépolir et dégraisser ; le PETG résiste aux solvants, il n'y a donc pas de soudure au solvant."]},
+    "ABS": {"applies": "yes",
+     "steps": ["Soudure à l'acétone : en pinceler une fine couche sur les deux faces à joindre quelques secondes, presser et maintenir ; ou « colle ABS » (ABS dissous dans l'acétone) pour combler un jeu.", "Ou époxy bi-composant pour les assemblages chargés."],
+     "hazards": ["Acétone extrêmement inflammable, vapeurs irritantes : aucune source d'ignition, forte ventilation, flacon refermé aussitôt."]},
+    "ASA": {"applies": "yes",
+     "steps": ["Soudure à l'acétone comme l'ABS (essayer sur pièce témoin) ou époxy bi-composant."],
+     "hazards": ["Acétone extrêmement inflammable, vapeurs irritantes : aucune source d'ignition, forte ventilation."]},
+    "PC": {"applies": "yes", "steps": ["Époxy bi-composant (le plus fiable) ou cyanoacrylate après avoir dépoli et dégraissé."]},
+    "PA": {"applies": "limited",
+     "steps": ["Le nylon se colle mal : époxy ou polyuréthane après ponçage et dégraissage ; préférer l'assemblage mécanique (vis, inserts, clips)."]},
+    "TPU": {"applies": "limited",
+     "steps": ["Cyanoacrylate souple, colle polyuréthane ou colle de contact flexible, après avoir légèrement dépoli ; un joint rigide se fissure à la flexion."]},
+    "default": {"applies": "limited", "steps": ["Dépolir, dégraisser, essayer époxy bi-composant sur une pièce témoin."]}
+   },
+   "common": {
+    "hazards": ["Cyanoacrylate : colle la peau en quelques secondes, vapeurs irritantes (blanchiment des surfaces voisines) ; époxy : gants, aération, sensibilisant cutané."]
+   }
+  }
+ ],
+ "honesty": {
+  "transparent_petg_pc": "Une pièce imprimée en FDM en PETG ou en polycarbonate ne devient pas transparente comme du verre ou de l'acrylique moulé : les couches, les vides internes et les interfaces entre lignes diffusent la lumière. On obtient du translucide, et un rendu proche du transparent seulement sur de faibles épaisseurs, avec ponçage fin et vernis ou résine, et un flou résiduel. C'est adapté à un diffuseur ou un guide de lumière, pas à une lentille, une vitre d'inspection nette ou un affichage lisible à travers une forte épaisseur."
+ }
+}

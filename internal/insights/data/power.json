@@ -1,0 +1,34 @@
+{
+ "version": "2026-11-07",
+ "level": "indicative",
+ "note": "Puissances MOYENNES indicatives (ordre de grandeur) par modèle d'imprimante Bambu Lab et par phase. Aucune n'a été mesurée dans ce projet et aucune ne provient d'une fiche fabricant : Bambu Lab publie la puissance nominale de l'alimentation (une borne haute), pas la consommation moyenne. Elles sont retenues comme ordres de grandeur d'après des relevés de prise mesurante rapportés par la communauté et DOIVENT être remplacées par une mesure personnelle (prise mesurante) via le réglage power_overrides. Phase preheat = chauffe du plateau et de la buse (et de l'enceinte pour les matières techniques) ; phase print = impression en régime établi.",
+ "model_aliases": {
+  "p1s": ["p1s"], "p1p": ["p1p"], "x1c": ["x1c", "x1 carbon", "x1-carbon"], "x1e": ["x1e"],
+  "a1mini": ["a1 mini", "a1mini", "a1-mini"], "a1": ["a1"],
+  "h2d": ["h2d"], "h2s": ["h2s"], "p2s": ["p2s"]
+ },
+ "models": {
+  "p1s":    {"name": "Bambu Lab P1S",       "preheat_w": 450, "print_w": 110},
+  "p1p":    {"name": "Bambu Lab P1P",       "preheat_w": 400, "print_w": 100},
+  "x1c":    {"name": "Bambu Lab X1 Carbon", "preheat_w": 500, "print_w": 120},
+  "x1e":    {"name": "Bambu Lab X1E",       "preheat_w": 600, "print_w": 150},
+  "a1":     {"name": "Bambu Lab A1",        "preheat_w": 350, "print_w": 85},
+  "a1mini": {"name": "Bambu Lab A1 mini",   "preheat_w": 150, "print_w": 55},
+  "h2d":    {"name": "Bambu Lab H2D",       "preheat_w": 900, "print_w": 200},
+  "h2s":    {"name": "Bambu Lab H2S",       "preheat_w": 800, "print_w": 180},
+  "p2s":    {"name": "Bambu Lab P2S",       "preheat_w": 450, "print_w": 120}
+ },
+ "default_model": {"name": "Modèle inconnu (valeurs moyennes prudentes)", "preheat_w": 500, "print_w": 130},
+ "family_print_factor": {
+  "PLA": 1.0, "PLA-CF": 1.0, "PETG": 1.1, "PETG-CF": 1.15, "TPU": 1.0, "ABS": 1.5, "ASA": 1.5, "PC": 1.8, "PA": 1.6, "PA-CF": 1.6, "PVA": 1.0, "PET": 1.3
+ },
+ "family_preheat_minutes": {
+  "PLA": 5, "PLA-CF": 5, "PETG": 6, "PETG-CF": 7, "TPU": 5, "ABS": 12, "ASA": 12, "PC": 15, "PA": 12, "PA-CF": 12, "PVA": 5, "PET": 10
+ },
+ "default_preheat_minutes": 6,
+ "assumptions": [
+  "La durée estimée par le slicer est supposée inclure la chauffe : durée totale = chauffe + impression.",
+  "La puissance moyenne en impression est multipliée par un facteur selon la famille de matière (plateau et enceinte plus chauds pour ABS, ASA, PC, PA).",
+  "La consommation de veille, de l'AMS et de l'éclairage n'est pas comptée."
+ ]
+}
