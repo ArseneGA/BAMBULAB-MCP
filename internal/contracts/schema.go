@@ -17,8 +17,10 @@ import (
 func schemaOptions() *jsonschema.ForOptions {
 	return &jsonschema.ForOptions{
 		TypeSchemas: map[reflect.Type]*jsonschema.Schema{
-			// Charge JSON libre : toute valeur JSON est acceptée.
-			reflect.TypeFor[json.RawMessage](): {},
+			// Charge JSON libre : toute valeur JSON est acceptée. Le schéma vide {} serait
+			// sérialisé en booléen `true`, que le validateur du SDK TypeScript (Claude
+			// Desktop) refuse dans "properties" : on porte donc une description.
+			reflect.TypeFor[json.RawMessage](): {Description: "valeur JSON libre"},
 		},
 	}
 }
