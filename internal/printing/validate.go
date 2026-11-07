@@ -165,6 +165,11 @@ func (s *Service) checkAssignments(ctx context.Context, rep *ValidationReport, r
 	if len(rep.Blocking) == 0 {
 		rep.add(true, "materials_assigned", true, "error", fmt.Sprintf("%d affectation(s) cohérente(s) avec le fichier et la machine", len(as)))
 	}
+	// Alerte AVANT l'envoi : une bobine risque de manquer (inventaire des bobines, internal/filament). Jamais bloquant
+	// ici : l'inventaire peut être faux ; c'est l'humain qui décide sur la page de confirmation.
+	for _, w := range s.filamentWarnings(ctx, rec.ID, plate, as) {
+		rep.add(true, w.Name, false, "warn", w.Detail)
+	}
 }
 
 // ValidateArtifact valide l'archive et sa compatibilité avec l'imprimante réelle.

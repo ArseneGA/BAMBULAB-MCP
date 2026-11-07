@@ -45,6 +45,7 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 <dt>Matières</dt><dd>{{range .V.Binding.Materials}}filament {{.FilamentSlot}} &rarr; {{.Tray}} : {{.MaterialID}}<br>{{end}}</dd>
 {{if .V.Binding.EstimatedMin}}<dt>Durée estimée</dt><dd>{{printf "%.0f" .V.Binding.EstimatedMin}} min (estimation du slicer){{if .V.Binding.WeightG}}, {{printf "%.1f" .V.Binding.WeightG}} g{{end}}</dd>{{end}}
 <dt>Valable jusqu'à</dt><dd>{{.V.ExpiresAt.Format "15:04:05 (02/01/2006)"}}</dd></dl>
+{{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}">
 <label class="chk"><input type="checkbox" name="plate_clear" value="yes" required> Le plateau est vide et dégagé, l'imprimante est surveillée.</label>
