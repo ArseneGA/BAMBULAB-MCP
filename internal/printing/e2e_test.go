@@ -336,6 +336,29 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 		t.Fatal("réconciliation hors START_UNKNOWN")
 	}
 
+	// ---- 8c. réconciliation PASSIVE : START_UNKNOWN -> PRINTING par simple lecture, sans reconcile_print ni renvoi ----
+	sim3 := startSim(t, "drop_after_start")
+	ap3 := r.addPrinterFor(sim3, map[string]any{"name": "Atelier 3"})
+	pid3 := str(ap3, "printer", "id")
+	r.humanSetsAccessCode(str(ap3, "setup_url"))
+	o9 := r.call("upload_print_artifact", map[string]any{"artifact_id": art, "printer_id": pid3, "idempotency_key": "cle-depot-imprimante-3", "plate": 1, "assignments": anyAssign(ams1)})
+	job9 := str(o9, "print_job_id")
+	cf9 := r.call("request_print_confirmation", map[string]any{"print_job_id": job9})
+	if st, _ := r.humanConfirm(str(cf9, "confirm_url"), true); st != 200 {
+		t.Fatal("approbation 9")
+	}
+	s9 := r.call("start_print", map[string]any{"print_job_id": job9, "confirmation_id": str(cf9, "confirmation_id"), "idempotency_key": "cle-start-imprimante-3"})
+	if str(s9, "state") != "START_UNKNOWN" {
+		t.Fatalf("lancement incertain attendu : %v", s9["state"])
+	}
+	waitFor(t, 40*time.Second, "réconciliation passive START_UNKNOWN -> PRINTING", func() bool {
+		return str(r.call("get_print_status", map[string]any{"print_job_id": job9}), "job", "state") == "PRINTING" ||
+			r.printState(job9) == "PRINTING" || r.printState(job9) == "COMPLETED"
+	})
+	if n := len(sim3.StartCommands()); n != 1 {
+		t.Fatalf("la réconciliation passive a envoyé une commande : %d project_file", n)
+	}
+
 	// ---- 9. annulations selon la phase ----
 	job4, _ := r.uploadAndAsk(art, "cle-depot-quatrieme-imp")
 	cf4 := r.call("request_print_confirmation", map[string]any{"print_job_id": job4})
@@ -392,6 +415,15 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	}
 	if r.printState(job5) != "CANCELLED" {
 		t.Fatalf("état après arrêt humain : %s", r.printState(job5))
+	}
+	// Point C : l'état « failed » de Bambu après un arrêt humain s'affiche « arrêtée (annulée par vous) » et s'explique.
+	waitFor(t, 10*time.Second, "affichage de l'arrêt humain", func() bool {
+		ps := r.call("get_printer_status", map[string]any{"printer_id": r.printerID})
+		return strings.Contains(str(ps, "display"), "arrêtée (annulée par vous)")
+	})
+	pst := r.call("get_printer_status", map[string]any{"printer_id": r.printerID})
+	if !strings.Contains(str(pst, "explanation"), "FAILED") || !strings.Contains(str(pst, "explanation"), "/stop") || str(pst, "last_job", "print_job_id") != job5 {
+		t.Fatalf("explication du failed : %v", pst)
 	}
 	if g := r.sim.GcodeState(); g != "FAILED" {
 		t.Fatalf("le simulateur devrait avoir reçu l'arrêt : %s", g)

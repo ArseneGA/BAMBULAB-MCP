@@ -92,6 +92,7 @@ func New(d Deps) (*Service, error) {
 	if d.Printing != nil {
 		d.Printing.SetFilamentCheck(s.validationWarnings)
 		d.Printing.AddJobEndHook(s.onJobEnd)
+		d.Printing.SetSpoolSource(s.loadedForPrinting)
 	}
 	return s, nil
 }

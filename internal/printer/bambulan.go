@@ -61,7 +61,7 @@ type BambuConfig struct {
 	MaxStartStatusAge    time.Duration // fraîcheur exigée au lancement (défaut 30 s)
 	PushAllMinInterval   time.Duration // défaut 5 min (note de recherche §2)
 	PushAllWait          time.Duration // attente d'un rapport après pushall (défaut 5 s)
-	PubAckTimeout        time.Duration // défaut 5 s
+	PubAckTimeout        time.Duration // accusé de transport de la commande de lancement ; défaut 30 s (une P1S occupée à lire un gros fichier met plus de 5 s)
 	CommandTimeout       time.Duration // pause/resume/stop (défaut 10 s)
 	StartObserveTimeout  time.Duration // attente de PREPARE/RUNNING après start (défaut 90 s)
 	ReconnectDelay       time.Duration // défaut 2 s
@@ -94,7 +94,7 @@ func (c *BambuConfig) defaults() {
 	d(&c.MaxStartStatusAge, 30*time.Second)
 	d(&c.PushAllMinInterval, 5*time.Minute)
 	d(&c.PushAllWait, 5*time.Second)
-	d(&c.PubAckTimeout, 5*time.Second)
+	d(&c.PubAckTimeout, 30*time.Second)
 	d(&c.CommandTimeout, 10*time.Second)
 	d(&c.StartObserveTimeout, 90*time.Second)
 	d(&c.ReconnectDelay, 2*time.Second)

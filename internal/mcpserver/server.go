@@ -51,7 +51,8 @@ func New(c *core.Core) *mcp.Server {
 
 	addTool(s, &mcp.Tool{
 		Name: "get_job_status", Title: "État d'un travail",
-		Description: "État, progression, journaux bornés (les plus récents), résultat ou erreur d'un travail.",
+		Description: "État, progression RÉELLE (progress_detail : percent, phase, octets envoyés / total, durée restante, position dans la file), journaux bornés, résultat ou erreur d'un travail. " +
+			"À utiliser pour suivre toute opération longue (découpe, dépôt, import) : un outil qui rend un job_id sans avoir fini N'A PAS échoué, il continue en arrière-plan ; rappeler get_job_status toutes les 10 à 30 s jusqu'à succeeded / failed.",
 		Annotations: roAnn,
 	}, h.getJobStatus)
 
@@ -172,12 +173,19 @@ func (h *handlers) getCapabilities(_ context.Context, _ *mcp.CallToolRequest, _ 
 	return textResult(fmt.Sprintf("Mode %s, %d/%d fonctions disponibles.", cp.Mode, n, len(cp.Features))), cp, nil
 }
 
-func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in GetJobStatusInput) (*mcp.CallToolResult, contracts.Job, error) {
-	j, err := h.c.Queue.Get(ctx, in.JobID)
+// JobStatusOut : le travail et son avancement lisible (pourcentage, phase, octets, durée restante, position).
+type JobStatusOut struct {
+	contracts.Job
+	Detail jobs.Progress `json:"progress_detail" jsonschema:"avancement : percent, phase, bytes_done/bytes_total, eta_seconds, queue_position (travail en file), stalled"`
+}
+
+func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in GetJobStatusInput) (*mcp.CallToolResult, JobStatusOut, error) {
+	raw, err := h.c.Queue.Get(ctx, in.JobID)
 	if err != nil {
-		return nil, j, err
+		return nil, JobStatusOut{Job: raw}, err
 	}
-	j = j.Redacted() // jamais de champs secrets vers le client
+	prog := h.c.Queue.ProgressOf(ctx, raw)
+	j := raw.Redacted() // jamais de champs secrets vers le client
 	tail := in.LogTail
 	if tail <= 0 {
 		tail = 50
@@ -188,7 +196,26 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if len(j.Logs) > tail {
 		j.Logs = j.Logs[len(j.Logs)-tail:]
 	}
-	return textResult(fmt.Sprintf("Travail %s (%s) : %s, %.0f %%.", j.ID, j.Kind, j.State, j.Progress*100)), j, nil
+	txt := fmt.Sprintf("Travail %s (%s) : %s, %d %%", j.ID, j.Kind, j.State, prog.Percent)
+	if prog.Phase != "" {
+		txt += " — " + prog.Phase
+	}
+	if prog.QueuePosition != nil {
+		txt += fmt.Sprintf(" (position %d dans la file)", *prog.QueuePosition)
+	}
+	if prog.BytesTotal > 0 {
+		txt += fmt.Sprintf(", %.1f / %.1f Mo", float64(prog.BytesDone)/(1<<20), float64(prog.BytesTotal)/(1<<20))
+	}
+	if prog.ETASeconds != nil {
+		txt += fmt.Sprintf(", reste ~%d s", *prog.ETASeconds)
+	}
+	if prog.Estimated {
+		txt += " (estimation : Bambu Studio ne publie pas de progression)"
+	}
+	if prog.Stalled {
+		txt += " — ATTENTION : aucun signe de vie, probablement bloqué"
+	}
+	return textResult(txt + "."), JobStatusOut{Job: j, Detail: prog}, nil
 }
 
 func (h *handlers) cancelJob(ctx context.Context, _ *mcp.CallToolRequest, in JobIDInput) (*mcp.CallToolResult, CancelJobOutput, error) {

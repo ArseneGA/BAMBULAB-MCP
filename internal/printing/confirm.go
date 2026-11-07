@@ -371,6 +371,12 @@ func (s *Service) purgeLocked() {
 	for k, v := range s.stops {
 		if !now.Before(v.expires) {
 			delete(s.stops, k)
+			s.stopGone[k] = goneStop{reason: "expired", at: now}
+		}
+	}
+	for k, v := range s.stopGone {
+		if now.Sub(v.at) > 24*time.Hour {
+			delete(s.stopGone, k)
 		}
 	}
 	for k, v := range s.approv {

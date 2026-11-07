@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 )
 
@@ -40,6 +41,26 @@ type PrinterIDInput struct {
 	PrinterID string `json:"printer_id"`
 }
 
+// ListHistoryInput : entrée de list_print_history.
+type ListHistoryInput struct {
+	View         string `json:"view,omitempty" jsonschema:"all (défaut) | active | finished | failed | archived | trash"`
+	ModelID      string `json:"model_id,omitempty"`
+	Limit        int    `json:"limit,omitempty"`
+	GroupByModel bool   `json:"group_by_model,omitempty"`
+}
+
+// ManageHistoryInput : entrée de manage_print_history.
+type ManageHistoryInput struct {
+	Action      string   `json:"action" jsonschema:"archive | trash | restore"`
+	PrintJobIDs []string `json:"print_job_ids" jsonschema:"impressions terminées (500 au plus)"`
+}
+
+// ListFilamentsInput : entrée de list_filaments.
+type ListFilamentsInput struct {
+	PrinterID string `json:"printer_id" jsonschema:"imprimante (modèle et buse déterminent les presets compatibles)"`
+	Family    string `json:"family,omitempty" jsonschema:"PLA, PETG, ABS/ASA, TPU, PA/PC, Support : ne lister que cette famille"`
+}
+
 // PrintJobIDInput identifie une impression.
 type PrintJobIDInput struct {
 	PrintJobID string `json:"print_job_id"`
@@ -52,8 +73,10 @@ type ConfirmationIDInput struct {
 
 // SliceOut : impression créée.
 type SliceOut struct {
-	Job  printing.Job `json:"job"`
-	Note string       `json:"note"`
+	Job      printing.Job   `json:"job"`
+	JobID    string         `json:"job_id" jsonschema:"travail de découpe : suivre avec get_job_status(job_id)"`
+	Progress *jobs.Progress `json:"progress,omitempty"`
+	Note     string         `json:"note"`
 }
 
 func appOnlyMeta() mcp.Meta { return mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}} }
@@ -96,6 +119,47 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	})
 
 	addTool(s, &mcp.Tool{
+		Name: "list_filaments", Title: "Filaments disponibles pour une imprimante",
+		Description: "Presets filament de Bambu Studio COMPATIBLES avec l'imprimante (modèle + buse), regroupés par famille (PLA, PETG, ABS/ASA, TPU, PA/PC, Support), avec le nom exact à utiliser. " +
+			"execute_headless_slice accepte aussi un nom libre en français ou anglais (« PETG transparent », « PLA mat », « PETG translucide ») résolu vers un preset de cette liste ; un nom inconnu renvoie les 5 plus proches. " +
+			"La couleur n'est donnée que si une bobine chargée la fournit (AMS lu ou bobine déclarée avec update_spool, slot « ext » pour la bobine externe) : jamais celle du profil. `family` filtre une famille.",
+		Annotations: ro,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ListFilamentsInput) (*mcp.CallToolResult, printing.FilamentList, error) {
+		l, err := p.ListFilaments(in.PrinterID, in.Family)
+		if err != nil {
+			return nil, printing.FilamentList{}, err
+		}
+		return textResult(fmt.Sprintf("%d filament(s) compatibles avec %s dans %d famille(s).", l.Total, in.PrinterID, len(l.Families))), *l, nil
+	})
+
+	addTool(s, &mcp.Tool{
+		Name: "list_print_history", Title: "Historique des impressions",
+		Description: "Historique filtré : view = all (défaut, sans archivées ni corbeille) | active | finished | failed (échecs, annulées) | archived | trash. group_by_model regroupe par modèle (compteurs et échecs par modèle). " +
+			"Renvoie aussi les compteurs par vue et l'avancement (pourcentage, position dans la file) des impressions en cours. Les essais ratés peuvent être rangés avec manage_print_history.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ListHistoryInput) (*mcp.CallToolResult, printing.History, error) {
+		h, err := p.ListHistory(ctx, printing.HistoryFilter{View: in.View, ModelID: in.ModelID, Limit: in.Limit}, in.GroupByModel)
+		if err != nil {
+			return nil, printing.History{}, err
+		}
+		return textResult(fmt.Sprintf("%d impression(s) dans la vue %s (actives %d, terminées %d, échecs %d, archivées %d, corbeille %d).",
+			len(h.Jobs), h.View, h.Counts["active"], h.Counts["finished"], h.Counts["failed"], h.Counts["archived"], h.Counts["trash"])), *h, nil
+	})
+
+	addTool(s, &mcp.Tool{
+		Name: "manage_print_history", Title: "Archiver ou mettre à la corbeille des impressions",
+		Description: "action = archive (masquer de la vue par défaut) | trash (corbeille, récupérable) | restore (remettre dans l'historique) sur des impressions TERMINÉES (réussies, échouées, annulées). " +
+			"Une impression active n'est jamais touchée. Rien n'est supprimé définitivement : le fichier découpé et la trace d'audit restent.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ManageHistoryInput) (*mcp.CallToolResult, printing.HistoryResult, error) {
+		r, err := p.ArchiveJobs(ctx, in.Action, in.PrintJobIDs)
+		if err != nil {
+			return nil, printing.HistoryResult{}, err
+		}
+		return textResult(fmt.Sprintf("%s : %d impression(s) traitée(s), %d ignorée(s). %s", r.Action, len(r.Done), len(r.Skipped), r.Note)), *r, nil
+	})
+
+	addTool(s, &mcp.Tool{
 		Name: "add_printer", Title: "Ajouter une imprimante",
 		Description: "Enregistre une imprimante Bambu (modèle de list_printer_models, hôte du réseau LOCAL — adresse privée, lien local ou nom .local —, numéro de série, buse, AMS). " +
 			"Ni le code d'accès, ni l'empreinte du certificat, ni aucune option de contournement TLS ne sont des paramètres : l'outil renvoie l'URL d'une page locale (/setup/printer/{id}) que " +
@@ -131,15 +195,23 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "execute_headless_slice", Title: "Découper pour une imprimante",
 		Description: "Crée une impression (DRAFT -> PREPARED), puis met en file la découpe par Bambu Studio headless (SLICING -> VALIDATED après validation de l'archive). " +
-			"Modèle, imprimante, révision de profil (ou variante appliquée). Suivre avec get_print_status ; l'artefact est conservé par empreinte. Aucun envoi à l'imprimante.",
+			"Modèle, imprimante, révision de profil (ou variante appliquée). Filaments : preset exact OU nom libre (« PETG transparent », « PLA mat »), voir list_filaments. " +
+			"RETOUR IMMÉDIAT avec un job_id : la découpe dure de quelques secondes à plusieurs minutes et continue en arrière-plan (une seule à la fois, les suivantes sont « en file, position n »). " +
+			"Ne JAMAIS considérer l'appel comme échoué parce que la découpe n'est pas finie : suivre avec get_job_status(job_id) (pourcentage estimé, phase, durée restante) ou get_print_status jusqu'à VALIDATED. " +
+			"Refuse tout de suite une pièce qui ne tient pas sur la machine (message avec dimensions et zone utile). L'artefact est conservé par empreinte. Aucun envoi à l'imprimante.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.SliceInput) (*mcp.CallToolResult, SliceOut, error) {
 		j, err := p.ExecuteHeadlessSlice(ctx, in)
 		if err != nil {
 			return nil, SliceOut{}, err
 		}
-		return textResult(fmt.Sprintf("Impression %s : %s. Découpe en file (travail %s).", j.ID, j.State, j.SliceJobID)),
-			SliceOut{Job: *j, Note: "Suivre avec get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
+		pr := p.ProgressFor(ctx, *j)
+		txt := fmt.Sprintf("Impression %s : %s. Découpe mise en file (job_id %s) : elle continue en arrière-plan, suivre avec get_job_status.", j.ID, j.State, j.SliceJobID)
+		if pr != nil && pr.QueuePosition != nil {
+			txt += fmt.Sprintf(" Position %d dans la file.", *pr.QueuePosition)
+		}
+		return textResult(txt),
+			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -162,6 +234,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "upload_print_artifact", Title: "Déposer le fichier sur l'imprimante",
 		Description: "Dépose l'artefact validé sur l'imprimante (FTPS). idempotency_key OBLIGATOIRE ; assignments (filament -> emplacement -> matière) OBLIGATOIRE. " +
+			"Le fichier peut peser des dizaines de Mo : l'envoi dure plusieurs minutes. L'outil attend au plus ~20 s puis rend un job_id (done=false) : l'envoi CONTINUE, ce n'est PAS un échec, suivre avec get_job_status(job_id) (octets envoyés / total, durée restante) ou get_print_status. " +
 			"N'allume rien, ne lance rien. Renvoie la question EXACTE à poser à l'utilisateur (« Le fichier X est envoyé sur la P1S. Veux-tu lancer cette impression ? ») " +
 			"avec imprimante, empreinte, plateau, matières et rappel plateau vide. Pose cette question et attends sa réponse.",
 		Annotations: physUpload,
@@ -170,7 +243,18 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if err != nil {
 			return nil, printing.UploadOutput{}, err
 		}
+		o.JobID = o.QueueJobID
 		txt := o.Note
+		if !o.Done && o.Progress != nil {
+			txt = fmt.Sprintf("Envoi en cours (job_id %s) : %d %%", o.QueueJobID, o.Progress.Percent)
+			if o.Progress.BytesTotal > 0 {
+				txt += fmt.Sprintf(", %.1f / %.1f Mo", float64(o.Progress.BytesDone)/(1<<20), float64(o.Progress.BytesTotal)/(1<<20))
+			}
+			if o.Progress.ETASeconds != nil {
+				txt += fmt.Sprintf(", reste ~%d s", *o.Progress.ETASeconds)
+			}
+			txt += ". L'envoi continue : ce n'est PAS un échec ; suivre avec get_job_status(job_id)."
+		}
 		if o.Question != "" {
 			txt = "QUESTION À POSER À L'UTILISATEUR : « " + o.Question + " » (" + o.Details.PrinterName + ", plateau " + fmt.Sprint(o.Details.Plate) + ", empreinte " + shortSHA(o.Details.SHA256) + "). " + o.Details.Reminder
 		}

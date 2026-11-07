@@ -71,6 +71,13 @@ type Deps struct {
 	CertFetch func(ctx context.Context, hostport string) (printer.CertInfo, error)
 	// ReconcileSettle : délai de stabilisation de la réconciliation (défaut de l'adaptateur : 10 s).
 	ReconcileSettle time.Duration
+	// SyncWait : attente maximale d'un outil long (découpe, dépôt) avant de rendre job_id + état (défaut 20 s).
+	SyncWait time.Duration
+	// StartAckWait : attente de l'accusé / de l'observation après la commande de lancement (défaut 90 s ;
+	// allongée selon la taille du fichier). Voir start.go.
+	StartAckWait time.Duration
+	// PubAckWait : attente de l'accusé de transport MQTT de la commande de lancement (défaut 30 s).
+	PubAckWait time.Duration
 }
 
 // Service est la chaîne d'impression.
@@ -88,8 +95,9 @@ type Service struct {
 	tracking map[string]context.CancelFunc
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
-	stopping map[string]bool    // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)
-	stops    map[string]stopReq // identifiant de demande d'arrêt -> print job (TTL, purgé)
+	stopping map[string]bool     // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)
+	stops    map[string]stopReq  // identifiant de demande d'arrêt -> print job (TTL, purgé)
+	stopGone map[string]goneStop // demandes d'arrêt expirées ou utilisées (24 h) : pour dire POURQUOI un lien ne marche plus
 	// consumedBy : confirmation -> travail de lancement qui l'a consommée (un autre lancement
 	// concurrent ne doit jamais faire passer l'impression en START_UNKNOWN). TTL, purgé.
 	consumedBy map[string]consumedEntry
@@ -99,6 +107,7 @@ type Service struct {
 	hooksClosed   bool // porte fermée avant wg.Wait : plus aucun observateur n'est lancé
 	endHooks      []JobEndHook
 	filamentCheck FilamentCheck
+	spoolSource   SpoolSource
 
 	planLocks sync.Map // plan_id -> *sync.Mutex : une seule découpe de plaques à la fois par plan
 
@@ -155,7 +164,7 @@ func New(d Deps) (*Service, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Service{d: d, secrets: secrets, log: d.Log, ctx: ctx, cancel: cancel,
 		adapters: map[string]*adapterEntry{}, tracking: map[string]context.CancelFunc{},
-		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, stopping: map[string]bool{}, consumedBy: map[string]consumedEntry{}}
+		approv: map[string]*approval{}, pages: map[string]pageNonce{}, stops: map[string]stopReq{}, stopGone: map[string]goneStop{}, stopping: map[string]bool{}, consumedBy: map[string]consumedEntry{}}
 	s.confirmTransition = s.defaultConfirmTransition
 	if d.CertFetch == nil {
 		s.d.CertFetch = printer.FetchCertInfo
@@ -166,7 +175,7 @@ func New(d Deps) (*Service, error) {
 	s.wg.Add(1)
 	go func() { // maintenance : purge des nonces, demandes d'arrêt, approbations et traces expirées
 		defer s.wg.Done()
-		t := time.NewTicker(time.Minute)
+		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
 		for {
 			select {
@@ -174,6 +183,7 @@ func New(d Deps) (*Service, error) {
 				return
 			case <-t.C:
 				s.purge()
+				s.SweepOrphans(ctx)
 			}
 		}
 	}()
@@ -658,6 +668,7 @@ func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret pr
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
 		Secrets: secret, TLS: printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}, Verifier: verifier, Logger: s.log,
 		AllowStartFromFinish: rec.AllowStartFromFinish, ReconcileSettle: settle,
+		StartObserveTimeout: s.d.StartAckWait, PubAckTimeout: s.d.PubAckWait,
 	})
 }
 
@@ -741,6 +752,20 @@ type PrinterStatus struct {
 	PlateEmpty   string        `json:"plate_empty" jsonschema:"toujours « inconnu » : une imprimante idle ne prouve pas un plateau vide"`
 	Note         string        `json:"note,omitempty"`
 	MaxStartAgeS int           `json:"max_start_age_seconds"`
+	HMSCodes     []string      `json:"hms_codes,omitempty" jsonschema:"codes HMS actifs (16 chiffres hexadécimaux) : à chercher dans la base d'erreurs Bambu"`
+	// Affichage lisible : « Joignable · arrêtée (annulée par vous) » plutôt que le gcode_state brut « failed ».
+	Display     string       `json:"display,omitempty"`
+	Explanation string       `json:"explanation,omitempty" jsonschema:"ce que signifie l'état brut (gcode_state FAILED = annulation OU erreur) et la cause connue"`
+	LastJob     *LastJobInfo `json:"last_job,omitempty"`
+}
+
+// LastJobInfo : dernière impression suivie sur cette imprimante.
+type LastJobInfo struct {
+	ID            string               `json:"print_job_id"`
+	Name          string               `json:"name"`
+	State         contracts.PrintState `json:"state"`
+	StoppedByUser bool                 `json:"stopped_by_user,omitempty"`
+	At            time.Time            `json:"at"`
 }
 
 // StatusFromPrinter normalise le statut d'un adaptateur.
@@ -782,6 +807,10 @@ func (s *Service) GetPrinterStatus(ctx context.Context, printerID string) (*Prin
 		_ = s.d.Store.PutDoc(ctx, actor, "printers", rec.ID, rec)
 	}
 	out.Note = "L'état « idle » ne prouve pas que le plateau est vide : seul l'humain peut l'attester (page de confirmation)."
+	for _, h := range st.HMS {
+		out.HMSCodes = append(out.HMSCodes, h.Code16())
+	}
+	s.describeStatus(ctx, &out, st)
 	return &out, nil
 }
 

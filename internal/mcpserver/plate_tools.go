@@ -82,7 +82,8 @@ func AddPlateTools(s *mcp.Server, p *printing.Service) {
 		Description: "Découpe un plan qui tient : UNE impression (PrintJob) par plaque, chacune tranchée par Bambu Studio headless à partir d'un 3MF multi-pièces qui porte les réglages par pièce. " +
 			"L'archive de chaque impression ne contient que sa plaque ; son numéro et son empreinte sont ce que la confirmation humaine lie, comme pour toute impression. " +
 			"La plaque est refusée si l'archive ne porte pas exactement les pièces du plan. Le résumé donne la matière et les couches de chaque pièce lues dans le G-code. " +
-			"Suivre chaque impression avec get_print_status, puis validate_print_artifact, upload_print_artifact et la confirmation humaine, plaque par plaque.",
+			"RETOUR IMMÉDIAT : chaque plaque est découpée en arrière-plan (une à la fois) ; ne pas considérer l'appel comme échoué, suivre avec get_job_status(slice_job_id de chaque impression) ou get_print_status. " +
+			"Ensuite : validate_print_artifact, upload_print_artifact et la confirmation humaine, plaque par plaque.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.PlateSliceInput) (*mcp.CallToolResult, printing.PlateSliceOutput, error) {
 		o, err := p.ExecutePlateSlice(ctx, in)

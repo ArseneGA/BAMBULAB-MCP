@@ -68,6 +68,9 @@ type Expect struct {
 	Plate        int      // 0 = toutes les plaques
 	BedArea      []profiles.Point
 	PrintableZ   float64
+	// LayerHeight et FirstLayerHeight (mm) : tolérance du contrôle de hauteur de trajectoire
+	// (max(hauteur de couche, première couche, 0,25 mm)).
+	LayerHeight, FirstLayerHeight float64
 	// Volume du modèle d'entrée (mm³) et nature de l'entrée, pour comparer à
 	// la géométrie du plateau ; 0 = pas de comparaison.
 	InputVolume float64
@@ -81,13 +84,16 @@ type Expect struct {
 
 // FilamentUse est la consommation d'un emplacement filament sur une plaque.
 type FilamentUse struct {
-	Slot     int     `json:"slot"`
-	Type     string  `json:"type"`
-	Color    string  `json:"color,omitempty"`
-	TrayInfo string  `json:"tray_info_idx,omitempty"`
-	Meters   float64 `json:"used_m"`
-	Grams    float64 `json:"used_g"`
-	Nozzle   float64 `json:"nozzle_diameter,omitempty"`
+	Slot  int    `json:"slot"`
+	Type  string `json:"type"`
+	Color string `json:"color,omitempty"`
+	// ColorSource : d'où vient Color. Vide = couleur du profil de découpe (valeur par défaut du preset, par exemple
+	// le vert Bambu #00AE42), qui n'est PAS la couleur de la bobine chargée.
+	ColorSource string  `json:"color_source,omitempty"`
+	TrayInfo    string  `json:"tray_info_idx,omitempty"`
+	Meters      float64 `json:"used_m"`
+	Grams       float64 `json:"used_g"`
+	Nozzle      float64 `json:"nozzle_diameter,omitempty"`
 }
 
 // PlateResult regroupe ce qui est lisible d'une plaque tranchée.
@@ -455,8 +461,9 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 				scan.minX, scan.maxX, scan.minY, scan.maxY, minX, maxX, minY, maxY)
 		}
 		if exp.PrintableZ > 0 {
-			val.add(pre+"toolpath_height", scan.maxZ <= exp.PrintableZ+0.01 && math.Abs(scan.maxZ-scan.headerMaxZ) < 0.05, "error",
-				"Z max trajectoire=%.2f en-tête=%.2f volume utile=%.0f", scan.maxZ, scan.headerMaxZ, exp.PrintableZ)
+			tol := ZTolerance(exp.LayerHeight, exp.FirstLayerHeight)
+			val.add(pre+"toolpath_height", scan.maxZ <= exp.PrintableZ+tol && math.Abs(scan.maxZ-scan.headerMaxZ) <= tol, "error",
+				"Z max trajectoire=%.2f en-tête=%.2f volume utile=%.0f (tolérance %.2f mm)", scan.maxZ, scan.headerMaxZ, exp.PrintableZ, tol)
 		}
 		if exp.Studio != nil {
 			if sp2 := exp.Studio.plate(pr.Index); sp2 != nil {
@@ -764,3 +771,7 @@ func allStrings(v any) []string {
 	}
 	return nil
 }
+
+// ZTolerance : tolérance (mm) entre la hauteur de trajectoire et celle annoncée : une couche (ou la première
+// couche) d'écart est normale ; jamais moins de 0,25 mm.
+func ZTolerance(layer, first float64) float64 { return math.Max(0.25, math.Max(layer, first)) }

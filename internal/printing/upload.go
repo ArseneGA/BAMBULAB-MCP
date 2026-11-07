@@ -35,6 +35,7 @@ type PromptDetails struct {
 	EstimatedMin float64              `json:"estimated_minutes,omitempty"`
 	WeightG      float64              `json:"estimated_grams,omitempty"`
 	Alerts       []string             `json:"alerts,omitempty" jsonschema:"alertes de matière (bobine qui risque de manquer) : à lire avant de lancer"`
+	Colors       []FilamentColor      `json:"colors,omitempty" jsonschema:"couleur de chaque filament d'après la bobine RÉELLEMENT chargée (inventaire, AMS, bobine externe déclarée) ; « inconnue » sinon, jamais la couleur par défaut du profil"`
 	Reminder     string               `json:"reminder"`
 }
 
@@ -49,6 +50,8 @@ type UploadOutput struct {
 	Details    *PromptDetails       `json:"details,omitempty"`
 	Note       string               `json:"note"`
 	Job        Job                  `json:"job"`
+	JobID      string               `json:"job_id,omitempty" jsonschema:"travail de file à suivre avec get_job_status quand done est faux"`
+	Progress   *jobs.Progress       `json:"progress,omitempty"`
 }
 
 func (s *Service) promptFor(j Job) (string, *PromptDetails) {
@@ -58,7 +61,7 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	if short == "" {
 		short = rec.Name
 	}
-	d := &PromptDetails{File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments,
+	d := &PromptDetails{Colors: s.colorsFor(j), File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments,
 		Reminder: "Vérifie que le plateau est vide et dégagé : l'imprimante ne peut pas le savoir. Le dépôt du fichier n'a déclenché ni chauffe ni mouvement."}
 	if j.Validation != nil {
 		for _, w := range j.Validation.Warnings {
@@ -204,11 +207,13 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 		return nil, err
 	}
 	mapping, useAMS := buildAMS(in.Assignments)
+	loaded := s.loadedSpools(in.PrinterID) // lecture hors du verrou des impressions
 	if _, err := s.update(ctx, j.ID, func(x *Job) error {
 		if x.State != contracts.PrintValidated {
 			return fmt.Errorf("%w : %s", ErrState, x.State)
 		}
 		x.Assignments, x.AMSMapping, x.UseAMS, x.Plate, x.PrinterID = in.Assignments, mapping, useAMS, plate, in.PrinterID
+		applyRealColors(x, loaded)
 		return nil
 	}); err != nil {
 		return nil, err
@@ -226,7 +231,7 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 			return nil, err
 		}
 	}
-	_, done := s.waitQueue(ctx, qj.ID, 90*time.Second)
+	_, done := s.waitQueue(ctx, qj.ID, s.syncWait())
 	cur, _ := s.GetJob(ctx, j.ID)
 	out := &UploadOutput{PrintJobID: cur.ID, State: cur.State, QueueJobID: qj.ID, Done: done, Replayed: !created, Job: cur}
 	switch cur.State {
@@ -236,7 +241,8 @@ func (s *Service) UploadArtifact(ctx context.Context, in UploadInput) (*UploadOu
 	case contracts.PrintFailed:
 		out.Note = "Dépôt en échec : " + cur.LastError
 	default:
-		out.Note = "Dépôt en cours : suivre avec get_print_status."
+		out.Note = "Le dépôt continue en arrière-plan (ne PAS considérer l'appel comme échoué) : suivre avec get_job_status(job_id = queue_job_id) ou get_print_status jusqu'à AWAITING_PRINT_CONFIRMATION."
+		out.Progress = s.progressOfQueue(ctx, qj.ID)
 	}
 	return out, nil
 }
@@ -278,8 +284,11 @@ func (s *Service) uploadHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawM
 		return fail("artifact_unreadable", err)
 	}
 	defer f.Close()
-	jc.Progress(0.2, "envoi FTPS")
-	ref, err := ad.Upload(ctx, f, j.Name, j.ArtifactSize, j.ArtifactSHA256)
+	jc.Progress(0.05, "connexion FTPS à l'imprimante")
+	jc.SetDetail(jobs.Detail{Phase: "connexion FTPS à l'imprimante", BytesTotal: j.ArtifactSize})
+	cr := &countingReader{r: f, total: j.ArtifactSize, jc: jc}
+	ref, err := ad.Upload(ctx, cr, j.Name, j.ArtifactSize, j.ArtifactSHA256)
+	jobs.ForgetDetail(jc.Job.ID)
 	if err != nil {
 		return fail("upload_failed", err)
 	}

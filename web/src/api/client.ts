@@ -3,7 +3,7 @@ import type {
   OpPreview, Operation, RestoreResult, ScanReport, SearchParams, SearchResult,
 } from './types';
 import type { AgentTask, AnalyzeOutput, InventoryItem, InventorySummary, MaterialDetail, MaterialList, MemoryResponse, ModifyInput, ModifyOutput, PartsOutput, PrintResult, ResultInput, SelectResult, ExperimentSummary } from './extraTypes';
-import type { CancelOutput, ReconcileOutput, AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
+import type { HistoryReply, CancelOutput, ReconcileOutput, AddPrinterInput, AgentStatus, ConfirmationView, FilamentAssignment, PrintJob, PrintStatus, PrinterModel, PrinterStatus, PrinterView, StartOutput, UploadOutput, ValidationReport } from './printTypes';
 import type { ApplyOutput, CompareOutput, CreateExperimentInput, Experiment, Goal, GoalCriteriaCatalog, GoalInput } from './goalTypes';
 
 /**
@@ -97,7 +97,8 @@ export const api = {
   printers: (signal?: AbortSignal) => request<{ printers: PrinterView[] }>('GET', '/api/printers', undefined, signal),
   addPrinter: (p: AddPrinterInput) => request<PrinterView>('POST', '/api/printers', p),
   printerStatus: (id: string, signal?: AbortSignal) => request<PrinterStatus>('GET', `/api/printers/${encodeURIComponent(id)}/status`, undefined, signal),
-  printJobs: (signal?: AbortSignal) => request<{ print_jobs: PrintJob[] }>('GET', '/api/print-jobs?limit=50', undefined, signal),
+  printJobs: (signal?: AbortSignal, view: string = 'all', group = false) => request<HistoryReply>('GET', `/api/print-jobs?limit=200&view=${encodeURIComponent(view)}${group ? '&group=model' : ''}`, undefined, signal),
+  printHistory: (action: 'archive' | 'trash' | 'restore', ids: string[]) => request<{ done: string[]; skipped?: string[]; note: string }>('POST', '/api/print-jobs/history', { action, print_job_ids: ids }),
   printStatus: (id: string, signal?: AbortSignal) => request<PrintStatus>('GET', `/api/print-jobs/${encodeURIComponent(id)}`, undefined, signal),
   createPrintJob: (b: { model_id: string; printer_id: string; plate?: number; idempotency_key: string }) => request<PrintJob>('POST', '/api/print-jobs', b),
   validatePrint: (b: { print_job_id: string; printer_id: string; assignments: FilamentAssignment[] }) => request<{ report: ValidationReport; job: PrintJob }>('POST', '/api/print-jobs/validate', b),

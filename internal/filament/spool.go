@@ -31,6 +31,7 @@ type Spool struct {
 	Brand           string         `json:"brand,omitempty"`
 	Name            string         `json:"name,omitempty" jsonschema:"nom de la couleur (ex. Blanc os)"`
 	ColorHex        string         `json:"color_hex,omitempty" jsonschema:"#RRGGBB"`
+	Translucent     bool           `json:"translucent,omitempty" jsonschema:"bobine translucide/transparente (la couleur est alors une teinte, pas une couleur opaque)"`
 	DiameterMM      float64        `json:"diameter_mm"`
 	NetWeightG      float64        `json:"net_weight_g" jsonschema:"poids de filament d'une bobine neuve"`
 	RemainingG      float64        `json:"remaining_g" jsonschema:"poids restant estimé"`
@@ -227,6 +228,7 @@ type UpdateInput struct {
 	Brand           string   `json:"brand,omitempty"`
 	Name            string   `json:"name,omitempty" jsonschema:"nom de la couleur"`
 	ColorHex        string   `json:"color_hex,omitempty" jsonschema:"#RRGGBB"`
+	Translucent     *bool    `json:"translucent,omitempty" jsonschema:"bobine translucide/transparente. Pour déclarer la bobine externe : slot=ext, material, color_hex, translucent"`
 	DiameterMM      *float64 `json:"diameter_mm,omitempty" jsonschema:"1.75 (défaut) ou 2.85"`
 	NetWeightG      *float64 `json:"net_weight_g,omitempty" jsonschema:"poids net d'une bobine neuve (défaut 1000)"`
 	RemainingG      *float64 `json:"remaining_g,omitempty" jsonschema:"poids restant (mesuré à la balance par exemple)"`
@@ -346,6 +348,10 @@ func (s *Service) apply(ctx context.Context, tx *sql.Tx, sp *Spool, in UpdateInp
 		}
 		sp.ColorHex = h
 		sp.markHuman("color_hex")
+	}
+	if in.Translucent != nil {
+		sp.Translucent = *in.Translucent
+		sp.markHuman("translucent")
 	}
 	if in.DiameterMM != nil {
 		if d := *in.DiameterMM; d != 1.75 && d != 2.85 {

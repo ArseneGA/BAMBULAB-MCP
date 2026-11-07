@@ -151,14 +151,26 @@ func (b *Bambu) Start(ctx context.Context, req StartRequest) error {
 	defer b.dropWaiter(seq)
 	stage := StageTransport
 	b.noteStartPublish()
-	if err := b.publishAcked(ctx, c, b.projectFile(seq, req)); err != nil {
-		return &StartUnknownError{Stage: StageTransport, Cause: err}
+	pubErr := b.publishAcked(ctx, c, b.projectFile(seq, req))
+	// Un accusé de transport qui n'arrive pas dans le délai ne prouve pas que la commande est perdue (retour
+	// terrain : la P1S n'a pas accusé en 5 s un fichier de 157 Mo alors qu'elle imprimait). On observe donc
+	// quand même, sans JAMAIS renvoyer la commande ; faute d'accusé, seul un état qui désigne EXACTEMENT ce
+	// fichier compte comme succès.
+	ackLost := errors.Is(pubErr, errTimeout)
+	if pubErr != nil && !ackLost {
+		return &StartUnknownError{Stage: StageTransport, Cause: pubErr}
 	}
-	stage = StageAcked
-	b.cfg.Logger.Info("project_file published", "printer", b.cfg.PrinterID, "seq", seq, "file", req.Remote.Name)
+	if !ackLost {
+		stage = StageAcked
+	}
+	b.cfg.Logger.Info("project_file published", "printer", b.cfg.PrinterID, "seq", seq, "file", req.Remote.Name, "ack_lost", ackLost)
+	observe := b.cfg.StartObserveTimeout
+	if sz := req.Remote.Size; sz > 0 { // proportionnel à la taille : l'imprimante lit/valide le fichier avant de répondre
+		observe += time.Duration(sz/(2<<20)) * time.Second // +1 s par 2 Mo (157 Mo : +78 s)
+	}
 
 	// 7. Observation : acceptation (réponse) puis état.
-	err = b.waitEval(ctx, c, respCh, b.cfg.StartObserveTimeout, func(resp map[string]any, s Status) (bool, error) {
+	err = b.waitEval(ctx, c, respCh, observe, func(resp map[string]any, s Status) (bool, error) {
 		if resp != nil {
 			if r := str(resp["result"]); r != "" && !strings.EqualFold(r, "success") {
 				return false, fmt.Errorf("%w: %s %s", ErrStartRejected, r, str(resp["reason"]))
@@ -173,6 +185,9 @@ func (b *Bambu) Start(ctx context.Context, req StartRequest) error {
 		case StatePreparing, StatePrinting, StateFinished:
 			if s.State == StateFinished && !b.cfg.AllowStartFromFinish && stage != StageAccepted {
 				return false, nil
+			}
+			if stage == StageTransport && !MatchesRemote(s, req.Remote.Name) {
+				return false, nil // ni accusé ni acceptation : seul ce fichier précis prouve le départ
 			}
 			return true, nil
 		case StateFailed:

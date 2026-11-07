@@ -28,8 +28,8 @@ func (s *Service) StartImportWait(ctx context.Context, in ImportInput) (*ImportS
 	if in.WaitSecs <= 0 {
 		return out, nil
 	}
-	if in.WaitSecs > 120 {
-		in.WaitSecs = 120
+	if in.WaitSecs > 20 { // le client MCP abandonne à 60 s : on rend job_id + état avant, l'import continue
+		in.WaitSecs = 20
 	}
 	state, done, err := s.WaitJob(ctx, j.ID, time.Duration(in.WaitSecs)*time.Second)
 	if err != nil {
