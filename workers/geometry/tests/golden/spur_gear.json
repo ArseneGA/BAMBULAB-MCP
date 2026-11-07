@@ -1,0 +1,16 @@
+{
+  "template": "spur_gear",
+  "template_version": "1.0.0",
+  "volume_mm3": 5303.155,
+  "area_mm2": 3027.012,
+  "bbox_size_mm": [
+    32.999,
+    32.999,
+    8.002
+  ],
+  "parts": 1,
+  "solids": 1,
+  "components": 1,
+  "watertight": true,
+  "fingerprint": "47e6c43e81365769"
+}

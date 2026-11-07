@@ -108,6 +108,8 @@ type ArtifactSummary struct {
 	StudioVersion string               `json:"studio_version,omitempty"`
 	// Objects : matière et couches par pièce de la plaque (lues dans le G-code), pour un plan multi-pièces.
 	Objects []slicer.ObjectUse `json:"objects,omitempty"`
+	// GcodeProfile : le G-code de démarrage/fin est-il celui du profil machine officiel (empreinte) ?
+	GcodeProfile *slicer.GcodeProfile `json:"gcode_profile,omitempty"`
 }
 
 // Job est un PrintJob enrichi : état contracts.PrintState + tout ce qui lie l'impression

@@ -75,6 +75,8 @@ type Expect struct {
 	// BinaryVersion : version du binaire, comparée à celle écrite dans l'archive.
 	BinaryVersion string
 	Studio        *studioResult
+	// Trust : référence de confiance (profils officiels, fiches d'imprimantes) ; défaut DefaultTrust().
+	Trust *Trust
 }
 
 // FilamentUse est la consommation d'un emplacement filament sur une plaque.
@@ -106,6 +108,8 @@ type PlateResult struct {
 	ExtrudeMoves     int           `json:"extrude_moves"`
 	ExtentX          [2]float64    `json:"extent_x"` // min, max des déplacements extrudés
 	ExtentY          [2]float64    `json:"extent_y"`
+	// Safety : températures et commandes lues dans le G-code de la plaque.
+	Safety *GcodeSafety `json:"safety,omitempty"`
 }
 
 // ArchiveInfo résume l'archive validée.
@@ -120,6 +124,8 @@ type ArchiveInfo struct {
 	BedType        string            `json:"bed_type,omitempty"`
 	Plates         []PlateResult     `json:"plates"`
 	Settings       map[string]string `json:"-"`
+	// GcodeProfile : le G-code de démarrage/fin est-il celui du profil machine officiel ?
+	GcodeProfile *GcodeProfile `json:"gcode_profile,omitempty"`
 }
 
 // ---- lecture des fichiers de l'archive ----
@@ -299,6 +305,34 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 		val.add("studio_version", info.StudioVersion == exp.BinaryVersion, "warn", "archive=%s binaire=%s", info.StudioVersion, exp.BinaryVersion)
 	}
 
+	// référence de confiance : profils officiels et fiches d'imprimantes de l'installation, jamais l'archive
+	trust := exp.Trust
+	if trust == nil {
+		trust = DefaultTrust()
+	}
+	lim := trust.Limits(info.PrinterModel)
+	gchk := newGcodeChecker(trust, settings, info)
+	var scanBad []string
+	// plafond de température de buse pendant l'impression : plage haute des filaments de l'archive (profils officiels)
+	nozzleHi, filKnown := 0.0, true
+	for _, n := range info.FilamentIDs {
+		var r *profiles.Resolved
+		if trust != nil && trust.Store != nil {
+			r, _ = trust.Store.Resolve(profiles.KindFilament, n)
+		}
+		if v, ok := firstFloat(r, "nozzle_temperature_range_high"); ok && v > 0 {
+			nozzleHi = math.Max(nozzleHi, v)
+		} else {
+			filKnown = false
+		}
+	}
+	if len(info.FilamentIDs) == 0 {
+		filKnown = false
+	}
+	if !filKnown {
+		nozzleHi = 0 // plafond filament non vérifiable : seul le maximum du modèle s'applique
+	}
+
 	// plaques
 	gcodeIdx := map[int]string{}
 	for n := range entries {
@@ -352,6 +386,28 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 		pr.ExtrudeMoves = scan.extrudes
 		pr.ExtentX = [2]float64{scan.minX, scan.maxX}
 		pr.ExtentY = [2]float64{scan.minY, scan.maxY}
+		sf := scan.safe.GcodeSafety
+		pr.Safety = &sf
+		{
+			refus, avert := sf.Verdict(nozzleHi, lim.NozzleMaxC, lim.BedMaxC, lim.ChamberMaxC)
+			src := lim.Source
+			if !lim.Known {
+				src = "bornes de repli (modèle absent de l'installation)"
+			}
+			summary := fmt.Sprintf("buse démarrage ≤%.0f °C, 1re couche %.0f °C, impression %.0f–%.0f °C ; plateau 1re couche %.0f °C (max %.0f) ; plafonds %s : buse %.0f, filament %.0f, plateau %.0f",
+				sf.NozzleStartMaxC, sf.NozzleFirstLayerC, sf.NozzlePrintMinC, sf.NozzlePrintMaxC, sf.BedFirstLayerC, sf.BedMaxC, src, lim.NozzleMaxC, nozzleHi, lim.BedMaxC)
+			if len(refus) > 0 {
+				summary = strings.Join(refus, " ; ")
+			}
+			val.add(pre+"unsafe_gcode", len(refus) == 0, "error", "%s", summary)
+			if len(avert) > 0 {
+				val.add(pre+"gcode_commands", false, "warn", "commandes hors de l'ensemble attendu pour Bambu Studio : %s", strings.Join(avert, " ; "))
+			}
+			if !filKnown && len(info.FilamentIDs) > 0 {
+				val.add(pre+"filament_range", false, "warn", "plage de température du filament non vérifiable (profil absent de l'installation) : seul le maximum du modèle %.0f °C est appliqué", lim.NozzleMaxC)
+			}
+		}
+		scanBad = append(scanBad, gchk.checkScan(scan.cfgGcode)...)
 
 		if mf := entries[entry+".md5"]; mf != nil {
 			b, _ := readEntry(mf, 1024)
@@ -418,6 +474,17 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 	}
 	sort.Slice(info.Plates, func(i, j int) bool { return info.Plates[i].Index < info.Plates[j].Index })
 
+	// G-code de démarrage/fin et tous les *_gcode : identiques au profil machine officiel résolu, sinon refus
+	info.GcodeProfile = gchk.finish(scanBad)
+	switch {
+	case len(info.GcodeProfile.Mismatch) > 0:
+		val.add("unsafe_gcode_profile", false, "error", "%s (empreinte %s)", info.GcodeProfile.Detail, info.GcodeProfile.Fingerprint)
+	case !info.GcodeProfile.Verifiable:
+		val.add("unsafe_gcode_profile", false, "warn", "%s", info.GcodeProfile.Detail)
+	default:
+		val.add("unsafe_gcode_profile", true, "error", "%s (empreinte %s)", info.GcodeProfile.Detail, info.GcodeProfile.Fingerprint)
+	}
+
 	if exp.Plate > 0 {
 		found := false
 		for _, p := range info.Plates {
@@ -469,6 +536,10 @@ type gcodeScan struct {
 	minX, maxX    float64
 	minY, maxY    float64
 	maxZ          float64
+
+	safe     gcodeSafetyScan
+	nline    int
+	cfgGcode map[string]string // « ; machine_start_gcode = … » du bloc de configuration
 }
 
 var (
@@ -513,6 +584,7 @@ func scanGcode(f *zip.File) (*gcodeScan, error) {
 	var curZ float64
 	for {
 		line, err := readLine(r)
+		s.nline++
 		if len(line) > 0 {
 			s.line(line, &curZ)
 		}
@@ -523,6 +595,7 @@ func scanGcode(f *zip.File) (*gcodeScan, error) {
 			return nil, err
 		}
 	}
+	s.safe.finish()
 	s.md5 = hex.EncodeToString(h.Sum(nil))
 	if s.extrudes == 0 {
 		s.minX, s.maxX, s.minY, s.maxY = 0, 0, 0, 0
@@ -552,7 +625,23 @@ func (s *gcodeScan) line(l []byte, curZ *float64) {
 	if len(l) == 0 {
 		return
 	}
+	s.safe.lineNo = s.nline
 	if l[0] == ';' {
+		// paramètres de G-code du bloc de configuration (« ; machine_start_gcode = … ») : conservés pour l'empreinte
+		if len(l) > 6 && l[1] == ' ' {
+			head := l
+			if len(head) > 80 {
+				head = head[:80]
+			}
+			if i := bytes.Index(head, []byte(" = ")); i > 2 {
+				if key := string(l[2:i]); strings.HasSuffix(key, "_gcode") && !strings.ContainsAny(key, " \t") {
+					if s.cfgGcode == nil {
+						s.cfgGcode = map[string]string{}
+					}
+					s.cfgGcode[key] = string(l[i+3:])
+				}
+			}
+		}
 		// commentaires : en-tête et marqueurs, mais jamais les lignes très longues du bloc de config
 		if len(l) > 4096 {
 			return
@@ -561,6 +650,9 @@ func (s *gcodeScan) line(l []byte, curZ *float64) {
 		switch {
 		case strings.HasPrefix(str, "; CHANGE_LAYER"):
 			s.layerChanges++
+			if s.layerChanges == 1 {
+				s.safe.layerOne()
+			}
 		case strings.Contains(str, "total estimated time:"):
 			if m := reTime.FindStringSubmatch(str); m != nil {
 				s.totalTime = strings.TrimSpace(m[1])
@@ -584,6 +676,7 @@ func (s *gcodeScan) line(l []byte, curZ *float64) {
 		}
 		return
 	}
+	s.safe.command(l, s.layerChanges > 0)
 	if l[0] != 'G' || len(l) < 3 {
 		return
 	}

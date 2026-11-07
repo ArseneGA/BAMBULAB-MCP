@@ -123,12 +123,15 @@ func (s *Service) GetPreviewAsset(ctx context.Context, in PreviewAssetInput) (*P
 
 // AnalyzeInput : analyse géométrique d'un modèle ou d'un fichier.
 type AnalyzeInput struct {
-	ModelID   string `json:"model_id,omitempty" jsonschema:"modèle (son fichier le plus récent)"`
-	FileID    string `json:"file_id,omitempty" jsonschema:"fichier source précis"`
-	Unit      string `json:"unit,omitempty" jsonschema:"unité confirmée des coordonnées pour un STL/OBJ : mm | cm | m | inch ; mémorisée sur le fichier et force le recalcul"`
-	Machine   string `json:"machine,omitempty" jsonschema:"cible machine pour la fabricabilité : p1s (défaut) | p1p | x1c | a1 | a1mini ; volumes nominaux, à confirmer"`
-	Recompute bool   `json:"recompute,omitempty" jsonschema:"ignorer l'analyse stockée"`
-	SkipFab   bool   `json:"skip_fabricability,omitempty" jsonschema:"ne pas calculer surplombs / épaisseurs / orientations (heuristiques)"`
+	ModelID     string  `json:"model_id,omitempty" jsonschema:"modèle (son fichier le plus récent)"`
+	FileID      string  `json:"file_id,omitempty" jsonschema:"fichier source précis"`
+	Unit        string  `json:"unit,omitempty" jsonschema:"unité confirmée des coordonnées pour un STL/OBJ : mm | cm | m | inch ; mémorisée sur le fichier et force le recalcul"`
+	Machine     string  `json:"machine,omitempty" jsonschema:"cible machine pour la fabricabilité : tout modèle Bambu des profils installés (p1s par défaut, h2d, h2s, x1e, p2s, a1, a1mini, x1c…) ; volume, buse et zones d'exclusion lus dans les profils Bambu Studio (double buse : par buse), repli nominal signalé si les profils sont absents"`
+	Nozzle      float64 `json:"nozzle_mm,omitempty" jsonschema:"diamètre de buse en mm (défaut 0.4)"`
+	Process     string  `json:"process,omitempty" jsonschema:"preset process Bambu dont lire support_threshold_angle (seuil de surplomb) ; défaut : process par défaut de la machine"`
+	OverhangDeg float64 `json:"overhang_angle_deg,omitempty" jsonschema:"seuil de surplomb explicite, en degrés depuis la verticale (0 = paroi, 90 = plafond) ; prime sur le profil"`
+	Recompute   bool    `json:"recompute,omitempty" jsonschema:"ignorer l'analyse stockée"`
+	SkipFab     bool    `json:"skip_fabricability,omitempty" jsonschema:"ne pas calculer surplombs / épaisseurs / orientations (heuristiques)"`
 }
 
 // AnalyzeOutput : mesures géométriques et heuristiques de fabricabilité.
@@ -147,25 +150,9 @@ type AnalyzeOutput struct {
 	Caveats       []string        `json:"caveats"`
 }
 
-func machineTarget(name string) (mesh.Target, string, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "", "p1s":
-		return mesh.TargetP1S, "p1s", nil
-	case "p1p":
-		return mesh.TargetP1P, "p1p", nil
-	case "x1c", "x1":
-		return mesh.TargetX1C, "x1c", nil
-	case "a1":
-		return mesh.TargetA1, "a1", nil
-	case "a1mini", "a1 mini", "a1-mini":
-		return mesh.TargetA1Mini, "a1mini", nil
-	}
-	return mesh.Target{}, "", invalidf("machine inconnue %q (p1s | p1p | x1c | a1 | a1mini)", name)
-}
-
 // AnalyzeGeometry renvoie l'analyse (stockée ou recalculée) et la fabricabilité heuristique.
 func (s *Service) AnalyzeGeometry(ctx context.Context, in AnalyzeInput) (*AnalyzeOutput, error) {
-	target, machine, err := machineTarget(in.Machine)
+	target, machine, err := s.machineTarget(in.Machine, in.Nozzle)
 	if err != nil {
 		return nil, err
 	}
@@ -245,10 +232,14 @@ func (s *Service) AnalyzeGeometry(ctx context.Context, in AnalyzeInput) (*Analyz
 	if !in.SkipFab {
 		md, _, err := s.loadMesh(p)
 		if err == nil {
-			rep, ferr := mesh.Fabricability(md.Combined(), mesh.FabOptions{Target: target})
+			fo := mesh.FabOptions{Target: target, OverhangAngleDeg: in.OverhangDeg}
+			if note := s.applyProcessThreshold(&fo, target, in.Process); note != "" {
+				out.Caveats = append(out.Caveats, note)
+			}
+			rep, ferr := mesh.Fabricability(md.Combined(), fo)
 			if ferr == nil {
 				out.Fabricability, _ = json.Marshal(rep)
-				out.Caveats = append(out.Caveats, fmt.Sprintf("Fabricabilité = heuristiques (surplombs, épaisseur par rayons, orientations) pour %s ; volumes machine nominaux à confirmer.", target.Name))
+				out.Caveats = append(out.Caveats, fmt.Sprintf("Fabricabilité = heuristiques (surplombs, épaisseur par rayons, orientations) pour %s (volumes : %s).", target.Name, target.Source))
 			} else {
 				out.Caveats = append(out.Caveats, "fabricabilité non calculée : "+ferr.Error())
 			}

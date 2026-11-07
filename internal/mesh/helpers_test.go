@@ -166,3 +166,5 @@ func TestGenerateTestdata(t *testing.T) {
 	write("cylinder_binary.stl", func() []byte { b, _ := STLBytes(Cylinder(5, 10, 32)); return b }())
 	write("t_shape.stl", stlASCII(TShape(4, 10, 20, 3, 10), "t"))
 }
+
+var testTarget = Target{Name: "test 256", BedX: 256, BedY: 256, BedZ: 256, Nozzle: 0.4}

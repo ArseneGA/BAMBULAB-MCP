@@ -44,7 +44,12 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 <dt>Empreinte</dt><dd><code>{{.V.Binding.SHA256}}</code></dd><dt>Plateau</dt><dd>{{.V.Binding.Plate}}</dd>
 <dt>Matières</dt><dd>{{range .V.Binding.Materials}}filament {{.FilamentSlot}} &rarr; {{.Tray}} : {{.MaterialID}}<br>{{end}}</dd>
 {{if .V.Binding.EstimatedMin}}<dt>Durée estimée</dt><dd>{{printf "%.0f" .V.Binding.EstimatedMin}} min (estimation du slicer){{if .V.Binding.WeightG}}, {{printf "%.1f" .V.Binding.WeightG}} g{{end}}</dd>{{end}}
+{{with .V.Safety}}<dt>Températures<br><small>lues dans le G-code</small></dt><dd>{{if .Analysed}}buse : démarrage jusqu'à {{printf "%.0f" .NozzleStartMaxC}} °C, 1re couche {{printf "%.0f" .NozzleFirstLayerC}} °C, impression {{printf "%.0f" .NozzlePrintMinC}} à {{printf "%.0f" .NozzlePrintMaxC}} °C<br>plateau : 1re couche {{printf "%.0f" .BedFirstLayerC}} °C (de {{printf "%.0f" .BedMinC}} à {{printf "%.0f" .BedMaxC}} °C){{if .ChamberMaxC}}<br>chambre : jusqu'à {{printf "%.0f" .ChamberMaxC}} °C{{end}}{{else}}<span class="bad">non lues : G-code non analysé</span>{{end}}</dd>
+{{if .Materials}}<dt>Matières lues dans le G-code</dt><dd>{{range .Materials}}{{.}}<br>{{end}}</dd>{{end}}{{end}}
 <dt>Valable jusqu'à</dt><dd>{{.V.ExpiresAt.Format "15:04:05 (02/01/2006)"}}</dd></dl>
+{{with .V.Safety}}<style>.bad{color:#c00000;font-weight:600}@media (prefers-color-scheme:dark){.bad{color:#ff7b7b}}</style>
+{{if .GcodeOfficial}}<p class="ok">{{.GcodeProfileLine}}</p>{{else}}<p class="warn bad">{{.GcodeProfileLine}}</p>{{end}}
+{{range .Anomalies}}{{if ne . $.V.Safety.GcodeProfileLine}}<p class="warn bad">Anomalie du G-code : {{.}}</p>{{end}}{{end}}{{end}}
 {{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" style="max-width:100%;border:1px solid #888;border-radius:6px"><figcaption>Photo du plateau prise à {{.Photo.TakenAt.Format "15:04:05 (02/01/2006)"}} par la caméra de l'imprimante, à l'ouverture de cette page. Vérifie sur cette image que le plateau est vide et dégagé.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>{{end}}
 {{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>

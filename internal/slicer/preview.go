@@ -29,7 +29,7 @@ func ResolveWithOverrides(st *profiles.Store, machine, process string, filaments
 		}
 		fs = append(fs, rf.Clone())
 	}
-	applied, err = applyOverrides(m, p, fs, ovs)
+	applied, err = applyOverrides(st, m, p, fs, ovs)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

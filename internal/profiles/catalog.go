@@ -13,17 +13,22 @@ type Point struct{ X, Y float64 }
 
 // Variant est une configuration machine concrète (modèle + buse).
 type Variant struct {
-	Profile       string    `json:"profile"` // nom du preset machine, ex. "Bambu Lab P1S 0.4 nozzle"
-	Nozzle        float64   `json:"nozzle"`  // diamètre de la première buse, mm
-	Extruders     int       `json:"extruders"`
-	BedArea       []Point   `json:"bed_area"` // polygone printable_area
-	BedX          float64   `json:"bed_x"`    // étendue du polygone
-	BedY          float64   `json:"bed_y"`
-	PrintableZ    float64   `json:"printable_height"`
-	ExcludeAreas  [][]Point `json:"exclude_areas,omitempty"`
-	BedTypes      []string  `json:"bed_types,omitempty"` // plateaux supportés si le profil les déclare
-	DefaultProces string    `json:"default_process,omitempty"`
-	DefaultFilmts []string  `json:"default_filaments,omitempty"`
+	Profile      string    `json:"profile"` // nom du preset machine, ex. "Bambu Lab P1S 0.4 nozzle"
+	Nozzle       float64   `json:"nozzle"`  // diamètre de la première buse, mm
+	Extruders    int       `json:"extruders"`
+	BedArea      []Point   `json:"bed_area"` // polygone printable_area
+	BedX         float64   `json:"bed_x"`    // étendue du polygone
+	BedY         float64   `json:"bed_y"`
+	PrintableZ   float64   `json:"printable_height"`
+	ExcludeAreas [][]Point `json:"exclude_areas,omitempty"`
+	// ExtruderAreas : zone imprimable propre à chaque buse (machines à double buse comme la H2D),
+	// dans l'ordre des extrudeurs ; vide pour une machine à buse unique.
+	ExtruderAreas [][]Point `json:"extruder_areas,omitempty"`
+	// ExtruderHeights : hauteur imprimable par buse (extruder_printable_height) quand le profil la donne.
+	ExtruderHeights []float64 `json:"extruder_heights,omitempty"`
+	BedTypes        []string  `json:"bed_types,omitempty"` // plateaux supportés si le profil les déclare
+	DefaultProces   string    `json:"default_process,omitempty"`
+	DefaultFilmts   []string  `json:"default_filaments,omitempty"`
 }
 
 // Printer est un modèle d'imprimante Bambu et ses variantes de buse.
@@ -122,6 +127,23 @@ func variantOf(r *Resolved) (Variant, error) {
 		for i := 0; i+4 <= len(ex); i += 4 {
 			v.ExcludeAreas = append(v.ExcludeAreas, ex[i:i+4])
 		}
+	}
+	// zones imprimables par buse : une chaîne par extrudeur, paires "XxY" séparées par des virgules.
+	for _, item := range r.Strings("extruder_printable_area") {
+		pts, err := parsePoly(strings.Split(item, ","))
+		if err != nil || len(pts) < 3 {
+			v.ExtruderAreas = nil
+			break
+		}
+		v.ExtruderAreas = append(v.ExtruderAreas, pts)
+	}
+	for _, item := range r.Strings("extruder_printable_height") {
+		h, err := strconv.ParseFloat(strings.TrimSpace(item), 64)
+		if err != nil {
+			v.ExtruderHeights = nil
+			break
+		}
+		v.ExtruderHeights = append(v.ExtruderHeights, h)
 	}
 	v.BedTypes = r.Strings("supported_bed_types")
 	v.DefaultProces, _ = r.String("default_print_profile")

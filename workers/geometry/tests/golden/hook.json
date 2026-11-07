@@ -1,0 +1,16 @@
+{
+  "template": "hook",
+  "template_version": "1.0.0",
+  "volume_mm3": 5792.765,
+  "area_mm2": 3761.495,
+  "bbox_size_mm": [
+    30.001,
+    20.0,
+    40.0
+  ],
+  "parts": 1,
+  "solids": 1,
+  "components": 1,
+  "watertight": true,
+  "fingerprint": "1360de85afda421c"
+}

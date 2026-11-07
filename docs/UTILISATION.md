@@ -153,17 +153,29 @@ Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serv
 
 
 
-## 9. Caméra, détection d'échec et notifications (chantier D)
+## 7 bis. Analyser, réparer un maillage et choisir la machine (qualité 3D)
 
-**Caméra (P1, P1S, A1).** « Montre-moi le plateau » : `get_camera_snapshot` renvoie une image que Claude voit (flux JPEG de l'imprimante, port 6000, avec le code d'accès déjà enregistré). Le X1, le P2 et le H2 exposent du RTSP : non pris en charge (l'outil le dit). Sur la P1S, activer « LAN liveview » dans les réglages réseau de l'écran. Sur la page Impression, la carte de l'imprimante a un bouton Instantané et un flux en direct (relayé par le serveur : une seule connexion à la caméra, quel que soit le nombre de spectateurs).
+**Machine d'analyse.** `analyze_geometry` (paramètre `machine`, puis `nozzle_mm`) lit le volume utile, la buse et les **zones d'exclusion** dans les profils Bambu Studio installés : toutes les imprimantes de l'installation sont acceptées (`p1s`, `p1p`, `x1c`, `x1e`, `a1`, `a1mini`, `h2d`, `h2s`, `p2s`…, ou le nom complet « Bambu Lab H2D »). Sur une **double buse (H2D)**, la pièce est comparée au volume de **chaque buse** (zone gauche 325 × 320 × 320, zone droite décalée de 25 mm) ; un avertissement dit quand elle tient avec une seule buse mais pas dans la zone commune (donc pas de multi-matière entre buses). Si les profils ne sont pas lisibles, un repli **nominal** (valeurs génériques, sans exclusions) est utilisé et le rapport le dit (`target.source = "nominal"`, avertissement). Une machine inconnue est refusée avec la liste des modèles.
+
+**Seuil de surplomb.** Il vient du preset process : `support_threshold_angle` (pente depuis l'horizontale ; 30° dans Bambu Studio, soit un surplomb à partir de 60° depuis la verticale), celui du process par défaut de la machine ou celui nommé par `process`. `overhang_angle_deg` (depuis la verticale) prime sur le profil. Le rapport donne le seuil dans les deux conventions et sa source ; sans profil, 45° par défaut est signalé.
+
+**Épaisseur des parois.** Plusieurs rayons par point (axe −normale et 4 rayons à 25° autour), points tirés **au prorata de l'aire**, seule une face qui regarde la nôtre compte. La confiance (`low | medium | high`) tient compte de la part de rayons qui aboutissent et de leur accord (`ray_agreement`). Reste une **heuristique**, pas une mesure de conception ; elle sous-estime près des arêtes vives.
+
+**Défauts signalés par l'analyse** : arêtes ouvertes, non manifold, normales incohérentes, triangles dégénérés, **triangles dupliqués** (compteur dédié), **éclats flottants** (composante de volume < 0,1 % de la pièce principale), **auto-intersections** (paires de triangles qui se traversent, hors voisins d'arête ; régions et nombre ; contrôle borné en temps : `complete = false` veut dire « au moins ce nombre »). Gros maillage (> 1 M triangles) : la notation des orientations travaille sur un échantillon, annoncé dans `sampling`.
+
+**Réparer** : « Répare ce modèle » → `repair_mesh` (ou `POST /api/models/{id}/repair`). Réparation minimale : soudure des sommets, suppression des triangles dégénérés et dupliqués, orientation cohérente des normales (et inversion d'un maillage dont toutes les normales regardent vers l'intérieur), comblement des petits trous (`max_hole_edges`, 32 par défaut), suppression **facultative** des petits composants flottants (`remove_floating`, jamais par défaut). La réponse donne le rapport **avant / après** (étanchéité, volume, nombre de défauts, actions) et crée une **NOUVELLE version** (STL en mm) ; l'original et les versions précédentes ne sont jamais modifiés. `dry_run` ne fait que le rapport ; s'il n'y a rien à réparer, aucune version n'est créée. **Limites** : les arêtes non manifold, les auto-intersections et les grands trous ne sont pas réparés (signalés) ; le comblement est plan (ear clipping), il ne reconstruit pas une surface courbe ; un 3MF devient un STL (métadonnées de projet non reprises) ; un STEP n'est pas concerné.
+
+## 8. Caméra, détection d'échec et notifications (chantier D)
+
+**Caméra (P1, P1S, A1).** « Montre-moi le plateau » : `get_camera_snapshot` renvoie une image que Claude voit (flux JPEG de l'imprimante, port 6000, avec le code d'accès déjà enregistré). Le X1, le P2 et le H2 exposent du RTSP : non pris en charge (l'outil le dit). Sur la P1S, activer « LAN liveview » dans les réglages réseau de l'écran. Sur la page Impression, la carte de l'imprimante a un bouton Instantané et un flux en direct (relayé par le serveur : une seule connexion à la caméra, quel que soit le nombre de spectateurs). **Un instantané à la demande n'est jamais conservé** : l'image est renvoyée puis oubliée ; seules les photos de fin d'impression, d'alerte et de confirmation sont enregistrées. Les instantanés et les ouvertures de flux sont limités en débit par imprimante (erreur 429 au-delà), les images de plus de 4096 x 4096 sont refusées, et les photos d'alerte plus vieilles que `alert_photo_retention_days` (90 jours par défaut, 0 = illimité, réglable avec `configure_failure_detection`) sont supprimées ; les photos de fin restent.
 
 **Photo sur la page de confirmation.** À l'ouverture de `/confirm/{id}`, la page montre une photo du plateau horodatée. Elle aide à vérifier qu'il est vide ; elle ne remplace pas votre case « plateau vide ». Caméra indisponible : la page le dit, sans photo périmée. Cette photo sert aussi d'image de référence à la détection.
 
 **Détection d'échec.** Pendant une impression, un instantané est analysé toutes les 60 s (réglable) par un détecteur local, sans modèle appris : masse de filaments hors de la colonne de la pièce (spaghetti), empreinte apprise qui se vide (pièce décollée), couche qui n'avance plus, erreurs HMS, mouvement brutal de la scène. Score de 0 à 1, chaque signal est expliqué. Au-dessus du seuil (0,6 par défaut) sur 2 analyses consécutives : **alerte** (photo + lien vers la page d'arrêt). **Aucun arrêt automatique** : l'arrêt reste la page humaine `/stop`. `analyze_print_frame` renvoie la dernière image à Claude pour qu'il la juge lui-même ; `configure_failure_detection` règle activation, intervalle, seuil, sensibilité, persistance. Une photo de fin d'impression est rattachée à l'impression (`GET /api/print-jobs/{id}/photos`).
 
-**Notifications.** `configure_notifications` crée des canaux **sans secret** : `ntfy`, `webhook` (JSON signé HMAC-SHA256, en-têtes `X-Bambu-Timestamp` et `X-Bambu-Signature: sha256=hex(HMAC(clé, horodatage + "." + corps))`) et `email` (SMTP, STARTTLS ou TLS implicite, jamais en clair). Les secrets (URL du sujet ntfy, URL et clé du webhook, mot de passe SMTP) se saisissent par **vous** sur `/setup/notifications` (navigateur enregistré) ou par variable d'environnement `BAMBU_NOTIFY_<CANAL>_<CHAMP>` (ou `…_FILE` vers un fichier) ; Claude ne les voit jamais. Évènements : `print_completed`, `print_failed`, `detection_alert`, `start_unknown`, `printer_offline`, `queue_event` (file d'attente). `test_notification` vérifie un canal. Le contenu d'une notification ne contient jamais de secret.
+**Notifications.** Types de canaux : `ntfy`, `webhook` (JSON signé HMAC-SHA256, en-têtes `X-Bambu-Timestamp` et `X-Bambu-Signature: sha256=hex(HMAC(clé, horodatage + "." + corps))`) et `email` (SMTP, STARTTLS ou TLS implicite, jamais en clair). **Vous** créez les canaux et réglez leur destination (hôte, port et utilisateur SMTP, destinataires, URL) ainsi que leurs secrets (URL du sujet ntfy, URL et clé du webhook, mot de passe SMTP) sur la page `/setup/notifications` (navigateur enregistré), ou par variable d'environnement `BAMBU_NOTIFY_<CANAL>_<CHAMP>` (ou `…_FILE` vers un fichier) ; Claude ne les voit jamais. `configure_notifications` ne sert qu'à **lister** les canaux et à **activer ou désactiver** un canal existant et choisir ses évènements : il ne peut ni créer, ni supprimer, ni rediriger un canal. Changer l'hôte, le port ou l'utilisateur SMTP efface le mot de passe enregistré. Par défaut, les adresses locales, privées ou de lien local et les ports SMTP hors 25, 465, 587 et 2525 sont refusés ; `BAMBU_NOTIFY_ALLOW_PRIVATE=1` (côté serveur) les permet pour un ntfy ou un SMTP de votre réseau. Évènements : `print_completed`, `print_failed`, `detection_alert`, `start_unknown`, `printer_offline`, `queue_event` (file d'attente). `test_notification` vérifie un canal. Le contenu d'une notification ne contient jamais de secret.
 
-## 8. Envoyer un fichier à l'Atelier (upload) et importer depuis un lien
+## 9. Envoyer un fichier à l'Atelier (upload) et importer depuis un lien
 
 Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient de générer** (script OpenSCAD/CadQuery, maillage, 3MF modifié) entre au catalogue avec l'outil `upload_file` ; un fichier **sur votre PC** se dépose par glisser-déposer dans la Bibliothèque.
 
@@ -173,7 +185,7 @@ Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient 
 - « Qu'est-ce que je peux envoyer ? » : `get_capabilities` (section `upload`) donne les dossiers d'import du serveur, la taille maximale (globale et par format), la taille de morceau et les domaines autorisés pour les liens.
 - « Importe ce modèle : https://www.printables.com/model/… » : outil `import_from_url`. La provenance (site, URL, auteur) et la licence, quand la page les expose, sont enregistrées. Si le site exige une connexion, Claude reçoit la marche à suivre : télécharger le fichier dans votre navigateur connecté, puis le déposer (ou `upload_file`).
 
-**Ce que le service contrôle** : nom sans chemin (jamais de dossier fourni par le client), taille annoncée et maximale par format, signature (STL binaire/ASCII, OBJ texte, 3MF = zip avec `3D/3dmodel.model`, STEP `ISO-10303-21`), empreinte sha256 **recalculée** (un envoi dont l'empreinte diffère est refusé et rien n'est stocké), puis stockage dans le magasin de blobs. Reprise : `get_upload_status` donne `next_offset` ; un morceau rejoué est ignoré. Une session inactive expire (`BAMBU_UPLOAD_TTL`, 1 h par défaut) et ses octets temporaires sont purgés ; `cancel_upload` l'abandonne.
+**Ce que le service contrôle** : nom sans chemin (jamais de dossier fourni par le client), taille annoncée et maximale par format, signature (STL binaire/ASCII, OBJ texte, 3MF = zip avec `3D/3dmodel.model`, STEP `ISO-10303-21`), empreinte sha256 **recalculée** (un envoi dont l'empreinte diffère est refusé et rien n'est stocké), puis stockage dans le magasin de blobs. Reprise : `get_upload_status` donne `next_offset` ; un morceau rejoué est ignoré. Une session inactive expire (`BAMBU_UPLOAD_TTL`, 1 h par défaut), une session ne dépasse jamais sa durée de vie absolue (`BAMBU_UPLOAD_MAX_LIFETIME`, 6 h par défaut) et le total des octets annoncés par les envois en cours est plafonné (`BAMBU_UPLOAD_INFLIGHT_MB`, 2 048 Mio par défaut) ; les octets temporaires sont purgés ; `cancel_upload` l'abandonne.
 
 **Glisser-déposer** : dans la Bibliothèque, déposez des fichiers n'importe où sur la page ou cliquez « Envoyer des fichiers » : collection, étiquettes et licence optionnelles, barre de progression par fichier, résultat (ajouté, nouvelle version, doublon) avec lien vers la fiche. Le même dialogue propose « Depuis un lien ».
 
@@ -181,7 +193,7 @@ Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient 
 
 ---
 
-## 9. Bobines, AMS, couleurs et file d'attente
+## 10. Bobines, AMS, couleurs et file d'attente
 
 Outils : `list_spools`, `update_spool`, `get_ams_state`, `check_filament_for_print`, `set_filament_margin`, `plan_colors`, `queue_print`, `list_print_queue`, `reorder_queue`, `remove_from_queue`. Écran web : **Bobines et file** (onglets Bobines et AMS, Multicolore, File d'attente).
 
@@ -238,7 +250,7 @@ Le simulateur et les tests suivent le format décrit par la communauté (`docs/r
 
 ---
 
-## 10. Coût, journal des impressions, tableau de bord, finition
+## 11. Coût, journal des impressions, tableau de bord, finition
 
 Tout est disponible dans Claude (outils) et dans l'interface web (écran **Tableau de bord**). Aucun de ces outils ne lance ni n'arrête d'impression.
 
@@ -249,11 +261,11 @@ Tout est disponible dans Claude (outils) et dans l'interface web (écran **Table
 
 Le coût est la somme de trois lignes :
 
-- **Filament** : masse de chaque emplacement × prix du kg. Le prix est, dans l'ordre : celui que vous donnez pour cet appel, celui de la bobine (`spool_per_kg`, clé = libellé de la bobine), celui de la famille de matière (PLA, PETG, ABS, ASA, TPU, PC, PA, PA-CF…), sinon une valeur par défaut **indicative**.
+- **Filament** : masse de chaque emplacement × prix du kg. Le prix est, dans l'ordre : celui que vous donnez pour cet appel, le **prix réel de la bobine chargée** dans l'emplacement (inventaire des bobines, prix au kg saisi avec la bobine ; la réponse l'indique : « bobine de l'inventaire »), celui du réglage de la bobine (`spool_per_kg`, clé = libellé de la bobine), celui de la famille de matière (PLA, PETG, ABS, ASA, TPU, PC, PA, PA-CF…), sinon une valeur par défaut **indicative**.
 - **Électricité** : (puissance de chauffe × durée de chauffe + puissance d'impression × durée restante) × prix du kWh. La puissance dépend du modèle d'imprimante (P1S, P1P, X1C, X1E, A1, A1 mini, H2D, H2S, P2S) et de la matière (facteur plus fort pour ABS, ASA, PC, PA : plateau et enceinte plus chauds ; chauffe plus longue). **Ces puissances sont des ordres de grandeur non mesurés** : remplacez-les par vos relevés de prise mesurante (`power_overrides`).
 - **Usure** : heures machine × amortissement de la machine + usure de la buse (réglages, **0 par défaut**).
 
-Pour une impression terminée, la réponse contient aussi le **coût réel estimé** : durée observée par le service (début et fin de l'impression), masse déclarée par vous (pesée) ou, à défaut, masse prévue (au prorata de l'avancement si l'impression a été interrompue).
+Pour une impression terminée, la réponse contient aussi le **coût réel estimé** : durée observée par le service (début et fin de l'impression), masse déclarée par vous (pesée) ou, à défaut, masse réellement décomptée dans l'inventaire des bobines, sinon masse prévue (au prorata de l'avancement si l'impression a été interrompue).
 
 Réglez les prix une fois :
 
@@ -265,7 +277,7 @@ Réglez les prix une fois :
 
 ### Le journal des impressions
 
-Chaque impression terminée, échouée ou annulée a une **fiche** (créée à la demande, la première fois que vous ouvrez le journal ou que Claude le lit). Elle garde les réglages effectifs (profil, buse, surcharges, orientation), la durée et la masse estimées et réelles, le coût, des photos, une note de 1 à 5, un commentaire et des défauts à cocher (gauchissement, fils, couches visibles, décollement de couches, adhérence, dimensions, patte d'éléphant, sous/sur-extrusion, boutons, supports, surplombs, décalage de couches, surface, autre).
+Chaque impression terminée, échouée ou annulée a une **fiche** (créée à la demande, la première fois que vous ouvrez le journal ou que Claude le lit). Elle garde les réglages effectifs (profil, buse, surcharges, orientation), la durée et la masse estimées et réelles, le coût, des photos (les vôtres, et celles de la caméra rattachées à l'impression : photo de fin et alertes, lues dans la caméra sans être copiées dans la fiche ; une photo d'alerte purgée disparaît aussi du journal), une note de 1 à 5, un commentaire et des défauts à cocher (gauchissement, fils, couches visibles, décollement de couches, adhérence, dimensions, patte d'éléphant, sous/sur-extrusion, boutons, supports, surplombs, décalage de couches, surface, autre).
 
 > « Note l'impression 3 : 4 sur 5, un peu de fils, 52 g pesés. » → `update_print_log`.
 > « Montre le journal des impressions en PETG ratées. » → `list_print_log`.
@@ -296,7 +308,7 @@ Réponse : des **étapes ordonnées** (préparation, ponçage avec les grains, a
 
 Honnêteté : le PETG et le polycarbonate imprimés en FDM restent **translucides**, pas transparents ; le PLA ne se lisse pas à l'acétone.
 
-## 11. Gabarits paramétriques (bibliothèque extensible)
+## 12. Gabarits paramétriques (bibliothèque extensible)
 
 La bibliothèque propose des **pièces prêtes à paramétrer** : chacune a un schéma de paramètres typé (unité, bornes, défaut), une description, une version, une vignette et les calculs d'ingénierie associés. Les paramètres « auto » (jeux d'ajustement, diamètres de trous, trous d'inserts) sont **calculés par le moteur d'ingénierie**, avec la **calibration de votre machine** quand elle existe (sinon valeurs génériques signalées comme telles).
 
@@ -329,7 +341,7 @@ La bibliothèque propose des **pièces prêtes à paramétrer** : chacune a un s
 
 Chaque appel renvoie `auto` (paramètres calculés : valeur nominale, valeur utilisée, niveau de confiance, origine), `calcs` (calculs détaillés), `calibration` (appliquée ou non) et `warnings`. Les gabarits sont **versionnés** : la version du gabarit et les paramètres exacts sont conservés avec chaque version de modèle. Interface web : écran **Gabarits** (formulaire généré depuis le schéma, vignettes, résultat détaillé, enregistrement en variante).
 
-## 12. Calibration d'une machine (pièces de test et mesures)
+## 13. Calibration d'une machine (pièces de test et mesures)
 
 Les valeurs génériques (jeu glissant 0,25 mm, trou −0,15 mm...) sont des ordres de grandeur. Pour un couple **imprimante + buse + matériau (+ bobine)** précis, on imprime des pièces de calibration et on **mesure** :
 
@@ -363,3 +375,27 @@ Toutes ces séries sont des **petites pièces, une par valeur**, avec — quand 
 **Calibrations de Bambu Studio** : Bambu Studio possède ses propres étalonnages (menu Calibration : *Flow Dynamics*, *Flow Rate*, débit volumétrique max, température, rétraction...). Ils passent par l'**interface graphique** et envoient leurs réglages à l'imprimante ; bambud ne peut ni les piloter ni relire leurs résultats (le binaire installé n'affiche aucune aide en ligne de commande et aucune option d'étalonnage n'est utilisée par bambud). L'avance de pression (K) est le cas typique : les profils Bambu n'exposent pas la clé, donc seul *Flow Dynamics* ou un réglage manuel dans Studio l'applique. Les séries de bambud servent quand on veut des pièces au catalogue, des profils découpables reproductibles et un historique par bobine.
 
 **Limites** : le facteur de retrait est calculé et affiché mais pas appliqué automatiquement aux gabarits (le trou et l'arbre rétrécissent ensemble ; une mise à l'échelle globale fausserait les compensations) — l'appliquer au besoin avec `modify_geometry` (échelle) et préférer les décalages de contour/trou issus de `shrink_sizes`. Avec seulement deux tailles on ne vérifie pas la linéarité (une troisième taille le permet). La tour de température demande d'insérer les changements `M104` à la main dans Bambu Studio (hauteurs fournies) ; la série de pièces est plus simple et se découpe avec les profils créés. Les valeurs retenues viennent de lectures humaines (pied à coulisse, œil) : elles valent pour cette bobine, cette buse et cette imprimante. Les filetages M3/M4 sont limités par la résolution FDM (avertissement) ; la poignée et le support mural demandent un essai de charge réel.
+
+## 13. Clés de profil que Claude peut modifier (surcharges)
+
+`modify_slicing_profile`, les variantes (`apply_variant`, `create_experiment`), la calibration et `execute_headless_slice` n'acceptent que les clés ci-dessous, avec leurs bornes. **Tout paramètre de G-code (`*_gcode`, `post_process`) et toute clé hors liste sont refusés** : le G-code de démarrage et de fin reste celui du profil officiel de Bambu Studio. Une valeur hors bornes est refusée avec la borne et sa source (« `nozzle_temperature` = 280 hors bornes [190 ; 240] (nozzle_temperature_range_high du filament) »). La liste complète et ses bornes vivent dans `slicer.OverridableKeys()`.
+
+| Famille | Clés | Bornes |
+|---|---|---|
+| Hauteur de couche | `layer_height`, `initial_layer_print_height` | 0,04 mm → diamètre de buse |
+| Parois et coques | `wall_loops` (1–50), `top_shell_layers`, `bottom_shell_layers` (0–50), `top_shell_thickness`, `bottom_shell_thickness` (0–20 mm), `wall_generator`, `only_one_wall_top`, `detect_thin_wall` | statiques |
+| Remplissage | `sparse_infill_density` (0–100 %), `sparse_infill_pattern` (18 motifs), `top_surface_pattern`, `bottom_surface_pattern`, `infill_direction` | statiques / énumérations |
+| Couture et surface | `seam_position` (nearest, aligned, aligned_back, back, random), `ironing_type`, `ironing_flow`, `ironing_spacing`, `ironing_speed`, `fuzzy_skin*`, `elefant_foot_compensation`, `xy_contour_compensation`, `xy_hole_compensation`, `spiral_mode`, `adaptive_layer_height`, `enable_arc_fitting` | statiques / énumérations |
+| Adhérence | `brim_type`, `brim_width` (0–30), `brim_object_gap`, `skirt_loops`, `skirt_distance`, `skirt_height`, `raft_layers`, `draft_shield`, `enable_prime_tower` | statiques |
+| Supports | `enable_support`, `support_type`, `support_style`, `support_base_pattern`, `support_threshold_angle` (0–90°), `support_on_build_plate_only`, `support_*_z_distance`, `support_object_xy_distance`, `support_interface_*` | statiques |
+| Vitesses (mm/s) | `outer_wall_speed`, `inner_wall_speed`, `sparse_infill_speed`, `internal_solid_infill_speed`, `top_surface_speed`, `initial_layer_speed`, `initial_layer_infill_speed`, `travel_speed`, `bridge_speed`, `gap_infill_speed`, `support_speed`, `support_interface_speed`, `small_perimeter_speed`, `overhang_*_speed` | ≤ `machine_max_speed_x/y` du profil machine (P1S : 500) |
+| Accélérations (mm/s²) | `default_acceleration`, `initial_layer_acceleration`, `outer_wall_acceleration`, `inner_wall_acceleration`, `top_surface_acceleration`, `sparse_infill_acceleration`, `bridge_acceleration` ; `travel_acceleration`, `initial_layer_travel_acceleration` | ≤ `machine_max_acceleration_extruding` (P1S : 20000) ; déplacement ≤ `…_travel` (9000) |
+| Températures de buse (filament) | `nozzle_temperature`, `nozzle_temperature_initial_layer` | de `nozzle_temperature_range_low` à `min(nozzle_temperature_range_high, maximum du modèle)` (P1S/A1/A1 mini : 300 °C) |
+| Températures de plateau (filament) | `hot_plate_temp`, `cool_plate_temp`, `eng_plate_temp`, `textured_plate_temp`, `supertack_plate_temp` et leurs `_initial_layer` | ≤ limite du modèle (P1S 100 °C, A1 mini 80 °C) |
+| Débit et refroidissement (filament) | `filament_flow_ratio` (0,5–1,5), `filament_max_volumetric_speed`, `fan_min_speed`, `fan_max_speed`, `overhang_fan_speed`, `additional_cooling_fan_speed`, `during_print_exhaust_fan_speed`, `complete_print_exhaust_fan_speed` (0–100 %), `close_fan_the_first_x_layers`, `full_fan_speed_layer`, `fan_cooling_layer_time`, `slow_down_min_speed`, `slow_down_for_layer_cooling`, `reduce_fan_stop_start_freq` | statiques |
+| Rétraction (machine) | `retraction_length` (0–15), `retraction_speed`, `deretraction_speed`, `retraction_minimum_travel`, `retract_restart_extra`, `z_hop`, `wipe_distance`, `retract_when_changing_layer`, `wipe` | statiques |
+
+- Une clé valide mais absente du profil résolu (par exemple `brim_type`) est ajoutée au process avec le type de la liste blanche ; les autres clés doivent exister dans le profil.
+- `sparse_infill_density` accepte `15` ou `15%` (écrit `15%`). Un booléen s'écrit `true`/`false`/`0`/`1`.
+- Les réglages **par pièce** d'un plan multi-pièces (`plan_plate`) sont limités à : densité, motif de remplissage, parois, hauteur de couche, couches du dessus/dessous, bordure (type, largeur) et supports ; mêmes bornes (hauteur de couche ≤ buse, vérifiée au tranchage).
+- Ce que ça change pour vous : Claude ne peut plus, même involontairement, changer ce que l'imprimante exécute au démarrage ou à la fin, ni demander une température que le matériau ou la machine ne supporte pas. Le résumé de confirmation (`/confirm`) affiche les températures réellement lues dans le G-code (voir `docs/SECURITY.md` § 11).
