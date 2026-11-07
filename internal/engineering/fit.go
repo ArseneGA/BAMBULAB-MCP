@@ -66,7 +66,7 @@ type FitParams struct {
 	Material    string  // id matériau (optionnel : "" = pas de correction de retrait)
 	Nozzle      float64 // mm
 	Orientation string  // vertical|horizontal
-	Dimension   float64 // dimension nominale de l'ajustement en mm (optionnel, 3–100 ; informatif, voir FitClearance)
+	Dimension   float64 // dimension nominale de l'ajustement en mm (optionnel, 3–100) : le jeu croît légèrement avec elle, voir FitDimensionDelta
 }
 
 // FitResult : Value = jeu DIAMÉTRAL total recommandé en mm (négatif = interférence).
@@ -75,12 +75,37 @@ type FitResult struct {
 	PerSide float64 `json:"per_side_mm"`
 }
 
+// FitRefDimensionMM est la dimension de référence des jeux de base (et du peigne de calibration : languette de 10 mm).
+const FitRefDimensionMM = 10.0
+
+// fitDimensionK : mm de jeu diamétral par µm d'écart d'unité de tolérance ISO (amplitude HEURISTIQUE, voir FitDimensionDelta).
+const fitDimensionK = 0.12
+
+// isoToleranceUnit est l'unité de tolérance normalisée i (µm) de l'ISO 286-1 pour une dimension D (mm) : i = 0,45·∛D + 0,001·D.
+func isoToleranceUnit(d float64) float64 { return 0.45*math.Cbrt(d) + 0.001*d }
+
+// FitDimensionDelta donne la correction (mm, diamétrale) du jeu pour une dimension nominale d'ajustement D, relativement à
+// la dimension de référence de 10 mm : delta = k·(i(D) − i(10)).
+//
+// La FORME de la loi vient de l'ISO 286-1 (la tolérance croît comme l'unité i, en ∛D) ; l'AMPLITUDE k = 0,12 mm/µm est
+// heuristique : elle donne −0,04 mm à 3 mm, 0 à 10 mm, +0,05 mm à 30 mm et +0,15 mm à 100 mm, ordre de grandeur des
+// pièces FDM qui gauchissent et dérivent davantage en grande dimension. À calibrer (le peigne de jeux est à 10 mm).
+func FitDimensionDelta(d float64) float64 {
+	if d <= 0 {
+		return 0
+	}
+	return round(fitDimensionK*(isoToleranceUnit(d)-isoToleranceUnit(FitRefDimensionMM)), 3)
+}
+
 // FitClearance recommande un jeu diamétral (cote trou − cote arbre).
-// Base buse 0,4 mm : libre 0,40 ; glissant 0,25 ; serré 0,10 ; press −0,10 mm.
+// Base buse 0,4 mm, dimension de référence 10 mm : libre 0,40 ; glissant 0,25 ; serré 0,10 ; press −0,10 mm.
+// Quand Dimension est fournie (3–100 mm) on ajoute FitDimensionDelta(Dimension) : le jeu croît légèrement avec la dimension
+// (heuristique, forme ISO 286-1) ; sans Dimension, la dimension de référence de 10 mm est supposée.
 //
 // Le retrait du matériau n'est PAS ajouté au jeu : le trou et l'arbre rétrécissent
 // ensemble dans les mêmes proportions, leur écart ne dépend donc pas (au premier
-// ordre) de la dimension nominale. Pour compenser le retrait d'une cote absolue,
+// ordre) du retrait ; la croissance du jeu avec la dimension vient de FitDimensionDelta
+// (heuristique, mécanismes de dérive dimensionnelle différents). Pour compenser le retrait d'une cote absolue,
 // utiliser ScaleForShrinkage ou HoleCompensation.
 func FitClearance(p FitParams) (*FitResult, error) {
 	fit, err := parseFit(p.Fit)
@@ -107,6 +132,13 @@ func FitClearance(p FitParams) (*FitResult, error) {
 	if axis == AxisHorizontal {
 		v += 0.05
 		asm = append(asm, "Axe horizontal : +0,05 mm (affaissement des voûtes, polygonisation)")
+	}
+	if p.Dimension != 0 {
+		dd := FitDimensionDelta(p.Dimension)
+		v += dd
+		asm = append(asm, "Dimension "+ftoa(p.Dimension)+" mm : "+signed(dd)+" mm par rapport à la référence de 10 mm (loi en ∛D de l'unité de tolérance ISO 286-1, amplitude heuristique)")
+	} else {
+		asm = append(asm, "Dimension non fournie : référence de 10 mm supposée (le jeu croît légèrement avec la dimension)")
 	}
 	level := LevelHeuristic
 	var srcs = []Source{litSource}
@@ -246,6 +278,13 @@ func ScaleForShrinkage(material string, nominal float64) (*ScaleResult, error) {
 	out.Range = &Range{Min: nominal / (1 - s.Value*0.5/100), Max: nominal / (1 - s.Value*1.5/100)}
 	out.Assumptions = append([]string{"D_modélisé = D_nominal / (1 − s/100), s = " + ftoa(s.Value) + " %"}, s.Assumptions...)
 	return out, nil
+}
+
+func signed(v float64) string {
+	if v >= 0 {
+		return "+" + ftoa(v)
+	}
+	return ftoa(v)
 }
 
 func ftoa(v float64) string {
