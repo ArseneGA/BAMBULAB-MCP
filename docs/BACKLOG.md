@@ -17,6 +17,12 @@ Ordre = priorité. Chaque entrée : besoin, constat d'origine, critère de fin.
 
 **Constat** : Claude Desktop est branché via `npx mcp-remote` (le pont `bambu-mcp.exe` est bloqué par la politique du poste). Il reste à vérifier que les ressources `ui://` et `_meta.ui` passent par ce pont (viewer 3D dans la conversation). Sinon : accès direct par URL (point 3) ou pont signé.
 
+**Constat (2026-11-07)** : « Montre-moi la matrice mâle en 3D » dans Claude Desktop → Claude a renvoyé une image PNG (capture_preview) et un lien GLB, sans viewer 3D intégré. À diagnostiquer : appel à `get_model_details` (outil lié à `ui://bambu/model.html`) et transmission de la ressource UI par `mcp-remote`.
+
+## 2 bis. Aperçu « sur le plateau » dans la conversation
+
+Utilisateur : « dommage qu'on n'ait pas une vue du plateau directement là ». `capture_preview` doit pouvoir rendre la ou les pièces posées sur le plateau de l'imprimante cible (P1S 256 × 256 mm, grille, orientation et position réelles après découpe ou arrangement), y compris plusieurs pièces d'une même plaque, et l'aperçu des couches du G-code. Marche même sans MCP App (image), et sert de repli au viewer 3D.
+
 ## 3. Connecteur distant direct (URL `https://…/mcp`) avec OAuth 2.1
 
 Pour claude.ai web/mobile sans installation : OAuth 2.1 dans bambud (connexion via navigateur enregistré, jetons révocables et à durée limitée), exposition Funnel limitée à `/mcp` + routes OAuth (jamais `/setup`, `/confirm`, `/stop`, `/agent/v1`, `/enroll`).
