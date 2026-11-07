@@ -47,7 +47,7 @@ type Measures struct {
 	BestPressureAdvance    *float64           `json:"best_pressure_advance,omitempty" jsonschema:"avance de pression K retenue, [0 ; 0,2] ; aucune clé de profil BBL : à régler dans Bambu Studio"`
 	BestRetractionMM       *float64           `json:"best_retraction_mm,omitempty" jsonschema:"plus courte rétraction sans fils, [0 ; 3] mm"`
 	BestMaxVolumetricSpeed *float64           `json:"best_max_volumetric_speed,omitempty" jsonschema:"plus grand débit volumétrique encore régulier, [1 ; 40] mm³/s"`
-	FirstLayer             *FirstLayerMeasure `json:"first_layer,omitempty" jsonschema:"première couche retenue : paramètre (height|speed|line_width|temperature) et valeur de la pièce la plus régulière"`
+	FirstLayer             *FirstLayerMeasure `json:"first_layer,omitempty" jsonschema:"première couche retenue : paramètre (height|speed|temperature) et valeur de la pièce la plus régulière"`
 }
 
 // SizeMeasure : un tube carré du kind shrink_sizes (mesures en mm, pièce refroidie, à mi-hauteur).
@@ -75,7 +75,7 @@ type FlowMeasure struct {
 
 // FirstLayerMeasure : la valeur retenue d'une série de première couche.
 type FirstLayerMeasure struct {
-	Param string  `json:"param" jsonschema:"height | speed | line_width | temperature"`
+	Param string  `json:"param" jsonschema:"height | speed | temperature"`
 	Value float64 `json:"value"`
 }
 
@@ -309,9 +309,6 @@ func Merge(base, over *engineering.Calibration) *engineering.Calibration {
 		}
 		if o.FirstLayer.SpeedMMS != nil {
 			fl.SpeedMMS = o.FirstLayer.SpeedMMS
-		}
-		if o.FirstLayer.LineWidthMM != nil {
-			fl.LineWidthMM = o.FirstLayer.LineWidthMM
 		}
 		if o.FirstLayer.TempC != nil {
 			fl.TempC = o.FirstLayer.TempC

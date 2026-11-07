@@ -77,7 +77,7 @@ def _legacy(fn: Any, drop_zero: tuple[str, ...] = ()) -> Any:
 
 
 register(Template(
-    id="clamp", title="Collier de serrage", category="fixation",
+    id="clamp", version="1.1.0", title="Collier de serrage", category="fixation",
     description="Collier fendu à oreilles percées (vis de serrage) ou pince à clipser pour un tube. Axe du tube = Z.",
     tags=["tube", "serrage", "fixation"],
     params=[
@@ -534,7 +534,7 @@ def _hinge(cq: Any, p: dict[str, Any], ctx: dict[str, Any], pip: bool) -> list[P
 
 
 register(Template(
-    id="hinge_print_in_place", title="Charnière imprimée en place", category="mécanisme",
+    id="hinge_print_in_place", version="1.1.0", title="Charnière imprimée en place", category="mécanisme",
     description="Charnière dont l'axe est imprimé à l'intérieur des nœuds de l'autre lame avec un jeu : sort de l'imprimante prête à pivoter, sans assemblage. Jeu calculé (calibré si disponible).",
     tags=["charnière", "print-in-place", "mécanisme"],
     params=[
@@ -551,7 +551,7 @@ register(Template(
 ))
 
 register(Template(
-    id="hinge_pin", title="Charnière à axe", category="mécanisme",
+    id="hinge_pin", version="1.1.0", title="Charnière à axe", category="mécanisme",
     description="Deux lames à nœuds alternés percés et un axe séparé (imprimé ou tige métallique).",
     tags=["charnière", "axe", "mécanisme"],
     params=[
@@ -766,7 +766,7 @@ _GEAR_COMMON = [
 ]
 
 register(Template(
-    id="spur_gear", title="Engrenage droit", category="mécanisme",
+    id="spur_gear", version="1.1.0", title="Engrenage droit", category="mécanisme",
     description="Engrenage droit à denture en développante : module, nombre de dents, angle de pression, alésage, clavette et moyeu optionnels.",
     tags=["engrenage", "pignon", "mécanisme"],
     params=[
@@ -821,7 +821,7 @@ def gear_pair(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
 
 
 register(Template(
-    id="gear_pair", title="Paire d'engrenages", category="mécanisme",
+    id="gear_pair", version="1.1.0", title="Paire d'engrenages", category="mécanisme",
     description="Deux engrenages droits au même module placés à l'entraxe calculé, avec jeu de flanc ; rapport de réduction et rapport de conduite fournis.",
     tags=["engrenage", "réducteur", "mécanisme"],
     params=[
@@ -902,7 +902,7 @@ def thread(cq: Any, p: dict[str, Any], ctx: dict[str, Any]) -> list[Part]:
 
 
 register(Template(
-    id="thread", title="Vis / écrou métrique ou plot d'insert", category="fixation",
+    id="thread", version="1.1.0", title="Vis / écrou métrique ou plot d'insert", category="fixation",
     description="Vis hexagonale et/ou écrou métriques imprimables (hélice exacte, jeu sur le filet calculé), ou plot cylindrique avec trou pour insert à chaud.",
     tags=["filetage", "vis", "écrou", "insert"],
     params=[

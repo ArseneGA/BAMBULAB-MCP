@@ -47,10 +47,9 @@ type Calibration struct {
 
 // FirstLayerCal : réglages de première couche retenus (chaque champ est facultatif, un par série).
 type FirstLayerCal struct {
-	HeightMM    *float64 `json:"initial_layer_print_height,omitempty"`
-	SpeedMMS    *float64 `json:"initial_layer_speed,omitempty"`
-	LineWidthMM *float64 `json:"initial_layer_line_width,omitempty"`
-	TempC       *float64 `json:"nozzle_temperature_initial_layer,omitempty"`
+	HeightMM *float64 `json:"initial_layer_print_height,omitempty"`
+	SpeedMMS *float64 `json:"initial_layer_speed,omitempty"`
+	TempC    *float64 `json:"nozzle_temperature_initial_layer,omitempty"`
 }
 
 // LinearOffset : décalage en fonction du diamètre nominal d, off = Offset + Slope·d (mm).

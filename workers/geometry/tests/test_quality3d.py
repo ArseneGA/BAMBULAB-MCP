@@ -294,10 +294,10 @@ def test_series_kinds_pieces_watertight_and_bounded(tmp_path):
     # avance de pression : la clé n'existe pas dans les profils BBL -> aucune surcharge, réglage manuel documenté
     pa = by["pressure_advance"][0]
     assert "slicing_overrides" not in pa and pa["profile_key_available"] is False and pa["manual_settings"][0]["value"] == 0.02
-    # rétraction : clé machine + clé filament facultative
+    # rétraction : clé machine seule (filament_retraction_length n'est pas dans la liste blanche des surcharges)
     rt = by["retraction"][1]
     assert rt["slicing_overrides"] == [{"key": "retraction_length", "value": "0.8", "target": "machine"}]
-    assert rt["slicing_overrides_optional"][0]["key"] == "filament_retraction_length"
+    assert "slicing_overrides_optional" not in rt
     # débit volumétrique : la vitesse de paroi dépasse la limite testée (sinon la limite ne plafonne rien)
     for p in by["volumetric_speed"]:
         v = float(p["series_value"])

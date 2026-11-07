@@ -1,10 +1,10 @@
 {
   "template": "gear_pair",
-  "template_version": "1.0.0",
-  "volume_mm3": 22080.954,
-  "area_mm2": 9979.586,
+  "template_version": "1.1.0",
+  "volume_mm3": 22193.148,
+  "area_mm2": 9753.715,
   "bbox_size_mm": [
-    83.93,
+    83.931,
     56.861,
     8.002
   ],
@@ -12,5 +12,5 @@
   "solids": 2,
   "components": 2,
   "watertight": true,
-  "fingerprint": "2d77afe6c28642bb"
+  "fingerprint": "942669b8f46ee893"
 }

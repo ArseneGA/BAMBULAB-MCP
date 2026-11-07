@@ -22,7 +22,7 @@ const (
 
 // firstLayerBounds : bornes de chaque paramètre de première couche.
 var firstLayerBounds = map[string][2]float64{
-	"height": {0.08, 0.4}, "speed": {5, 150}, "line_width": {0.3, 1.5}, "temperature": {150, 320},
+	"height": {0.08, 0.4}, "speed": {5, 150}, "temperature": {150, 320},
 }
 
 func inRange(v, lo, hi float64) bool { return finite(v) && v >= lo && v <= hi }
@@ -119,7 +119,7 @@ func computeExtrusion(m Measures, cal *engineering.Calibration) (notes []string,
 	if fl := m.FirstLayer; fl != nil {
 		b, ok := firstLayerBounds[fl.Param]
 		if !ok {
-			return nil, invalidf("first_layer.param %q inconnu (height|speed|line_width|temperature)", fl.Param)
+			return nil, invalidf("first_layer.param %q inconnu (height|speed|temperature)", fl.Param)
 		}
 		if !inRange(fl.Value, b[0], b[1]) {
 			return nil, invalidf("first_layer.value %v hors de [%g ; %g] pour %s", fl.Value, b[0], b[1], fl.Param)
@@ -130,8 +130,6 @@ func computeExtrusion(m Measures, cal *engineering.Calibration) (notes []string,
 			out.HeightMM = ptr(fl.Value)
 		case "speed":
 			out.SpeedMMS = ptr(fl.Value)
-		case "line_width":
-			out.LineWidthMM = ptr(fl.Value)
 		case "temperature":
 			out.TempC = ptr(fl.Value)
 		}
@@ -285,8 +283,8 @@ func ProposalsFor(c *engineering.Calibration) *Proposals {
 		add("filament_flow_ratio", fnum(*c.BestFlowRatio), "filament", "débit retenu sur la série de parois d'une ligne", false)
 	}
 	if c.BestRetractionMM != nil {
-		add("retraction_length", fnum(*c.BestRetractionMM), "machine", "plus courte rétraction sans fils", false)
-		add("filament_retraction_length", fnum(*c.BestRetractionMM), "filament", "idem côté filament (prime sur la machine quand il est renseigné)", true)
+		add("retraction_length", fnum(*c.BestRetractionMM), "machine",
+			"plus courte rétraction sans fils (si le profil filament renseigne sa propre filament_retraction_length, elle prime : à régler dans Bambu Studio, la clé n'est pas surchargeable)", false)
 	}
 	if c.BestMaxVolumetricSpeed != nil {
 		add("filament_max_volumetric_speed", fnum(safeVolumetric(*c.BestMaxVolumetricSpeed)), "filament",
@@ -298,9 +296,6 @@ func ProposalsFor(c *engineering.Calibration) *Proposals {
 		}
 		if fl.SpeedMMS != nil {
 			add("initial_layer_speed", fnum(*fl.SpeedMMS), "process", "vitesse de première couche retenue", false)
-		}
-		if fl.LineWidthMM != nil {
-			add("initial_layer_line_width", fnum(*fl.LineWidthMM), "process", "largeur de ligne de première couche retenue", false)
 		}
 		if fl.TempC != nil {
 			add("nozzle_temperature_initial_layer", fnum(*fl.TempC), "filament", "température de première couche retenue", false)
@@ -326,11 +321,9 @@ func ProposalsFor(c *engineering.Calibration) *Proposals {
 var seriesKeys = map[string][2]float64{
 	"filament_flow_ratio":              {flowMin, flowMax},
 	"retraction_length":                {retractMin, retractMax},
-	"filament_retraction_length":       {retractMin, retractMax},
 	"filament_max_volumetric_speed":    {volMin, volMax},
 	"initial_layer_print_height":       firstLayerBounds["height"],
 	"initial_layer_speed":              firstLayerBounds["speed"],
-	"initial_layer_line_width":         firstLayerBounds["line_width"],
 	"nozzle_temperature_initial_layer": firstLayerBounds["temperature"],
 	"nozzle_temperature":               {150, 330},
 	"outer_wall_speed":                 {10, 500},

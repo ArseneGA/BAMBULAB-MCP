@@ -140,7 +140,7 @@ func TestExtrusionValuesAndProposals(t *testing.T) {
 		}
 	}
 	want := map[string][2]string{
-		"filament_flow_ratio": {"0.97", "filament"}, "retraction_length": {"0.6", "machine"}, "filament_retraction_length": {"0.6", "filament"},
+		"filament_flow_ratio": {"0.97", "filament"}, "retraction_length": {"0.6", "machine"},
 		"filament_max_volumetric_speed": {"16", "filament"}, "initial_layer_speed": {"30", "process"}, "nozzle_temperature": {"215", "filament"},
 		"xy_contour_compensation": {"-0.1", "process"}, "xy_hole_compensation": {"0.1", "process"},
 	}
@@ -154,8 +154,22 @@ func TestExtrusionValuesAndProposals(t *testing.T) {
 			t.Errorf("%s = %+v, attendu %v", k, o, w)
 		}
 	}
-	if !byKey["filament_retraction_length"].Optional || byKey["retraction_length"].Optional {
-		t.Error("seule la clé filament de rétraction est facultative")
+	if _, ok := byKey["filament_retraction_length"]; ok {
+		t.Error("filament_retraction_length n'est pas surchargeable (liste blanche) : ne doit pas être proposée")
+	}
+	if !strings.Contains(byKey["retraction_length"].Reason, "filament_retraction_length") {
+		t.Error("la raison doit signaler que la clé filament prime")
+	}
+	// toute clé proposée ou autorisée dans une série est dans la liste blanche des surcharges (sinon modify_slicing_profile la refuserait)
+	for _, o := range p.Overrides {
+		if !slicer.IsOverridable(o.Key) {
+			t.Errorf("proposition %s hors liste blanche", o.Key)
+		}
+	}
+	for k := range seriesKeys {
+		if !slicer.IsOverridable(k) {
+			t.Errorf("clé de série %s hors liste blanche", k)
+		}
 	}
 	// avance de pression : aucune clé de profil, réglage manuel ; échelle XY : réglage manuel aussi
 	if _, ok := byKey["pressure_advance"]; ok || len(p.Manual) != 2 || !strings.Contains(p.Manual[0].Reason, "Flow Dynamics") {
@@ -359,14 +373,14 @@ func TestRecordAndResolveExposeProposals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if o.Proposals == nil || len(o.Proposals.Overrides) != 3 || len(o.Proposals.Manual) != 1 {
+	if o.Proposals == nil || len(o.Proposals.Overrides) != 2 || len(o.Proposals.Manual) != 1 {
 		t.Fatalf("%+v", o.Proposals)
 	}
 	if !strings.Contains(strings.Join(o.Effects, " "), "PROPOSÉES") {
 		t.Fatalf("effets : %v", o.Effects)
 	}
 	r, err := s.Resolve(ctx, k)
-	if err != nil || r.Proposals == nil || len(r.Proposals.Overrides) != 3 {
+	if err != nil || r.Proposals == nil || len(r.Proposals.Overrides) != 2 {
 		t.Fatalf("%+v %v", r, err)
 	}
 	// stocké par (imprimante, buse, bobine) : une autre bobine n'hérite pas du débit

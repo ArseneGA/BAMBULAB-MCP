@@ -32,7 +32,6 @@ VOLUMETRIC_BOUNDS = (1.0, 40.0)
 FIRST_LAYER_PARAMS = {  # paramètre -> (clé BBL, cible, bornes, valeurs par défaut)
     "height": ("initial_layer_print_height", "process", (0.08, 0.4), (0.16, 0.20, 0.24, 0.28)),
     "speed": ("initial_layer_speed", "process", (5.0, 150.0), (20.0, 30.0, 40.0, 50.0)),
-    "line_width": ("initial_layer_line_width", "process", (0.3, 1.5), (0.42, 0.46, 0.50, 0.55)),
     "temperature": ("nozzle_temperature_initial_layer", "filament", (150.0, 320.0), (200.0, 210.0, 220.0, 230.0)),
 }
 DEFAULT_GAPS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
@@ -377,8 +376,9 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
                          f"Deux tours (stringing) imprimées avec une rétraction de {ln:g} mm. Compter / noter les fils entre les tours.",
                          ["best_retraction_mm : la plus courte rétraction sans fils (les rétractions longues usent le filament et bouchent)"],
                          {"series_value": ln, "series_param": "retraction_length",
-                          "slicing_overrides": [{"key": "retraction_length", "value": _fmt(ln), "target": "machine"}],
-                          "slicing_overrides_optional": [{"key": "filament_retraction_length", "value": _fmt(ln), "target": "filament"}]})
+                          # filament_retraction_length n'est pas surchargeable (liste blanche) : si le profil filament la renseigne
+                          # (autre chose que « nil »), elle prime sur retraction_length de la machine -> à régler dans Studio.
+                          "slicing_overrides": [{"key": "retraction_length", "value": _fmt(ln), "target": "machine"}]})
             elif kind == "volumetric_speed":
                 for v in vols:
                     parts, info = volumetric_vase(cq)
@@ -396,7 +396,7 @@ def run(req: dict[str, Any]) -> dict[str, Any]:
                     emit(kind, f"firstlayer_{fl_param}_{_fmt(v)}", parts, info,
                          f"Plaque 50 x 50 mm de 0,6 mm : première couche avec {fl_key} = {v:g}. Regarder le dessus : lignes jointives et "
                          "lisses = bon écrasement ; trous = trop haut / trop froid ; bourrelets rugueux = trop bas.",
-                         ["first_layer : {param, value} de la pièce la plus régulière (param = height|speed|line_width|temperature)"],
+                         ["first_layer : {param, value} de la pièce la plus régulière (param = height|speed|temperature)"],
                          {"series_value": v, "series_param": fl_key, "first_layer_param": fl_param,
                           "slicing_overrides": [{"key": fl_key, "value": _fmt(v), "target": fl_target}]})
     except GeometryError:

@@ -136,7 +136,7 @@ type GenerateInput struct {
 	PressureAdvance []float64       `json:"pressure_advance_values,omitempty" jsonschema:"kind pressure_advance : K de chaque pièce, [0 ; 0,2] (réglage manuel dans Bambu Studio)"`
 	RetractionsMM   []float64       `json:"retraction_lengths,omitempty" jsonschema:"kind retraction : longueurs de rétraction en mm, [0 ; 3] (défaut 0,2 à 1,4)"`
 	VolumetricSpeed []float64       `json:"volumetric_speeds,omitempty" jsonschema:"kind volumetric_speed : débits max en mm³/s, [1 ; 40] (défaut 8 à 24)"`
-	FirstLayerParam string          `json:"first_layer_param,omitempty" jsonschema:"kind first_layer : height | speed | line_width | temperature (défaut height)"`
+	FirstLayerParam string          `json:"first_layer_param,omitempty" jsonschema:"kind first_layer : height | speed | temperature (défaut height)"`
 	FirstLayerVals  []float64       `json:"first_layer_values,omitempty" jsonschema:"kind first_layer : valeurs du paramètre choisi"`
 	Base            *goals.BaseSpec `json:"base,omitempty" jsonschema:"profils de départ (machine/process/filament) : si fourni, une révision de profil découpable est créée par pièce portant des surcharges ; la plage de température est lue dans le profil filament"`
 	Tags            []string        `json:"tags,omitempty"`
@@ -430,7 +430,7 @@ func measuresTemplate(ps []Piece) map[string]any {
 		t["best_max_volumetric_speed"] = "plus grand débit encore régulier (mm³/s) ; 90 % en est proposé"
 	}
 	if has["first_layer"] {
-		t["first_layer"] = map[string]any{"param": "height|speed|line_width|temperature", "value": "valeur de la pièce la plus régulière"}
+		t["first_layer"] = map[string]any{"param": "height|speed|temperature", "value": "valeur de la pièce la plus régulière"}
 	}
 	if has["bridge_overhang"] {
 		t["bridge_max_span_mm"] = "plus grande portée sans affaissement"
