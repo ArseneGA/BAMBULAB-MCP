@@ -37,4 +37,11 @@ Règle commune : tout est utilisable depuis Claude (outil MCP + rendu texte/imag
 8. Réparation de maillage minimale avec rapport avant/après ; détection d'auto-intersections.
 9. ~~Golden files des gabarits, maillages « sales » de test, benchmarks gros maillages~~ (faits, voir `docs/jalons/QUALITE.md`) ; température de calibration selon le matériau (pas seulement PLA) ; `FitClearance` selon la dimension.
 
+## Confirmer l'impression sans quitter Claude (demande du 2026-11-07)
+
+Besoin : le bouton « Lancer » (et « Arrêter ») s'affiche dans la conversation, sans ouvrir le navigateur.
+Contrainte de sécurité (SECURITY.md) : le serveur ne distingue pas un appel venant de la vue MCP App d'un appel fait par le modèle ; un simple bouton dans la vue serait donc approuvable par Claude lui-même (faille déjà corrigée une fois).
+Piste retenue : vue MCP App de confirmation (résumé, températures, photo du plateau) avec un **code de lancement personnel** saisi par l'humain dans la vue : code à 6 chiffres défini une fois sur une page humaine, stocké haché, jamais transmis par la conversation, verrouillage après 3 essais, lié à la confirmation (imprimante, empreinte, plateau, matières) et valable 2 min. Le modèle ne connaît pas le code ; un appel deviné est bloqué par le verrouillage. Variante plus forte à étudier : passkey/WebAuthn dans la vue si le bac à sable de Claude l'autorise. Le lien navigateur reste disponible en secours.
+Prérequis : vue MCP App réellement affichée dans Claude Desktop (point 3).
+
 Restent ouverts hors lot : ponts Windows signés (`bambu-mcp.exe`, `bambu-agent.exe`), licence du dépôt (choix utilisateur), 22 export de projet.
