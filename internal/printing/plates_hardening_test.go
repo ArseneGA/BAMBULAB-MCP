@@ -2,10 +2,13 @@ package printing_test
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 )
@@ -53,6 +56,12 @@ func TestPlanRefusesHugeBlobsAndCountsTrianglesWhileLoading(t *testing.T) {
 // Deux execute_plate_slice concurrents sur le même plan renvoient les MÊMES impressions : aucune plaque n'est découpée deux fois.
 func TestConcurrentPlateSliceYieldsTheSameJobs(t *testing.T) {
 	r := platesRig(t)
+	// Le test porte sur la déduplication, pas sur la découpe : sans Bambu Studio (CI Linux) la vraie découpe échoue aussitôt,
+	// et une impression en échec est légitimement recréée. On garde donc la découpe « en cours » jusqu'à la fin du test.
+	r.c.Registry.Register(printing.JobSlice, true, func(ctx context.Context, _ *jobs.JobCtx) (json.RawMessage, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
 	cube := r.seedMesh("cube", mesh.Cube(40))
 	plan := r.call("plan_plate", map[string]any{"printer_id": r.printerID, "arrangement": "estimate", "items": []any{map[string]any{"model_id": cube, "quantity": 2}}})["plan"].(map[string]any)
 	planID := plan["id"].(string)
