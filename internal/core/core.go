@@ -21,6 +21,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/filament"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
@@ -78,6 +79,8 @@ type Core struct {
 	Goals *goals.Service
 	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
 	Printing *printing.Service
+	// Insights : coût, journal des impressions, tableau de bord, post-traitement (chantier C).
+	Insights *insights.Service
 	// Camera : instantanés, détection d'échec, photos ; Notify : notifications (ntfy, webhook, e-mail). Observent, n'agissent jamais.
 	Camera *camera.Service
 	Notify *notify.Service
@@ -192,11 +195,19 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("impression : %w", err)
 	}
 	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
+	c.Insights, err = insights.New(insights.Config{Store: st, Blobs: blobs, Goals: gs})
+	if err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("journal et coûts : %w", err)
+	}
 	if c.Filament, err = filament.New(filament.Deps{Store: st, Blobs: blobs, Printing: pr, Log: cfg.Logger}); err != nil {
 		st.Close()
 		lock.release()
 		return nil, fmt.Errorf("bobines et file d'attente : %w", err)
 	}
+	c.Insights.SetSpools(c.Filament)                            // prix/kg réel des bobines inventoriées et consommation décomptée
+	c.Filament.SetCostFunc(c.Insights.MaterialCost)             // le coût de purge (plan_colors) suit les réglages de prix
 	c.AddRunHook(c.Filament.Run)                                // préparation de la file d'attente (ne lance jamais d'impression)
 	c.AddRunHook(func(context.Context) { c.Catalog.WarmCAD() }) // vérifie CadQuery (ping) dès le démarrage, sans bloquer
 	c.Runner = jobs.NewRunner(q, reg, jobs.RunnerConfig{
