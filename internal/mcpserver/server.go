@@ -51,7 +51,7 @@ func New(c *core.Core) *mcp.Server {
 
 	addTool(s, &mcp.Tool{
 		Name: "get_job_status", Title: "État d'un travail",
-		Description: "État, progression RÉELLE (percent, phase, octets envoyés / total, durée restante, position dans la file), journaux bornés, résultat ou erreur d'un travail. " +
+		Description: "État, progression RÉELLE (progress_detail : percent, phase, octets envoyés / total, durée restante, position dans la file), journaux bornés, résultat ou erreur d'un travail. " +
 			"À utiliser pour suivre toute opération longue (découpe, dépôt, import) : un outil qui rend un job_id sans avoir fini N'A PAS échoué, il continue en arrière-plan ; rappeler get_job_status toutes les 10 à 30 s jusqu'à succeeded / failed.",
 		Annotations: roAnn,
 	}, h.getJobStatus)
@@ -176,7 +176,7 @@ func (h *handlers) getCapabilities(_ context.Context, _ *mcp.CallToolRequest, _ 
 // JobStatusOut : le travail et son avancement lisible (pourcentage, phase, octets, durée restante, position).
 type JobStatusOut struct {
 	contracts.Job
-	Progress jobs.Progress `json:"progress" jsonschema:"avancement : percent, phase, bytes_done/bytes_total, eta_seconds, queue_position (travail en file), stalled"`
+	Detail jobs.Progress `json:"progress_detail" jsonschema:"avancement : percent, phase, bytes_done/bytes_total, eta_seconds, queue_position (travail en file), stalled"`
 }
 
 func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in GetJobStatusInput) (*mcp.CallToolResult, JobStatusOut, error) {
@@ -215,7 +215,7 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if prog.Stalled {
 		txt += " — ATTENTION : aucun signe de vie, probablement bloqué"
 	}
-	return textResult(txt + "."), JobStatusOut{Job: j, Progress: prog}, nil
+	return textResult(txt + "."), JobStatusOut{Job: j, Detail: prog}, nil
 }
 
 func (h *handlers) cancelJob(ctx context.Context, _ *mcp.CallToolRequest, in JobIDInput) (*mcp.CallToolResult, CancelJobOutput, error) {
