@@ -6,25 +6,6 @@ import (
 	"sort"
 )
 
-// Target décrit la machine visée (volume utile et buse). Valeurs nominales : à vérifier
-// sur la machine réelle (zones d'exclusion, purge, bords du plateau).
-type Target struct {
-	Name   string  `json:"name"`
-	BedX   float64 `json:"bed_x_mm"`
-	BedY   float64 `json:"bed_y_mm"`
-	BedZ   float64 `json:"bed_z_mm"`
-	Nozzle float64 `json:"nozzle_mm"`
-}
-
-// Cibles nominales Bambu Lab.
-var (
-	TargetP1S    = Target{"P1S", 256, 256, 256, 0.4}
-	TargetP1P    = Target{"P1P", 256, 256, 256, 0.4}
-	TargetX1C    = Target{"X1C", 256, 256, 256, 0.4}
-	TargetA1     = Target{"A1", 256, 256, 256, 0.4}
-	TargetA1Mini = Target{"A1 mini", 180, 180, 180, 0.4}
-)
-
 // FabOptions règle l'analyse de fabricabilité.
 type FabOptions struct {
 	Target Target
@@ -114,7 +95,7 @@ const orientationFormula = "0,6·fraction_surplomb + 0,25·hauteur/diagonale + 0
 
 func (o *FabOptions) defaults() {
 	if o.Target.BedX == 0 {
-		o.Target = TargetP1S
+		o.Target, _ = NominalTarget("p1s")
 	}
 	if o.OverhangAngleDeg <= 0 {
 		o.OverhangAngleDeg = 45
@@ -143,16 +124,32 @@ func Fabricability(m *Mesh, opt FabOptions) (*FabReport, error) {
 	bb := m.Bounds()
 	r := &FabReport{Target: opt.Target, Size: bb.Size}
 	t := opt.Target
-	r.FitsBed = bb.Size.X <= t.BedX && bb.Size.Y <= t.BedY && bb.Size.Z <= t.BedZ
-	r.FitsBedRotatedZ = bb.Size.Y <= t.BedX && bb.Size.X <= t.BedY && bb.Size.Z <= t.BedZ
+	direct, rot1 := t.Fits(bb.Size)
+	swapped, rot2 := t.Fits(Vec3{bb.Size.Y, bb.Size.X, bb.Size.Z})
+	r.FitsBed = direct && !rot1
+	r.FitsBedRotatedZ = swapped && !rot2
 	r.MarginMM = Vec3{t.BedX - bb.Size.X, t.BedY - bb.Size.Y, t.BedZ - bb.Size.Z}
+	if t.Source == TargetNominal {
+		r.Warnings = append(r.Warnings, "machine nominale (profils Bambu Studio indisponibles) : volume et zones d'exclusion à confirmer")
+	} else {
+		r.Warnings = append(r.Warnings, t.Notes...)
+	}
 	switch {
 	case r.FitsBed:
 	case r.FitsBedRotatedZ:
 		r.Warnings = append(r.Warnings, "la pièce ne tient que tournée de 90° autour de Z")
 	default:
-		r.Warnings = append(r.Warnings, fmt.Sprintf("la pièce (%.1f × %.1f × %.1f mm) dépasse le volume %s (%.0f × %.0f × %.0f mm) dans cette orientation : réorienter, découper ou changer de machine",
-			bb.Size.X, bb.Size.Y, bb.Size.Z, t.Name, t.BedX, t.BedY, t.BedZ))
+		fw, fh := t.UsableMaxFootprint()
+		r.Warnings = append(r.Warnings, fmt.Sprintf("la pièce (%.1f × %.1f × %.1f mm) dépasse le volume utile %s (%.0f × %.0f × %.0f mm hors zones d'exclusion) dans cette orientation : réorienter, découper ou changer de machine",
+			bb.Size.X, bb.Size.Y, bb.Size.Z, t.Name, fw, fh, t.BedZ))
+	}
+	if len(t.Volumes) > 1 && (r.FitsBed || r.FitsBedRotatedZ) {
+		all1, _ := t.FitsAllNozzles(bb.Size)
+		all2, _ := t.FitsAllNozzles(Vec3{bb.Size.Y, bb.Size.X, bb.Size.Z})
+		if !all1 && !all2 {
+			c, _, _ := t.CommonArea()
+			r.Warnings = append(r.Warnings, fmt.Sprintf("la pièce tient avec une seule buse mais pas dans la zone commune aux %d buses (%.0f × %.0f mm) : pas de multi-matière entre buses", len(t.Volumes), c.W(), c.H()))
+		}
 	}
 
 	tol := opt.WeldTol
@@ -396,7 +393,7 @@ func proposeOrientations(m *Mesh, remap []int, nw int, opt FabOptions) *Orientat
 		}
 		sz := hi.Sub(lo)
 		oc := OrientationCandidate{Label: c.label, Up: c.up, Rotation: R, HeightMM: sz.Z, SizeXMM: sz.X, SizeYMM: sz.Y, Source: c.source}
-		oc.Fits = sz.Z <= t.BedZ && ((sz.X <= t.BedX && sz.Y <= t.BedY) || (sz.Y <= t.BedX && sz.X <= t.BedY))
+		oc.Fits, _ = t.Fits(sz)
 		ov := overhangs(m, remap, nw, c.up, opt.OverhangAngleDeg, false)
 		oc.OverhangMM2, oc.OverhangFrac = ov.AreaMM2, ov.Fraction
 		for i, tr := range m.T {

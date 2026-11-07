@@ -183,6 +183,15 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		})
 		return slInst, slErr
 	}
+	// Profils Bambu Studio pour les cibles machine du catalogue (volumes, buses, exclusions, seuil de surplomb) :
+	// chargés au premier besoin ; indisponibles => repli nominal signalé.
+	cat.SetProfiles(func() *profiles.Store {
+		sl, err := slFactory()
+		if err != nil || sl == nil {
+			return nil
+		}
+		return sl.Profiles()
+	})
 	gs, err := goals.New(goals.Config{
 		Store: st, Blobs: blobs, Queue: q, Registry: reg, WorkRoot: filepath.Join(cfg.DataDir, "work", "goals"),
 		SlicerFactory: slFactory,

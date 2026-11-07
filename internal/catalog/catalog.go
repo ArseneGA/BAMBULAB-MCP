@@ -22,6 +22,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
 
@@ -131,8 +132,9 @@ type Service struct {
 	mu      sync.RWMutex
 	roots   []string // canoniques
 	baseURL string
-	key     []byte    // clé HMAC des URL signées
-	cad     cadHealth // vérification réelle du backend CAO (ping)
+	key     []byte                 // clé HMAC des URL signées
+	cad     cadHealth              // vérification réelle du backend CAO (ping)
+	profFn  func() *profiles.Store // profils Bambu Studio (cibles machine, seuil de surplomb) ; nil = repli nominal
 
 	// testHook est appelé après chaque fichier d'un import (tests d'interruption).
 	testHook func(done int)

@@ -221,9 +221,14 @@ func (s *Service) CreateExperiment(ctx context.Context, in CreateExperimentInput
 		geo.DimsSortedMM = [3]float64{d[0], d[1], d[2]}
 		geo.VolumeMM3 = math.Abs(mesh.Analyze(m, mesh.AnalyzeOptions{}).Volume)
 	}
-	bed := mesh.Target{Name: rb.doc.Machine, BedX: 256, BedY: 256, BedZ: 256, Nozzle: rb.doc.Nozzle}
-	if pv, err := s.variantFor(rb.doc.Machine); err == nil {
-		bed.BedX, bed.BedY, bed.BedZ = pv.BedX, pv.BedY, pv.PrintableZ
+	// Cible lue dans le preset machine (volume, zones d'exclusion, volume par buse) ; repli nominal marqué sinon.
+	bed, terr := s.prof.TargetForMachine(rb.doc.Machine)
+	if terr != nil {
+		bed, _ = mesh.NominalTarget("p1s")
+		bed.Name = rb.doc.Machine
+	}
+	if rb.doc.Nozzle > 0 {
+		bed.Nozzle = rb.doc.Nozzle
 	}
 
 	count := in.Candidates
