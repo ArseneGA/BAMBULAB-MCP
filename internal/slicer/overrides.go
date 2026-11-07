@@ -81,7 +81,10 @@ func classify(s string) valClass {
 // applyOverrides valide et applique les surcharges sur des copies des
 // configurations. machine, process et fils sont modifiés en place (ce sont des
 // clones privés).
-func applyOverrides(machine, process *profiles.Resolved, fils []*profiles.Resolved, ovs []Override) ([]AppliedOverride, error) {
+func applyOverrides(st *profiles.Store, machine, process *profiles.Resolved, fils []*profiles.Resolved, ovs []Override) ([]AppliedOverride, error) {
+	trust := NewTrust(st)
+	model, _ := machine.String("printer_model")
+	lim := trust.Limits(model)
 	var applied []AppliedOverride
 	for i, o := range ovs {
 		key := strings.TrimSpace(o.Key)
@@ -91,6 +94,11 @@ func applyOverrides(machine, process *profiles.Resolved, fils []*profiles.Resolv
 		if protectedKeys[key] {
 			return nil, fmt.Errorf("%w: la clé %q est protégée (identité ou cohérence machine)", ErrOverride, key)
 		}
+		// Liste blanche : toute clé *_gcode et toute clé hors liste sont refusées, avant même de regarder les profils.
+		if err := RejectKey(key); err != nil {
+			return nil, err
+		}
+		spec := specs[key]
 		type holder struct {
 			target string
 			cfgs   []*profiles.Resolved
@@ -127,6 +135,20 @@ func applyOverrides(machine, process *profiles.Resolved, fils []*profiles.Resolv
 			}
 			cands = f
 		}
+		// la clé ne s'applique qu'à la configuration que sa définition désigne
+		{
+			var f []holder
+			for _, c := range cands {
+				if c.target == spec.Target {
+					f = append(f, c)
+				}
+			}
+			cands = f
+		}
+		if len(cands) == 0 && spec.Target == TargetProcess && (o.Target == "" || o.Target == TargetProcess) {
+			// clé valide mais absente du profil résolu (ex. brim_type) : la définition donne son type, on l'ajoute
+			cands = append(cands, holder{TargetProcess, []*profiles.Resolved{process}})
+		}
 		switch len(cands) {
 		case 0:
 			return nil, fmt.Errorf("%w: clé %q inconnue dans les profils résolus", ErrOverride, key)
@@ -140,10 +162,19 @@ func applyOverrides(machine, process *profiles.Resolved, fils []*profiles.Resolv
 		}
 		h := cands[0]
 		for _, cfg := range h.cfgs {
-			old := cfg.Config[key]
+			old, present := cfg.Config[key]
+			if !present {
+				old = ""
+			}
 			nv, err := coerce(key, old, o.Value)
 			if err != nil {
 				return nil, err
+			}
+			if nv, err = enforceValue(spec, nv, boundCtx{machine: machine, fil: filOf(h.target, cfg), lim: lim, cur: maxNum(old)}); err != nil {
+				return nil, err
+			}
+			if !present {
+				old = nil
 			}
 			cfg.Config[key] = nv
 			cfg.Source[key] = "override"
