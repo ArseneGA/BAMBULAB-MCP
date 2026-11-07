@@ -206,10 +206,11 @@ func (c *Camera) serve(conn net.Conn) {
 			return
 		}
 		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		// compté AVANT l'écriture : le client peut lire l'image et interroger Frames() avant que ce goroutine ne reprenne la main.
+		c.frames.Add(1)
 		if _, err := conn.Write(printer.BuildCameraFrame(jpg)); err != nil {
 			return
 		}
-		c.frames.Add(1)
 		n++
 		select {
 		case <-c.done:
