@@ -1,11 +1,9 @@
 package mcpserver
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"image/jpeg"
 	"strings"
 	"time"
 
@@ -32,7 +30,7 @@ type SnapshotOut struct {
 	SizeBytes int       `json:"size_bytes"`
 	Width     int       `json:"width"`
 	Height    int       `json:"height"`
-	PhotoURL  string    `json:"photo_url" jsonschema:"route de l'interface qui sert cette photo (jeton d'API ou navigateur enregistré)"`
+	PhotoURL  string    `json:"photo_url,omitempty" jsonschema:"toujours vide : un instantané à la demande n'est pas conservé (seules les photos de fin et d'alerte le sont)"`
 	Note      string    `json:"note"`
 }
 
@@ -60,14 +58,13 @@ type NotifyOut struct {
 	Events    []string             `json:"known_events"`
 	EnvHint   string               `json:"env_hint"`
 	Note      string               `json:"note"`
-	Deleted   []string             `json:"deleted,omitempty"`
 	RecentLog []notify.LogEntry    `json:"recent_log,omitempty"`
 }
 
-// ConfigureNotificationsInput : canaux à créer/modifier (par nom) ou supprimer. AUCUN secret n'est accepté.
+// ConfigureNotificationsInput : canaux existants à activer, désactiver ou dont choisir les évènements. Ni création, ni
+// suppression, ni destination (hôte, port, utilisateur, destinataires, URL), ni secret : tout cela se fait sur la page humaine.
 type ConfigureNotificationsInput struct {
-	Channels []notify.ChannelInput `json:"channels,omitempty" jsonschema:"canaux à créer ou modifier (par nom) ; sans secret"`
-	Delete   []string              `json:"delete,omitempty" jsonschema:"noms de canaux à supprimer (leurs secrets du coffre aussi)"`
+	Channels []notify.ChannelPatch `json:"channels,omitempty" jsonschema:"canaux EXISTANTS à activer/désactiver ou dont régler les évènements"`
 }
 
 // TestNotificationInput : canal visé (tous les canaux actifs si omis).
@@ -115,12 +112,12 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 		if err != nil {
 			return nil, SnapshotOut{}, err
 		}
-		p, err := c.Camera.Capture(ctx, id, "snapshot", "", 2*time.Second)
+		p, err := c.Camera.Snapshot(ctx, id)
 		if err != nil {
 			return nil, SnapshotOut{}, err
 		}
-		cfg, _ := jpeg.DecodeConfig(bytes.NewReader(p.JPEG))
-		out := SnapshotOut{PrinterID: id, TakenAt: p.TakenAt, SHA256: p.SHA256, SizeBytes: p.Size, Width: cfg.Width, Height: cfg.Height, PhotoURL: p.URL,
+		cfg := struct{ Width, Height int }{p.Width, p.Height}
+		out := SnapshotOut{PrinterID: id, TakenAt: p.TakenAt, SHA256: p.SHA256, SizeBytes: p.Size, Width: cfg.Width, Height: cfg.Height,
 			Note: "Image prise à " + p.TakenAt.Format("15:04:05") + ". Une photo ne prouve pas que le plateau est vide : l'attestation reste humaine (page de confirmation)."}
 		return imageResult(fmt.Sprintf("Instantané de %s pris à %s (%dx%d).", id, p.TakenAt.Format(time.RFC3339), cfg.Width, cfg.Height), p.JPEG), out, nil
 	})
@@ -172,20 +169,14 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 
 	addTool(s, &mcp.Tool{
 		Name: "configure_notifications", Title: "Configurer les notifications",
-		Description: "Crée, modifie ou supprime des canaux de notification (ntfy, webhook signé HMAC, e-mail SMTP en TLS) et leurs évènements (print_completed, print_failed, detection_alert, start_unknown, printer_offline, queue_event). " +
-			"N'accepte AUCUN secret : renvoie setup_url, la page /setup/notifications où l'HUMAIN saisit l'URL ntfy, l'URL et la clé du webhook, le mot de passe SMTP (jamais renvoyés). Sans argument : liste les canaux.",
+		Description: "Liste les canaux de notification (ntfy, webhook signé HMAC, e-mail SMTP en TLS) et permet d'ACTIVER ou DÉSACTIVER un canal existant et de choisir ses évènements (print_completed, print_failed, detection_alert, start_unknown, printer_offline, queue_event). " +
+			"Ne crée, ne supprime et ne redirige aucun canal : l'hôte, le port, l'utilisateur SMTP, les destinataires, les URL et les secrets se saisissent sur setup_url (/setup/notifications), page réservée à l'HUMAIN. Sans argument : liste les canaux (sans secret).",
 		Annotations: idem,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ConfigureNotificationsInput) (*mcp.CallToolResult, NotifyOut, error) {
 		out := NotifyOut{SetupURL: c.Notify.SetupURL(), Events: notify.AllEvents,
 			EnvHint: "Un secret peut aussi venir de la variable BAMBU_NOTIFY_<CANAL>_<CHAMP> (ou …_FILE vers un fichier), ex. " + notify.EnvName("mon canal", "url") + "."}
-		for _, name := range in.Delete {
-			if err := c.Notify.DeleteChannel(ctx, name); err != nil {
-				return nil, NotifyOut{}, err
-			}
-			out.Deleted = append(out.Deleted, name)
-		}
 		for _, ch := range in.Channels {
-			if _, err := c.Notify.UpsertChannel(ctx, ch); err != nil {
+			if _, err := c.Notify.PatchChannel(ctx, ch); err != nil {
 				return nil, NotifyOut{}, err
 			}
 		}
@@ -203,7 +194,7 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 		}
 		out.Note = "Canaux : " + fmt.Sprint(len(chs)) + "."
 		if len(todo) > 0 {
-			out.Note += " À compléter par l'utilisateur sur " + out.SetupURL + " : " + strings.Join(todo, ", ") + " (secrets manquants). Ensuite lance test_notification."
+			out.Note += " À créer ou compléter par l'utilisateur sur " + out.SetupURL + " : " + strings.Join(todo, ", ") + " (secrets manquants). Ensuite lance test_notification."
 		}
 		return textResult(out.Note), out, nil
 	})
@@ -222,7 +213,7 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 		}
 		out := TestNotificationOut{Results: rs}
 		if len(rs) == 0 {
-			out.Note = "Aucun canal actif. Crée-en un avec configure_notifications."
+			out.Note = "Aucun canal actif. L'utilisateur en crée sur la page /setup/notifications."
 		} else {
 			ok := 0
 			for _, r := range rs {

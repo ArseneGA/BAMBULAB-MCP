@@ -49,10 +49,14 @@ func (s *Service) fireJobEnd(j Job) {
 		return
 	}
 	s.hookMu.Lock()
+	if s.hooksClosed { // arrêt en cours : wg.Wait a peut-être déjà commencé, on n'ajoute plus rien
+		s.hookMu.Unlock()
+		return
+	}
 	hs := append([]JobEndHook(nil), s.endHooks...)
+	s.wg.Add(len(hs)) // sous le verrou, avant la fermeture de la porte : jamais après wg.Wait
 	s.hookMu.Unlock()
 	for _, h := range hs {
-		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
 			defer func() {

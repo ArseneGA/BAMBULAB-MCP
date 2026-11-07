@@ -153,17 +153,17 @@ Ce que l'interface ne fait pas : approuver un lancement ou un arrêt (pages serv
 
 
 
-## 9. Caméra, détection d'échec et notifications (chantier D)
+## 8. Caméra, détection d'échec et notifications (chantier D)
 
-**Caméra (P1, P1S, A1).** « Montre-moi le plateau » : `get_camera_snapshot` renvoie une image que Claude voit (flux JPEG de l'imprimante, port 6000, avec le code d'accès déjà enregistré). Le X1, le P2 et le H2 exposent du RTSP : non pris en charge (l'outil le dit). Sur la P1S, activer « LAN liveview » dans les réglages réseau de l'écran. Sur la page Impression, la carte de l'imprimante a un bouton Instantané et un flux en direct (relayé par le serveur : une seule connexion à la caméra, quel que soit le nombre de spectateurs).
+**Caméra (P1, P1S, A1).** « Montre-moi le plateau » : `get_camera_snapshot` renvoie une image que Claude voit (flux JPEG de l'imprimante, port 6000, avec le code d'accès déjà enregistré). Le X1, le P2 et le H2 exposent du RTSP : non pris en charge (l'outil le dit). Sur la P1S, activer « LAN liveview » dans les réglages réseau de l'écran. Sur la page Impression, la carte de l'imprimante a un bouton Instantané et un flux en direct (relayé par le serveur : une seule connexion à la caméra, quel que soit le nombre de spectateurs). **Un instantané à la demande n'est jamais conservé** : l'image est renvoyée puis oubliée ; seules les photos de fin d'impression, d'alerte et de confirmation sont enregistrées. Les instantanés et les ouvertures de flux sont limités en débit par imprimante (erreur 429 au-delà), les images de plus de 4096 x 4096 sont refusées, et les photos d'alerte plus vieilles que `alert_photo_retention_days` (90 jours par défaut, 0 = illimité, réglable avec `configure_failure_detection`) sont supprimées ; les photos de fin restent.
 
 **Photo sur la page de confirmation.** À l'ouverture de `/confirm/{id}`, la page montre une photo du plateau horodatée. Elle aide à vérifier qu'il est vide ; elle ne remplace pas votre case « plateau vide ». Caméra indisponible : la page le dit, sans photo périmée. Cette photo sert aussi d'image de référence à la détection.
 
 **Détection d'échec.** Pendant une impression, un instantané est analysé toutes les 60 s (réglable) par un détecteur local, sans modèle appris : masse de filaments hors de la colonne de la pièce (spaghetti), empreinte apprise qui se vide (pièce décollée), couche qui n'avance plus, erreurs HMS, mouvement brutal de la scène. Score de 0 à 1, chaque signal est expliqué. Au-dessus du seuil (0,6 par défaut) sur 2 analyses consécutives : **alerte** (photo + lien vers la page d'arrêt). **Aucun arrêt automatique** : l'arrêt reste la page humaine `/stop`. `analyze_print_frame` renvoie la dernière image à Claude pour qu'il la juge lui-même ; `configure_failure_detection` règle activation, intervalle, seuil, sensibilité, persistance. Une photo de fin d'impression est rattachée à l'impression (`GET /api/print-jobs/{id}/photos`).
 
-**Notifications.** `configure_notifications` crée des canaux **sans secret** : `ntfy`, `webhook` (JSON signé HMAC-SHA256, en-têtes `X-Bambu-Timestamp` et `X-Bambu-Signature: sha256=hex(HMAC(clé, horodatage + "." + corps))`) et `email` (SMTP, STARTTLS ou TLS implicite, jamais en clair). Les secrets (URL du sujet ntfy, URL et clé du webhook, mot de passe SMTP) se saisissent par **vous** sur `/setup/notifications` (navigateur enregistré) ou par variable d'environnement `BAMBU_NOTIFY_<CANAL>_<CHAMP>` (ou `…_FILE` vers un fichier) ; Claude ne les voit jamais. Évènements : `print_completed`, `print_failed`, `detection_alert`, `start_unknown`, `printer_offline`, `queue_event` (file d'attente). `test_notification` vérifie un canal. Le contenu d'une notification ne contient jamais de secret.
+**Notifications.** Types de canaux : `ntfy`, `webhook` (JSON signé HMAC-SHA256, en-têtes `X-Bambu-Timestamp` et `X-Bambu-Signature: sha256=hex(HMAC(clé, horodatage + "." + corps))`) et `email` (SMTP, STARTTLS ou TLS implicite, jamais en clair). **Vous** créez les canaux et réglez leur destination (hôte, port et utilisateur SMTP, destinataires, URL) ainsi que leurs secrets (URL du sujet ntfy, URL et clé du webhook, mot de passe SMTP) sur la page `/setup/notifications` (navigateur enregistré), ou par variable d'environnement `BAMBU_NOTIFY_<CANAL>_<CHAMP>` (ou `…_FILE` vers un fichier) ; Claude ne les voit jamais. `configure_notifications` ne sert qu'à **lister** les canaux et à **activer ou désactiver** un canal existant et choisir ses évènements : il ne peut ni créer, ni supprimer, ni rediriger un canal. Changer l'hôte, le port ou l'utilisateur SMTP efface le mot de passe enregistré. Par défaut, les adresses locales, privées ou de lien local et les ports SMTP hors 25, 465, 587 et 2525 sont refusés ; `BAMBU_NOTIFY_ALLOW_PRIVATE=1` (côté serveur) les permet pour un ntfy ou un SMTP de votre réseau. Évènements : `print_completed`, `print_failed`, `detection_alert`, `start_unknown`, `printer_offline`, `queue_event` (file d'attente). `test_notification` vérifie un canal. Le contenu d'une notification ne contient jamais de secret.
 
-## 8. Envoyer un fichier à l'Atelier (upload) et importer depuis un lien
+## 9. Envoyer un fichier à l'Atelier (upload) et importer depuis un lien
 
 Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient de générer** (script OpenSCAD/CadQuery, maillage, 3MF modifié) entre au catalogue avec l'outil `upload_file` ; un fichier **sur votre PC** se dépose par glisser-déposer dans la Bibliothèque.
 
@@ -173,7 +173,7 @@ Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient 
 - « Qu'est-ce que je peux envoyer ? » : `get_capabilities` (section `upload`) donne les dossiers d'import du serveur, la taille maximale (globale et par format), la taille de morceau et les domaines autorisés pour les liens.
 - « Importe ce modèle : https://www.printables.com/model/… » : outil `import_from_url`. La provenance (site, URL, auteur) et la licence, quand la page les expose, sont enregistrées. Si le site exige une connexion, Claude reçoit la marche à suivre : télécharger le fichier dans votre navigateur connecté, puis le déposer (ou `upload_file`).
 
-**Ce que le service contrôle** : nom sans chemin (jamais de dossier fourni par le client), taille annoncée et maximale par format, signature (STL binaire/ASCII, OBJ texte, 3MF = zip avec `3D/3dmodel.model`, STEP `ISO-10303-21`), empreinte sha256 **recalculée** (un envoi dont l'empreinte diffère est refusé et rien n'est stocké), puis stockage dans le magasin de blobs. Reprise : `get_upload_status` donne `next_offset` ; un morceau rejoué est ignoré. Une session inactive expire (`BAMBU_UPLOAD_TTL`, 1 h par défaut) et ses octets temporaires sont purgés ; `cancel_upload` l'abandonne.
+**Ce que le service contrôle** : nom sans chemin (jamais de dossier fourni par le client), taille annoncée et maximale par format, signature (STL binaire/ASCII, OBJ texte, 3MF = zip avec `3D/3dmodel.model`, STEP `ISO-10303-21`), empreinte sha256 **recalculée** (un envoi dont l'empreinte diffère est refusé et rien n'est stocké), puis stockage dans le magasin de blobs. Reprise : `get_upload_status` donne `next_offset` ; un morceau rejoué est ignoré. Une session inactive expire (`BAMBU_UPLOAD_TTL`, 1 h par défaut), une session ne dépasse jamais sa durée de vie absolue (`BAMBU_UPLOAD_MAX_LIFETIME`, 6 h par défaut) et le total des octets annoncés par les envois en cours est plafonné (`BAMBU_UPLOAD_INFLIGHT_MB`, 2 048 Mio par défaut) ; les octets temporaires sont purgés ; `cancel_upload` l'abandonne.
 
 **Glisser-déposer** : dans la Bibliothèque, déposez des fichiers n'importe où sur la page ou cliquez « Envoyer des fichiers » : collection, étiquettes et licence optionnelles, barre de progression par fichier, résultat (ajouté, nouvelle version, doublon) avec lien vers la fiche. Le même dialogue propose « Depuis un lien ».
 
@@ -181,7 +181,7 @@ Le service ne lit pas le disque de l'utilisateur. Un fichier que **Claude vient 
 
 ---
 
-## 9. Bobines, AMS, couleurs et file d'attente
+## 10. Bobines, AMS, couleurs et file d'attente
 
 Outils : `list_spools`, `update_spool`, `get_ams_state`, `check_filament_for_print`, `set_filament_margin`, `plan_colors`, `queue_print`, `list_print_queue`, `reorder_queue`, `remove_from_queue`. Écran web : **Bobines et file** (onglets Bobines et AMS, Multicolore, File d'attente).
 
@@ -238,7 +238,7 @@ Le simulateur et les tests suivent le format décrit par la communauté (`docs/r
 
 ---
 
-## 10. Coût, journal des impressions, tableau de bord, finition
+## 11. Coût, journal des impressions, tableau de bord, finition
 
 Tout est disponible dans Claude (outils) et dans l'interface web (écran **Tableau de bord**). Aucun de ces outils ne lance ni n'arrête d'impression.
 
@@ -249,11 +249,11 @@ Tout est disponible dans Claude (outils) et dans l'interface web (écran **Table
 
 Le coût est la somme de trois lignes :
 
-- **Filament** : masse de chaque emplacement × prix du kg. Le prix est, dans l'ordre : celui que vous donnez pour cet appel, celui de la bobine (`spool_per_kg`, clé = libellé de la bobine), celui de la famille de matière (PLA, PETG, ABS, ASA, TPU, PC, PA, PA-CF…), sinon une valeur par défaut **indicative**.
+- **Filament** : masse de chaque emplacement × prix du kg. Le prix est, dans l'ordre : celui que vous donnez pour cet appel, le **prix réel de la bobine chargée** dans l'emplacement (inventaire des bobines, prix au kg saisi avec la bobine ; la réponse l'indique : « bobine de l'inventaire »), celui du réglage de la bobine (`spool_per_kg`, clé = libellé de la bobine), celui de la famille de matière (PLA, PETG, ABS, ASA, TPU, PC, PA, PA-CF…), sinon une valeur par défaut **indicative**.
 - **Électricité** : (puissance de chauffe × durée de chauffe + puissance d'impression × durée restante) × prix du kWh. La puissance dépend du modèle d'imprimante (P1S, P1P, X1C, X1E, A1, A1 mini, H2D, H2S, P2S) et de la matière (facteur plus fort pour ABS, ASA, PC, PA : plateau et enceinte plus chauds ; chauffe plus longue). **Ces puissances sont des ordres de grandeur non mesurés** : remplacez-les par vos relevés de prise mesurante (`power_overrides`).
 - **Usure** : heures machine × amortissement de la machine + usure de la buse (réglages, **0 par défaut**).
 
-Pour une impression terminée, la réponse contient aussi le **coût réel estimé** : durée observée par le service (début et fin de l'impression), masse déclarée par vous (pesée) ou, à défaut, masse prévue (au prorata de l'avancement si l'impression a été interrompue).
+Pour une impression terminée, la réponse contient aussi le **coût réel estimé** : durée observée par le service (début et fin de l'impression), masse déclarée par vous (pesée) ou, à défaut, masse réellement décomptée dans l'inventaire des bobines, sinon masse prévue (au prorata de l'avancement si l'impression a été interrompue).
 
 Réglez les prix une fois :
 
@@ -265,7 +265,7 @@ Réglez les prix une fois :
 
 ### Le journal des impressions
 
-Chaque impression terminée, échouée ou annulée a une **fiche** (créée à la demande, la première fois que vous ouvrez le journal ou que Claude le lit). Elle garde les réglages effectifs (profil, buse, surcharges, orientation), la durée et la masse estimées et réelles, le coût, des photos, une note de 1 à 5, un commentaire et des défauts à cocher (gauchissement, fils, couches visibles, décollement de couches, adhérence, dimensions, patte d'éléphant, sous/sur-extrusion, boutons, supports, surplombs, décalage de couches, surface, autre).
+Chaque impression terminée, échouée ou annulée a une **fiche** (créée à la demande, la première fois que vous ouvrez le journal ou que Claude le lit). Elle garde les réglages effectifs (profil, buse, surcharges, orientation), la durée et la masse estimées et réelles, le coût, des photos (les vôtres, et celles de la caméra rattachées à l'impression : photo de fin et alertes, lues dans la caméra sans être copiées dans la fiche ; une photo d'alerte purgée disparaît aussi du journal), une note de 1 à 5, un commentaire et des défauts à cocher (gauchissement, fils, couches visibles, décollement de couches, adhérence, dimensions, patte d'éléphant, sous/sur-extrusion, boutons, supports, surplombs, décalage de couches, surface, autre).
 
 > « Note l'impression 3 : 4 sur 5, un peu de fils, 52 g pesés. » → `update_print_log`.
 > « Montre le journal des impressions en PETG ratées. » → `list_print_log`.
@@ -296,7 +296,7 @@ Réponse : des **étapes ordonnées** (préparation, ponçage avec les grains, a
 
 Honnêteté : le PETG et le polycarbonate imprimés en FDM restent **translucides**, pas transparents ; le PLA ne se lisse pas à l'acétone.
 
-## 11. Gabarits paramétriques (bibliothèque extensible)
+## 12. Gabarits paramétriques (bibliothèque extensible)
 
 La bibliothèque propose des **pièces prêtes à paramétrer** : chacune a un schéma de paramètres typé (unité, bornes, défaut), une description, une version, une vignette et les calculs d'ingénierie associés. Les paramètres « auto » (jeux d'ajustement, diamètres de trous, trous d'inserts) sont **calculés par le moteur d'ingénierie**, avec la **calibration de votre machine** quand elle existe (sinon valeurs génériques signalées comme telles).
 
@@ -323,7 +323,7 @@ La bibliothèque propose des **pièces prêtes à paramétrer** : chacune a un s
 
 Chaque appel renvoie `auto` (paramètres calculés : valeur nominale, valeur utilisée, niveau de confiance, origine), `calcs` (calculs détaillés), `calibration` (appliquée ou non) et `warnings`. Les gabarits sont **versionnés** : la version du gabarit et les paramètres exacts sont conservés avec chaque version de modèle. Interface web : écran **Gabarits** (formulaire généré depuis le schéma, vignettes, résultat détaillé, enregistrement en variante).
 
-## 12. Calibration d'une machine (pièces de test et mesures)
+## 13. Calibration d'une machine (pièces de test et mesures)
 
 Les valeurs génériques (jeu glissant 0,25 mm, trou −0,15 mm...) sont des ordres de grandeur. Pour un couple **imprimante + buse + matériau (+ bobine)** précis, on imprime des pièces de calibration et on **mesure** :
 

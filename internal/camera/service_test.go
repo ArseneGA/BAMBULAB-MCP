@@ -130,11 +130,11 @@ func newRig(t *testing.T, model string, mut func(*Config)) *rig {
 func TestCaptureStoresAPhotoAndOnlyRegisteredBlobsAreServed(t *testing.T) {
 	r := newRig(t, "p1s", nil)
 	ctx := context.Background()
-	p, err := r.svc.Capture(ctx, "pr_1", "snapshot", "", time.Second)
+	p, err := r.svc.Capture(ctx, "pr_1", "confirm", "", time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := jpeg.Decode(bytes.NewReader(p.JPEG)); err != nil || p.Kind != "snapshot" || !strings.HasPrefix(p.URL, "/api/camera/photos/") {
+	if _, err := jpeg.Decode(bytes.NewReader(p.JPEG)); err != nil || p.Kind != "confirm" || !strings.HasPrefix(p.URL, "/api/camera/photos/") {
 		t.Fatalf("photo : %+v %v", p, err)
 	}
 	b, err := r.svc.OpenPhoto(ctx, p.SHA256)

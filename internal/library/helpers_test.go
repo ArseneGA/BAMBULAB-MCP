@@ -60,6 +60,7 @@ type fakeCatalog struct {
 	models      map[string]*contracts.Model
 	versions    map[string][]contracts.ModelVersion
 	failBuild   error
+	listGate    chan struct{} // si non nil, library_list attend sa fermeture (test du chargement hors verrou)
 }
 
 func newFakeCatalog(t *testing.T, st *store.Store) *fakeCatalog {
@@ -99,6 +100,9 @@ func (f *fakeCatalog) RunWorker(_ context.Context, cmd string, req map[string]an
 	f.mu.Unlock()
 	switch cmd {
 	case "library_list":
+		if f.listGate != nil {
+			<-f.listGate
+		}
 		return json.RawMessage(fakeSpecs), nil
 	case "library_thumbnail":
 		return json.RawMessage(`{"svg":"<svg xmlns=\"http://www.w3.org/2000/svg\"><polygon points=\"0,0 1,0 1,1\"/></svg>"}`), nil

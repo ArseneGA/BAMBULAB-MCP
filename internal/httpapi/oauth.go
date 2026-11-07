@@ -59,12 +59,13 @@ var oauthTpl = template.Must(template.New("oauth").Parse(`{{define "head"}}<!doc
 <style>` + humanauth.Style + `</style></head><body><main><h1>{{.Title}}</h1>{{end}}
 {{define "foot"}}</main></body></html>{{end}}
 {{define "gate"}}{{template "head" .}}
-<p><strong>{{.Client}}</strong> demande l'accès à ton atelier Bambu Lab (outils MCP de bambud).</p>
+<p>Une application se présentant sous le nom « <strong>{{.Client}}</strong> » (nom déclaré par le client, non vérifié) demande l'accès à ton atelier Bambu Lab (outils MCP de bambud).</p>
+<p>Demande reçue à {{.At}} depuis l'adresse <code>{{.IP}}</code>, retour vers <code>{{.Host}}</code>. Si tu n'as rien lancé à l'instant, ferme cette page.</p>
 <p>Pour des raisons de sécurité, l'autorisation se donne depuis un <strong>navigateur enregistré</strong> (<code>bambud enroll</code>).</p>
 <p><a href="/oauth/consent/{{.ID}}"><button type="button">Continuer</button></a></p>{{template "foot"}}{{end}}
 {{define "consent"}}{{template "head" .}}
-<p><strong>{{.Client}}</strong> demande à se connecter à ton atelier Bambu Lab.</p>
-<dl><dt>Application</dt><dd>{{.Client}}</dd><dt>Retour vers</dt><dd><code>{{.Host}}</code></dd><dt>Ressource</dt><dd><code>{{.Resource}}</code></dd><dt>Droit</dt><dd>outils MCP de l'atelier (fichiers, devis, aperçus, état des imprimantes)</dd></dl>
+<p>Une application demande à se connecter à ton atelier Bambu Lab. Ne l'autorise que si TU viens de lancer cette connexion, depuis ce navigateur.</p>
+<dl><dt>Nom déclaré par le client (non vérifié)</dt><dd>{{.Client}}</dd><dt>Retour vers</dt><dd><code>{{.Host}}</code></dd><dt>Demande faite depuis l'adresse</dt><dd><code>{{.IP}}</code></dd><dt>Heure de la demande</dt><dd>{{.At}}</dd><dt>Ressource</dt><dd><code>{{.Resource}}</code></dd><dt>Droit</dt><dd>outils MCP de l'atelier (fichiers, devis, aperçus, état des imprimantes)</dd></dl>
 {{if .Local}}<p class="warn">Cette application revient sur ton propre ordinateur (boucle locale) : tout programme local pourrait se faire passer pour elle. N'autorise que si tu viens de la lancer.</p>{{end}}
 <p class="ok">Cette autorisation ne permet <strong>jamais</strong> de lancer ou d'arrêter une impression : ces gestes restent sur les pages /confirm et /stop, dans un navigateur enregistré. Tu peux la révoquer à tout moment : <code>bambud oauth --revoke</code>.</p>
 <form method="post" action="/oauth/consent/{{.ID}}"><input type="hidden" name="nonce" value="{{.Nonce}}">
@@ -88,7 +89,7 @@ func oauthErr(w http.ResponseWriter, e *oauth.Error) {
 
 // registerOAuth monte le serveur d'autorisation et branche la vérification des jetons sur la garde de /mcp.
 func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, opts *Options) *oauth.Service {
-	svc := oauth.New(c.Store, oauth.Options{ExtraRedirects: opts.OAuthRedirects})
+	svc := oauth.New(c.Store, oauth.Options{ExtraRedirects: opts.OAuthRedirects, Log: c.Log})
 	resourceOf := func(r *http.Request) string { return opts.baseURL(r) + "/mcp" }
 
 	opts.extraBearer = func(r *http.Request) bool {
@@ -132,7 +133,7 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 			oauthErr(w, &oauth.Error{Status: 400, Code: "invalid_client_metadata", Desc: "JSON attendu (≤ 16 Kio)"})
 			return
 		}
-		out, e := svc.Register(r.Context(), raw)
+		out, e := svc.Register(r.Context(), raw, opts.clientAddr(r))
 		if e != nil {
 			oauthErr(w, e)
 			return
@@ -142,8 +143,10 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 
 	mux.HandleFunc("GET /oauth/authorize", func(w http.ResponseWriter, r *http.Request) {
 		b := opts.baseURL(r)
-		res := svc.Authorize(r.Context(), r.URL.Query(), b+"/mcp")
+		res := svc.Authorize(r.Context(), r.URL.Query(), b+"/mcp", opts.clientAddr(r))
 		switch {
+		case res.Limited:
+			oauthPage(w, http.StatusTooManyRequests, "msg", map[string]any{"Title": "Trop de demandes", "Msg": res.Fatal})
 		case res.Fatal != "":
 			oauthPage(w, http.StatusBadRequest, "msg", map[string]any{"Title": "Demande invalide", "Msg": res.Fatal})
 		case res.RedirectError != nil:
@@ -153,9 +156,17 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 			// Claude (autre site). On passe par une page intermédiaire dont le lien est, lui, une navigation interne.
 			name := res.Pending.ClientName
 			if name == "" {
-				name = "Une application"
+				name = "sans nom"
 			}
-			oauthPage(w, http.StatusOK, "gate", map[string]any{"Title": "Autoriser une application ?", "Client": name, "ID": res.Pending.ID})
+			// Liaison au navigateur initiateur : seul ce navigateur pourra consentir (cookie lié à cette demande).
+			http.SetCookie(w, &http.Cookie{Name: "obind", Value: res.Bind, Path: "/oauth/consent/" + res.Pending.ID, MaxAge: int(oauth.PendingTTL.Seconds()),
+				HttpOnly: true, Secure: opts.requestHTTPS(r), SameSite: http.SameSiteStrictMode})
+			host := ""
+			if u, err := url.Parse(res.Pending.RedirectURI); err == nil {
+				host = u.Host
+			}
+			oauthPage(w, http.StatusOK, "gate", map[string]any{"Title": "Autoriser une application ?", "Client": name, "ID": res.Pending.ID,
+				"IP": res.Pending.RemoteIP, "At": res.Pending.RequestedAt.Local().Format("15:04:05"), "Host": host})
 		}
 	})
 
@@ -165,17 +176,21 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 			oauthPage(w, http.StatusNotFound, "msg", map[string]any{"Title": "Demande expirée", "Msg": "Cette demande a expiré ou a déjà été traitée. Relance la connexion depuis Claude."})
 			return
 		}
+		if ck, err := r.Cookie("obind"); err != nil || !p.Bound(ck.Value) {
+			oauthPage(w, http.StatusForbidden, "msg", map[string]any{"Title": "Demande d'un autre navigateur", "Msg": "Cette demande n'a pas été ouverte dans ce navigateur. Si elle est de toi, relance la connexion depuis Claude puis clique sur « Continuer » dans le navigateur enregistré ; sinon, ne fais rien."})
+			return
+		}
 		name := p.ClientName
 		if name == "" {
-			name = "Une application"
+			name = "(sans nom)"
 		}
 		host, local := "", false
 		if u, err := url.Parse(p.RedirectURI); err == nil {
 			host = u.Host
 			local = u.Scheme == "http"
 		}
-		oauthPage(w, http.StatusOK, "consent", map[string]any{"Title": "Autoriser " + name + " ?", "Client": name, "Host": host, "Local": local,
-			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce})
+		oauthPage(w, http.StatusOK, "consent", map[string]any{"Title": "Autoriser cette application ?", "Client": name, "Host": host, "Local": local,
+			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce, "IP": p.RemoteIP, "At": p.RequestedAt.Local().Format("15:04:05")})
 	})))
 	mux.Handle("POST /oauth/consent/{id}", human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -188,7 +203,11 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 			oauthPage(w, http.StatusForbidden, "msg", map[string]any{"Title": "Navigateur non enregistré", "Msg": "Enregistre ce navigateur avant d'autoriser."})
 			return
 		}
-		redir, err := svc.Decide(r.Context(), r.PathValue("id"), r.PostFormValue("nonce"), opts.baseURL(r), sess.ID, r.PostFormValue("decision") == "allow")
+		bind := ""
+		if ck, e := r.Cookie("obind"); e == nil {
+			bind = ck.Value
+		}
+		redir, err := svc.Decide(r.Context(), r.PathValue("id"), r.PostFormValue("nonce"), opts.baseURL(r), sess.ID, bind, r.PostFormValue("decision") == "allow")
 		if err != nil {
 			oauthPage(w, http.StatusBadRequest, "msg", map[string]any{"Title": "Demande refusée", "Msg": err.Error()})
 			return

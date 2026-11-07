@@ -1,0 +1,16 @@
+{
+  "template": "enclosure",
+  "template_version": "1.0.0",
+  "volume_mm3": 43758.824,
+  "area_mm2": 34810.962,
+  "bbox_size_mm": [
+    159.602,
+    54.802,
+    30.411
+  ],
+  "parts": 2,
+  "solids": 2,
+  "components": 2,
+  "watertight": true,
+  "fingerprint": "fdc1659bdb353aa7"
+}
