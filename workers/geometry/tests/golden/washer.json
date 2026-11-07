@@ -1,0 +1,16 @@
+{
+  "template": "washer",
+  "template_version": "1.0.0",
+  "volume_mm3": 434.331,
+  "area_mm2": 576.777,
+  "bbox_size_mm": [
+    18.011,
+    18.006,
+    2.008
+  ],
+  "parts": 1,
+  "solids": 1,
+  "components": 1,
+  "watertight": true,
+  "fingerprint": "e3a055da0f21c673"
+}
