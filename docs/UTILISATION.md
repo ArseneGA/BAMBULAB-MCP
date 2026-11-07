@@ -376,6 +376,45 @@ Toutes ces séries sont des **petites pièces, une par valeur**, avec — quand 
 
 **Limites** : le facteur de retrait est calculé et affiché mais pas appliqué automatiquement aux gabarits (le trou et l'arbre rétrécissent ensemble ; une mise à l'échelle globale fausserait les compensations) — l'appliquer au besoin avec `modify_geometry` (échelle) et préférer les décalages de contour/trou issus de `shrink_sizes`. Avec seulement deux tailles on ne vérifie pas la linéarité (une troisième taille le permet). La tour de température demande d'insérer les changements `M104` à la main dans Bambu Studio (hauteurs fournies) ; la série de pièces est plus simple et se découpe avec les profils créés. Les valeurs retenues viennent de lectures humaines (pied à coulisse, œil) : elles valent pour cette bobine, cette buse et cette imprimante. Les filetages M3/M4 sont limités par la résolution FDM (avertissement) ; la poignée et le support mural demandent un essai de charge réel.
 
+## 14. Exporter un projet (archive à partager)
+
+Pour donner ou publier un projet (une collection, ou quelques modèles) : « Exporte le projet *Support téléphone* avec la licence CC BY-NC 4.0, quantité 2 pour la base, et joins mes photos » (`export_project`, puis `get_project_export` pour redemander le lien). Sur le web : **Bibliothèque → choisir une collection → « Exporter le projet »** (formulaire : titre, description, licence, notice d'assemblage, quincaillerie, options). Rien n'est publié : vous obtenez un **zip** à télécharger.
+
+**Contenu de l'archive**
+
+| Entrée | Rôle |
+|---|---|
+| `README.md` | en français : description, tableau des pièces (quantités, matière, dimensions), réglages par pièce, temps / masse / coût **estimés** si une découpe existe, notice d'assemblage et quincaillerie (champs libres), licence (défaut « non précisée »), photos |
+| `files/<pièce>/…` | fichiers sources **d'origine** (STL, STEP, 3MF, OBJ) de la dernière version (ou de la version choisie par pièce), copiés tels quels ; leur sha256 est recalculé à l'écriture et comparé au catalogue |
+| `sources/<pièce>/parametrique.json` | pour une pièce générée par un gabarit : gabarit, version, paramètres demandés et résolus, calculs, calibration utilisée |
+| `profiles/<pièce>.json` | réglages de découpe effectifs : **uniquement les clés surchargées** (révision de profil appliquée, lignée comprise) et la référence aux préréglages officiels de Bambu Studio ; **jamais de G-code** |
+| `printer-specific/<pièce>/….gcode.3mf` | **en option, désactivé par défaut** : seulement les archives découpées *validées* ; spécifiques à une imprimante, une buse et des réglages |
+| `images/<pièce>/photo-NN.jpg` | en option : photos de fin d'impression du journal (JPEG sans EXIF ni GPS ; photos d'alerte d'échec exclues) |
+| `manifest.json` | versions, sha256 et taille de chaque fichier, provenance (source, auteur, URL), date, avertissements, éléments laissés de côté |
+
+La structure (`files/`, `images/`, `README.md`) correspond à ce que demandent les dépôts MakerWorld et Printables.
+
+**Garanties**
+
+- **Aucun secret ni donnée d'imprimante** : pas d'adresse, de numéro de série ni de code d'accès, et **aucun chemin du serveur ou de votre disque** (le chemin d'origine d'un import n'est jamais exporté). Les textes générés (README, JSON) passent par un filtre qui remplace ces valeurs, y compris si vous les avez collées dans une description. Un fichier `.3mf` (d'origine ou découpé) qui contient l'adresse ou le numéro de série d'une imprimante déclarée, ou un chemin du serveur, **n'est pas joint** : il est signalé dans `manifest.json` et dans la réponse.
+- **Streaming et taille bornée** : l'archive est construite par un travail asynchrone, fichier par fichier, sans jamais charger un fichier entier en mémoire. Limite par défaut 1 Gio décompressé (réglable jusqu'à 4 Gio avec `max_bytes`), 200 pièces au plus ; un dépassement est refusé **avant** d'écrire quoi que ce soit.
+- **Téléchargement par lien signé à durée limitée** : `/api/exports/<id>.zip?exp=…&sig=…` valable **10 minutes**, lisible sans jeton (comme les aperçus 3D) mais impossible à modifier ou à réutiliser pour un autre export. Redemandez un lien à tout moment (`get_project_export`, ou le bouton). L'archive reste **24 h** sur le serveur (20 archives au plus), puis expire ; le dossier `exports/` du dossier de données n'est pas sauvegardé.
+- Si une pièce vient d'un site tiers (provenance avec URL), un avertissement rappelle de vérifier sa licence avant de la republier.
+
+**Ce qu'il reste à faire à la main pour publier** (aucune publication automatique, volontairement) :
+
+1. Relire et compléter le `README.md` (description, photos, notice d'assemblage).
+2. Choisir la licence si elle est « non précisée » ; vérifier le droit de republier les pièces issues d'ailleurs.
+3. Créer la page du projet vous-même sur MakerWorld ou Printables, puis y déposer le contenu de `files/`, les images de `images/` et le texte du README.
+4. Renseigner dans le formulaire du site la catégorie, les étiquettes, l'image de couverture et les réglages conseillés (les `profiles/*.json` listent seulement ce qui diffère des préréglages officiels).
+5. Pour MakerWorld, joindre de préférence un 3MF de projet enregistré depuis Bambu Studio (plateau et réglages inclus) : l'archive ne le remplace pas.
+6. Ne publier les `.gcode.3mf` que s'ils sont voulus (propres à une imprimante).
+7. Vérifier une dernière fois les photos (arrière-plan, informations personnelles).
+
+**Limites** : les fichiers dont l'original n'est copié que sur Windows ne sont pas exportables (signalés, laissés de côté) ; les estimations de temps, de masse et de coût viennent de la dernière découpe enregistrée de la pièce (sans découpe, ces lignes sont absentes) et ne sont pas une facture ; les photos PNG et WebP sont jointes telles quelles (seul l'EXIF des JPEG est retiré).
+
+---
+
 ## 13. Clés de profil que Claude peut modifier (surcharges)
 
 `modify_slicing_profile`, les variantes (`apply_variant`, `create_experiment`), la calibration et `execute_headless_slice` n'acceptent que les clés ci-dessous, avec leurs bornes. **Tout paramètre de G-code (`*_gcode`, `post_process`) et toute clé hors liste sont refusés** : le G-code de démarrage et de fin reste celui du profil officiel de Bambu Studio. Une valeur hors bornes est refusée avec la borne et sa source (« `nozzle_temperature` = 280 hors bornes [190 ; 240] (nozzle_temperature_range_high du filament) »). La liste complète et ses bornes vivent dans `slicer.OverridableKeys()`.
