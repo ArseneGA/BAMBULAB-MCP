@@ -79,7 +79,7 @@ func degenerate() *Mesh {
 	m := dirtyCube()
 	n := len(m.V)
 	m.V = append(m.V, Vec3{1, 1, 1}, Vec3{2, 2, 2}, Vec3{3, 3, 3}) // colinéaires : aire nulle
-	m.T = append(m.T, Tri{n, n + 1, n + 2}, Tri{0, 0, 1}) // + sommet répété
+	m.T = append(m.T, Tri{n, n + 1, n + 2}, Tri{0, 0, 1})          // + sommet répété
 	return m
 }
 
@@ -198,7 +198,13 @@ func TestDirtyDuplicatedTriangleIsFlaggedNonManifold(t *testing.T) {
 }
 
 func TestDirtyDuplicatedTriangleDedicatedReport(t *testing.T) {
-	t.Skip("à implémenter : compter et signaler les triangles dupliqués (champ DuplicateTriangles + avertissement dédié) au lieu de les confondre avec du non-manifold")
+	r := Analyze(duplicatedTriangle(), AnalyzeOptions{})
+	if r.DuplicateTriangles != 1 || !hasWarning(r, "dupliqué") {
+		t.Fatalf("triangle dupliqué : %d %v", r.DuplicateTriangles, r.Warnings)
+	}
+	if c := Analyze(dirtyCube(), AnalyzeOptions{}); c.DuplicateTriangles != 0 {
+		t.Fatalf("cube sain : %d dupliqués", c.DuplicateTriangles)
+	}
 }
 
 func TestDirtyUnweldedSoup(t *testing.T) {
@@ -222,7 +228,14 @@ func TestDirtyFloatingComponent(t *testing.T) {
 }
 
 func TestDirtyFloatingFragmentSpecificWarning(t *testing.T) {
-	t.Skip("à implémenter : distinguer un éclat flottant (volume négligeable devant la pièce principale, ou non posé sur le plateau) d'une pièce disjointe légitime, avec un avertissement dédié dans Analyze/Fabricability")
+	r := Analyze(floating(), AnalyzeOptions{})
+	if r.FloatingFragments != 1 || !hasWarning(r, "flottant") {
+		t.Fatalf("éclat flottant : %d %v", r.FloatingFragments, r.Warnings)
+	}
+	// une pièce disjointe légitime (deux cubes comparables) n'est pas un éclat
+	if r2 := Analyze(TwoCubes(10, 5), AnalyzeOptions{}); r2.FloatingFragments != 0 || hasWarning(r2, "flottant") {
+		t.Fatalf("deux cubes : %d %v", r2.FloatingFragments, r2.Warnings)
+	}
 }
 
 func TestDirtySelfIntersectionIsOnlySeenAsTwoComponents(t *testing.T) {
@@ -233,7 +246,25 @@ func TestDirtySelfIntersectionIsOnlySeenAsTwoComponents(t *testing.T) {
 }
 
 func TestDirtySelfIntersectionDetected(t *testing.T) {
-	t.Skip("à implémenter : détection d'auto-intersections (paires de triangles qui se coupent, via le BVH de bvh.go) avec compteur SelfIntersections et avertissement ; le volume de deux cubes interpénétrés est aujourd'hui compté deux fois (2000 au lieu de 1875)")
+	r := Analyze(selfIntersecting(), AnalyzeOptions{})
+	if !r.SelfIntersectionsChecked || !r.SelfIntersectionsComplete || r.SelfIntersectingPairs == 0 || r.SelfIntersectionRegionCount != 1 {
+		t.Fatalf("auto-intersection non détectée : %+v", r)
+	}
+	if !hasWarning(r, "interpénètrent") {
+		t.Fatalf("avertissement manquant : %v", r.Warnings)
+	}
+	fr, err := Fabricability(selfIntersecting(), FabOptions{SkipOrientation: true})
+	if err != nil || fr.SelfIntersections == nil || fr.SelfIntersections.Pairs != r.SelfIntersectingPairs {
+		t.Fatalf("fabricabilité : %+v %v", fr.SelfIntersections, err)
+	}
+	reg := fr.SelfIntersections.Regions[0]
+	if reg.Triangles < 4 || reg.BBox.Min.X > 5 || reg.BBox.Max.X < 10 || reg.BBox.Max.X > 15.1 {
+		t.Errorf("boîte de région : %+v", reg.BBox)
+	}
+	// un cube sain n'a aucune auto-intersection (voisins à arête commune ignorés)
+	if c := Analyze(dirtyCube(), AnalyzeOptions{}); !c.SelfIntersectionsChecked || c.SelfIntersectingPairs != 0 {
+		t.Fatalf("cube sain : %+v", c)
+	}
 }
 
 func TestDirtyNaNRejected(t *testing.T) {

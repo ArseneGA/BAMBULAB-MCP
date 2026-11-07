@@ -96,7 +96,7 @@ func TestThinWalls(t *testing.T) {
 	}
 	r, _ = Fabricability(Cube(10), FabOptions{SkipOrientation: true})
 	near(t, "cube médiane", r.Thin.MedianMM, 10, 1e-6)
-	if r.Thin.ThinCount != 0 || r.Thin.Confidence != "medium" { // 12 échantillons : confiance moyenne
+	if r.Thin.ThinCount != 0 || r.Thin.Confidence != "high" { // 2000 échantillons au prorata de l'aire, rayons concordants : confiance haute
 		t.Errorf("cube : %+v", r.Thin)
 	}
 	// Cube troué : paroi de 3 mm sur les faces du trou.

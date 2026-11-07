@@ -172,4 +172,3 @@ func TShape(stem, stemH, bar, barT, depth float64) *Mesh {
 	}
 	return Extrude(prof, depth).Transform(RotateX90).Transform(Translation(0, depth, 0))
 }
-

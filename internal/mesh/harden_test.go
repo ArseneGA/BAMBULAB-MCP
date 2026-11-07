@@ -191,7 +191,7 @@ func TestBVHBoundedLeavesWithIdenticalCentroids(t *testing.T) {
 	}
 	b := buildBVH(m)
 	for i, n := range b.nodes {
-		if n.left < 0 && n.n > 4 {
+		if n.left < 0 && n.n > bvhLeaf {
 			t.Fatalf("feuille %d de %d triangles", i, n.n)
 		}
 	}
