@@ -38,20 +38,18 @@ func permanent(f string, a ...any) error { return &permanentError{fmt.Errorf(f, 
 var urlInText = regexp.MustCompile(`https?://\S+`)
 
 // scrubErr retire des messages d'erreur toute URL (l'URL d'un sujet ntfy ou d'un webhook est un secret).
+// Toute erreur réseau est réduite à une phrase générique, et toute adresse restante est masquée : le modèle ne doit pas
+// pouvoir cartographier le réseau interne par les messages d'erreur.
 func scrubErr(err error) string {
 	var ue *url.Error
 	if errors.As(err, &ue) {
 		err = ue.Err
 	}
-	return urlInText.ReplaceAllString(err.Error(), "<url>")
-}
-
-func checkURL(raw string) error {
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
-		return invalidf("URL invalide : http(s)://hôte/chemin attendu, sans identifiants intégrés")
+	if m := netErrMessage(err); m != "" {
+		return m
 	}
-	return nil
+	m := urlInText.ReplaceAllString(err.Error(), "<url>")
+	return addrInText.ReplaceAllString(m, "<adresse>")
 }
 
 func (s *Service) mustSecret(ctx context.Context, ch ChannelView, field string) (string, error) {
@@ -101,8 +99,8 @@ func (s *Service) sendNtfy(ctx context.Context, ch ChannelView, e Event) error {
 	if err != nil {
 		return err
 	}
-	if err := checkURL(u); err != nil {
-		return permanent("URL du sujet invalide")
+	if err := s.checkURL(u); err != nil {
+		return permanent("URL du sujet invalide ou non autorisée")
 	}
 	tok, _ := s.mustSecret(ctx, ch, "token")
 	var req *http.Request
@@ -180,8 +178,8 @@ func (s *Service) sendWebhook(ctx context.Context, ch ChannelView, e Event) erro
 	if err != nil {
 		return err
 	}
-	if err := checkURL(u); err != nil {
-		return permanent("URL du webhook invalide")
+	if err := s.checkURL(u); err != nil {
+		return permanent("URL du webhook invalide ou non autorisée")
 	}
 	key, err := s.mustSecret(ctx, ch, "hmac_key")
 	if err != nil {
@@ -231,7 +229,10 @@ func (s *Service) sendEmail(ctx context.Context, ch ChannelView, e Event) error 
 		tcfg = s.d.SMTPTLS.Clone()
 	}
 	tcfg.ServerName = c.SMTPHost
-	dialer := &net.Dialer{Timeout: 15 * time.Second}
+	if err := s.checkSMTPDestination(c.SMTPHost, c.SMTPPort); err != nil {
+		return permanent("destination SMTP non autorisée")
+	}
+	dialer := s.dialer(15 * time.Second)
 	var conn net.Conn
 	if c.SMTPTLS == "implicit" {
 		conn, err = (&tls.Dialer{NetDialer: dialer, Config: tcfg}).DialContext(ctx, "tcp", addr)
@@ -239,13 +240,14 @@ func (s *Service) sendEmail(ctx context.Context, ch ChannelView, e Event) error 
 		conn, err = dialer.DialContext(ctx, "tcp", addr)
 	}
 	if err != nil {
-		return fmt.Errorf("connexion SMTP : %w", err)
+		s.log.Debug("connexion SMTP impossible", "err", err) // détail réseau : journal local seulement
+		return errors.New("connexion SMTP : " + scrubErr(err))
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(45 * time.Second))
 	cl, err := smtp.NewClient(conn, c.SMTPHost)
 	if err != nil {
-		return fmt.Errorf("dialogue SMTP : %w", err)
+		return errors.New("dialogue SMTP impossible")
 	}
 	defer cl.Close()
 	if c.SMTPTLS != "implicit" {
@@ -253,7 +255,8 @@ func (s *Service) sendEmail(ctx context.Context, ch ChannelView, e Event) error 
 			return permanent("le serveur n'offre pas STARTTLS : le SMTP en clair est refusé")
 		}
 		if err := cl.StartTLS(tcfg); err != nil {
-			return permanent("STARTTLS refusé ou certificat non vérifié : %v", err)
+			s.log.Debug("STARTTLS refusé", "err", err)
+			return permanent("STARTTLS refusé ou certificat non vérifié")
 		}
 	}
 	if c.SMTPUser != "" && pass != "" {
@@ -262,22 +265,22 @@ func (s *Service) sendEmail(ctx context.Context, ch ChannelView, e Event) error 
 		}
 	}
 	if err := cl.Mail(from.Address); err != nil {
-		return fmt.Errorf("SMTP MAIL : %w", err)
+		return errors.New("SMTP : expéditeur refusé")
 	}
 	for _, r := range rcpts {
 		if err := cl.Rcpt(r); err != nil {
-			return fmt.Errorf("SMTP RCPT : %w", err)
+			return errors.New("SMTP : destinataire refusé")
 		}
 	}
 	w, err := cl.Data()
 	if err != nil {
-		return fmt.Errorf("SMTP DATA : %w", err)
+		return errors.New("SMTP : DATA refusé")
 	}
 	if _, err := w.Write(msg); err != nil {
-		return fmt.Errorf("SMTP écriture : %w", err)
+		return errors.New("SMTP : écriture impossible")
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("SMTP fin de message : %w", err)
+		return errors.New("SMTP : fin de message refusée")
 	}
 	return cl.Quit()
 }
