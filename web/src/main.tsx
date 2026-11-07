@@ -15,6 +15,7 @@ import { PrintPage } from './pages/Print';
 import { AgentsPage } from './pages/Agents';
 import { FilamentPage } from './pages/Filament';
 import { DesignPage } from './pages/Design';
+import { GabaritsPage } from './pages/Gabarits';
 const PreparePage = lazy(() => import('./pages/Prepare').then((m) => ({ default: m.PreparePage })));
 const ComparePage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ComparePage })));
 const InsightsPage = lazy(() => import('./pages/Insights').then((m) => ({ default: m.InsightsPage })));
@@ -48,6 +49,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="tableau-de-bord" element={<InsightsPage />} />
               <Route path="bobines" element={<FilamentPage />} />
               <Route path="file" element={<FilamentPage initial="file" />} />
+              <Route path="gabarits" element={<GabaritsPage />} />
               <Route path="agents" element={<AgentsPage />} />
               <Route path="design" element={<DesignPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

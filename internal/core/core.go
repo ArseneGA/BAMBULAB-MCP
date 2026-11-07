@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/calibration"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -23,6 +24,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/library"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
@@ -79,6 +81,9 @@ type Core struct {
 	Goals *goals.Service
 	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
 	Printing *printing.Service
+	// Library, Calibration : bibliothèque de gabarits paramétriques et calibration machine (library.go).
+	Library     *library.Service
+	Calibration *calibration.Service
 	// Insights : coût, journal des impressions, tableau de bord, post-traitement (chantier C).
 	Insights *insights.Service
 	// Camera : instantanés, détection d'échec, photos ; Notify : notifications (ntfy, webhook, e-mail). Observent, n'agissent jamais.
@@ -195,6 +200,11 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		return nil, fmt.Errorf("impression : %w", err)
 	}
 	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
+	if err := c.wireLibrary(); err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("bibliothèque : %w", err)
+	}
 	c.Insights, err = insights.New(insights.Config{Store: st, Blobs: blobs, Goals: gs})
 	if err != nil {
 		st.Close()

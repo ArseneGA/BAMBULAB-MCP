@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Boxes, SlidersHorizontal, GitCompare, Layers, Printer, Disc3, Moon, Sun, Palette, Trash2, Gauge } from 'lucide-react';
+import { Boxes, SlidersHorizontal, GitCompare, Layers, Printer, Disc3, Moon, Sun, Palette, Trash2, Gauge, Shapes } from 'lucide-react';
 import { IconButton, StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
 import { useTheme } from './design/theme';
@@ -15,6 +15,7 @@ export const spaces = [
   { path: 'impression', label: 'Impression', icon: Printer, live: true },
   { path: 'bobines', label: 'Bobines et file', icon: Disc3, live: true },
   { path: 'tableau-de-bord', label: 'Tableau de bord', icon: Gauge, live: true },
+  { path: 'gabarits', label: 'Gabarits', icon: Shapes, live: true },
 ] as const;
 
 function Pills() {
