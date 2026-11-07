@@ -23,6 +23,14 @@ Ordre = priorité. Chaque entrée : besoin, constat d'origine, critère de fin.
 
 Utilisateur : « dommage qu'on n'ait pas une vue du plateau directement là ». `capture_preview` doit pouvoir rendre la ou les pièces posées sur le plateau de l'imprimante cible (P1S 256 × 256 mm, grille, orientation et position réelles après découpe ou arrangement), y compris plusieurs pièces d'une même plaque, et l'aperçu des couches du G-code. Marche même sans MCP App (image), et sert de repli au viewer 3D.
 
+## 2 ter. Plusieurs pièces sur un même plateau
+
+Constat : `execute_headless_slice` ne prend qu'un `model_id` (internal/printing/slice.go:23), donc une pièce par impression. Bambu Studio sait arranger plusieurs objets (`--arrange`, testé en J5 sur deux cubes).
+- Entrée : liste de pièces (modèle + version + quantité), arrangement automatique ou positions imposées, répartition sur plusieurs plaques si tout ne tient pas, rapport « tient / ne tient pas » avant découpe.
+- Réglages par objet dans le 3MF (ex. matrices à 100 % et couches fines, bâti à 40 %) : c'est le sous-point « variantes par zone » resté ouvert (`pending.ts` zone_overrides) ; sans lui, une plaque = un seul jeu de réglages, donc regrouper les pièces par réglages.
+- Validation, confirmation et suivi inchangés (une impression = une plaque, empreinte de l'archive).
+- Aperçu de la plaque (point 2 bis).
+
 ## 3. Connecteur distant direct (URL `https://…/mcp`) avec OAuth 2.1
 
 Pour claude.ai web/mobile sans installation : OAuth 2.1 dans bambud (connexion via navigateur enregistré, jetons révocables et à durée limitée), exposition Funnel limitée à `/mcp` + routes OAuth (jamais `/setup`, `/confirm`, `/stop`, `/agent/v1`, `/enroll`).
