@@ -71,6 +71,7 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	human.RegisterPages(mux)
 
 	registerCatalog(mux, c)
+	registerUpload(mux, c) // envoi de fichiers, import par lien (upload.go)
 	registerAgent(mux, c, human)
 	registerGoals(mux, c)
 	registerMaterials(mux, c)
