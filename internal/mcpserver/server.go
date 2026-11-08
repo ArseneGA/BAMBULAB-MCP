@@ -33,6 +33,7 @@ func New(c *core.Core) *mcp.Server {
 			Logger: c.Log,
 			Instructions: "Atelier 3D pour imprimantes Bambu Lab. Les travaux longs renvoient un job_id : " +
 				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
+				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
 				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation.",
 		})
 	h := &handlers{c: c}
@@ -284,6 +285,18 @@ func (h *handlers) showAtelier(ctx context.Context, _ *mcp.CallToolRequest, _ Em
 	}
 	sum := AtelierSummary{Title: "Atelier 3D (démonstration)", ServiceReady: true, ActiveJobs: active, Demo: true}
 	return textResult(fmt.Sprintf("Atelier (démonstration) : service prêt, %d travail(aux) actif(s). Vue disponible dans les hôtes MCP Apps.", active)), sum, nil
+}
+
+// withView recopie le lien vers la vue MCP App dans le _meta du RÉSULTAT (en plus de la définition de l'outil dans
+// tools/list, seule exigée par la spec) : certains hôtes lisent l'un, d'autres l'autre.
+func withView(r *mcp.CallToolResult, tool string) *mcp.CallToolResult {
+	if m, ok := toolViewMeta[tool]; ok {
+		r.Meta = mcp.Meta{}
+		for k, v := range m {
+			r.Meta[k] = v
+		}
+	}
+	return r
 }
 
 func textResult(s string) *mcp.CallToolResult {

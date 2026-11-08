@@ -202,13 +202,16 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 		t.Fatalf("page de confirmation : %d", st)
 	}
 	// Humain : coche « plateau vide » et lance.
-	if st, body := r.humanConfirm(confURL, true); st != 200 || !strings.Contains(body, "cette impression uniquement") {
+	if st, body := r.humanConfirm(confURL, true); st != 200 || !strings.Contains(body, "Impression lancée") {
 		t.Fatalf("approbation : %d %s", st, body)
 	}
 
-	// ---- 6. lancement : START_REQUESTED -> PRINTING observé ----
+	// ---- 6. lancement : DÉCLENCHÉ PAR L'APPROBATION de l'humain (sans start_print du modèle) ; start_print le constate ----
+	if n := len(r.sim.StartCommands()); n != 1 {
+		t.Fatalf("l'approbation humaine devait lancer l'impression : %d commande(s)", n)
+	}
 	s1 := r.call("start_print", map[string]any{"print_job_id": jobID, "confirmation_id": confID, "idempotency_key": "cle-start-impression-1"})
-	if str(s1, "outcome") != "printing" || str(s1, "state") != "PRINTING" {
+	if str(s1, "outcome") != "printing" || str(s1, "state") != "PRINTING" || s1["replayed"] != true || !strings.Contains(str(s1, "note"), "Déjà lancé par l'approbation") {
 		t.Fatalf("lancement : %v", s1)
 	}
 	if n := len(r.sim.StartCommands()); n != 1 {
@@ -223,9 +226,9 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	if s1b["replayed"] != true || len(r.sim.StartCommands()) != 1 {
 		t.Fatalf("rejeu du lancement : %v (%d)", s1b, len(r.sim.StartCommands()))
 	}
-	// Nouvelle clé sur la même impression, confirmation consommée : refus.
-	if r.callErr("start_print", map[string]any{"print_job_id": jobID, "confirmation_id": confID, "idempotency_key": "cle-start-nouvelle-cle"}) == "" || len(r.sim.StartCommands()) != 1 {
-		t.Fatal("relance avec une nouvelle clé")
+	// Nouvelle clé sur la même impression déjà lancée par l'approbation : constat, jamais de nouvelle commande.
+	if m := r.call("start_print", map[string]any{"print_job_id": jobID, "confirmation_id": confID, "idempotency_key": "cle-start-nouvelle-cle"}); m["replayed"] != true || len(r.sim.StartCommands()) != 1 {
+		t.Fatalf("relance avec une nouvelle clé : %v", m)
 	}
 	// Une autre impression ne peut pas démarrer pendant que celle-ci occupe l'imprimante.
 	waitState := r.waitState(jobID, 30*time.Second, "COMPLETED", "FAILED")
@@ -315,8 +318,8 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 		t.Fatalf("%d commande(s) reçue(s) par le simulateur 2, 1 attendue", n)
 	}
 	// Ni relance avec une autre clé, ni annulation à l'aveugle, ni nouvelle confirmation en attendant.
-	if r.callErr("start_print", map[string]any{"print_job_id": job8, "confirmation_id": str(cf8, "confirmation_id"), "idempotency_key": "cle-start-relance-auto"}) == "" || len(sim2.StartCommands()) != 1 {
-		t.Fatal("relance après START_UNKNOWN")
+	if m, _, isErr := r.raw("start_print", map[string]any{"print_job_id": job8, "confirmation_id": str(cf8, "confirmation_id"), "idempotency_key": "cle-start-relance-auto"}); (!isErr && m["replayed"] != true) || len(sim2.StartCommands()) != 1 {
+		t.Fatalf("relance après START_UNKNOWN : %v", m)
 	}
 	if r.callErr("request_print_confirmation", map[string]any{"print_job_id": job8}) == "" {
 		t.Fatal("nouvelle confirmation pendant START_UNKNOWN")

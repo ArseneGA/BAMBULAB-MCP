@@ -57,6 +57,10 @@ func (s *Service) GetAMS(ctx context.Context, printerID string) (*AMSView, error
 	if s.d.Printing == nil {
 		return nil, fmt.Errorf("%w : chaîne d'impression indisponible", ErrConflict)
 	}
+	printerID, err := s.d.Printing.ResolvePrinterID(ctx, printerID) // une seule imprimante enregistrée : défaut
+	if err != nil {
+		return nil, err
+	}
 	if _, err := s.d.Printing.GetPrinterRecord(ctx, printerID); err != nil {
 		return nil, fmt.Errorf("%w : imprimante %q", ErrNotFound, printerID)
 	}

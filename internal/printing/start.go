@@ -53,6 +53,20 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 	ikey := idemKey(j.ID, "start", key)
 	// Rejeu de la même requête : on rend l'état, on ne relance JAMAIS. Mêmes clé ET paramètres, sinon refus.
 	if j.StartJobID != "" {
+		// Démarrage déjà fait par l'approbation de l'humain (autostart.go) : on le dit, sans rien renvoyer.
+		if q, err := s.d.Queue.Get(ctx, j.StartJobID); err == nil && q.State != contracts.JobFailed && q.IdempotencyKey == idemKey(j.ID, "start", autoStartKey(in.ConfirmationID)) && sameStartParams(q.Params, j.ID, in.ConfirmationID) {
+			q, _ = s.waitQueue(ctx, q.ID, 200*time.Millisecond)
+			cur, _ := s.GetJob(ctx, j.ID)
+			outcome := "start_requested"
+			var r struct{ Outcome string }
+			if json.Unmarshal(q.Result, &r) == nil && r.Outcome != "" {
+				outcome = r.Outcome
+			} else if q.State == contracts.JobFailed {
+				outcome = "rejected"
+			}
+			return &StartOutput{PrintJobID: cur.ID, State: cur.State, QueueJobID: q.ID, Outcome: outcome, Replayed: true, Job: cur,
+				Note: "Déjà lancé par l'approbation de l'utilisateur : aucune nouvelle commande n'a été envoyée. Suivre avec get_print_status."}, nil
+		}
 		if q, err := s.d.Queue.Get(ctx, j.StartJobID); err == nil && q.IdempotencyKey == ikey {
 			if !sameStartParams(q.Params, j.ID, in.ConfirmationID) {
 				return nil, fmt.Errorf("%w : start_print avec cette clé a déjà été demandé pour une autre confirmation", ErrReplayParams)

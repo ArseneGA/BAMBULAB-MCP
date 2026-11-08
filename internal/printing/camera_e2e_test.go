@@ -188,7 +188,22 @@ func TestCameraEndToEnd(t *testing.T) {
 	if st != 200 || m == nil || !strings.Contains(body, "Photo du plateau prise à") {
 		t.Fatalf("photo absente de /confirm : %d %s", st, body)
 	}
-	ires, err := browserGet(r.human, r.web.URL+m[1])
+	// Cause réelle du défaut « image brisée » : la CSP de la page (default-src 'none') bloquait l'<img> sans img-src.
+	// Un navigateur applique la CSP : on la vérifie ici (Go ne l'applique pas), puis on charge l'image comme lui
+	// (sous-ressource : Sec-Fetch-Mode no-cors, Dest image, Site same-origin, cookie d'enrôlement, derrière un proxy HTTPS).
+	pres, _ := browserGet(r.human, confURL)
+	csp := pres.Header.Get("Content-Security-Policy")
+	pres.Body.Close()
+	if !strings.Contains(csp, "img-src 'self'") || strings.Contains(csp, "data:") || strings.Contains(csp, "http") {
+		t.Fatalf("la CSP de /confirm doit autoriser les images de la même origine seulement : %q", csp)
+	}
+	ireq, _ := http.NewRequest("GET", r.web.URL+m[1], nil)
+	ireq.Header.Set("Sec-Fetch-Mode", "no-cors")
+	ireq.Header.Set("Sec-Fetch-Dest", "image")
+	ireq.Header.Set("Sec-Fetch-Site", "same-origin")
+	ireq.Header.Set("Accept", "image/avif,image/webp,*/*")
+	ireq.Header.Set("X-Forwarded-Proto", "https")
+	ires, err := r.human.Do(ireq)
 	if err != nil || ires.StatusCode != 200 || ires.Header.Get("Content-Type") != "image/jpeg" {
 		t.Fatalf("image de /confirm : %v %v", err, ires)
 	}

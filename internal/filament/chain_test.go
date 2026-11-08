@@ -263,10 +263,7 @@ func TestConfirmationBindsMaterialAssignment(t *testing.T) {
 	if !strings.Contains(b1, "ams1:1") || !strings.Contains(b1, "ams1:4") {
 		t.Fatalf("la confirmation doit montrer l'affectation : %s", b1)
 	}
-	if st, body := r.humanConfirm(str(cf, "confirm_url")); st != 200 {
-		t.Fatalf("approbation : %d %s", st, body)
-	}
-	// Après l'accord, l'affectation change (couleurs échangées) : le lancement est refusé, rien n'est envoyé.
+	// L'approbation humaine lance l'impression : l'affectation change donc AVANT le clic (couleurs échangées).
 	var doc map[string]any
 	if err := r.c.Store.GetDoc(context.Background(), "print_jobs", job, &doc); err != nil {
 		t.Fatal(err)
@@ -276,6 +273,9 @@ func TestConfirmationBindsMaterialAssignment(t *testing.T) {
 	a0["tray"], a1["tray"] = a1["tray"], a0["tray"]
 	if err := r.c.Store.PutDoc(context.Background(), "test", "print_jobs", job, doc); err != nil {
 		t.Fatal(err)
+	}
+	if st, _, _ := r.humanGet(str(cf, "confirm_url")); st == 200 {
+		t.Fatal("l'approbation d'une confirmation dont la liaison a changé doit être refusée")
 	}
 	txt := r.callErr("start_print", map[string]any{"print_job_id": job, "confirmation_id": str(cf, "confirmation_id"), "idempotency_key": "cle-start-affectation"})
 	if txt == "" || len(r.sim.StartCommands()) != 0 {

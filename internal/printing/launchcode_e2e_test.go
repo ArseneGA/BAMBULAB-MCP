@@ -163,7 +163,7 @@ func TestLaunchCodeApprovesPrintFromAppTool(t *testing.T) {
 		t.Fatalf("mauvais code 1 : %v", m)
 	}
 	m := r.call("approve_print_with_code", approveArgs(cf, goodCode, true))
-	if m["approved"] != true || m["seconds_left"].(float64) <= 0 || m["seconds_left"].(float64) > 120 {
+	if m["approved"] != true || m["started"] != true || str(m, "outcome") != "printing" || len(r.sim.StartCommands()) != 1 { // le code approuve ET lance (sans start_print)
 		t.Fatalf("bon code : %v", m)
 	}
 	if v := r.call("get_print_confirmation_view", map[string]any{"confirmation_id": confID}); v["approved"] != true {
@@ -173,9 +173,9 @@ func TestLaunchCodeApprovesPrintFromAppTool(t *testing.T) {
 	if vs := r.call("get_launch_view_state", map[string]any{"confirmation_id": confID}); vs["attempts_left"].(float64) != 3 || vs["approved"] != true {
 		t.Fatalf("état après réussite : %v", vs)
 	}
-	// start_print comme aujourd'hui : un seul lancement, la confirmation est consommée.
+	// start_print du modèle ensuite : constat « déjà lancé », aucune seconde commande ; la confirmation est consommée.
 	s := r.call("start_print", map[string]any{"print_job_id": job, "confirmation_id": confID, "idempotency_key": "cle-start-code-01"})
-	if str(s, "outcome") != "printing" || len(r.sim.StartCommands()) != 1 {
+	if str(s, "outcome") != "printing" || s["replayed"] != true || len(r.sim.StartCommands()) != 1 {
 		t.Fatalf("lancement : %v", s)
 	}
 	// La confirmation consommée ne se ré-approuve pas.
@@ -216,12 +216,13 @@ func TestLaunchCodeThreeWrongCodesLockEverything(t *testing.T) {
 	if m := r.call("approve_print_with_code", approveArgs(cf2, goodCode, true)); m["approved"] != false || str(m, "problem") != "locked" {
 		t.Fatalf("nouvelle confirmation sous verrou : %v", m)
 	}
-	// Le lien navigateur reste disponible sous verrou (l'humain peut toujours approuver sur la page).
-	if st, body := r.humanConfirm(str(cf2, "confirm_url"), true); st != 200 {
+	// Le lien navigateur reste disponible sous verrou (l'humain peut toujours approuver sur la page : son clic lance
+	// l'impression, ce qui est vérifié dans TestEndToEndChainWithSimulator ; ici on garde la confirmation pour la suite).
+	if st, body, nonce := r.humanGet(str(cf2, "confirm_url")); st != 200 || nonce == "" {
 		t.Fatalf("lien navigateur sous verrou : %d %s", st, body)
 	}
 	// Seuls la page humaine ou la CLI déverrouillent : un outil MCP n'en a pas.
-	cf3 := r.call("request_print_confirmation", map[string]any{"print_job_id": job})
+	cf3 := cf2
 	if body := r.humanLaunchAction("unlock"); !strings.Contains(body, "Verrou levé") {
 		t.Fatalf("déverrouillage : %s", body)
 	}

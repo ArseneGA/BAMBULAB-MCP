@@ -73,8 +73,10 @@ func (s *Service) CheckFilament(ctx context.Context, in CheckInput) (*CheckOutpu
 	if pid == "" {
 		pid = j.PrinterID
 	}
-	if pid == "" {
-		return nil, invalidf("printer_id requis (l'impression n'en a pas)")
+	if pid == "" { // l'impression n'a pas d'imprimante : l'unique imprimante enregistrée, sinon erreur claire
+		if pid, err = s.d.Printing.ResolvePrinterID(ctx, ""); err != nil {
+			return nil, err
+		}
 	}
 	as := in.Assignments
 	if len(as) == 0 {

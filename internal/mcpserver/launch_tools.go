@@ -56,6 +56,8 @@ type CodeApprovalOut struct {
 	AttemptsLeft int    `json:"attempts_left" jsonschema:"essais restants avant verrouillage global"`
 	Locked       bool   `json:"locked"`
 	SecondsLeft  int    `json:"seconds_left,omitempty" jsonschema:"durée restante de l'accord de lancement (2 minutes au plus)"`
+	Started      bool   `json:"started,omitempty" jsonschema:"l'approbation a déclenché le démarrage de l'impression (sans appel de start_print)"`
+	Outcome      string `json:"outcome,omitempty" jsonschema:"issue du démarrage : printing | start_requested | start_unknown | not_sent | rejected…"`
 	Message      string `json:"message"`
 }
 
@@ -119,15 +121,19 @@ func AddLaunchTools(s *mcp.Server, c *core.Core) {
 
 	addTool(s, &mcp.Tool{
 		Name: "approve_print_with_code", Title: "Autoriser le lancement (code de lancement)",
-		Description: launchToolWarning + " Donne l'accord de lancement de la confirmation précise (valable 2 minutes), après quoi start_print peut être appelé comme d'habitude.",
+		Description: launchToolWarning + " Donne l'accord de lancement de la confirmation précise (2 minutes) ET lance aussitôt l'impression côté serveur (une seule commande, sans start_print).",
 		Annotations: phys, Meta: appOnlyMeta(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ApproveWithCodeInput) (*mcp.CallToolResult, CodeApprovalOut, error) {
-		_, err := p.ApproveWithCode(ctx, in.ConfirmationID, in.Code, in.PlateClear)
+		res, err := p.ApproveWithCode(ctx, in.ConfirmationID, in.Code, in.PlateClear)
 		if err != nil {
 			return codeFailure(ctx, p, err)
 		}
+		// L'approbation humaine par code a lancé l'impression côté serveur : plus rien à dire à l'assistant.
 		out := CodeApprovalOut{Approved: true, AttemptsLeft: printing.LaunchCodeAttempts, SecondsLeft: int(p.ConfirmationApprovalLeft(in.ConfirmationID).Seconds()),
-			Message: "Accord enregistré pour cette impression uniquement, valable 2 minutes. Dis à l'assistant que c'est fait : il lancera l'impression."}
+			Started: res.Started(), Message: res.Message()}
+		if res.Start != nil {
+			out.Outcome = res.Start.Outcome
+		}
 		return textResult(out.Message), out, nil
 	})
 
