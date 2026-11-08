@@ -286,60 +286,6 @@ func (s *Service) rejectStart(ctx context.Context, id string, cause error) {
 
 func matches(st printer.Status, remote string) bool { return printer.MatchesRemote(st, remote) }
 
-// observe applique un état d'imprimante à une impression PRINTING.
-func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
-	j, err := s.GetJob(ctx, id)
-	if err != nil || j.State != contracts.PrintPrinting || j.Remote == nil {
-		return
-	}
-	m := matches(st, j.Remote.Name)
-	pg := &PrintProgress{PrinterState: string(st.State), Percent: st.Progress, Layer: st.Layer, TotalLayers: st.TotalLayers,
-		RemainingMin: st.RemainingMin, ObservedAt: s.now(), MatchesFile: m, PrinterReason: st.FailReason}
-	if j.Print != nil {
-		pg.SeenActive = j.Print.SeenActive
-		pg.Stage, pg.StageName = j.Print.Stage, j.Print.StageName
-		pg.Stages = append([]StageSeen(nil), j.Print.Stages...)
-	}
-	stageNew := false
-	if m {
-		stageNew = pg.noteStage(st, s.now())
-	}
-	if m && (st.State == printer.StatePreparing || st.State == printer.StatePrinting || st.State == printer.StatePaused) {
-		pg.SeenActive = true
-	}
-	if m && !pg.SeenActive && (st.State == printer.StateFinished || st.State == printer.StateFailed) {
-		// Un FINISH/FAILED du même fichier vu avant toute activité peut venir d'une impression antérieure.
-		pg.PrinterReason = "état final du même fichier observé sans activité préalable : non attribuable à cette impression"
-		if j.Print == nil || j.Print.PrinterState != pg.PrinterState {
-			_, _ = s.update(ctx, id, func(x *Job) error { x.Print = pg; return nil })
-		}
-		return
-	}
-	if !m {
-		if j.Print == nil || j.Print.MatchesFile || j.Print.PrinterState != pg.PrinterState {
-			_, _ = s.update(ctx, id, func(x *Job) error { x.Print = pg; return nil })
-		}
-		return
-	}
-	switch st.State {
-	case printer.StateFinished:
-		_, _ = s.transition(ctx, id, contracts.EvPrintDone, "l'imprimante rapporte la fin de l'impression (FINISH)", func(x *Job) error { pg.Percent = 100; x.Print = pg; return nil })
-	case printer.StateFailed:
-		s.mu.Lock()
-		stopping := s.stopping[id]
-		s.mu.Unlock()
-		if stopping {
-			return // arrêt humain en cours : ExecuteStop enregistre CANCELLED (sinon le relevé suivant verra FAILED)
-		}
-		msg := fmt.Sprintf("l'imprimante rapporte un échec (%s, print_error=%d)", st.FailReason, st.PrintError)
-		_, _ = s.transition(ctx, id, contracts.EvFail, msg, func(x *Job) error { x.Print, x.LastError = pg, msg; return nil })
-	default:
-		if j.Print == nil || stageNew || j.Print.Percent != pg.Percent || j.Print.PrinterState != pg.PrinterState || j.Print.Layer != pg.Layer {
-			_, _ = s.update(ctx, id, func(x *Job) error { x.Print = pg; return nil })
-		}
-	}
-}
-
 // track suit une impression PRINTING jusqu'à COMPLETED/FAILED (abonnement + relevé périodique).
 func (s *Service) track(id string) {
 	s.mu.Lock()
@@ -374,7 +320,7 @@ func (s *Service) track(id string) {
 				sleepCtx(ctx, 2*time.Second)
 				continue
 			}
-			tick := time.NewTicker(2 * time.Second)
+			tick := time.NewTicker(s.watchCfg().TrackTick)
 		inner:
 			for {
 				select {
@@ -416,7 +362,11 @@ type PrintStatus struct {
 	// Stages : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression (étapes vues, avec l'heure locale).
 	Stages *StageSummary `json:"stage_report,omitempty" jsonschema:"étapes réellement exécutées d'après l'étape courante transmise par l'imprimante (mise à niveau, chauffe, nettoyage, calibrations) avec l'heure de première observation"`
 	Wait   *WaitInfo     `json:"wait,omitempty" jsonschema:"présent quand wait_seconds ou wait_for_print_change a attendu : ce qui a changé, ou échéance"`
-	Note   string        `json:"note,omitempty"`
+	// Alert : « bloquée : … », « attend une action à l'écran : <texte HMS> » ou « injoignable… » : à signaler tout de suite à l'utilisateur.
+	Alert string `json:"alert,omitempty" jsonschema:"situation à signaler : impression bloquée, attente d'une action à l'écran (texte HMS décodé), imprimante injoignable"`
+	// Causes : erreurs décodées (print_error, HMS) vues pour cette impression, surtout utiles quand elle a échoué.
+	Causes []printer.ErrorInfo `json:"causes,omitempty" jsonschema:"codes d'erreur de l'imprimante décodés (texte, gravité, consigne, lien wiki)"`
+	Note   string              `json:"note,omitempty"`
 }
 
 // GetPrintStatus relit l'impression et, si elle est active, rafraîchit depuis l'imprimante.
@@ -456,6 +406,10 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 		}
 	}
 	out.Job = j
+	if j.Print != nil {
+		out.Alert = alertSentence(j.Print)
+		out.Causes = j.Print.ErrorDetails
+	}
 	out.Progress = s.ProgressFor(ctx, j)
 	out.Stages = stageSummary(j, curSt)
 	return out, nil
@@ -574,6 +528,7 @@ func (s *Service) CancelPrint(ctx context.Context, in CancelInput) (*CancelOutpu
 		out.StopExpiresAtLocal = localtime.Full(exp)
 		out.Question = fmt.Sprintf("Veux-tu vraiment arrêter l'impression de %s en cours sur l'imprimante ? Le travail en cours sera perdu.", j.Name)
 		_ = s.d.Store.Audit(ctx, actor, "print.stop_requested", "print_job", j.ID, map[string]any{"expires": exp})
+		s.journal(ctx, j.ID, "stop_requested", "arrêt demandé (cancel_print) : en attente de la validation de l'humain")
 		return finish("stop_requested", "Rien n'est arrêté. Demande à l'utilisateur d'ouvrir stop_url dans son navigateur enregistré et de valider l'arrêt ; tu ne peux pas le faire à sa place.")
 	}
 	// Phases avant le lancement : annulation purement logique (et de la découpe en cours).
@@ -639,49 +594,6 @@ func (s *Service) GetStop(ctx context.Context, stopID string) (*StopView, error)
 		v.Percent, v.Layer, v.TotalLayers = j.Print.Percent, j.Print.Layer, j.Print.TotalLayers
 	}
 	return v, nil
-}
-
-// ExecuteStop arrête l'impression après la validation HUMAINE de la demande (appelé par la page /stop/{id}
-// d'un navigateur enregistré, jamais par MCP). La demande n'est consommée qu'une fois l'arrêt accepté.
-func (s *Service) ExecuteStop(ctx context.Context, stopID string) (*CancelOutput, error) {
-	v, err := s.GetStop(ctx, stopID)
-	if err != nil {
-		return nil, err
-	}
-	j, err := s.GetJob(ctx, v.PrintJobID)
-	if err != nil {
-		return nil, err
-	}
-	ad, _, err := s.adapter(ctx, j.PrinterID)
-	if err != nil {
-		return nil, err
-	}
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s.mu.Lock()
-	s.stopping[j.ID] = true
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		delete(s.stopping, j.ID)
-		s.mu.Unlock()
-	}()
-	if err := ad.Stop(cctx); err != nil {
-		return nil, fmt.Errorf("arrêt de l'imprimante en échec : %w", err)
-	}
-	s.mu.Lock()
-	delete(s.stops, v.StopID)
-	s.stopGone[v.StopID] = goneStop{reason: "used", at: s.now()}
-	s.mu.Unlock()
-	if _, err = s.transition(ctx, j.ID, contracts.EvCancel, "arrêt validé par l'utilisateur sur la page /stop", func(x *Job) error {
-		x.StoppedByUser = true
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	_ = s.d.Store.Audit(ctx, "human:web", "print.stopped", "print_job", j.ID, nil)
-	cur, _ := s.GetJob(ctx, j.ID)
-	return &CancelOutput{PrintJobID: j.ID, Outcome: "stopped", State: cur.State, Note: "Commande d'arrêt acceptée par l'imprimante.", Job: cur}, nil
 }
 
 // Recover traite l'impression laissée par un arrêt du service : un lancement en cours

@@ -100,6 +100,8 @@ func (s *Service) RegisterPages(mux *http.ServeMux, require func(http.Handler) h
 	mux.Handle("POST /confirm/{id}/photo", h(s.photoPost))
 	mux.Handle("GET /stop/{id}", h(s.stopGet))
 	mux.Handle("POST /stop/{id}", h(s.stopPost))
+	mux.Handle("GET /action/{id}", h(s.actionGet))
+	mux.Handle("POST /action/{id}", h(s.actionPost))
 }
 
 func (s *Service) mqttHostPort(rec PrinterRecord) string {
@@ -320,10 +322,15 @@ func (s *Service) stopPost(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Formulaire périmé", "Msg": "Recharge la page d'arrêt puis recommence."})
 		return
 	}
-	if _, err := s.ExecuteStop(r.Context(), id); err != nil {
+	res, err := s.ExecuteStop(r.Context(), id)
+	if err != nil {
 		s.log.Warn("arrêt refusé", "stop", id, "err", err)
 		s.render(w, http.StatusConflict, "done", map[string]any{"Title": "Arrêt non effectué", "Msg": "L'arrêt n'a pas pu être effectué : " + err.Error()})
 		return
 	}
-	s.render(w, http.StatusOK, "done", map[string]any{"Title": "Impression arrêtée", "Msg": "La commande d'arrêt a été acceptée par l'imprimante."})
+	msg := "La commande d'arrêt a été acceptée par l'imprimante."
+	if strings.Contains(res.Note, "RUNNING") { // arrêt appliqué mais état résiduel : on le dit et on propose de redémarrer
+		msg = res.Note
+	}
+	s.render(w, http.StatusOK, "done", map[string]any{"Title": "Impression arrêtée", "Msg": msg})
 }

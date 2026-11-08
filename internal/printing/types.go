@@ -101,6 +101,20 @@ type PrintProgress struct {
 	Stage     int         `json:"stage,omitempty"`
 	StageName string      `json:"stage_name,omitempty"`
 	Stages    []StageSeen `json:"stages,omitempty"`
+
+	// Supervision (watch.go) : ce que l'imprimante dit, ce qui cloche, depuis quand.
+	Attention    string              `json:"attention,omitempty" jsonschema:"« attend une action à l'écran : <texte HMS> » quand l'imprimante est en pause sur erreur"`
+	Blocked      string              `json:"blocked,omitempty" jsonschema:"« bloquée : … » : progression figée ou consignes incohérentes en pleine impression"`
+	Unreachable  string              `json:"unreachable,omitempty" jsonschema:"imprimante injoignable depuis un moment : l'état réel est inconnu"`
+	ErrorDetails []printer.ErrorInfo `json:"error_details,omitempty" jsonschema:"dernières erreurs (print_error, HMS) décodées vues pour cette impression"`
+	WasGone      bool                `json:"was_gone,omitempty" jsonschema:"la liaison avec l'imprimante a été coupée puis rétablie pendant l'impression (redémarrage possible)"`
+	GoneSince    time.Time           `json:"gone_since,omitzero"`
+	IdleSince    time.Time           `json:"idle_since,omitzero"`
+	MismatchAt   time.Time           `json:"mismatch_since,omitzero"`
+	InconsistAt  time.Time           `json:"inconsistent_since,omitzero"`
+	Sig          string              `json:"sig,omitempty"`
+	SigAt        time.Time           `json:"sig_at,omitzero"`
+	Alerted      []string            `json:"alerted,omitempty"`
 }
 
 // ArtifactSummary résume l'artefact découpé (mesures lues dans l'archive).

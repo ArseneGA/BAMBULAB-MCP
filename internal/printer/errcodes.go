@@ -30,7 +30,12 @@ type ErrorInfo struct {
 	Benign bool   `json:"benign,omitempty"` // reliquat sans gravité (annulation) : ne bloque pas un lancement
 	Module string `json:"module,omitempty"` // module probable d'après le préfixe
 	Action string `json:"action,omitempty"` // consigne à l'utilisateur
-	Wiki   string `json:"wiki"`             // où chercher le code
+	Wiki   string `json:"wiki"`             // où chercher le code (page du code pour un HMS ; format du lien non vérifié, voir hms.go)
+	// Severity : gravité lue dans le code d'un HMS (fatale, grave, courante, information) ; vide sinon.
+	Severity string `json:"severity,omitempty"`
+	// Unverified : texte ou lien écrit sans pouvoir le relire sur le wiki officiel (voir hms.go) : à vérifier.
+	Unverified bool   `json:"unverified,omitempty"`
+	Source     string `json:"source,omitempty"` // origine de l'entrée de la table
 }
 
 type knownError struct {
@@ -85,6 +90,21 @@ func DescribeCode(code string) ErrorInfo {
 	key := code
 	if len(code) == 16 {
 		key = code[8:]
+	}
+	if len(code) == 16 {
+		info.Wiki = HMSWikiLink(code)
+		var attr, c uint32
+		if _, err := fmt.Sscanf(code, "%08X%08X", &attr, &c); err == nil {
+			info.Severity = hmsSeverity(c)
+		}
+	}
+	if k, ok := knownPrintErrors[key]; ok && len(code) == 8 {
+		info.Known, info.Text, info.Benign, info.Action = true, k.text, k.benign, k.action
+		return info
+	}
+	if e, ok := lookupExtended(code); ok {
+		info.Known, info.Text, info.Action, info.Source, info.Unverified = true, e.text, e.action, e.source, !e.verified
+		return info
 	}
 	if k, ok := knownPrintErrors[key]; ok {
 		info.Known, info.Text, info.Benign, info.Action = true, k.text, k.benign, k.action

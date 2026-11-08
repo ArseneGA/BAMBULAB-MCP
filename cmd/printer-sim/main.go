@@ -26,7 +26,7 @@ func main() {
 		prep     = flag.Duration("prepare", time.Second, "durée de PREPARE")
 		dur      = flag.Duration("print-duration", 10*time.Second, "durée de RUNNING")
 		layers   = flag.Int("layers", 100, "nombre total de couches")
-		faults   = flag.String("faults", "", "pannes initiales séparées par des virgules (offline,drop_after_start,ignore_start,reject_start,hms_error,file_missing,plate_occupied)")
+		faults   = flag.String("faults", "", "pannes initiales séparées par des virgules (offline,drop_after_start,ignore_start,reject_start,hms_error,file_missing,plate_occupied,freeze,stop_stays_running,resume_broken)")
 		amsUnits = flag.Int("ams-units", 1, "nombre d'AMS simulés (0 = bobine externe seule, 1 à 4 ; 4 emplacements par AMS, le premier est rempli d'exemples)")
 		verbose  = flag.Bool("v", false, "journal détaillé")
 	)

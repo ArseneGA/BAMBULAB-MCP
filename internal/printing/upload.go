@@ -303,7 +303,7 @@ func (s *Service) uploadHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawM
 	jc.Progress(0.05, "connexion FTPS à l'imprimante")
 	jc.SetDetail(jobs.Detail{Phase: "connexion FTPS à l'imprimante", Label: label, BytesTotal: j.ArtifactSize})
 	cr := &countingReader{r: f, total: j.ArtifactSize, jc: jc, label: label}
-	ref, err := ad.Upload(ctx, cr, j.Name, j.ArtifactSize, j.ArtifactSHA256)
+	ref, err := ad.Upload(ctx, cr, s.depositName(bg, j), j.ArtifactSize, j.ArtifactSHA256)
 	jobs.ForgetDetail(jc.Job.ID)
 	if err != nil {
 		return fail("upload_failed", err)

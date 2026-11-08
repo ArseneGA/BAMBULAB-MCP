@@ -140,6 +140,7 @@ type Sim struct {
 	lastSent  map[string]string
 	lastBeat  time.Time
 	starts    []StartRecord
+	cmds      []string // commandes d'impression reçues (scenarios.go)
 	reportSeq int
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
@@ -237,7 +238,8 @@ func (s *Sim) Close() error {
 // SetFault active ou désactive une panne.
 func (s *Sim) SetFault(name string, on bool) error {
 	switch name {
-	case FaultOffline, FaultDropAfterStart, FaultSlowAck, FaultIgnoreStart, FaultRejectStart, FaultHMSError, FaultFileMissing, FaultPlateOccupied:
+	case FaultOffline, FaultDropAfterStart, FaultSlowAck, FaultIgnoreStart, FaultRejectStart, FaultHMSError, FaultFileMissing, FaultPlateOccupied,
+		FaultFreeze, FaultStopStaysRunning, FaultResumeBroken:
 	default:
 		return fmt.Errorf("sim: unknown fault %q", name)
 	}
@@ -256,6 +258,7 @@ func (s *Sim) SetFault(name string, on bool) error {
 		s.p.setHMS(on)
 		s.mu.Unlock()
 	}
+	s.applyScenarioFault(name, on)
 	return nil
 }
 
@@ -439,7 +442,10 @@ func (s *Sim) handleRequest(payload []byte) {
 	}
 	cmd := fmt.Sprint(p["command"])
 	seq := fmt.Sprint(p["sequence_id"])
+	s.noteCommand(cmd)
 	switch cmd {
+	case "ams_change_filament", "ams_control":
+		s.onFilamentCommand(cmd, seq)
 	case "project_file":
 		s.onProjectFile(seq, p)
 	case "pause", "resume", "stop":

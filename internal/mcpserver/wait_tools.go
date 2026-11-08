@@ -147,6 +147,9 @@ func printStatusText(st *printing.PrintStatus) string {
 			txt += " " + st.Stages.Note
 		}
 	}
+	if st.Alert != "" {
+		txt += " À SIGNALER À L'UTILISATEUR : " + st.Alert + "."
+	}
 	if p := st.Printer; p != nil && len(p.ErrorDetails) > 0 {
 		var parts []string
 		for _, d := range p.ErrorDetails {

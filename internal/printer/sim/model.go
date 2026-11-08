@@ -36,9 +36,13 @@ type model struct {
 	hms        []map[string]any
 	failReason string
 	hmsFault   bool
-	wifi       int
-	taskSeq    int
-	ams        *amsModel // AMS simulé (ams.go) ; nil = aucun
+	// Scénarios de panne (scenarios.go).
+	frozen           bool // RUNNING mais la progression ne bouge plus
+	stopKeepsRunning bool // stop coupe les chauffes mais laisse gcode_state à RUNNING
+	resumeBroken     bool // resume repasse RUNNING figé, consigne plateau à 0
+	wifi             int
+	taskSeq          int
+	ams              *amsModel // AMS simulé (ams.go) ; nil = aucun
 }
 
 func newModel(c Config) *model {
@@ -105,11 +109,24 @@ func (m *model) control(cmd string, now time.Time) error {
 		if m.hmsFault {
 			return errors.New("error not cleared")
 		}
+		if m.resumeBroken {
+			m.pausedTotal += now.Sub(m.pausedAt)
+			m.gcodeState, m.frozen = "RUNNING", true
+			m.nozzleT, m.bedT = 230, 0
+			return nil
+		}
 		m.pausedTotal += now.Sub(m.pausedAt)
 		m.gcodeState = "RUNNING"
 	case "stop":
 		switch m.gcodeState {
 		case "PREPARE", "RUNNING", "PAUSE":
+			if m.stopKeepsRunning {
+				m.nozzleT, m.bedT, m.frozen = 0, 0, true
+				if m.gcodeState == "PAUSE" {
+					m.gcodeState = "RUNNING"
+				}
+				return nil
+			}
 			m.gcodeState = "FAILED"
 			m.failReason = "50348044" // « annulé par l'utilisateur » (valeur fictive)
 			m.nozzleT, m.bedT = 0, 0
@@ -143,6 +160,9 @@ func (m *model) step(now time.Time, fileMissingFault bool, exists func(string) b
 			m.runStarted = now
 		}
 	case "RUNNING":
+		if m.frozen {
+			break
+		}
 		el := now.Sub(m.runStarted) - m.pausedTotal
 		p := float64(el) / float64(m.printDur)
 		if p >= 1 {

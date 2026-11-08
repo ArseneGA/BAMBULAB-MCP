@@ -136,6 +136,7 @@ type Bambu struct {
 	changed       chan struct{}
 	subs          map[*subscriber]struct{}
 	waiters       map[string]chan map[string]any
+	rc            reconnectState // liaison : dernière connexion, erreurs, délai (reconnect.go)
 
 	seq      atomic.Int64
 	startMu  sync.Mutex // réservation : un seul Start à la fois
@@ -355,6 +356,7 @@ func (b *Bambu) connectOnce(ctx context.Context) error {
 	b.cur = c
 	b.merger = newReportMerger() // nouvelle session : on repart d'un pushall complet
 	b.mu.Unlock()
+	b.rcNoteOK()
 	b.notify()
 	// pushall à la connexion : seul cas où la limite des 5 minutes ne s'applique pas.
 	b.sendPushAll(c, true)
@@ -381,6 +383,7 @@ func (b *Bambu) onLost(c *conn) {
 		b.cur = nil
 	}
 	b.mu.Unlock()
+	b.rcNoteLost()
 	c.markLost()
 	b.notify()
 }
@@ -394,15 +397,14 @@ func (b *Bambu) supervise() {
 		c := b.cur
 		b.mu.Unlock()
 		if c == nil {
-			select {
-			case <-b.ctx.Done():
+			if !b.waitReconnect() { // délai croissant plafonné, coupé dès qu'un port répond (reconnect.go)
 				return
-			case <-time.After(b.cfg.ReconnectDelay):
 			}
 			cctx, cancel := context.WithTimeout(b.ctx, 20*time.Second)
 			err := b.connectOnce(cctx)
 			cancel()
 			if err != nil {
+				b.rcNoteFail(err)
 				b.cfg.Logger.Warn("reconnect failed", "printer", b.cfg.PrinterID, "err", err)
 			}
 			continue
@@ -762,7 +764,7 @@ func (b *Bambu) control(ctx context.Context, cmd string, allowed func(State) boo
 	case err == nil:
 		return nil
 	case errors.Is(err, errTimeout):
-		return fmt.Errorf("printer: %s: expected state not observed in time", cmd)
+		return fmt.Errorf("printer: %s: %w in time", cmd, ErrStateNotObserved)
 	case errors.Is(err, errLost):
 		return fmt.Errorf("printer: %s: %w", cmd, ErrNotConnected)
 	}
