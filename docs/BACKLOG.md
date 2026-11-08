@@ -54,3 +54,20 @@ Prérequis : vue MCP App réellement affichée dans Claude Desktop (point 3).
 `export_project` / `get_project_export` (paquet `internal/export`, outils `internal/mcpserver/export_tools.go`, routes `/api/exports` dans `internal/httpapi/export.go`, bouton « Exporter le projet » sur une collection de la Bibliothèque, migration 0250). Archive zip (originaux vérifiés par sha256, sources paramétriques, profils effectifs sans G-code, `.gcode.3mf` validés en option, README en français, manifest.json, photos en option), construite en flux par un travail asynchrone, taille bornée, téléchargée par URL signée de 10 minutes, conservée 24 h. Aucune publication automatique : la réponse liste ce qu'il reste à faire à la main (voir `docs/UTILISATION.md` § 14).
 
 Restent ouverts hors lot : ponts Windows signés (`bambu-mcp.exe`, `bambu-agent.exe`), licence du dépôt (choix utilisateur).
+
+## Lot « game changers » (issu de docs/strategie/ETUDE-MARCHE.md, 2026-11-08)
+
+Ce qui change la position du produit sur le marché, par ordre d'impact. Règle : la valeur doit survivre à un durcissement de Bambu (risque n°1) et ne pas se battre sur la gestion de flotte (gratuite ailleurs) ni sur la génération 3D (déjà chez Bambu).
+
+| # | Chantier | Pourquoi c'est décisif | Segment |
+|---|---|---|---|
+| G1 | **Connecteur distant officiel + annuaire Anthropic** : OAuth en production (HTTPS public), fiche dans l'annuaire des connecteurs Claude, mcpservers.org, Glama, registre MCP | La distribution passe par les annuaires et claude.ai (aucun MCP Bambu sérieux n'y est) ; débloque aussi les cartes (vues) et le mobile | Tous |
+| G2 | **Coût réel, devis et marge** : prix de revient par pièce et par commande, prix de vente conseillé selon marge cible, frais de plateforme (Etsy, MakerWorld), devis PDF, rapprochement commande ↔ impressions | Le seul argument que les vendeurs paient tout de suite : ROI chiffrable en quelques ventes | Vendeurs, fermes |
+| G3 | **« Après la génération IA »** : importer un modèle généré (MakerLab/Meshy/Tripo, image ou texte), le réparer, l'orienter, vérifier la fabricabilité, le découper et le chiffrer en une conversation | La génération est banalisée et presque jamais imprimable telle quelle : la valeur est juste après, là où personne n'est | Makers, vendeurs |
+| G4 | **Rapport de fabricabilité traçable** : résistance, surplombs, adhérence, profils comparés, avec preuves (mesuré / calculé / estimé), exporté en PDF signé et rattaché à la pièce | Ouvre les bureaux d'études et PME (exigence qualité), et justifie un prix plus haut que la flotte | PME, fermes |
+| G5 | **Traçabilité par commande pour les fermes** : commande client → pièces → impressions (photo, réglages réels, bobine, opérateur, accord humain), file par priorité et échéance | Se différencie des gestionnaires de flotte en vendant la preuve et la qualité, pas le nombre d'imprimantes | Fermes |
+| G6 | **Mode classe / fablab** : approbation par un adulte (un élève prépare, un encadrant lance), sans compte élève, sur site, journal auditable | Marché institutionnel qui exige justement ce que le produit a déjà (approbation humaine, données chez soi) | Écoles, fablabs |
+| G7 | **Survivre au verrouillage Bambu** : fonctionnement complet « sans lancement » (préparer, déposer via carte SD/Handy/Bambu Connect, suivre ce qui est possible), et voie Bambu Connect / API officielle si elle s'ouvre | Protège 100 % de la valeur hors lancement si le mode Développeur disparaît | Tous |
+| G8 | **Compatible tout client MCP** (ChatGPT, Gemini, clients open source) et interface web autonome | Réduit la dépendance à Claude (risque n°4) et élargit le marché | Tous |
+
+À valider avant de coder G2–G6 : entretiens clients (questions en § 10.1 de l'étude) et page d'attente (§ 10.2).
