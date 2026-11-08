@@ -13,6 +13,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 )
 
 // Envoi de fichiers par morceaux et import par lien (chantier A). Logique dans internal/catalog (upload.go,
@@ -41,6 +42,35 @@ type UploadFileOutput struct {
 	ExpiresAt  string              `json:"expires_at,omitempty"`
 	File       *catalog.FileResult `json:"file,omitempty" jsonschema:"présent quand status=complete : modèle créé, nouvelle version ou doublon"`
 	Note       string              `json:"note,omitempty"`
+	// Progression (champs structurés stables, mêmes noms que jobs.Progress).
+	Percent    int    `json:"percent" jsonschema:"avancement 0..100 (octets reçus / total)"`
+	DoneBytes  int64  `json:"done_bytes" jsonschema:"octets reçus"`
+	TotalBytes int64  `json:"total_bytes" jsonschema:"octets attendus"`
+	Phase      string `json:"phase" jsonschema:"receiving | complete"`
+	PhaseLabel string `json:"phase_label"`
+	Bar        string `json:"bar" jsonschema:"barre texte de 10 cases"`
+	Text       string `json:"text" jsonschema:"ligne lisible : « Réception de x.stl : ███████░░░ 72 % (21,6 / 30 Mo) »"`
+}
+
+// withProgress complète les champs de progression d'un envoi (octets reçus / total).
+func (o UploadFileOutput) withProgress(name string) UploadFileOutput {
+	o.DoneBytes, o.TotalBytes = o.Received, o.TotalSize
+	if o.TotalSize > 0 {
+		o.Percent = int(min(100, o.Received*100/o.TotalSize))
+	}
+	o.Phase, o.PhaseLabel = "receiving", "Réception de "+name
+	if o.Status == "complete" {
+		o.Percent, o.Phase, o.PhaseLabel = 100, "complete", "Réception terminée : "+name
+	}
+	if name == "" {
+		o.PhaseLabel = "Réception du fichier"
+	}
+	o.Bar = jobs.Bar(o.Percent, jobs.BarWidth)
+	o.Text = fmt.Sprintf("%s : %s %d %%", o.PhaseLabel, o.Bar, o.Percent)
+	if o.TotalSize > 0 {
+		o.Text += fmt.Sprintf(" (%s / %s Mo)", jobs.FormatMB(o.DoneBytes), jobs.FormatMB(o.TotalBytes))
+	}
+	return o
 }
 
 // UploadIDInput désigne une session d'envoi.
@@ -144,7 +174,7 @@ func (h *uploadHandlers) uploadFile(ctx context.Context, _ *mcp.CallToolRequest,
 	}
 	out := outFrom(st)
 	if !st.Complete {
-		out.Note = fmt.Sprintf("%d/%d octets reçus ; envoyer le morceau suivant avec upload_id et offset=%d.", st.Received, st.Total, st.NextOffset)
+		out.Note = fmt.Sprintf("%s — %d/%d octets reçus ; envoyer le morceau suivant avec upload_id et offset=%d.", out.Text, st.Received, st.Total, st.NextOffset)
 		return textResult(out.Note), out, nil
 	}
 	res, err := h.svc.UploadFinish(ctx, id)
@@ -152,6 +182,7 @@ func (h *uploadHandlers) uploadFile(ctx context.Context, _ *mcp.CallToolRequest,
 		return nil, UploadFileOutput{UploadID: id}, fmt.Errorf("envoi terminé mais refusé (la session est fermée, recommencer l'envoi) : %w", err)
 	}
 	out.Status, out.File, out.Note = "complete", &res.File, res.Note
+	out = out.withProgress(st.Filename)
 	txt := fmt.Sprintf("Fichier %s reçu et contrôlé : %s", st.Filename, res.File.Status)
 	if res.File.ModelID != "" {
 		txt += " (modèle " + res.File.ModelID + ")"
@@ -161,7 +192,7 @@ func (h *uploadHandlers) uploadFile(ctx context.Context, _ *mcp.CallToolRequest,
 
 func outFrom(st catalog.UploadStatus) UploadFileOutput {
 	return UploadFileOutput{UploadID: st.UploadID, Status: "in_progress", Received: st.Received, TotalSize: st.Total, NextOffset: st.NextOffset,
-		ExpiresAt: st.ExpiresAt.Format("2006-01-02T15:04:05Z07:00")}
+		ExpiresAt: st.ExpiresAt.Format("2006-01-02T15:04:05Z07:00")}.withProgress(st.Filename)
 }
 
 func (h *uploadHandlers) status(ctx context.Context, _ *mcp.CallToolRequest, in UploadIDInput) (*mcp.CallToolResult, UploadFileOutput, error) {
@@ -170,7 +201,7 @@ func (h *uploadHandlers) status(ctx context.Context, _ *mcp.CallToolRequest, in 
 		return nil, UploadFileOutput{}, err
 	}
 	o := outFrom(st)
-	o.Note = fmt.Sprintf("%d/%d octets reçus ; reprendre à l'offset %d.", st.Received, st.Total, st.NextOffset)
+	o.Note = fmt.Sprintf("%s — %d/%d octets reçus ; reprendre à l'offset %d.", o.Text, st.Received, st.Total, st.NextOffset)
 	return textResult(o.Note), o, nil
 }
 

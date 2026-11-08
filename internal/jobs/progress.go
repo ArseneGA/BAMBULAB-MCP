@@ -13,6 +13,7 @@ import (
 // Detail est l'avancement fin d'un travail en cours (en mémoire : utile seulement tant qu'il s'exécute).
 type Detail struct {
 	Phase      string  // « découpe par Bambu Studio », « envoi FTPS »…
+	Label      string  // libellé lisible de la barre, ex. « Dépôt sur la P1S » (sinon déduit du genre de travail)
 	BytesDone  int64   // octets déjà transférés (envois)
 	BytesTotal int64   // octets à transférer
 	Expected   float64 // durée attendue en secondes (découpe : estimation)
@@ -47,7 +48,7 @@ type Progress struct {
 	JobID          string   `json:"job_id"`
 	State          string   `json:"state"`
 	Percent        int      `json:"percent" jsonschema:"avancement 0..100 (octets envoyés / total pour un envoi, temps écoulé / attendu pour une découpe)"`
-	Phase          string   `json:"phase,omitempty"`
+	Phase          string   `json:"phase" jsonschema:"libellé libre de la phase en cours (toujours présent ; le code stable est phase_code)"`
 	Message        string   `json:"message,omitempty"`
 	BytesDone      int64    `json:"bytes_done,omitempty"`
 	BytesTotal     int64    `json:"bytes_total,omitempty"`
@@ -61,10 +62,28 @@ type Progress struct {
 	HeartbeatAge   *int     `json:"heartbeat_age_seconds,omitempty"`
 	Terminal       bool     `json:"terminal"`
 	Notes          []string `json:"notes,omitempty"`
+	// Champs structurés STABLES pour dessiner une barre (documentés dans docs/UTILISATION.md) : percent, done_bytes,
+	// total_bytes, eta_seconds, phase_code / phase_label (phase est le libellé libre historique), bar et text.
+	PhaseCode  string `json:"phase_code" jsonschema:"phase STABLE : queued | slicing | uploading | starting | importing | analyzing | rendering | converting | exporting | running | done | failed | cancelled | unknown"`
+	PhaseLabel string `json:"phase_label" jsonschema:"libellé lisible de la phase, ex. « Dépôt sur la P1S »"`
+	DoneBytes  int64  `json:"done_bytes" jsonschema:"octets déjà transférés (0 si le travail n'a pas d'octets)"`
+	TotalBytes int64  `json:"total_bytes" jsonschema:"octets à transférer au total (0 si inconnu ou sans objet)"`
+	Bar        string `json:"bar" jsonschema:"barre texte de 10 cases, ex. ███████░░░"`
+	Text       string `json:"text" jsonschema:"ligne lisible : « Dépôt sur la P1S : ███████░░░ 72 % (21,6 / 30 Mo, ~1 min) »"`
 }
 
-// ProgressOf calcule l'avancement lisible d'un travail.
+// ProgressOf calcule l'avancement lisible d'un travail (et ses champs structurés stables : voir finalize).
 func (q *Queue) ProgressOf(ctx context.Context, j contracts.Job) Progress {
+	p := q.progressOf(ctx, j)
+	label := ""
+	if d, ok := GetDetail(j.ID); ok && !j.State.Terminal() && j.State != contracts.JobQueued {
+		label = d.Label
+	}
+	p.finalize(j, label)
+	return p
+}
+
+func (q *Queue) progressOf(ctx context.Context, j contracts.Job) Progress {
 	now := time.Now()
 	p := Progress{JobID: j.ID, State: string(j.State), Message: j.Message, Terminal: j.State.Terminal()}
 	p.Percent = int(math.Round(j.Progress * 100))

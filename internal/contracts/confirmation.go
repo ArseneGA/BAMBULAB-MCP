@@ -59,6 +59,12 @@ type ConfirmationBinding struct {
 	// NoBedLeveling : le lancement approuvé n'effectue PAS la mise à niveau du plateau. Absent (faux) par défaut :
 	// l'empreinte des liaisons « mise à niveau activée » reste inchangée (omitempty).
 	NoBedLeveling bool `json:"no_bed_leveling,omitempty"`
+	// Options de démarrage approuvées. Elles sont exprimées par l'ÉCART au comportement historique (calibration du
+	// débit et des vibrations activées, pas de timelapse) : absentes (faux) par défaut, donc l'empreinte des liaisons
+	// « par défaut » est inchangée. Les valeurs approuvées sont celles de la commande envoyée.
+	NoFlowCali      bool `json:"no_flow_cali,omitempty"`
+	NoVibrationCali bool `json:"no_vibration_cali,omitempty"`
+	Timelapse       bool `json:"timelapse,omitempty"`
 }
 
 // Fingerprint est une empreinte canonique (matières triées par emplacement).

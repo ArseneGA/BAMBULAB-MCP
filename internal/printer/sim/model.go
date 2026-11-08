@@ -17,6 +17,8 @@ type model struct {
 	file       string
 
 	prepareUntil time.Time
+	prepareStart time.Time
+	stageSeq     []int // étapes de préparation (stg_cur) selon les options reçues ; voir setStages
 	runStarted   time.Time
 	pausedAt     time.Time
 	pausedTotal  time.Duration
@@ -79,6 +81,8 @@ func (m *model) begin(now time.Time, file, param, subtask string) error {
 	m.taskSeq++
 	m.taskID = fmt.Sprint(1000 + m.taskSeq)
 	m.gcodeState = "PREPARE"
+	m.prepareStart = now
+	m.stageSeq = []int{13, 2, 14, 7}
 	m.prepareUntil = now.Add(m.prepareDur)
 	m.percent, m.layer, m.remaining = 0, 0, int(math.Ceil(m.printDur.Minutes()))
 	m.pausedTotal, m.pausedAt = 0, time.Time{}
@@ -184,7 +188,7 @@ func (m *model) report(c Config) map[string]any {
 		"wifi_signal":          fmt.Sprintf("%ddBm", m.wifi),
 		"nozzle_diameter":      "0.4",
 		"spd_lvl":              2,
-		"stg_cur":              stage(m.gcodeState),
+		"stg_cur":              m.stageNow(time.Now()),
 		"print_type":           "local",
 		"hw_switch_state":      0,
 		"sdcard":               true,
@@ -211,14 +215,58 @@ func nonNilHMS(h []map[string]any) []map[string]any {
 	return h
 }
 
-func stage(st string) int {
-	switch st {
+// setStages compose la suite d'étapes de PRÉPARATION d'après les options du project_file reçu : la mise à niveau
+// (étape 1), la calibration du débit (19) et celle des vibrations (25) ne sont jouées que si l'option est vraie,
+// comme sur la vraie machine. Cela permet de prouver, par stg_cur, ce que l'imprimante a réellement exécuté.
+func (m *model) setStages(p map[string]any) {
+	on := func(k string, def bool) bool {
+		if v, ok := p[k].(bool); ok {
+			return v
+		}
+		return def
+	}
+	seq := []int{13, 2, 14}
+	if on("bed_leveling", true) {
+		seq = append(seq, 1)
+	}
+	seq = append(seq, 7)
+	if on("flow_cali", true) {
+		seq = append(seq, 19)
+	}
+	if on("vibration_cali", true) {
+		seq = append(seq, 25)
+	}
+	m.stageSeq = seq
+}
+
+// stageNow : stg_cur selon l'état simulé (255 = repos).
+func (m *model) stageNow(now time.Time) int {
+	switch m.gcodeState {
 	case "PREPARE":
-		return 2
+		if len(m.stageSeq) == 0 || m.prepareDur <= 0 {
+			return 2
+		}
+		i := int(float64(now.Sub(m.prepareStart)) / float64(m.prepareDur) * float64(len(m.stageSeq)))
+		if i < 0 {
+			i = 0
+		}
+		if i >= len(m.stageSeq) {
+			i = len(m.stageSeq) - 1
+		}
+		return m.stageSeq[i]
 	case "RUNNING":
 		return 0
 	case "PAUSE":
 		return 16
 	}
 	return -1
+}
+
+// forceState impose un état (tests : FAILED/FINISH résiduels, print_error).
+func (m *model) forceState(gcodeState string, printError int) {
+	m.gcodeState = gcodeState
+	m.printError = printError
+	if gcodeState == "FAILED" || gcodeState == "FINISH" || gcodeState == "IDLE" {
+		m.nozzleT, m.bedT = 0, 0
+	}
 }

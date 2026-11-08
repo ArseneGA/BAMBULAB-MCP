@@ -81,6 +81,13 @@ func confirmationText(v *printing.ConfirmationView, baseURL string, views bool) 
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Confirmation %s créée : %s sur %s, plateau %d, empreinte %s, mise à niveau du plateau : %s. Valable jusqu'à %s.\n",
 		v.ConfirmationID, b.File, b.PrinterName, b.Plate, shortSHA(b.SHA256), bl, v.ExpiresAtLocal)
+	onoff := func(v bool) string {
+		if v {
+			return "oui"
+		}
+		return "NON"
+	}
+	fmt.Fprintf(&sb, "Options de démarrage approuvées : calibration du débit %s, calibration des vibrations %s, timelapse %s.\n", onoff(b.FlowCali), onoff(b.VibrationCali), map[bool]string{true: "OUI", false: "non"}[b.Timelapse])
 	for _, a := range b.Adhesion {
 		sb.WriteString("AVERTISSEMENT (non bloquant, à dire à l'utilisateur) : " + a + "\n")
 	}

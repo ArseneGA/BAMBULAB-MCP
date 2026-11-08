@@ -66,7 +66,11 @@ type BambuConfig struct {
 	StartObserveTimeout  time.Duration // attente de PREPARE/RUNNING après start (défaut 90 s)
 	ReconnectDelay       time.Duration // défaut 2 s
 	AllowStartFromFinish bool          // autorise le départ depuis l'état finished (défaut non)
-	ReconcileSettle      time.Duration // délai de stabilisation avant de conclure « non démarré » (défaut 10 s)
+	// StartFromTerminal : accepte le départ depuis FINISH et FAILED (comme Bambu Studio). Une P1S reste en FAILED après
+	// une annulation jusqu'à son redémarrage. Exige toujours un état frais, sans HMS actif ni print_error en cours
+	// (hors reliquat bénin d'annulation) ; l'ancien état final ne compte jamais comme preuve de départ. Défaut : non.
+	StartFromTerminal bool
+	ReconcileSettle   time.Duration // délai de stabilisation avant de conclure « non démarré » (défaut 10 s)
 }
 
 func (c *BambuConfig) defaults() {

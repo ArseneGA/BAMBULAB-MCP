@@ -96,10 +96,16 @@ type RequestConfirmationInput struct {
 	// BedLeveling : mise à niveau automatique du plateau au démarrage. Défaut : oui. L'humain la voit sur /confirm et
 	// dans la vue, et elle fait partie de la liaison qu'il approuve ; la changer exige une nouvelle confirmation.
 	BedLeveling *bool `json:"bed_leveling,omitempty" jsonschema:"mise à niveau du plateau au démarrage (défaut true) ; affichée à l'humain et incluse dans ce qu'il approuve"`
+	// FlowCali, VibrationCali, Timelapse : autres options de démarrage. Défauts = ce que le service envoyait déjà
+	// (calibration du débit : oui ; vibrations : oui ; timelapse : non). Affichées à l'humain et incluses dans ce qu'il approuve.
+	FlowCali      *bool `json:"flow_cali,omitempty" jsonschema:"calibration du débit au démarrage (défaut true) ; affichée à l'humain et incluse dans ce qu'il approuve"`
+	VibrationCali *bool `json:"vibration_cali,omitempty" jsonschema:"calibration des vibrations au démarrage (défaut true ; imprimantes qui la gèrent) ; affichée à l'humain et incluse dans ce qu'il approuve"`
+	Timelapse     *bool `json:"timelapse,omitempty" jsonschema:"enregistrer un timelapse (défaut false) ; affiché à l'humain et inclus dans ce qu'il approuve"`
 }
 
 func newBinding(j Job) contracts.ConfirmationBinding {
-	b := contracts.ConfirmationBinding{PrinterID: j.PrinterID, ArtifactSHA256: j.ArtifactSHA256, Plate: j.Plate, NoBedLeveling: j.NoBedLeveling}
+	b := contracts.ConfirmationBinding{PrinterID: j.PrinterID, ArtifactSHA256: j.ArtifactSHA256, Plate: j.Plate, NoBedLeveling: j.NoBedLeveling,
+		NoFlowCali: j.NoFlowCali, NoVibrationCali: j.NoVibrationCali, Timelapse: j.Timelapse}
 	for _, a := range j.Assignments {
 		b.Materials = append(b.Materials, contracts.SlotAssignment{Slot: bindingSlot(a), MaterialID: a.MaterialID})
 	}
@@ -119,7 +125,17 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 		return nil, fmt.Errorf("%w : dépôt, plateau et matières requis avant la confirmation", ErrState)
 	}
 	noBL := in.BedLeveling != nil && !*in.BedLeveling
-	j.NoBedLeveling = noBL // liaison de CETTE confirmation ; enregistrée sur l'impression plus bas
+	noFlow := in.FlowCali != nil && !*in.FlowCali
+	noVib := in.VibrationCali != nil && !*in.VibrationCali
+	timelapse := in.Timelapse != nil && *in.Timelapse
+	if rec, rerr := s.GetPrinterRecord(ctx, j.PrinterID); rerr == nil && in.VibrationCali != nil && *in.VibrationCali != true && !vibrationCaliSupported(rec.ModelID) {
+		return nil, invalidf("la calibration des vibrations n'est pas réglable sur le modèle %q", rec.ModelID)
+	}
+	// AVANT toute confirmation : l'imprimante doit être lançable (sinon l'humain approuverait un lancement voué à l'échec).
+	if err := s.ensureLaunchable(ctx, j.PrinterID); err != nil {
+		return nil, err
+	}
+	j.NoBedLeveling, j.NoFlowCali, j.NoVibrationCali, j.Timelapse = noBL, noFlow, noVib, timelapse // liaison de CETTE confirmation ; enregistrée plus bas
 	id := contracts.NewID("cf")
 	conf, token, err := contracts.NewConfirmation(id, j.ID, newBinding(j), s.d.ConfirmationTTL, s.now())
 	if err != nil {
@@ -139,7 +155,7 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 			return fmt.Errorf("%w : %s", ErrState, x.State)
 		}
 		old, x.ConfirmationID = x.ConfirmationID, id
-		x.NoBedLeveling = noBL
+		x.NoBedLeveling, x.NoFlowCali, x.NoVibrationCali, x.Timelapse = noBL, noFlow, noVib, timelapse
 		x.event("confirmation_issued", x.State, x.State, "confirmation "+id+" émise (jeton non transmis au modèle)", s.now())
 		return nil
 	})

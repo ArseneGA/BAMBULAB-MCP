@@ -3,6 +3,7 @@ package printing
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -54,9 +55,17 @@ func (s *Service) describeStatus(ctx context.Context, o *PrinterStatus, st print
 		cause := "cause non précisée par l'imprimante"
 		switch {
 		case st.PrintError != 0 || len(st.HMS) > 0:
-			cause = fmt.Sprintf("erreur signalée (print_error=%d, %d alerte(s) HMS : %s)", st.PrintError, len(st.HMS), strings.Join(o.HMSCodes, ", "))
+			var det []string
+			for _, d := range o.ErrorDetails {
+				det = append(det, d.Short+" : "+d.Text)
+			}
+			cause = fmt.Sprintf("erreur signalée (print_error=%d, %d alerte(s) HMS : %s ; décodage : %s)", st.PrintError, len(st.HMS), strings.Join(o.HMSCodes, ", "), strings.Join(det, " ; "))
 		case st.FailReason != "":
 			cause = "raison : " + st.FailReason
+			if n, err := strconv.Atoi(st.FailReason); err == nil && n != 0 { // fail_reason est souvent le print_error en décimal
+				d := printer.DescribePrintError(n)
+				cause = fmt.Sprintf("raison : %s — %s (%s)", st.FailReason, d.Text, d.Short)
+			}
 		}
 		o.Explanation = "gcode_state FAILED : dans le protocole Bambu, FAILED signifie que la dernière impression s'est terminée SANS aller au bout — soit annulée (par l'écran, Bambu Studio ou le service), soit en erreur. Ici : "
 		if last != nil && last.StoppedByUser && last.State == contracts.PrintCancelled {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
@@ -51,6 +52,19 @@ func (s *Service) ProgressFor(ctx context.Context, j Job) *jobs.Progress {
 				eta := j.Print.RemainingMin * 60
 				p.ETASeconds = &eta
 			}
+		}
+		// champs structurés stables (voir jobs.Progress) + barre texte
+		p.PhaseCode, p.PhaseLabel, p.Bar = "printing", "Impression en cours", jobs.Bar(p.Percent, jobs.BarWidth)
+		det := []string{}
+		if j.Print != nil && j.Print.TotalLayers > 0 {
+			det = append(det, fmt.Sprintf("couche %d/%d", j.Print.Layer, j.Print.TotalLayers))
+		}
+		if p.ETASeconds != nil {
+			det = append(det, "reste "+jobs.FormatETA(*p.ETASeconds))
+		}
+		p.Text = fmt.Sprintf("%s : %s %d %%", p.PhaseLabel, p.Bar, p.Percent)
+		if len(det) > 0 {
+			p.Text += " (" + strings.Join(det, ", ") + ")"
 		}
 		return &p
 	}

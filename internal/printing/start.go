@@ -94,20 +94,12 @@ func (s *Service) StartPrint(ctx context.Context, in StartInput) (*StartOutput, 
 		return nil, err
 	}
 	// Contrôle d'état FRAIS avant toute chose (idle, connecté, sans erreur) ; Bambu.Start le refait.
-	ad, rec, err := s.adapter(ctx, j.PrinterID)
+	ad, _, err := s.adapter(ctx, j.PrinterID)
 	if err != nil {
 		return nil, err
 	}
-	sctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	st, err := ad.Status(sctx)
-	cancel()
-	okState := st.State == printer.StateIdle || (rec.AllowStartFromFinish && st.State == printer.StateFinished)
-	if err != nil || !st.Connected || st.Stale || !okState || st.HasError() {
-		why := fmt.Sprintf("état %s, connecté=%v, périmé=%v, erreurs=%v", st.State, st.Connected, st.Stale, st.HasError())
-		if err != nil {
-			why = err.Error()
-		}
-		return nil, fmt.Errorf("%w : l'imprimante n'est pas prête (%s) — rien n'a été envoyé, la confirmation reste valable", printer.ErrNotReady, why)
+	if _, lerr := s.launchableNow(ctx, ad, true); lerr != nil {
+		return nil, fmt.Errorf("%w : l'imprimante n'est pas prête (%v) — rien n'a été envoyé, la confirmation reste valable", printer.ErrNotReady, lerr)
 	}
 	params, _ := json.Marshal(map[string]string{"print_job_id": j.ID, "confirmation_id": in.ConfirmationID})
 	qj, created, err := s.d.Queue.Enqueue(ctx, jobs.EnqueueParams{Kind: JobStart, Class: contracts.ClassLight, Params: params, IdempotencyKey: ikey})
@@ -198,7 +190,7 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if j.Remote == nil {
 		return notSent(errors.New("aucun fichier déposé"))
 	}
-	ad, rec, err := s.adapter(bg, j.PrinterID)
+	ad, _, err := s.adapter(bg, j.PrinterID)
 	if err != nil {
 		return notSent(err)
 	}
@@ -206,8 +198,9 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if err := s.d.Store.GetDoc(bg, "print_confirmations", p.Conf, &conf); err != nil {
 		return notSent(err)
 	}
-	opts := printer.DefaultStartOptions()
-	opts.BedLeveling = !j.NoBedLeveling // ce que l'humain a vu et approuvé (liaison de la confirmation) ; défaut : oui
+	opts := startOptionsOf(j)
+	preState, _ := ad.Status(bg) // état juste avant l'envoi : un départ depuis FINISH/FAILED exige de VOIR l'activité ensuite
+	fromTerminal := printer.TerminalState(preState.State)
 	req := printer.StartRequest{
 		Remote: *j.Remote, Plate: j.Plate, UseAMS: j.UseAMS, AMSMapping: j.AMSMapping, PlateClear: a.plateClear,
 		Options: opts,
@@ -223,7 +216,7 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 		return nil, &jobs.HandlerError{Code: "aborted_before_send", Err: serr}
 	}
 	switch {
-	case serr == nil && rec.AllowStartFromFinish && !s.confirmActive(ctx, ad, j.Remote.Name):
+	case serr == nil && fromTerminal && !s.confirmActive(ctx, ad, j.Remote.Name):
 		// Départ depuis FINISH : l'état FINISH précédent peut avoir été pris pour un succès ; rien d'actif n'a été vu.
 		if _, err := s.transition(bg, j.ID, contracts.EvStartLost, "commande acceptée mais aucune activité observée pour ce fichier (départ depuis FINISH)", func(x *Job) error {
 			x.LastError = "lancement indéterminé : ne pas relancer ; reconcile_print"
@@ -234,8 +227,12 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 		out, _ := json.Marshal(map[string]string{"outcome": "start_unknown", "note": "Aucune activité observée après la commande (départ depuis FINISH). NE PAS relancer : appeler reconcile_print."})
 		return out, nil
 	case serr == nil:
+		first := &PrintProgress{PrinterState: "preparing", MatchesFile: true, SeenActive: true, ObservedAt: s.now()}
+		if st2, e := ad.Status(bg); e == nil && matches(st2, j.Remote.Name) {
+			first.noteStage(st2, s.now()) // première étape vue (historique propre à CETTE impression)
+		}
 		if _, err := s.transition(bg, j.ID, contracts.EvObservedPrinting, "imprimante en préparation/impression observée", func(x *Job) error {
-			x.Print = &PrintProgress{PrinterState: "preparing", MatchesFile: true, SeenActive: true, ObservedAt: s.now()}
+			x.Print = first
 			return nil
 		}); err != nil {
 			return nil, &jobs.HandlerError{Code: "state", Err: err}
@@ -300,6 +297,12 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 		RemainingMin: st.RemainingMin, ObservedAt: s.now(), MatchesFile: m, PrinterReason: st.FailReason}
 	if j.Print != nil {
 		pg.SeenActive = j.Print.SeenActive
+		pg.Stage, pg.StageName = j.Print.Stage, j.Print.StageName
+		pg.Stages = append([]StageSeen(nil), j.Print.Stages...)
+	}
+	stageNew := false
+	if m {
+		stageNew = pg.noteStage(st, s.now())
 	}
 	if m && (st.State == printer.StatePreparing || st.State == printer.StatePrinting || st.State == printer.StatePaused) {
 		pg.SeenActive = true
@@ -331,7 +334,7 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 		msg := fmt.Sprintf("l'imprimante rapporte un échec (%s, print_error=%d)", st.FailReason, st.PrintError)
 		_, _ = s.transition(ctx, id, contracts.EvFail, msg, func(x *Job) error { x.Print, x.LastError = pg, msg; return nil })
 	default:
-		if j.Print == nil || j.Print.Percent != pg.Percent || j.Print.PrinterState != pg.PrinterState || j.Print.Layer != pg.Layer {
+		if j.Print == nil || stageNew || j.Print.Percent != pg.Percent || j.Print.PrinterState != pg.PrinterState || j.Print.Layer != pg.Layer {
 			_, _ = s.update(ctx, id, func(x *Job) error { x.Print = pg; return nil })
 		}
 	}
@@ -410,7 +413,10 @@ type PrintStatus struct {
 	Job      Job            `json:"job"`
 	Progress *jobs.Progress `json:"progress,omitempty" jsonschema:"avancement de la phase en cours : pourcentage, phase, octets, durée restante, position en file"`
 	Printer  *PrinterStatus `json:"printer,omitempty"`
-	Note     string         `json:"note,omitempty"`
+	// Stages : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression (étapes vues, avec l'heure locale).
+	Stages *StageSummary `json:"stage_report,omitempty" jsonschema:"étapes réellement exécutées d'après l'étape courante transmise par l'imprimante (mise à niveau, chauffe, nettoyage, calibrations) avec l'heure de première observation"`
+	Wait   *WaitInfo     `json:"wait,omitempty" jsonschema:"présent quand wait_seconds ou wait_for_print_change a attendu : ce qui a changé, ou échéance"`
+	Note   string        `json:"note,omitempty"`
 }
 
 // GetPrintStatus relit l'impression et, si elle est active, rafraîchit depuis l'imprimante.
@@ -420,6 +426,7 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 		return nil, err
 	}
 	out := &PrintStatus{}
+	var curSt *printer.Status
 	j = s.CheckConsistency(ctx, j)
 	switch j.State {
 	case contracts.PrintPrinting, contracts.PrintStartRequested, contracts.PrintStartUnknown, contracts.PrintUploaded, contracts.PrintAwaitingConfirmation:
@@ -431,6 +438,7 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 		if ad, _, err := s.adapter(ctx, j.PrinterID); err == nil {
 			if st, err := ad.Status(ctx); err == nil {
 				s.observe(ctx, id, st)
+				curSt = &st
 			}
 		}
 		s.track(id)
@@ -449,6 +457,7 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 	}
 	out.Job = j
 	out.Progress = s.ProgressFor(ctx, j)
+	out.Stages = stageSummary(j, curSt)
 	return out, nil
 }
 
