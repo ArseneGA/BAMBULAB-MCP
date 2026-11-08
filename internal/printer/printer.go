@@ -69,6 +69,8 @@ type Status struct {
 	UpdatedAt      time.Time  `json:"updated_at"`       // horodatage de la dernière info reçue
 	Stale          bool       `json:"stale"`            // UpdatedAt plus ancien que le seuil de fraîcheur
 	Connected      bool       `json:"connected"`        // session MQTT active
+	Stage          int        `json:"stage"`            // étape courante (stg_cur) ; significatif seulement si StageSeen
+	StageSeen      bool       `json:"stage_seen"`       // l'imprimante a transmis stg_cur
 	FullReportSeen bool       `json:"full_report_seen"` // au moins un pushall complet fusionné
 	AMS            *AMSState  `json:"ams,omitempty"`    // état AMS du dernier rapport (nil si aucun)
 }

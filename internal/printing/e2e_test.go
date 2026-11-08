@@ -380,9 +380,16 @@ func TestEndToEndChainWithSimulator(t *testing.T) {
 	if st, _ := r.humanConfirm(str(cf5, "confirm_url"), true); st != 200 {
 		t.Fatal("approbation 5")
 	}
-	if s := r.call("start_print", map[string]any{"print_job_id": job5, "confirmation_id": str(cf5, "confirmation_id"), "idempotency_key": "cle-start-impression-5"}); str(s, "outcome") != "printing" {
-		t.Fatalf("lancement 5 : %v", s)
+	// Le simulateur coupe la liaison juste après la commande (panne drop_after_start armée en 8a) : depuis FINISH,
+	// l'ancien état final ne prouve rien ; le lancement est donc soit observé (« printing »), soit déclaré
+	// START_UNKNOWN puis réconcilié en LECTURE (jamais de renvoi) dès que l'imprimante montre ce fichier en cours.
+	s5 := r.call("start_print", map[string]any{"print_job_id": job5, "confirmation_id": str(cf5, "confirmation_id"), "idempotency_key": "cle-start-impression-5"})
+	if o := str(s5, "outcome"); o != "printing" && o != "start_unknown" {
+		t.Fatalf("lancement 5 : %v", s5)
 	}
+	waitFor(t, 40*time.Second, "impression 5 suivie (PRINTING)", func() bool {
+		return str(r.call("get_print_status", map[string]any{"print_job_id": job5}), "job", "state") == "PRINTING"
+	})
 	// Arrêt : cancel_print ne renvoie AUCUN identifiant exécutable ; il crée une demande et renvoie /stop/{id}.
 	c5 := r.call("cancel_print", map[string]any{"print_job_id": job5})
 	stopURL := str(c5, "stop_url")

@@ -81,6 +81,7 @@ func New(c *core.Core) *mcp.Server {
 		Annotations: roAnn,
 		Meta:        AppToolMeta(AtelierURI),
 	}, h.showAtelier)
+	AddWaitTools(s, c) // attente bloquante : wait_for_job, wait_for_print_change (wait_tools.go)
 	registerCatalogTools(s, &catalogHandlers{svc: c.Catalog})
 	registerUploadTools(s, c)
 	registerLibraryTools(s, c)
@@ -207,9 +208,16 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if err != nil {
 		return nil, JobStatusOut{Job: raw}, err
 	}
+	out, txt := h.jobStatusOf(ctx, raw, in.LogTail)
+	return textResult(txt), out, nil
+}
+
+// jobStatusOf compose l'état d'un travail (sans secret) et son texte : la ligne de barre « Dépôt sur la P1S :
+// ███████░░░ 72 % (21,6 / 30 Mo, ~1 min) » est celle de jobs.Progress.Text, identique à ce que lisent les clients.
+func (h *handlers) jobStatusOf(ctx context.Context, raw contracts.Job, logTail int) (JobStatusOut, string) {
 	prog := h.c.Queue.ProgressOf(ctx, raw)
 	j := raw.Redacted() // jamais de champs secrets vers le client
-	tail := in.LogTail
+	tail := logTail
 	if tail <= 0 {
 		tail = 50
 	}
@@ -219,26 +227,14 @@ func (h *handlers) getJobStatus(ctx context.Context, _ *mcp.CallToolRequest, in 
 	if len(j.Logs) > tail {
 		j.Logs = j.Logs[len(j.Logs)-tail:]
 	}
-	txt := fmt.Sprintf("Travail %s (%s) : %s, %d %%", j.ID, j.Kind, j.State, prog.Percent)
-	if prog.Phase != "" {
-		txt += " — " + prog.Phase
-	}
-	if prog.QueuePosition != nil {
-		txt += fmt.Sprintf(" (position %d dans la file)", *prog.QueuePosition)
-	}
-	if prog.BytesTotal > 0 {
-		txt += fmt.Sprintf(", %.1f / %.1f Mo", float64(prog.BytesDone)/(1<<20), float64(prog.BytesTotal)/(1<<20))
-	}
-	if prog.ETASeconds != nil {
-		txt += fmt.Sprintf(", reste ~%d s", *prog.ETASeconds)
-	}
+	txt := fmt.Sprintf("Travail %s (%s) : %s. %s", j.ID, j.Kind, j.State, prog.Text)
 	if prog.Estimated {
-		txt += " (estimation : Bambu Studio ne publie pas de progression)"
+		txt += " (Bambu Studio ne publie pas de progression : pourcentage estimé par le temps)"
 	}
-	if prog.Stalled {
-		txt += " — ATTENTION : aucun signe de vie, probablement bloqué"
+	if j.State == contracts.JobFailed && j.Error != nil {
+		txt += " Erreur : " + j.Error.Message
 	}
-	return textResult(txt + "."), JobStatusOut{Job: j, Detail: prog}, nil
+	return JobStatusOut{Job: j, Detail: prog}, txt + "."
 }
 
 func (h *handlers) cancelJob(ctx context.Context, _ *mcp.CallToolRequest, in JobIDInput) (*mcp.CallToolResult, CancelJobOutput, error) {

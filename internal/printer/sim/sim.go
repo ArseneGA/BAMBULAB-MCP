@@ -291,6 +291,15 @@ func (s *Sim) StartCommands() []StartRecord {
 	return append([]StartRecord(nil), s.starts...)
 }
 
+// ForceState impose un gcode_state (IDLE, FINISH, FAILED...) et un print_error, puis le publie : reproduit le FAILED
+// résiduel d'une P1S après une annulation (print_error 50348044 affiché jusqu'au redémarrage). Pour les tests.
+func (s *Sim) ForceState(gcodeState string, printError int) {
+	s.mu.Lock()
+	s.p.forceState(gcodeState, printError)
+	s.mu.Unlock()
+	s.publishDelta(false)
+}
+
 // GcodeState renvoie le gcode_state courant du modèle.
 func (s *Sim) GcodeState() string {
 	s.mu.Lock()
@@ -487,6 +496,9 @@ func (s *Sim) onProjectFile(seq string, p map[string]any) {
 	name := fileFromURL(fmt.Sprint(p["url"]))
 	s.mu.Lock()
 	err := s.p.begin(time.Now(), name, fmt.Sprint(p["param"]), fmt.Sprint(p["subtask_name"]))
+	if err == nil {
+		s.p.setStages(p)
+	}
 	if err == nil && faults[FaultDropAfterStart] {
 		// L'impression démarre mais la liaison tombe avant tout accusé ni rapport :
 		// l'appelant ne peut pas savoir. Sous le verrou, pour qu'aucun rapport ne

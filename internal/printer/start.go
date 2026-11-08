@@ -134,13 +134,11 @@ func (b *Bambu) Start(ctx context.Context, req StartRequest) error {
 	if err != nil {
 		return err
 	}
-	okState := st.State == StateIdle || (b.cfg.AllowStartFromFinish && st.State == StateFinished)
-	if !okState {
-		return fmt.Errorf("%w: state is %s", ErrNotReady, st.State)
+	pol := b.startPolicy()
+	if err := CheckLaunchable(st, b.cfg.MaxStartStatusAge, b.cfg.Now(), pol); err != nil {
+		return err
 	}
-	if st.HasError() {
-		return fmt.Errorf("%w: print_error=%d hms=%d", ErrPrinterError, st.PrintError, len(st.HMS))
-	}
+	fromTerminal := TerminalState(st.State) // FINISH/FAILED : l'ancien état ne doit JAMAIS compter comme preuve de départ
 	// 5. Vérification du jeton (peut le consommer) en dernier avant l'envoi.
 	if err := b.cfg.Verifier(ctx, req.Proof); err != nil {
 		return fmt.Errorf("%w: %v", ErrNoProof, err)
@@ -183,7 +181,10 @@ func (b *Bambu) Start(ctx context.Context, req StartRequest) error {
 		}
 		switch s.State {
 		case StatePreparing, StatePrinting, StateFinished:
-			if s.State == StateFinished && !b.cfg.AllowStartFromFinish && stage != StageAccepted {
+			if s.State == StateFinished && fromTerminal {
+				return false, nil // état final d'AVANT le lancement : seul PREPARE/RUNNING prouve le départ
+			}
+			if s.State == StateFinished && !pol.FromFinish && stage != StageAccepted {
 				return false, nil
 			}
 			if stage == StageTransport && !MatchesRemote(s, req.Remote.Name) {
@@ -191,6 +192,9 @@ func (b *Bambu) Start(ctx context.Context, req StartRequest) error {
 			}
 			return true, nil
 		case StateFailed:
+			if fromTerminal {
+				return false, nil // FAILED d'avant le lancement (résidu d'annulation) : ne pas le prendre pour un refus
+			}
 			if stage == StageAccepted {
 				return false, fmt.Errorf("%w: printer failed after accept: %s (print_error=%d)", ErrStartRejected, s.FailReason, s.PrintError)
 			}
@@ -226,6 +230,14 @@ func MatchesRemote(st Status, remoteName string) bool {
 		g = g[i+1:]
 	}
 	return g == remoteName || remoteStem(g) == stem
+}
+
+// startPolicy : états de départ acceptés en plus de IDLE (voir BambuConfig.StartFromTerminal).
+func (b *Bambu) startPolicy() StartPolicy {
+	return StartPolicy{
+		FromFinish: b.cfg.AllowStartFromFinish || b.cfg.StartFromTerminal,
+		FromFailed: b.cfg.StartFromTerminal,
+	}
 }
 
 func (b *Bambu) noteStartPublish() {

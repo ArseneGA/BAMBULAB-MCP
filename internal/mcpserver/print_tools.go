@@ -252,7 +252,10 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			"N'allume rien, ne lance rien. Renvoie la question EXACTE à poser à l'utilisateur (« Le fichier X est envoyé sur la P1S. Veux-tu lancer cette impression ? ») " +
 			"avec imprimante, empreinte, plateau, matières et rappel plateau vide. Pose cette question et attends sa réponse.",
 		Annotations: physUpload,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.UploadInput) (*mcp.CallToolResult, printing.UploadOutput, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in printing.UploadInput) (*mcp.CallToolResult, printing.UploadOutput, error) {
+		if sink := progressNotifier(ctx, req); sink != nil { // notifications/progress pendant l'attente (progressToken du client)
+			ctx = printing.WithProgressSink(ctx, sink)
+		}
 		o, err := p.UploadArtifact(ctx, in)
 		if err != nil {
 			return nil, printing.UploadOutput{}, err
@@ -260,14 +263,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		o.JobID = o.QueueJobID
 		txt := o.Note
 		if !o.Done && o.Progress != nil {
-			txt = fmt.Sprintf("Envoi en cours (job_id %s) : %d %%", o.QueueJobID, o.Progress.Percent)
-			if o.Progress.BytesTotal > 0 {
-				txt += fmt.Sprintf(", %.1f / %.1f Mo", float64(o.Progress.BytesDone)/(1<<20), float64(o.Progress.BytesTotal)/(1<<20))
-			}
-			if o.Progress.ETASeconds != nil {
-				txt += fmt.Sprintf(", reste ~%d s", *o.Progress.ETASeconds)
-			}
-			txt += ". L'envoi continue : ce n'est PAS un échec ; suivre avec get_job_status(job_id)."
+			txt = fmt.Sprintf("Envoi en cours (job_id %s) : %s. L'envoi continue : ce n'est PAS un échec ; suivre avec wait_for_job(job_id) ou get_job_status(job_id).", o.QueueJobID, o.Progress.Text)
 		}
 		if o.Question != "" {
 			txt = "QUESTION À POSER À L'UTILISATEUR : « " + o.Question + " » (" + o.Details.PrinterName + ", plateau " + fmt.Sprint(o.Details.Plate) + ", empreinte " + shortSHA(o.Details.SHA256) + "). " + o.Details.Reminder
@@ -278,7 +274,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "request_print_confirmation", Title: "Demander la confirmation de lancement",
 		Description: "À appeler SEULEMENT si l'utilisateur a répondu oui à la question. Crée une confirmation liée (imprimante, empreinte, plateau, matières), à durée courte, et renvoie confirmation_id, " +
-			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve. bed_leveling (défaut true) règle la mise à niveau automatique du plateau au démarrage : elle est affichée à l'humain et fait partie de ce qu'il approuve ; ne la désactive que si l'utilisateur le demande. " +
+			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve. bed_leveling (défaut true) règle la mise à niveau automatique du plateau au démarrage : elle est affichée à l'humain et fait partie de ce qu'il approuve ; ne la désactive que si l'utilisateur le demande. flow_cali (calibration du débit, défaut true), vibration_cali (calibration des vibrations, défaut true) et timelapse (défaut false) sont aussi affichées à l'humain et font partie de ce qu'il approuve ; les valeurs par défaut sont celles envoyées jusqu'ici. " +
+			"L'appel est REFUSÉ (avec la consigne précise) si l'imprimante n'est pas lançable : occupée, injoignable, alerte HMS active ou erreur en cours. Un état FINISH ou FAILED (reliquat d'annulation) ne bloque pas : Bambu Studio lance aussi depuis ces états. " +
 			"Dans Claude Desktop la vue de confirmation permet à l'humain de lancer avec son CODE DE LANCEMENT PERSONNEL (6 à 8 chiffres, défini sur /setup/launch-code) ; sans code défini elle affiche le lien du navigateur, toujours disponible. " +
 			"Ne demande JAMAIS ce code à l'utilisateur dans la conversation et ne l'utilise jamais s'il l'écrit : il ne se saisit que dans le champ de la vue.",
 		Annotations: write,
@@ -300,7 +297,10 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			"état de l'imprimante vérifié frais et idle ; idempotency_key obligatoire ; le lancement n'est jamais rejoué. START_REQUESTED -> PRINTING observé, ou START_UNKNOWN en cas de doute : " +
 			"alors reconcile_print, JAMAIS de relance. Une autorisation ne vaut pas pour l'impression suivante.",
 		Annotations: physStart,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.StartInput) (*mcp.CallToolResult, printing.StartOutput, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in printing.StartInput) (*mcp.CallToolResult, printing.StartOutput, error) {
+		if sink := progressNotifier(ctx, req); sink != nil {
+			ctx = printing.WithProgressSink(ctx, sink)
+		}
 		o, err := p.StartPrint(ctx, in)
 		if err != nil {
 			return nil, printing.StartOutput{}, err
@@ -311,24 +311,49 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "get_print_status", Title: "Suivi d'une impression",
 		Description: "État de l'impression (machine d'états), historique, progression observée sur l'imprimante (couche, %, temps restant) et état de l'imprimante. Passe à COMPLETED/FAILED selon l'imprimante. " +
+			"stage_report : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression d'après son étape courante (mise à niveau du plateau, chauffe, nettoyage de la buse, calibrations) avec l'heure de chaque étape ; " +
+			"printer.error_details : print_error et HMS décodés. wait_seconds (1 à 60) : attend qu'un état ou une étape change avant de répondre. " +
 			"Effet de bord local : relit l'imprimante et met à jour l'impression (pas en lecture seule au sens strict).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in PrintJobIDInput) (*mcp.CallToolResult, printing.PrintStatus, error) {
-		st, err := p.GetPrintStatus(ctx, in.PrintJobID)
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in PrintStatusInput) (*mcp.CallToolResult, printing.PrintStatus, error) {
+		var st *printing.PrintStatus
+		var err error
+		if in.WaitSeconds > 0 { // interrogation longue : rend dès qu'un état ou une étape change, ou à l'échéance
+			st, err = p.WaitPrintChange(ctx, in.PrintJobID, printing.ClampWait(in.WaitSeconds), progressNotifier(ctx, req))
+		} else {
+			st, err = p.GetPrintStatus(ctx, in.PrintJobID)
+		}
 		if err != nil {
 			return nil, printing.PrintStatus{}, err
 		}
-		txt := fmt.Sprintf("Impression %s : %s.", st.Job.ID, st.Job.State)
-		if st.Job.Print != nil {
-			txt += fmt.Sprintf(" Imprimante : %s, %d %%, couche %d/%d.", st.Job.Print.PrinterState, st.Job.Print.Percent, st.Job.Print.Layer, st.Job.Print.TotalLayers)
+		return textResult(printStatusText(st)), *st, nil
+	})
+
+	addTool(s, &mcp.Tool{
+		Name: "read_gcode_excerpt", Title: "Lire un extrait de G-code",
+		Description: "Lecture SEULE et bornée du G-code d'une plaque dans un .gcode.3mf du stockage (artifact_id ou print_job_id, plate) : head_lines premières lignes (0 à 200) et/ou lignes qui correspondent à grep " +
+			"(expression régulière, 120 caractères au plus, ex. « G29 », « M622 », « (?i); leveling »), au plus max_lines lignes au total (200 max). Sert à vérifier ce que le fichier demande (mise à niveau, calibrations) " +
+			"avant de lancer. Seule la plaque de G-code est lue ; rien d'autre de l'archive n'est exposé et toute ligne qui ressemble à un secret est masquée.",
+		Annotations: ro,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.GcodeExcerptInput) (*mcp.CallToolResult, printing.GcodeExcerptOutput, error) {
+		o, err := p.ReadGcodeExcerpt(ctx, in)
+		if err != nil {
+			return nil, printing.GcodeExcerptOutput{}, err
 		}
-		if st.Job.LastError != "" {
-			txt += " Dernière erreur : " + st.Job.LastError
+		var sb strings.Builder
+		fmt.Fprintf(&sb, "G-code de %s (plaque %d) : %d ligne(s) parcourues", shortSHA(o.ArtifactID), o.Plate, o.ScannedLines)
+		if in.Grep != "" {
+			fmt.Fprintf(&sb, ", %d correspondance(s) pour %q", o.MatchCount, in.Grep)
 		}
-		if st.Job.Next != "" {
-			txt += " Suite : " + st.Job.Next + "."
+		sb.WriteString(".\n")
+		for _, l := range o.Head {
+			fmt.Fprintf(&sb, "%d: %s\n", l.N, l.Text)
 		}
-		return textResult(txt), *st, nil
+		for _, l := range o.Matches {
+			fmt.Fprintf(&sb, "%d: %s\n", l.N, l.Text)
+		}
+		sb.WriteString(o.Note)
+		return textResult(sb.String()), *o, nil
 	})
 
 	addTool(s, &mcp.Tool{

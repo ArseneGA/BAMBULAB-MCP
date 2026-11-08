@@ -88,6 +88,9 @@ func (m *reportMerger) toStatus() Status {
 		BedTarget:    num(d["bed_target_temper"]),
 		Chamber:      num(d["chamber_temper"]),
 	}
+	if v, ok := d["stg_cur"]; ok {
+		s.Stage, s.StageSeen = int(num(v)), true
+	}
 	if s.FailReason == "0" {
 		s.FailReason = ""
 	}

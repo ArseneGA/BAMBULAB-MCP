@@ -49,6 +49,9 @@ var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": local
 {{with .V.Safety}}<dt>Températures<br><small>lues dans le G-code</small></dt><dd>{{if .Analysed}}buse : démarrage jusqu'à {{printf "%.0f" .NozzleStartMaxC}} °C, 1re couche {{printf "%.0f" .NozzleFirstLayerC}} °C, impression {{printf "%.0f" .NozzlePrintMinC}} à {{printf "%.0f" .NozzlePrintMaxC}} °C<br>plateau : 1re couche {{printf "%.0f" .BedFirstLayerC}} °C (de {{printf "%.0f" .BedMinC}} à {{printf "%.0f" .BedMaxC}} °C){{if .ChamberMaxC}}<br>chambre : jusqu'à {{printf "%.0f" .ChamberMaxC}} °C{{end}}{{else}}<span class="bad">non lues : G-code non analysé</span>{{end}}</dd>
 {{if .Materials}}<dt>Matières lues dans le G-code</dt><dd>{{range .Materials}}{{.}}<br>{{end}}</dd>{{end}}{{end}}
 <dt>Mise à niveau du plateau</dt><dd>{{if .V.Binding.BedLeveling}}oui (automatique au démarrage){{else}}<strong>non</strong> (désactivée pour cette impression){{end}}</dd>
+<dt>Calibration du débit</dt><dd>{{if .V.Binding.FlowCali}}oui (automatique au démarrage){{else}}<strong>non</strong> (désactivée pour cette impression){{end}}</dd>
+<dt>Calibration des vibrations</dt><dd>{{if .V.Binding.VibrationCali}}oui (automatique au démarrage){{else}}<strong>non</strong> (désactivée pour cette impression){{end}}</dd>
+<dt>Timelapse</dt><dd>{{if .V.Binding.Timelapse}}<strong>oui</strong> (enregistré pendant l'impression){{else}}non{{end}}</dd>
 <dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
 {{with .V.Safety}}<style>.bad{color:#c00000;font-weight:600}@media (prefers-color-scheme:dark){.bad{color:#ff7b7b}}</style>
 {{if .GcodeOfficial}}<p class="ok">{{.GcodeProfileLine}}</p>{{else}}<p class="warn bad">{{.GcodeProfileLine}}</p>{{end}}

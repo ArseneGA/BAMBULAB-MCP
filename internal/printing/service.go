@@ -691,7 +691,7 @@ func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret pr
 	return printer.NewBambu(printer.BambuConfig{
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
 		Secrets: secret, TLS: printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}, Verifier: verifier, Logger: s.log,
-		AllowStartFromFinish: rec.AllowStartFromFinish, ReconcileSettle: settle,
+		AllowStartFromFinish: rec.AllowStartFromFinish, StartFromTerminal: true, ReconcileSettle: settle,
 		StartObserveTimeout: s.d.StartAckWait, PubAckTimeout: s.d.PubAckWait,
 	})
 }
@@ -777,6 +777,13 @@ type PrinterStatus struct {
 	Note         string        `json:"note,omitempty"`
 	MaxStartAgeS int           `json:"max_start_age_seconds"`
 	HMSCodes     []string      `json:"hms_codes,omitempty" jsonschema:"codes HMS actifs (16 chiffres hexadécimaux) : à chercher dans la base d'erreurs Bambu"`
+	// Étape courante (stg_cur), erreurs décodées (table partielle Bambu, repli « code X (inconnu) » + lien wiki) et
+	// aptitude au lancement.
+	Stage         int                 `json:"stage,omitempty" jsonschema:"étape courante de l'imprimante (stg_cur) ; 0 ou absent = impression / repos"`
+	StageName     string              `json:"stage_name,omitempty"`
+	ErrorDetails  []printer.ErrorInfo `json:"error_details,omitempty" jsonschema:"print_error et alertes HMS décodés : texte, bénin ou non, consigne, lien wiki"`
+	Launchable    bool                `json:"launchable" jsonschema:"vrai si un lancement serait accepté maintenant (IDLE, FINISH ou FAILED, état frais, sans HMS ni erreur en cours)"`
+	LaunchBlocker string              `json:"launch_blocker,omitempty" jsonschema:"si launchable est faux : pourquoi, et quoi faire"`
 	// Affichage lisible : « Joignable · arrêtée (annulée par vous) » plutôt que le gcode_state brut « failed ».
 	Display     string       `json:"display,omitempty"`
 	Explanation string       `json:"explanation,omitempty" jsonschema:"ce que signifie l'état brut (gcode_state FAILED = annulation OU erreur) et la cause connue"`
@@ -833,6 +840,18 @@ func (s *Service) GetPrinterStatus(ctx context.Context, printerID string) (*Prin
 	out.Note = "L'état « idle » ne prouve pas que le plateau est vide : seul l'humain peut l'attester (page de confirmation)."
 	for _, h := range st.HMS {
 		out.HMSCodes = append(out.HMSCodes, h.Code16())
+		out.ErrorDetails = append(out.ErrorDetails, printer.DescribeHMS(h))
+	}
+	if st.PrintError != 0 {
+		out.ErrorDetails = append(out.ErrorDetails, printer.DescribePrintError(st.PrintError))
+	}
+	if st.StageSeen && !printer.StageIdle(st.Stage) {
+		out.Stage, out.StageName = st.Stage, printer.StageName(st.Stage)
+	}
+	if lerr := printer.CheckLaunchable(st, 0, s.now(), startPolicy); lerr == nil {
+		out.Launchable = true
+	} else {
+		out.LaunchBlocker = lerr.Error()
 	}
 	s.describeStatus(ctx, &out, st)
 	return &out, nil

@@ -253,7 +253,11 @@ func TestStartIdempotencyKeyIsComposedAndParamsChecked(t *testing.T) {
 	if _, err := s.StartPrint(ctx, StartInput{PrintJobID: j.ID, ConfirmationID: "cf_autre", IdempotencyKey: key}); !errors.Is(err, ErrReplayParams) {
 		t.Fatalf("rejeu avec d'autres paramètres : %v", err)
 	}
-	// La même chaîne sur une autre impression ne collisionne pas.
+	// La même chaîne sur une autre impression ne collisionne pas. (Une confirmation n'est plus émise tant que
+	// l'imprimante est occupée : l'imprimante factice revient au repos.)
+	fa.mu.Lock()
+	fa.state = printer.StateIdle
+	fa.mu.Unlock()
 	j2, conf2 := confirmed(t, s)
 	if _, err := s.update(ctx, j2.ID, func(x *Job) error { x.PrinterID = "prn_t2"; return nil }); err != nil {
 		t.Fatal(err)

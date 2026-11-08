@@ -1,6 +1,7 @@
 package printing
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -11,6 +12,20 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 )
+
+type progressSinkKey struct{}
+
+// WithProgressSink fait remonter l'avancement des travaux attendus par un outil (dépôt, lancement) à `sink`, appelé
+// au plus une fois par seconde : la couche MCP en fait des notifications/progress quand le client a fourni un
+// progressToken.
+func WithProgressSink(ctx context.Context, sink func(jobs.Progress)) context.Context {
+	return context.WithValue(ctx, progressSinkKey{}, sink)
+}
+
+func progressSinkOf(ctx context.Context) func(jobs.Progress) {
+	f, _ := ctx.Value(progressSinkKey{}).(func(jobs.Progress))
+	return f
+}
 
 // expectedSliceSeconds estime la durée de découpe d'après la taille de la source : Bambu Studio ne publie aucune
 // progression exploitable (sortie bloc à la fin), l'avancement affiché est donc une ESTIMATION par le temps écoulé.
@@ -66,6 +81,7 @@ type countingReader struct {
 	total int64
 	read  atomic.Int64
 	jc    *jobs.JobCtx
+	label string       // libellé de la barre (« Dépôt sur la P1S »)
 	last  atomic.Int64 // dernière publication en base (ns)
 }
 
@@ -73,7 +89,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	if n > 0 {
 		done := c.read.Add(int64(n))
-		c.jc.SetDetail(jobs.Detail{Phase: "envoi FTPS vers l'imprimante", BytesDone: done, BytesTotal: c.total})
+		c.jc.SetDetail(jobs.Detail{Phase: "envoi FTPS vers l'imprimante", Label: c.label, BytesDone: done, BytesTotal: c.total})
 		now := time.Now().UnixNano()
 		if now-c.last.Load() > int64(2*time.Second) {
 			c.last.Store(now)

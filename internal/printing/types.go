@@ -97,6 +97,10 @@ type PrintProgress struct {
 	SeenActive    bool      `json:"seen_active" jsonschema:"vrai une fois qu'un état préparation/impression/pause de CE fichier a été observé : seul un FINISH/FAILED vu après peut être attribué à cette impression"`
 	MatchesFile   bool      `json:"matches_file" jsonschema:"vrai si le rapport de l'imprimante désigne bien le fichier de cette impression"`
 	PrinterReason string    `json:"printer_reason,omitempty"`
+	// Stage / Stages : étape courante de l'imprimante (stg_cur) et historique des étapes vues pour CETTE impression.
+	Stage     int         `json:"stage,omitempty"`
+	StageName string      `json:"stage_name,omitempty"`
+	Stages    []StageSeen `json:"stages,omitempty"`
 }
 
 // ArtifactSummary résume l'artefact découpé (mesures lues dans l'archive).
@@ -138,6 +142,10 @@ type Job struct {
 	// NoBedLeveling : l'humain a approuvé un lancement SANS mise à niveau du plateau (défaut : mise à niveau activée).
 	// Fait partie de la liaison approuvée (contracts.ConfirmationBinding.NoBedLeveling).
 	NoBedLeveling bool `json:"no_bed_leveling,omitempty" jsonschema:"vrai si le lancement approuvé désactive la mise à niveau du plateau (défaut : elle est activée)"`
+	// Options de démarrage approuvées (mêmes conventions que NoBedLeveling : écart au défaut historique, omitempty).
+	NoFlowCali      bool `json:"no_flow_cali,omitempty" jsonschema:"vrai si le lancement approuvé désactive la calibration du débit (défaut : activée)"`
+	NoVibrationCali bool `json:"no_vibration_cali,omitempty" jsonschema:"vrai si le lancement approuvé désactive la calibration des vibrations (défaut : activée)"`
+	Timelapse       bool `json:"timelapse,omitempty" jsonschema:"vrai si le lancement approuvé enregistre un timelapse (défaut : non)"`
 	// Adhesion : risque de décollement estimé d'après la géométrie de la pièce (mesh.Adhesion), évalué à la découpe.
 	Adhesion      *mesh.AdhesionReport `json:"adhesion,omitempty" jsonschema:"risque de décollement estimé à la découpe (heuristique)"`
 	SliceJobID    string               `json:"slice_job_id,omitempty"`
