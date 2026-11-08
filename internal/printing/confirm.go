@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
@@ -233,6 +234,9 @@ func (s *Service) confirmable(ctx context.Context, confID string) (contracts.Pri
 func (s *Service) Approve(ctx context.Context, confID string, plateClear bool, via string) (*ConfirmationView, error) {
 	if !plateClear {
 		return nil, fmt.Errorf("%w : l'attestation « plateau vide et dégagé » est obligatoire", ErrNeedsApproval)
+	}
+	if via != "passkey" && s.PasskeyRequired(ctx) { // « exiger une passkey » : seul le canal passkey approuve (docs/SECURITY.md § 13)
+		return nil, humanauth.ErrPasskeyRequired
 	}
 	conf, j, err := s.confirmable(ctx, confID)
 	if err != nil {

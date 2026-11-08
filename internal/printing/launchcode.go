@@ -23,8 +23,15 @@ const LaunchCodeAttempts = humanauth.LaunchMaxFailures
 func (s *Service) launchCodes() *humanauth.LaunchCodes { return humanauth.LaunchCodesFor(s.d.Store) }
 
 // LaunchCodeStatus : le code est-il défini, verrouillé ? (aucun secret)
+//
+// Avec « exiger une passkey », le code n'est plus utilisable : l'état le dit comme « non défini » (la vue affiche
+// alors le lien du navigateur, où se fait l'approbation par passkey) sans toucher au code lui-même.
 func (s *Service) LaunchCodeStatus(ctx context.Context) (humanauth.LaunchCodeStatus, error) {
-	return s.launchCodes().Status(ctx)
+	st, err := s.launchCodes().Status(ctx)
+	if err == nil && s.PasskeyRequired(ctx) {
+		return humanauth.LaunchCodeStatus{}, nil
+	}
+	return st, err
 }
 
 // ApproveWithCode donne l'accord de lancement d'une confirmation précise si le code de lancement est correct.
@@ -32,6 +39,9 @@ func (s *Service) LaunchCodeStatus(ctx context.Context) (humanauth.LaunchCodeSta
 // empreinte, plateau, matières) n'a pas bougé ; l'accord qui en résulte ne vaut que pour CETTE confirmation et
 // 2 minutes (start_print, ConsumeConfirmation : inchangés). plateClear est l'attestation « plateau vide ».
 func (s *Service) ApproveWithCode(ctx context.Context, confID, code string, plateClear bool) (*ApprovalResult, error) {
+	if s.PasskeyRequired(ctx) { // avant tout essai : ne brûle aucune tentative
+		return nil, humanauth.ErrPasskeyRequired
+	}
 	if !plateClear {
 		return nil, fmt.Errorf("%w : l'attestation « plateau vide et dégagé » est obligatoire", ErrNeedsApproval)
 	}
@@ -54,6 +64,9 @@ func (s *Service) ApproveWithCode(ctx context.Context, confID, code string, plat
 
 // StopWithCode arrête l'impression d'une demande d'arrêt précise si le code de lancement est correct.
 func (s *Service) StopWithCode(ctx context.Context, stopID, code string) (*CancelOutput, error) {
+	if s.PasskeyRequired(ctx) {
+		return nil, humanauth.ErrPasskeyRequired
+	}
 	v, err := s.GetStop(ctx, stopID)
 	if err != nil {
 		return nil, err
@@ -99,8 +112,8 @@ func LaunchCodeProblem(err error) string {
 		return "locked"
 	case errors.Is(err, humanauth.ErrLaunchCodeTooFast):
 		return "too_fast"
-	case errors.Is(err, humanauth.ErrLaunchCodeNotSet):
-		return "not_set"
+	case errors.Is(err, humanauth.ErrLaunchCodeNotSet), errors.Is(err, humanauth.ErrPasskeyRequired):
+		return "not_set" // passkey exigée : le code n'est plus utilisable, la vue retombe sur le lien du navigateur
 	case errors.Is(err, humanauth.ErrLaunchCodeFormat):
 		return "format"
 	}

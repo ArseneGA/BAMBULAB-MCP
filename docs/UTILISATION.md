@@ -148,6 +148,22 @@ Ce qui a été ajouté : (1) bambud **journalise** à chaque connexion ce que le
 
 ---
 
+## 4 ter. Approuver avec une passkey (facultatif)
+
+Une **passkey** (empreinte, visage, code de l'appareil, clé de sécurité, gestionnaire de mots de passe) approuve un lancement ou un arrêt **sans code à taper**. Elle s'ajoute au bouton et au code de lancement ; rien ne change si tu n'en enregistres pas.
+
+**Prérequis** : une passkey exige un contexte sécurisé. Ouvre bambud en **https** (par exemple l'adresse `tailscale serve` de `BAMBU_PUBLIC_URL`) ou sur **`http://localhost:7878`**. En http sur le réseau local, ou par une adresse IP (`http://192.168.1.20…`, `http://127.0.0.1…`), le navigateur refuse : la page te le dit et le bouton passkey n'apparaît pas (le bouton simple reste là). La passkey est liée au **nom du site** (le premier `https://` de `BAMBU_PUBLIC_URL`) : une passkey créée sous `atelier.tailnet.ts.net` ne sert pas sous `localhost`.
+
+**Enregistrer** (une ou plusieurs, jusqu'à 10) :
+1. Depuis un navigateur déjà enregistré (`bambud enroll`, voir plus haut), ouvre `/setup/passkeys`.
+2. Donne un nom (« MacBook », « clé jaune »), clique **Enregistrer une passkey** et valide sur l'appareil. L'authentificateur doit vérifier l'utilisateur (empreinte, visage ou code) : sinon refusé.
+
+**Utiliser** : sur `/confirm/…` (lancement) comme sur `/stop/…` (arrêt), un bouton **Approuver avec ma passkey** apparaît à côté du bouton habituel. Coche toujours « le plateau est vide » (la passkey ne remplace pas cette attestation), clique, valide sur l'appareil : l'impression part exactement comme avec le bouton (une seule commande). Le défi est lié à CETTE confirmation (imprimante, fichier, plaque, matières, options) et valable 5 minutes : ouvre la page puis approuve ; en cas de refus, recharge la page.
+
+**Exiger la passkey** (réglage, **désactivé par défaut**) : sur `/setup/passkeys`, « Exiger une passkey ». Alors le bouton simple, le code de lancement et l'approbation depuis la vue de Claude deviennent indisponibles : seule une passkey approuve (la vue de Claude affiche le lien du navigateur). Impossible à activer sans passkey, ni de révoquer la dernière tant qu'elle est exigée.
+
+**Secours et gestion** (sur le poste du service) : `bambud passkey` (liste), `bambud passkey --revoke ID`, `bambud passkey --require=off` (si tu as perdu toutes tes passkeys). Détails et limites : `docs/SECURITY.md` § 13.
+
 ## 5. Depuis le PC Windows (renfort)
 
 - **Importer mes dossiers 3D** : « Inventorie D:\3D » (agent, lecture seule) → « Copie tout sur le serveur » : chaque fichier est copié avec empreinte vérifiée ; les originaux Windows ne sont jamais touchés ; un fichier modifié entre-temps n'est pas envoyé.

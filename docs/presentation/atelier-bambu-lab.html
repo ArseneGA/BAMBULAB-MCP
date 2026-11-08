@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Atelier Bambu Lab</title>
+<style>
+  @page { size: A4; margin: 18mm 18mm 20mm; }
+  :root { --ink:#1d2228; --muted:#5d6670; --line:#d9dee3; --accent:#1f7a5a; --soft:#eef5f1; --soft2:#f4f6f8; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.5; margin: 0; background:#fff; }
+  h1 { font-size: 30pt; margin: 0 0 4mm; letter-spacing: -0.5px; }
+  h2 { font-size: 16pt; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 11.5pt; margin: 5mm 0 1.5mm; }
+  p { margin: 0 0 3mm; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .cover { display:flex; flex-direction:column; justify-content:center; min-height: 250mm; }
+  .kicker { color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; font-size: 9pt; margin-bottom: 3mm; }
+  .lead { font-size: 14pt; color: var(--muted); max-width: 150mm; margin-bottom: 10mm; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .card { border:1px solid var(--line); border-radius: 3mm; padding: 4mm 5mm; background: var(--soft2); }
+  .card h3 { margin-top: 0; color: var(--accent); }
+  .card p { margin:0; color: var(--muted); }
+  .chat { font-size: 9.5pt; line-height: 1.4; border:1px solid var(--line); border-radius: 3mm; padding: 2.5mm 4mm; margin: 0 0 3mm; break-inside: avoid; }
+  .chat .t { font-size: 9pt; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2mm; }
+  .me, .cl { padding: 1.5mm 3mm; border-radius: 2.5mm; margin: 1mm 0; }
+  .me { background: var(--soft); margin-left: 12mm; }
+  .cl { background: var(--soft2); margin-right: 12mm; }
+  .me b, .cl b { font-size: 8.5pt; color: var(--muted); display:block; }
+  .note { border-left: 3px solid var(--accent); background: var(--soft); padding: 3mm 4mm; margin: 4mm 0; }
+  ul { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  .steps { counter-reset: s; list-style:none; padding:0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 10mm; margin-bottom: 3mm; }
+  .steps li::before { content: counter(s); position:absolute; left:0; top:0; width:6.5mm; height:6.5mm; border-radius:50%; background: var(--accent); color:#fff; font-weight:700; font-size:9pt; display:flex; align-items:center; justify-content:center; }
+  .foot { color: var(--muted); font-size: 9pt; margin-top: 8mm; }
+  svg text { font-family: "Segoe UI", system-ui, sans-serif; }
+</style>
+</head>
+<body>
+
+<!-- Page 1 : couverture -->
+<section class="page cover">
+  <div class="kicker">Imprimantes Bambu Lab · FDM</div>
+  <h1>Atelier Bambu Lab</h1>
+  <p class="lead">Votre bibliothèque de modèles 3D et un copilote d'impression, pilotés en parlant à Claude. Vous décrivez ce que vous voulez, l'atelier prépare tout. Vous gardez la main sur le bouton « Lancer ».</p>
+  <div class="grid">
+    <div class="card"><h3>Ranger et retrouver</h3><p>STL, OBJ, 3MF, STEP rangés en collections, avec aperçu 3D. « Retrouve ma pince » suffit.</p></div>
+    <div class="card"><h3>Créer et modifier</h3><p>Pièces sur mesure (boîtes, équerres, crochets, engrenages…), mise à l'échelle, coupe. Toujours sur une copie.</p></div>
+    <div class="card"><h3>Préparer l'impression</h3><p>Découpe par Bambu Studio, variantes comparées : temps, grammes, coût, solidité.</p></div>
+    <div class="card"><h3>Imprimer en sécurité</h3><p>Rien ne démarre sans votre accord, donné par vous seul et lié à cette impression précise.</p></div>
+  </div>
+  <p class="foot">Logiciel libre (AGPL-3.0) · Machine de référence : Bambu Lab P1S · Fonctionne sur votre réseau, chez vous.</p>
+</section>
+
+<!-- Page 2 : à quoi ça sert -->
+<section class="page">
+  <h2>À quoi ça sert</h2>
+  <p>Imprimer en 3D, c'est souvent jongler entre des dossiers de fichiers éparpillés, un logiciel de découpe aux centaines de réglages et une imprimante qu'on surveille de loin. Atelier Bambu Lab réunit tout cela et vous laisse le piloter <b>en langage courant</b>, depuis Claude, sur votre ordinateur ou votre téléphone.</p>
+
+  <h3>Ce que l'atelier fait pour vous</h3>
+  <ul>
+    <li><b>Une bibliothèque qui ne perd rien.</b> Vos fichiers sont importés sans être modifiés, rangés, étiquetés, versionnés. Les doublons sont repérés, une corbeille permet de revenir en arrière.</li>
+    <li><b>Des pièces faites sur mesure.</b> Dites « une boîte de 80 × 50 × 30 mm avec couvercle » : l'atelier la dessine. Il sait aussi faire des filetages, des engrenages, des charnières, et adapter les jeux à votre machine.</li>
+    <li><b>Des réglages expliqués.</b> Vous donnez un objectif (« solide », « surface propre », « rapide ») ; l'atelier propose plusieurs variantes, les découpe avec Bambu Studio et les compare honnêtement.</li>
+    <li><b>Le suivi de l'imprimante.</b> État, progression, photo de la caméra, alerte sur votre téléphone en fin d'impression ou en cas de problème.</li>
+    <li><b>Les petits comptes.</b> Coût de chaque pièce (filament, électricité, usure), inventaire des bobines, journal des impressions qui aide à améliorer les suivantes.</li>
+  </ul>
+
+  <div class="note"><b>Le principe le plus important :</b> Claude prépare, vous décidez. Aucune impression ne peut démarrer sans que vous l'ayez approuvée vous-même, en tapant votre code personnel ou depuis votre navigateur enregistré. Claude n'a aucun moyen de le faire à votre place.</div>
+
+  <h3>Ce qui est mesuré, et ce qui est estimé</h3>
+  <p>L'atelier distingue toujours ce qui vient réellement du logiciel de découpe (temps, grammes, températures lues dans le fichier final) de ce qui est une estimation. Une valeur inconnue est signalée comme telle, jamais inventée.</p>
+</section>
+
+<!-- Page 3 : comment ça marche -->
+<section class="page">
+  <h2>Comment ça marche</h2>
+  <p>Tout tourne chez vous, sur un petit serveur Linux allumé en permanence. Claude lui parle à travers une connexion standard (le protocole MCP) ; le serveur parle à l'imprimante sur votre réseau local.</p>
+
+  <svg viewBox="0 0 680 330" width="100%" role="img" aria-label="Schéma : vous et Claude, le serveur atelier, l'imprimante">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5d6670"/></marker>
+    </defs>
+    <!-- Vous -->
+    <rect x="10" y="20" width="190" height="120" rx="12" fill="#eef5f1" stroke="#1f7a5a"/>
+    <text x="105" y="50" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2228">Vous + Claude</text>
+    <text x="105" y="75" text-anchor="middle" font-size="12" fill="#5d6670">ordinateur ou téléphone</text>
+    <text x="105" y="100" text-anchor="middle" font-size="12" fill="#5d6670">« Prépare-moi cette pièce</text>
+    <text x="105" y="116" text-anchor="middle" font-size="12" fill="#5d6670">en PETG, solide »</text>
+    <!-- Navigateur -->
+    <rect x="10" y="190" width="190" height="110" rx="12" fill="#f4f6f8" stroke="#d9dee3"/>
+    <text x="105" y="220" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2228">Votre navigateur</text>
+    <text x="105" y="245" text-anchor="middle" font-size="12" fill="#5d6670">bibliothèque, aperçus 3D</text>
+    <text x="105" y="263" text-anchor="middle" font-size="12" fill="#5d6670">et bouton « Lancer »</text>
+    <text x="105" y="281" text-anchor="middle" font-size="12" fill="#5d6670">(approbation humaine)</text>
+    <!-- Serveur -->
+    <rect x="250" y="20" width="230" height="280" rx="12" fill="#ffffff" stroke="#1f7a5a" stroke-width="2"/>
+    <text x="365" y="50" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2228">Serveur de l'atelier</text>
+    <text x="365" y="68" text-anchor="middle" font-size="11" fill="#5d6670">chez vous, sous Linux</text>
+    <g font-size="12" fill="#1d2228">
+      <rect x="268" y="85" width="194" height="34" rx="6" fill="#f4f6f8"/><text x="365" y="107" text-anchor="middle">Bibliothèque de modèles</text>
+      <rect x="268" y="127" width="194" height="34" rx="6" fill="#f4f6f8"/><text x="365" y="149" text-anchor="middle">Création de pièces (CAO)</text>
+      <rect x="268" y="169" width="194" height="34" rx="6" fill="#f4f6f8"/><text x="365" y="191" text-anchor="middle">Découpe : Bambu Studio</text>
+      <rect x="268" y="211" width="194" height="34" rx="6" fill="#f4f6f8"/><text x="365" y="233" text-anchor="middle">File d'impression, coûts</text>
+      <rect x="268" y="253" width="194" height="34" rx="6" fill="#eef5f1"/><text x="365" y="275" text-anchor="middle">Garde-fous de sécurité</text>
+    </g>
+    <!-- Imprimante -->
+    <rect x="530" y="95" width="140" height="130" rx="12" fill="#eef5f1" stroke="#1f7a5a"/>
+    <text x="600" y="130" text-anchor="middle" font-size="15" font-weight="700" fill="#1d2228">Imprimante</text>
+    <text x="600" y="150" text-anchor="middle" font-size="13" fill="#1d2228">Bambu Lab</text>
+    <text x="600" y="175" text-anchor="middle" font-size="11" fill="#5d6670">P1S, X1, A1…</text>
+    <text x="600" y="193" text-anchor="middle" font-size="11" fill="#5d6670">réseau local</text>
+    <!-- flèches -->
+    <line x1="200" y1="80" x2="248" y2="80" stroke="#5d6670" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+    <line x1="200" y1="245" x2="248" y2="245" stroke="#5d6670" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+    <line x1="480" y1="160" x2="528" y2="160" stroke="#5d6670" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+    <text x="504" y="150" text-anchor="middle" font-size="10" fill="#5d6670">fichier</text>
+    <text x="504" y="182" text-anchor="middle" font-size="9" fill="#5d6670">état</text>
+  </svg>
+
+  <h3>Le parcours d'une impression</h3>
+  <ol class="steps">
+    <li><b>Vous demandez.</b> « Imprime le porte-clés en PLA noir, le plus vite possible. »</li>
+    <li><b>L'atelier prépare.</b> Il choisit les profils de votre imprimante, découpe le modèle, vérifie qu'il tient sur le plateau et que les températures sont cohérentes avec le filament.</li>
+    <li><b>Il vous montre.</b> Aperçu du plateau, temps, grammes, coût, températures lues dans le fichier réel.</li>
+    <li><b>Il dépose le fichier</b> sur l'imprimante, <b>sans la lancer</b>.</li>
+    <li><b>Vous approuvez.</b> Vous tapez votre code de lancement personnel dans la fenêtre de confirmation, ou vous cliquez sur « Lancer » depuis votre navigateur enregistré. L'accord vaut pour cette impression-là, et pour deux minutes seulement.</li>
+    <li><b>Il suit.</b> Progression, photo de la caméra, notification à la fin. L'arrêt d'urgence reste lui aussi un geste humain.</li>
+  </ol>
+</section>
+
+<!-- Page 4 : exemples -->
+<section class="page">
+  <h2>Exemples de conversations</h2>
+
+  <div class="chat"><div class="t">Retrouver un fichier</div>
+    <div class="me"><b>Vous</b>Retrouve la pince que j'avais téléchargée le mois dernier.</div>
+    <div class="cl"><b>Claude</b>J'en trouve deux : « pince_cable_v3 » (STL, 42 × 18 × 12 mm) et « pince_rideau » (3MF). Voici leurs aperçus 3D. Laquelle veux-tu ?</div>
+  </div>
+
+  <div class="chat"><div class="t">Créer une pièce sur mesure</div>
+    <div class="me"><b>Vous</b>Fais-moi une équerre de 60 mm, épaisseur 4 mm, avec deux trous pour des vis M4.</div>
+    <div class="cl"><b>Claude</b>C'est fait. Les trous font 4,4 mm pour compenser le retrait du plastique. Elle est enregistrée dans la collection « Bricolage ». Tu veux la découper en PETG ?</div>
+  </div>
+
+  <div class="chat"><div class="t">Comparer des réglages</div>
+    <div class="me"><b>Vous</b>Compare trois façons d'imprimer ce support : solide, rapide, et économe en filament.</div>
+    <div class="cl"><b>Claude</b>Variante solide : 4 h 10, 86 g, 2,10 €. Rapide : 1 h 55, 61 g, 1,45 €. Économe : 2 h 30, 44 g, 1,05 €, mais moins résistante. Pour un support qui porte du poids, je recommande la solide.</div>
+  </div>
+
+  <div class="chat"><div class="t">Imprimer, avec votre accord</div>
+    <div class="me"><b>Vous</b>Envoie la variante solide à la P1S.</div>
+    <div class="cl"><b>Claude</b>Le fichier est sur l'imprimante, rien n'a démarré. Buse 250 °C, plateau 70 °C, plaque texturée. Saisis ton code de lancement dans la fenêtre de confirmation quand tu es prêt.</div>
+  </div>
+
+  <div class="chat"><div class="t">Suivre l'impression</div>
+    <div class="me"><b>Vous</b>Où en est l'impression ?</div>
+    <div class="cl"><b>Claude</b>62 %, couche 148 sur 240, environ 1 h 35 restante. Voici la photo de la caméra : tout a l'air normal.</div>
+  </div>
+</section>
+
+<!-- Page 5 : pour qui / installation / état -->
+<section class="page">
+  <h2>Pour qui, et comment commencer</h2>
+
+  <h3>Pour qui</h3>
+  <ul>
+    <li>Les possesseurs d'une imprimante <b>Bambu Lab</b> (P1S, P1P, X1, A1, H2D…) en FDM.</li>
+    <li>Ceux qui ont des dizaines de fichiers 3D et ne retrouvent jamais le bon.</li>
+    <li>Ceux qui veulent des pièces sur mesure sans apprendre un logiciel de CAO.</li>
+    <li>Ceux qui préfèrent expliquer ce qu'ils veulent plutôt que régler cent paramètres.</li>
+  </ul>
+
+  <h3>Ce qu'il faut</h3>
+  <ul>
+    <li>Une imprimante Bambu Lab en <b>mode LAN</b> (réseau local) avec le mode développeur activé.</li>
+    <li>Un petit ordinateur sous Linux allumé en permanence (un vieux PC ou un mini-PC suffit), ou Docker.</li>
+    <li>Claude (application de bureau, web ou mobile).</li>
+  </ul>
+
+  <h3>Vos données restent chez vous</h3>
+  <p>Les fichiers, la bibliothèque et l'historique sont sur votre serveur, avec une sauvegarde automatique chaque nuit. Le code d'accès de l'imprimante et les mots de passe ne passent jamais par la conversation avec Claude.</p>
+
+  <h3>Où en est le projet</h3>
+  <p>Toutes les fonctions décrites ici sont réalisées et testées automatiquement, l'imprimante étant remplacée par un simulateur fidèle. Le serveur tourne et découpe déjà les vrais fichiers avec Bambu Studio. Les premières impressions sur une vraie P1S sont en cours : c'est l'étape qui validera définitivement le dialogue avec la machine.</p>
+
+  <div class="note">Atelier Bambu Lab est un logiciel libre, publié sous licence AGPL-3.0. Il n'est ni édité ni soutenu par Bambu Lab. Bambu Studio, utilisé pour la découpe, reste distribué par Bambu Lab sous sa propre licence.</div>
+
+  <p class="foot">Code source et documentation : github.com/ArseneGA/BAMBULAB-MCP</p>
+</section>
+
+</body>
+</html>

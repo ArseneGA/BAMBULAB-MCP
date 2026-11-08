@@ -28,6 +28,9 @@ type Target struct {
 	ID, Name, Host, Serial, ModelID, ModelName string
 	PinnedSHA256                               string
 	Secrets                                    printer.SecretProvider
+	// Snap : instantané relayé par l'agent local (imprimante en link=agent). Non nil : le serveur n'ouvre AUCUNE
+	// connexion à la caméra (ni code d'accès, ni empreinte, ni flux continu) ; seuls les instantanés sont servis.
+	Snap func(ctx context.Context) ([]byte, error)
 }
 
 // JobInfo : une impression, vue par la caméra.
@@ -525,6 +528,9 @@ func (s *Service) Subscribe(ctx context.Context, printerID string) (*Stream, err
 	if err != nil {
 		return nil, err
 	}
+	if t.Snap != nil {
+		return nil, fmt.Errorf("%w : le flux vidéo continu n'est pas relayé par l'agent local (instantanés seulement)", ErrUnavailable)
+	}
 	cl, err := s.client(ctx, t)
 	if err != nil {
 		return nil, err
@@ -677,6 +683,23 @@ func (s *Service) frame(ctx context.Context, t Target, maxAge time.Duration) (Fr
 				return Frame{}, ctx.Err()
 			}
 		}
+	}
+	if t.Snap != nil { // imprimante servie par un agent local : l'image vient de l'agent
+		if _, err := Supported(t); err != nil {
+			return Frame{}, err
+		}
+		sctx, scancel := context.WithTimeout(ctx, 25*time.Second)
+		defer scancel()
+		jpg, err := t.Snap(sctx)
+		if err != nil {
+			return Frame{}, fmt.Errorf("%w : caméra via l'agent local : %v", ErrUnavailable, err)
+		}
+		if _, err := checkJPEG(jpg); err != nil {
+			return Frame{}, err
+		}
+		f := Frame{JPEG: jpg, At: s.now()}
+		s.remember(t.ID, f)
+		return f, nil
 	}
 	cl, err := s.client(ctx, t)
 	if err != nil {

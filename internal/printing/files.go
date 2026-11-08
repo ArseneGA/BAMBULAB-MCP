@@ -66,7 +66,7 @@ func (s *Service) ListPrinterFiles(ctx context.Context, printerID string, keepLa
 	}
 	fl, ok := ad.(printer.FileLister)
 	if !ok {
-		return nil, fmt.Errorf("%w : cet adaptateur ne sait pas lister la carte", ErrUnavailable)
+		return nil, s.unsupported(ctx, pid, "la lecture de la carte SD")
 	}
 	cctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
@@ -237,7 +237,7 @@ func (s *Service) doCleanup(ctx context.Context, req actionReq, who string) (*Ac
 	}
 	del, ok := ad.(printer.FileDeleter)
 	if !ok {
-		return nil, fmt.Errorf("%w : cet adaptateur ne sait pas supprimer", ErrUnavailable)
+		return nil, s.unsupported(ctx, req.printerID, "la suppression de fichiers de la carte SD")
 	}
 	// Revérification au moment de supprimer : un fichier devenu utile depuis la demande n'est JAMAIS supprimé.
 	all, _ := s.ListJobs(ctx, "", 0)

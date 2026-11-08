@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
 )
@@ -179,7 +180,7 @@ func (s *Service) RequestLoadFilament(ctx context.Context, printerID, jobID stri
 		return nil, err
 	}
 	if _, ok := ad.(printer.FilamentLoader); !ok {
-		return nil, fmt.Errorf("%w : cet adaptateur ne sait pas charger la bobine externe", ErrUnavailable)
+		return nil, s.unsupported(ctx, pid, "le chargement de la bobine externe")
 	}
 	st, err := ad.Status(ctx)
 	if err != nil || !st.Connected {
@@ -329,7 +330,7 @@ func (s *Service) doLoad(ctx context.Context, req actionReq, who string) (*Actio
 	}
 	ld, ok := ad.(printer.FilamentLoader)
 	if !ok {
-		return nil, fmt.Errorf("%w : chargement non pris en charge", ErrUnavailable)
+		return nil, s.unsupported(ctx, req.printerID, "le chargement de la bobine externe")
 	}
 	_ = s.d.Store.Audit(ctx, who, "printer.load_approved", "printer", req.printerID, map[string]any{"temp": req.tempC})
 	if req.jobID != "" {
@@ -358,6 +359,9 @@ func (s *Service) doLoad(ctx context.Context, req actionReq, who string) (*Actio
 
 // ActionWithCode exécute la demande si le code de lancement personnel de l'humain est correct (vue de l'application).
 func (s *Service) ActionWithCode(ctx context.Context, id, code string) (*ActionResult, error) {
+	if s.PasskeyRequired(ctx) { // « exiger une passkey » : le code est refusé avant tout essai (aucune tentative brûlée)
+		return nil, humanauth.ErrPasskeyRequired
+	}
 	id = trimLinkPunct(id)
 	v, err := s.GetAction(ctx, id)
 	if err != nil {
@@ -379,7 +383,12 @@ func init() {
 <dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
 {{range .V.Lines}}<p class="warn">{{.}}</p>{{end}}
 {{if .V.Files}}<p>Fichiers concernés :</p><ul>{{range .V.Files}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
-<form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}"><button type="submit">{{.V.Button}}</button></form>{{end}}{{template "foot"}}{{end}}`))
+<form method="post"{{if .PasskeyOptions}} data-pk-mode="get" data-pk-options="{{.PasskeyOptions}}"{{end}}><input type="hidden" name="nonce" value="{{.Nonce}}">
+{{if not .PasskeyRequired}}<button type="submit">{{.V.Button}}</button>{{end}}
+{{if .PasskeyOptions}}<button type="button" data-pk-go hidden>Valider avec ma passkey</button>{{end}}
+{{if .PasskeyRequired}}<p class="warn">Une passkey est exigée (réglage de <code>/setup/passkeys</code>) : le bouton simple et le code de lancement sont indisponibles.{{if not .PasskeyOptions}} {{if .PasskeyErr}}Passkey indisponible ici : {{.PasskeyErr}}{{else}}Aucune passkey n'est disponible : enregistre-en une sur <code>/setup/passkeys</code> ou lance <code>bambud passkey --require=off</code>.{{end}}{{end}}</p>{{end}}
+{{if and .PasskeyErr (not .PasskeyRequired)}}<p class="dim"><small>Passkey indisponible ici : {{.PasskeyErr}}</small></p>{{end}}
+<p id="pk-msg" role="status" hidden></p></form>{{if .PasskeyOptions}}<script src="/setup/passkeys/passkey.js" defer></script>{{end}}{{end}}{{template "foot"}}{{end}}`))
 }
 
 func (s *Service) actionGet(w http.ResponseWriter, r *http.Request) {
@@ -393,12 +402,15 @@ func (s *Service) actionGet(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusGone, "action", map[string]any{"Title": "Action", "Heading": "Action sur l'imprimante", "Closed": strings.ToUpper(msg[:1]) + msg[1:] + "."})
 		return
 	}
-	s.render(w, http.StatusOK, "action", map[string]any{"Title": v.Heading, "Heading": v.Heading, "V": v, "Nonce": s.issueNonce("action:" + id), "TZ": localtime.Name()})
+	d := map[string]any{"Title": v.Heading, "Heading": v.Heading, "V": v, "Nonce": s.issueNonce("action:" + id), "TZ": localtime.Name()}
+	d["PasskeyRequired"] = s.PasskeyRequired(r.Context())
+	d["PasskeyOptions"], d["PasskeyErr"] = s.passkeyBegin(r.Context(), r, humanauth.ApprovalSubject{Kind: "action", ID: id, Binding: v.Kind})
+	s.render(w, http.StatusOK, "action", d)
 }
 
 func (s *Service) actionPost(w http.ResponseWriter, r *http.Request) {
 	id := trimLinkPunct(r.PathValue("id"))
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, humanauth.PasskeyMaxBody+4096)
 	if err := r.ParseForm(); err != nil {
 		s.render(w, http.StatusBadRequest, "done", map[string]any{"Title": "Requête invalide", "Msg": "Formulaire illisible."})
 		return
@@ -407,7 +419,27 @@ func (s *Service) actionPost(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Formulaire périmé", "Msg": "Recharge la page puis recommence."})
 		return
 	}
-	res, err := s.ExecuteAction(r.Context(), id, "web")
+	var (
+		res *ActionResult
+		err error
+	)
+	switch {
+	case r.PostFormValue("method") == "passkey":
+		a := r.PostFormValue("assertion")
+		if len(a) > humanauth.PasskeyMaxBody {
+			a = ""
+		}
+		res, err = s.ActionWithPasskey(r.Context(), id, []byte(a), r)
+		if err != nil && isPasskeyError(err) {
+			s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Action refusée", "Msg": err.Error() + ". Recharge la page puis recommence."})
+			return
+		}
+	case s.PasskeyRequired(r.Context()):
+		s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Action refusée", "Msg": humanauth.ErrPasskeyRequired.Error() + "."})
+		return
+	default:
+		res, err = s.ExecuteAction(r.Context(), id, "web")
+	}
 	if err != nil {
 		s.log.Warn("action refusée", "action", id, "err", err)
 		s.render(w, http.StatusConflict, "done", map[string]any{"Title": "Action non effectuée", "Msg": "L'action n'a pas pu être effectuée : " + err.Error()})
@@ -425,4 +457,20 @@ func (s *Service) actionPost(w http.ResponseWriter, r *http.Request) {
 		msg += " Échecs : " + strings.Join(res.Failed, " ; ") + "."
 	}
 	s.render(w, http.StatusOK, "done", map[string]any{"Title": title, "Msg": msg})
+}
+
+// ActionWithPasskey exécute la demande si l'assertion de la passkey de l'humain est valide (même mécanisme que /stop :
+// l'approbation est liée à cette demande précise, à ce navigateur enregistré, et ne vaut qu'une fois).
+func (s *Service) ActionWithPasskey(ctx context.Context, id string, assertion []byte, r *http.Request) (*ActionResult, error) {
+	id = trimLinkPunct(id)
+	v, err := s.GetAction(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	info, err := s.passkeys().FinishApproval(ctx, r, humanauth.ApprovalSubject{Kind: "action", ID: id, Binding: v.Kind}, assertion)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.d.Store.Audit(ctx, "human:passkey", "print.action_passkey_accepted", "printer", "", map[string]any{"action": id, "kind": v.Kind, "passkey": info.ID})
+	return s.ExecuteAction(ctx, id, "passkey")
 }

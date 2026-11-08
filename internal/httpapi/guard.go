@@ -232,7 +232,7 @@ func guard(opts Options, isSession func(*http.Request) bool, next http.Handler) 
 		// Protocole de l'agent Windows (distant, pas un navigateur) : il s'authentifie par son propre
 		// secret Bearer (ou, pour /pair, par un jeton d'appairage à usage unique), vérifiés par agentlink.
 		// Ni garde Host ni CSRF navigateur ni jeton d'API ici. /api/agents/pairing reste sous garde et loopback.
-		if strings.HasPrefix(r.URL.Path, "/agent/v1/") {
+		if strings.HasPrefix(r.URL.Path, "/agent/v1/") || strings.HasPrefix(r.URL.Path, "/agent/v2/") {
 			next.ServeHTTP(w, r)
 			return
 		}

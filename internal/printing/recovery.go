@@ -74,7 +74,7 @@ func (s *Service) ReprintUploaded(ctx context.Context, in ReprintInput) (*Reprin
 	// 2. le fichier est-il toujours là, identique ?
 	rv, ok := ad.(printer.RemoteVerifier)
 	if !ok {
-		return nil, fmt.Errorf("%w : cet adaptateur ne sait pas vérifier un fichier déposé", ErrUnavailable)
+		return nil, s.unsupported(ctx, src.PrinterID, "la vérification d'un fichier déjà déposé")
 	}
 	vctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
@@ -201,6 +201,9 @@ func (s *Service) DiagnoseConnection(ctx context.Context, printerID string) (*Co
 	if err != nil {
 		return nil, err
 	}
+	if isAgentLink(rec) {
+		return nil, s.unsupported(ctx, pid, "le diagnostic de connexion")
+	}
 	var ci *printer.ConnInfo
 	s.mu.Lock()
 	if e := s.adapters[pid]; e != nil {
@@ -261,3 +264,12 @@ func (s *Service) diagCameraPort() int {
 
 var _ = errors.New
 var _ = strconv.Itoa
+
+// unsupported : fonction non disponible pour ce transport. En mode agent, le serveur n'a ni accès au réseau de
+// l'imprimante ni code d'accès : ces fonctions-là se font depuis l'agent local.
+func (s *Service) unsupported(ctx context.Context, printerID, what string) error {
+	if rec, err := s.GetPrinterRecord(ctx, printerID); err == nil && isAgentLink(rec) {
+		return fmt.Errorf("%w : %s n'est pas pris en charge quand l'imprimante est servie par un agent local (transport « agent ») : le serveur n'a pas accès à son réseau ; l'état, l'arrêt, la reprise et le lancement fonctionnent, pas cette opération", ErrUnavailable, what)
+	}
+	return fmt.Errorf("%w : cet adaptateur ne prend pas en charge %s", ErrUnavailable, what)
+}
