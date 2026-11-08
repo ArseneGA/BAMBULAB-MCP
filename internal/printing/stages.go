@@ -81,7 +81,7 @@ func stageSummary(j Job, cur *printer.Status) *StageSummary {
 	}
 	for i, s := range st {
 		state := "done"
-		verb := "effectuée"
+		verb := "effectuée à"
 		if i == len(st)-1 && (curID == s.ID || (cur == nil && out.Current == s.Name)) {
 			state, verb = "in_progress", "en cours depuis"
 		}

@@ -48,7 +48,7 @@ type Progress struct {
 	JobID          string   `json:"job_id"`
 	State          string   `json:"state"`
 	Percent        int      `json:"percent" jsonschema:"avancement 0..100 (octets envoyés / total pour un envoi, temps écoulé / attendu pour une découpe)"`
-	Phase          string   `json:"phase,omitempty"`
+	Phase          string   `json:"phase" jsonschema:"libellé libre de la phase en cours (toujours présent ; le code stable est phase_code)"`
 	Message        string   `json:"message,omitempty"`
 	BytesDone      int64    `json:"bytes_done,omitempty"`
 	BytesTotal     int64    `json:"bytes_total,omitempty"`

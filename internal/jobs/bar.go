@@ -37,7 +37,8 @@ func Bar(percent, width int) string {
 
 // FormatMB : « 21,6 » (virgule décimale).
 func FormatMB(b int64) string {
-	return strings.Replace(fmt.Sprintf("%.1f", float64(b)/(1<<20)), ".", ",", 1)
+	s := strings.Replace(fmt.Sprintf("%.1f", float64(b)/(1<<20)), ".", ",", 1)
+	return strings.TrimSuffix(s, ",0")
 }
 
 // FormatETA : « ~45 s », « ~3 min », « ~1 h 05 ».
@@ -46,7 +47,7 @@ func FormatETA(sec int) string {
 	case sec < 0:
 		sec = 0
 		fallthrough
-	case sec < 90:
+	case sec < 60:
 		return fmt.Sprintf("~%d s", sec)
 	case sec < 5400:
 		return fmt.Sprintf("~%d min", (sec+30)/60)
@@ -102,6 +103,9 @@ func (p *Progress) finalize(j contracts.Job, label string) {
 		p.PhaseLabel = strings.ToUpper(string(r[:1])) + string(r[1:])
 	default:
 		p.PhaseLabel = fallback
+	}
+	if p.Phase == "" {
+		p.Phase = p.PhaseLabel
 	}
 	p.Bar = Bar(p.Percent, BarWidth)
 	p.Text = p.textLine()

@@ -484,3 +484,31 @@ La structure (`files/`, `images/`, `README.md`) correspond à ce que demandent l
 - **Matières.** « Quelles matières pour ma P1S ? » → `list_filaments` (groupées par famille). On peut écrire « PETG transparent », « PLA mat », « PETG translucide » : le service choisit le preset installé et compatible, signale un repli, ou propose les 5 noms les plus proches. Les profils par défaut préfèrent le preset de la machine ; un preset dessiné pour une autre machine (le X1C pour la P1S, seul déclaré compatible par Bambu) est signalé.
 - **Couleur.** La couleur annoncée est celle de la bobine **chargée** (AMS lu, ou inventaire). Pour la bobine externe, déclarez-la : « la bobine externe est du PETG translucide bleu clair » → `update_spool` avec `slot=ext`, `material`, `color_hex` et `translucent`. Sans cela, la couleur est « inconnue » (jamais le vert par défaut du profil).
 - **Écran Impression.** Onglets Toutes / Actives / Terminées / Échecs / Archivées / Corbeille, regroupement par modèle, boutons Archiver / Corbeille / Restaurer (récupérable), « Archiver les n échecs », « en file (position n) » ou « découpe en cours · x % » ; après un arrêt demandé par vous l'imprimante s'affiche « arrêtée (annulée par vous) », et un « failed » Bambu est expliqué (annulation ou erreur, codes HMS). Une impression dont le travail de découpe a disparu est fermée avec la raison.
+
+## 15. Lancer après une annulation, options, étapes réelles, attente et barre de progression
+
+- **Après une annulation.** La P1S reste en `FAILED` jusqu'à son redémarrage ; l'Atelier lance quand même depuis `FAILED` ou `FINISH` (comme Bambu Studio) si l'état est frais, sans alerte HMS ni erreur en cours. Avant d'émettre une confirmation, `request_print_confirmation` vérifie que l'imprimante est lançable et sinon refuse avec la consigne précise (« l'imprimante signale une erreur HMS 0300_… ; acquittez-la sur l'écran ou redémarrez »). `get_printer_status` rend `launchable`, `launch_blocker`, `stage` / `stage_name` et `error_details` (print_error et HMS décodés). La table des codes Bambu est **partielle** (sources : wiki Bambu Lab, ha-bambulab, OpenBambuAPI) : un code absent est rendu « code X (inconnu) » avec un lien vers le wiki, jamais deviné.
+- **Options de démarrage.** `request_print_confirmation` accepte `bed_leveling` (défaut vrai), `flow_cali` (défaut vrai), `vibration_cali` (défaut vrai) et `timelapse` (défaut faux) : ce sont les valeurs envoyées jusqu'ici. Elles sont affichées sur `/confirm` et dans le contenu structuré de la vue (`binding.bed_leveling`, `flow_cali`, `vibration_cali`, `timelapse`) et font partie de ce que l'humain approuve.
+- **Ce que l'imprimante a réellement fait.** `get_print_status` rend `stage_report` : les étapes vues pour CETTE impression d'après l'étape courante de l'imprimante (`stg_cur`), avec l'heure locale (« Mise à niveau du plateau : effectuée à 21:05 »), et `bed_leveling` / `flow_cali` / `vibration_cali` = `performed` | `not_observed` | `not_requested` | `unknown`. Une étape trop brève pour être vue donne `not_observed` : ce n'est pas une preuve d'absence.
+- **Lire le G-code.** `read_gcode_excerpt(artifact_id | print_job_id, plate?, head_lines?, grep?, max_lines?)` (lecture seule, bornée) : par exemple `grep: "G29|M622|(?i); leveling"`.
+- **Attendre sans boucler.** `wait_for_job(job_id, timeout_seconds ≤ 60, défaut 25)` rend dès que l'état du travail change, ou à l'échéance (`wait.timed_out`, le travail continue). `wait_for_print_change(print_job_id, timeout_seconds)` fait de même pour une impression (état de l'impression, de l'imprimante ou étape) ; `get_print_status(wait_seconds)` aussi.
+
+### Champs de progression (stables, pour dessiner une barre)
+
+Tout travail long (découpe, dépôt FTPS, import, export) expose `progress_detail` dans `get_job_status` / `wait_for_job` (et `progress` dans `upload_print_artifact`, `get_print_status`) :
+
+| Champ | Type | Sens |
+|---|---|---|
+| `percent` | entier 0..100 | avancement (octets envoyés / total pour un dépôt ; temps écoulé / attendu, **estimé**, pour une découpe : `estimated` vrai) |
+| `done_bytes`, `total_bytes` | entiers | octets transférés / à transférer (0 si sans objet) |
+| `eta_seconds` | entier, facultatif | durée restante estimée |
+| `phase_code` | chaîne | phase STABLE : `queued`, `slicing`, `uploading`, `starting`, `importing`, `analyzing`, `rendering`, `converting`, `exporting`, `printing`, `running`, `done`, `failed`, `cancelled`, `unknown` |
+| `phase_label` | chaîne | libellé lisible (« Dépôt sur la P1S ») |
+| `phase` | chaîne | libellé libre historique de la phase (toujours présent) |
+| `bar` | chaîne | barre texte de 10 cases, ex. `███████░░░` |
+| `text` | chaîne | ligne lisible : `Dépôt sur la P1S : ███████░░░ 72 % (21,6 / 30 Mo, ~1 min)` |
+| `queue_position`, `stalled`, `elapsed_seconds`, `message` | | position en file, travail sans signe de vie, temps écoulé, étape courante |
+
+`get_upload_status` / `upload_file` (envoi d'un fichier vers l'Atelier) rendent les mêmes `percent`, `done_bytes`, `total_bytes`, `phase` (`receiving` | `complete`), `phase_label`, `bar`, `text`.
+
+**Notifications.** Si le client fournit un `progressToken` (`_meta.progressToken` de `tools/call`), `wait_for_job`, `wait_for_print_change`, `get_print_status(wait_seconds)`, `upload_print_artifact` et `start_print` émettent des `notifications/progress` : `progress` = pourcentage (strictement croissant), `total` = 100, `message` = la ligne `text`. Sans jeton, rien n'est émis : le résultat porte la même information.
