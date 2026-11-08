@@ -262,6 +262,19 @@ func (s *Store) ResolveFilament(machine, query string) (FilamentResolution, erro
 			return FilamentResolution{Entry: e, Note: e.Note}, nil
 		}
 	}
+	// « Bambu PETG Translucent @BBL X1C » demandé pour une autre machine : la ligne de produit (sans suffixe) est
+	// résolue vers le preset de CETTE machine.
+	if base := presetBase(q); base != q {
+		for _, e := range list {
+			if strings.EqualFold(e.Line, base) {
+				n := e.Note
+				if !strings.EqualFold(e.Name, q) {
+					n = strings.TrimSpace(fmt.Sprintf("suffixe machine « %s » remplacé par celui de cette imprimante. %s", strings.TrimSpace(strings.TrimPrefix(q, base)), n))
+				}
+				return FilamentResolution{Entry: e, Note: n}, nil
+			}
+		}
+	}
 	qmat, qmods := canonTokens(q)
 	if qmat == "" {
 		return FilamentResolution{}, &FilamentNotFound{Query: q, Closest: s.closestFilaments(list, q, qmat, qmods)}
@@ -302,7 +315,21 @@ func (s *Store) ResolveFilament(machine, query string) (FilamentResolution, erro
 			}
 			return cands[i].e.Line < cands[j].e.Line
 		})
-		return FilamentResolution{Entry: cands[0].e, Note: cands[0].e.Note}, nil
+		note := cands[0].e.Note
+		// plusieurs lignes également plausibles : le choix est dit clairement (jamais silencieux)
+		var tied []string
+		for _, c := range cands[1:] {
+			if c.score == cands[0].score {
+				tied = append(tied, c.e.Line)
+			}
+		}
+		if len(tied) > 0 {
+			if len(tied) > 5 {
+				tied = tied[:5]
+			}
+			note = strings.TrimSpace(fmt.Sprintf("nom ambigu : « %s » correspond aussi à %s ; retenu « %s » (préciser le nom complet de list_filaments pour choisir autrement). %s", q, strings.Join(tied, ", "), cands[0].e.Line, note))
+		}
+		return FilamentResolution{Entry: cands[0].e, Note: note}, nil
 	}
 	// variante demandée absente : repli sur la variante de base de la matière, signalé
 	if len(qmods) > 0 {

@@ -241,6 +241,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if o.Report.Adhesion.Risky() {
 			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur) : " + o.Report.Adhesion.Summary() + " Bordure du profil : " + firstNonEmptyStr(o.Report.BrimType, "inconnue") + " " + o.Report.BrimWidth + "."
 		}
+		if w := o.Report.OverhangWarning(); w != "" {
+			txt += " AVERTISSEMENT FORT (non bloquant, à signaler à l'utilisateur, qui doit en prendre acte avant le lancement) : " + w
+		}
 		return textResult(txt), *o, nil
 	})
 

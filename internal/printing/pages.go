@@ -57,6 +57,7 @@ var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": local
 <form method="post" action="/confirm/{{.ID}}/photo"><input type="hidden" name="nonce" value="{{.PhotoNonce}}"><button type="submit">Reprendre la photo</button></form>{{end}}
 {{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
 {{range .V.Binding.Adhesion}}<p class="warn"><strong>Risque de décollement.</strong> {{.}}</p>{{end}}
+{{range .V.Binding.Overhang}}<p class="warn"><strong>Surplombs sans supports.</strong> {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}">
 <label class="chk"><input type="checkbox" name="plate_clear" value="yes" required> Le plateau est vide et dégagé, l'imprimante est surveillée.</label>

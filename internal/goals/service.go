@@ -253,6 +253,7 @@ type resolvedBase struct {
 	machine  *profiles.Resolved
 	process  *profiles.Resolved // avec surcharges de base
 	filament *profiles.Resolved // premier filament, avec surcharges de base
+	notes    []string           // résolutions faites automatiquement (noms de filament)
 }
 
 func digestOf(r *profiles.Resolved) string {
@@ -323,9 +324,23 @@ func (s *Service) resolveBase(spec BaseSpec, fam string, baseOvs []slicer.Overri
 	if ok, err := s.prof.IsCompatible(profiles.KindProcess, process, machine); err != nil || !ok {
 		return nil, fmt.Errorf("%w: process %q avec %q (%v)", ErrIncompatible, process, machine, err)
 	}
-	for _, f := range fils {
+	var notes []string
+	for i, f := range fils {
 		if ok, err := s.prof.IsCompatible(profiles.KindFilament, f, machine); err != nil || !ok {
-			return nil, fmt.Errorf("%w: filament %q avec %q (%v)", ErrIncompatible, f, machine, err)
+			// nom sans suffixe machine (« Bambu PETG Translucent ») ou libre (« PETG transparent ») : résolu vers le
+			// préréglage compatible avec CETTE machine (« … @BBL X1C » pour une P1S) ; message clair si ambigu.
+			r, rerr := s.prof.ResolveFilament(machine, f)
+			if rerr != nil {
+				return nil, fmt.Errorf("%w: filament %q avec %q (%v)", ErrIncompatible, f, machine, rerr)
+			}
+			nl := append([]string(nil), fils...)
+			nl[i] = r.Entry.Name
+			fils = nl
+			note := fmt.Sprintf("filament « %s » résolu vers le préréglage compatible « %s »", f, r.Entry.Name)
+			if r.Note != "" {
+				note += " (" + r.Note + ")"
+			}
+			notes = append(notes, note)
 		}
 	}
 	m, p, fs, _, err := slicer.ResolveWithOverrides(s.prof, machine, process, fils, baseOvs)
@@ -342,7 +357,7 @@ func (s *Service) resolveBase(spec BaseSpec, fam string, baseOvs []slicer.Overri
 			nozzle = v
 		}
 	}
-	rb := &resolvedBase{machine: m, process: p, filament: fs[0]}
+	rb := &resolvedBase{machine: m, process: p, filament: fs[0], notes: notes}
 	rb.doc = BaseDoc{Machine: machine, Process: process, Filaments: fils, Family: family, Nozzle: nozzle, ProfilesStore: s.prof.Version,
 		Digests: map[string]string{}, Overrides: baseOvs}
 	rb.doc.Digests["machine:"+machine] = digestOf(rm)

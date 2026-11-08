@@ -133,7 +133,28 @@ type ModifyOutput struct {
 	Overrides      []slicer.Override        `json:"overrides"`
 	Applied        []slicer.AppliedOverride `json:"applied"`
 	Diff           []DiffEntry              `json:"diff" jsonschema:"différences avec la révision de base (ou avec les profils d'origine pour une première révision)"`
+	Effective      []EffectiveSetting       `json:"effective_settings" jsonschema:"réglages d'adhérence et de supports EFFECTIFS après modification (brim_type, brim_width, raft_layers, enable_support, support_type, curr_bed_type), avec leur origine : surcharge, profil ou défaut de Bambu Studio ; jamais null"`
 	Notes          []string                 `json:"notes,omitempty"`
+}
+
+// EffectiveSetting est la valeur effective d'un réglage et son origine.
+type EffectiveSetting struct {
+	Key    string `json:"key"`
+	Value  string `json:"value"`
+	Source string `json:"source" jsonschema:"surcharge | profil | défaut Bambu Studio | inconnue"`
+}
+
+// effectiveKeys : réglages qui décident de l'adhérence et des supports, toujours résolus pour l'affichage.
+var effectiveKeys = []string{"brim_type", "brim_width", "raft_layers", "enable_support", "support_type", "support_threshold_angle", "curr_bed_type"}
+
+// effectiveSettings résout la valeur effective de chaque réglage clé (défaut de Bambu Studio compris).
+func effectiveSettings(p *profiles.Resolved) []EffectiveSetting {
+	out := make([]EffectiveSetting, 0, len(effectiveKeys))
+	for _, k := range effectiveKeys {
+		v, src := slicer.Effective(p, k)
+		out = append(out, EffectiveSetting{Key: k, Value: v, Source: src})
+	}
+	return out
 }
 
 func view(r *profiles.Resolved) ProfileView {
@@ -156,7 +177,14 @@ func diffResolved(target string, oldR, newR *profiles.Resolved) []DiffEntry {
 	sort.Strings(ks)
 	for _, k := range ks {
 		if !reflect.DeepEqual(oldR.Config[k], newR.Config[k]) {
-			out = append(out, DiffEntry{Target: target, Key: k, Old: oldR.Config[k], New: newR.Config[k], OldSource: oldR.Source[k], NewSource: newR.Source[k]})
+			d := DiffEntry{Target: target, Key: k, Old: oldR.Config[k], New: newR.Config[k], OldSource: oldR.Source[k], NewSource: newR.Source[k]}
+			// clé absente du profil : sa valeur effective est celle de Bambu Studio, pas « null »
+			if _, ok := oldR.Config[k]; !ok {
+				if def, ok := slicer.BambuDefault(k); ok {
+					d.Old, d.OldSource = def, slicer.SourceDefault
+				}
+			}
+			out = append(out, d)
 		}
 	}
 	return out
@@ -223,7 +251,8 @@ func (s *Service) ModifyProfile(ctx context.Context, in ModifyInput) (*ModifyOut
 	if err != nil {
 		return nil, err
 	}
-	out := &ModifyOutput{Revision: rev.ID, ParentRevision: rev.ParentID, Process: view(np), Overrides: merged, Applied: applied, Diff: []DiffEntry{}}
+	out := &ModifyOutput{Revision: rev.ID, ParentRevision: rev.ParentID, Process: view(np), Overrides: merged, Applied: applied, Diff: []DiffEntry{},
+		Effective: effectiveSettings(np)}
 	// machine : seulement les clés modifiées (le profil complet fait des centaines de clés dont des scripts G-code)
 	mv := ProfileView{Name: nm.Name, Chain: nm.Chain, Config: map[string]any{}, Source: map[string]string{}}
 	for _, d := range diffResolved("machine", om, nm) {
@@ -236,7 +265,7 @@ func (s *Service) ModifyProfile(ctx context.Context, in ModifyInput) (*ModifyOut
 		out.Filaments = append(out.Filaments, view(nfs[i]))
 		out.Diff = append(out.Diff, diffResolved("filament", ofs[i], nfs[i])...)
 	}
-	out.Notes = []string{"profil machine : seules les clés modifiées sont listées (le profil complet est écrit au moment de la découpe)"}
+	out.Notes = append([]string{"profil machine : seules les clés modifiées sont listées (le profil complet est écrit au moment de la découpe)"}, rb.notes...)
 	if parent == nil {
 		out.Notes = append(out.Notes, "première révision : la différence est calculée par rapport aux profils d'origine de l'installation")
 	}

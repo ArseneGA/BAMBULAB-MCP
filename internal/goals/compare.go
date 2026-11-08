@@ -59,6 +59,8 @@ type CompareCandidate struct {
 	ViolatesNonNeg    bool              `json:"violates_non_negotiable,omitempty"`
 	Indicators        map[string]any    `json:"indicators_for_non_evaluable,omitempty"`
 	Error             string            `json:"error,omitempty"`
+	// Warnings : mises en garde propres au candidat : surplombs sans supports, ventilation réduite / température relevée.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // RankEntry est une position dans un classement par critère.
@@ -112,6 +114,7 @@ func (s *Service) CompareVariants(ctx context.Context, experimentID string) (*Co
 	}
 	out := &CompareOutput{ExperimentID: exp.ID, ModelVersionID: exp.ModelVersionID, GoalID: exp.GoalID, Complete: true,
 		Rankings: []Ranking{}, NotEvaluable: []NonEvaluable{}, Memory: exp.Details.Prior, SkippedLevers: exp.Details.Skipped, Notice: noticeText}
+	src := s.sourceMesh(exp)
 	for _, c := range exp.Candidates {
 		cc := CompareCandidate{ID: c.ID, Label: c.Label, Kind: c.Kind, State: c.State, Rationale: c.Rationale,
 			ExpectedTradeoffs: c.Tradeoffs, Notes: c.Notes, Error: c.Error, Changes: []string{}}
@@ -123,12 +126,29 @@ func (s *Service) CompareVariants(ctx context.Context, experimentID string) (*Co
 			}
 			cc.Changes = append(cc.Changes, fmt.Sprintf("%s : %s → %s", ch.Key, fmtAny(ch.From), fmtAny(ch.To)))
 		}
+		// Variante sans changements décrits (expérience créée avant l'affichage des variantes personnalisées) mais avec
+		// des surcharges : on liste les réglages réellement appliqués plutôt que « changes: [] ».
+		if len(cc.Changes) == 0 {
+			for _, o := range c.Overrides {
+				cc.Changes = append(cc.Changes, fmt.Sprintf("%s : → %s", o.Key, fmtAny(displayValue(o.Value))))
+			}
+		}
 		if c.State != "succeeded" && c.State != "failed" && c.State != "cancelled" {
 			out.Complete = false
 			out.Pending = append(out.Pending, c.ID)
 		}
 		if c.Metrics != nil {
 			cc.Metrics = c.Metrics.Values
+		}
+		// Surplombs de la pièce croisés avec les supports et le refroidissement DE CE candidat.
+		if mt, warns := s.candidateInsight(exp, src, c); mt != nil {
+			vals := map[string]Metric{}
+			for k, v := range cc.Metrics {
+				vals[k] = v
+			}
+			vals[MetricUnsupportedOverhang] = *mt
+			cc.Metrics = vals
+			cc.Warnings = append(cc.Warnings, warns...)
 		}
 		if goal != nil {
 			for _, crit := range goal.Criteria {

@@ -65,16 +65,18 @@ func (s *Service) checkFabricable(ctx context.Context, spec *SliceSpec) (warn st
 
 // overridesHaveBrim : les surcharges de découpe demandent-elles une vraie bordure (≥ 3 mm) ?
 func overridesHaveBrim(ov []slicer.Override) bool {
-	var typ, width string
+	var typ, width, raft string
 	for _, o := range ov {
 		switch o.Key {
 		case "brim_type":
 			typ = fmt.Sprint(o.Value)
 		case "brim_width":
 			width = fmt.Sprint(o.Value)
+		case "raft_layers":
+			raft = fmt.Sprint(o.Value)
 		}
 	}
-	return brimPresent(typ, width)
+	return adhesionCovered(typ, width, raft)
 }
 
 func (s *Service) targetOf(sl *slicer.Slicer, spec *SliceSpec) (mesh.Target, error) {

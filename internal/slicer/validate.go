@@ -128,8 +128,12 @@ type ArchiveInfo struct {
 	FilamentIDs    []string          `json:"filament_settings_id"`
 	Nozzles        []string          `json:"nozzle_diameter"`
 	BedType        string            `json:"bed_type,omitempty"`
-	BrimType       string            `json:"brim_type,omitempty"`  // bordure du procédé réellement tranché (project_settings.config)
-	BrimWidth      string            `json:"brim_width,omitempty"` // largeur de bordure (mm), telle qu'écrite par Studio
+	BrimType       string            `json:"brim_type,omitempty"`               // bordure du procédé réellement tranché (project_settings.config)
+	BrimWidth      string            `json:"brim_width,omitempty"`              // largeur de bordure (mm), telle qu'écrite par Studio
+	RaftLayers     string            `json:"raft_layers,omitempty"`             // couches de radeau du procédé tranché
+	EnableSupport  string            `json:"enable_support,omitempty"`          // « 1 » / « 0 » : supports activés dans le procédé tranché
+	SupportType    string            `json:"support_type,omitempty"`            // normal(auto), tree(auto), normal(manual), tree(manual)
+	SupportAngle   string            `json:"support_threshold_angle,omitempty"` // seuil de surplomb (°, pente depuis l'horizontale) ; « 0 » = automatique
 	Plates         []PlateResult     `json:"plates"`
 	Settings       map[string]string `json:"-"`
 	// GcodeProfile : le G-code de démarrage/fin est-il celui du profil machine officiel ?
@@ -270,6 +274,10 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 	info.BedType = firstString(settings["curr_bed_type"])
 	info.BrimType = firstString(settings["brim_type"])
 	info.BrimWidth = firstString(settings["brim_width"])
+	info.RaftLayers = firstString(settings["raft_layers"])
+	info.EnableSupport = firstString(settings["enable_support"])
+	info.SupportType = firstString(settings["support_type"])
+	info.SupportAngle = firstString(settings["support_threshold_angle"])
 
 	// slice_info.config (XML)
 	var si siConfig

@@ -67,6 +67,9 @@ func materialWord(name string) string {
 	return ""
 }
 
+// PresetBase retire le suffixe machine « @BBL X1C » d'un nom de preset (« Bambu PETG Translucent @BBL X1C » → « Bambu PETG Translucent »).
+func PresetBase(name string) string { return presetBase(name) }
+
 func presetBase(name string) string {
 	b, _, _ := strings.Cut(name, " @")
 	return strings.TrimSpace(b)

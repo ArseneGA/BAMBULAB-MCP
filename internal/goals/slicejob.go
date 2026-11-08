@@ -274,6 +274,13 @@ func (s *Service) collectMetrics(res *slicer.Result, exp *Experiment, cand *Cand
 					m.Effective["filament."+k] = v
 				}
 			}
+			// adhérence et supports EFFECTIFS (défaut de Bambu Studio compris) : jamais absents du résumé
+			for _, ek := range effectiveKeys {
+				if _, have := m.Effective["process."+ek]; !have {
+					v, _ := slicer.Effective(p, ek)
+					m.Effective["process."+ek] = v
+				}
+			}
 			if lh, _, ok := parseNum(firstStr(p.Config["layer_height"])); ok {
 				put("layer_height_mm", lh, "mm", LabelSlicer, "réglage effectif, indicateur d'aspect de surface")
 			}
