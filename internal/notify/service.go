@@ -49,12 +49,14 @@ const (
 	EvDetectionAlert = "detection_alert"
 	EvStartUnknown   = "start_unknown"
 	EvPrinterOffline = "printer_offline"
+	// EvPrintAttention : impression qui attend une action à l'écran, bloquée, injoignable, ou arrêt non appliqué (supervision).
+	EvPrintAttention = "print_attention"
 	EvQueue          = "queue_event" // file d'attente (chantier E) : prochaine impression à confirmer, file bloquée...
 	EvTest           = "test"
 )
 
 // AllEvents liste les évènements auxquels un canal peut s'abonner (EvTest est toujours livré par test_notification).
-var AllEvents = []string{EvPrintCompleted, EvPrintFailed, EvDetectionAlert, EvStartUnknown, EvPrinterOffline, EvQueue}
+var AllEvents = []string{EvPrintCompleted, EvPrintFailed, EvDetectionAlert, EvStartUnknown, EvPrinterOffline, EvQueue, EvPrintAttention}
 
 // Noms de secrets par type de canal.
 var secretFields = map[string][]SecretField{

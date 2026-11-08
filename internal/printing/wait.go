@@ -38,10 +38,10 @@ type WaitInfo struct {
 }
 
 // printSig : ce qui, en changeant, réveille l'attente.
-type printSig struct{ job, printer, stage string }
+type printSig struct{ job, printer, stage, alert string }
 
 func sigOf(ps *PrintStatus) printSig {
-	s := printSig{job: string(ps.Job.State)}
+	s := printSig{job: string(ps.Job.State), alert: ps.Alert}
 	if ps.Printer != nil {
 		s.printer = ps.Printer.GcodeState + "/" + ps.Printer.State
 		s.stage = ps.Printer.StageName

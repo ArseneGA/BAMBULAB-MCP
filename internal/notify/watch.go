@@ -45,7 +45,36 @@ func NewWatcher(n *Service, p PrinterSource, photos PhotoSource) *Watcher {
 }
 
 // Attach abonne le surveillant aux transitions d'impression : fin, échec, lancement incertain.
-func (w *Watcher) Attach(p *printing.Service) { p.OnEvent(w.OnPrintEvent) }
+func (w *Watcher) Attach(p *printing.Service) {
+	p.OnEvent(w.OnPrintEvent)
+	p.OnAlert(w.OnPrintAlert)
+}
+
+// OnPrintAlert traduit une alerte de supervision (pause sur erreur, impression bloquée, injoignable, arrêt non appliqué)
+// en notification « print_attention ». Une alerte n'est pas une transition : l'impression garde son état.
+func (w *Watcher) OnPrintAlert(a printing.Alert) {
+	name := a.JobName
+	if name == "" {
+		name = a.JobID
+	}
+	pname := w.printerName(a.PrinterID)
+	title := map[string]string{
+		"attention":        "Action requise à l'écran : " + name,
+		"stalled":          "Impression bloquée : " + name,
+		"unreachable":      "Imprimante injoignable : " + name,
+		"stop_not_applied": "Arrêt non appliqué : " + name,
+	}[a.Kind]
+	if title == "" {
+		title = "À voir : " + name
+	}
+	go func() {
+		defer func() { _ = recover() }()
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		w.n.Emit(ctx, Event{Kind: EvPrintAttention, Title: title, Message: fmt.Sprintf("%s (%s) : %s", name, pname, a.Message), Link: w.n.BaseURL() + "/impression",
+			PrinterID: a.PrinterID, JobID: a.JobID, At: a.At, DedupKey: EvPrintAttention + ":" + a.JobID + ":" + a.Kind + ":" + a.Message})
+	}()
+}
 
 // OnPrintEvent traduit une transition de la machine d'états en notification.
 func (w *Watcher) OnPrintEvent(ev printing.Event) {

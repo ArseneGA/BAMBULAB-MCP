@@ -79,6 +79,10 @@ type Deps struct {
 	StartAckWait time.Duration
 	// PubAckWait : attente de l'accusé de transport MQTT de la commande de lancement (défaut 30 s).
 	PubAckWait time.Duration
+	// CommandWait : attente de l'effet d'une commande pause/reprise/arrêt (défaut de l'adaptateur : 10 s).
+	CommandWait time.Duration
+	// CameraPort : port de la caméra sondé par diagnose_connection (0 = 6000).
+	CameraPort int
 	// AgentHub : côté serveur du protocole /agent/v2 (transport « via agent »). nil : seules les imprimantes en
 	// transport direct (défaut) sont utilisables ; rien ne change pour elles.
 	AgentHub *agentv2.Hub
@@ -129,6 +133,11 @@ type Service struct {
 	// Abonnés aux transitions et photo du plateau (events.go).
 	evMu       sync.Mutex
 	evSubs     []func(Event)
+	alertSubs  []func(Alert)
+	actions    map[string]*actionReq // demandes d'action validées par l'humain (actions.go)
+	actionGone map[string]goneAction
+	links      map[string]*linkRecord // dernière connexion / erreur par imprimante (recovery.go)
+	wc         WatchConfig
 	platePhoto func(ctx context.Context, printerID string) PlatePhoto
 	photoCache map[string]PlatePhoto // dernière photo RÉUSSIE par imprimante (réutilisée moins de PhotoMaxAge)
 }
@@ -703,7 +712,7 @@ func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret pr
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
 		Secrets: secret, TLS: printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}, Verifier: verifier, Logger: s.log,
 		AllowStartFromFinish: rec.AllowStartFromFinish, StartFromTerminal: true, ReconcileSettle: settle,
-		StartObserveTimeout: s.d.StartAckWait, PubAckTimeout: s.d.PubAckWait,
+		StartObserveTimeout: s.d.StartAckWait, PubAckTimeout: s.d.PubAckWait, CommandTimeout: s.d.CommandWait,
 	})
 	if err != nil {
 		return nil, err
@@ -807,8 +816,10 @@ func (s *Service) adapter(ctx context.Context, printerID string) (printer.Adapte
 			if cl, ok := ad.(interface{ Close() error }); ok {
 				_ = cl.Close()
 			}
+			s.noteLink(printerID, err)
 			return nil, rec, fmt.Errorf("%w : connexion à l'imprimante %s impossible : %v", ErrUnavailable, rec.Name, err)
 		}
+		s.noteLink(printerID, nil)
 	}
 	s.mu.Lock()
 	if e := s.adapters[printerID]; e != nil { // course : garder le premier

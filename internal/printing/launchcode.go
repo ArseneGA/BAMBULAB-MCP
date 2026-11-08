@@ -75,7 +75,7 @@ func (s *Service) StopWithCode(ctx context.Context, stopID, code string) (*Cance
 		return nil, err
 	}
 	_ = s.d.Store.Audit(ctx, "human:app-code", "print.stop_code_accepted", "print_job", v.PrintJobID, map[string]any{"stop": stopID})
-	return s.ExecuteStop(ctx, stopID)
+	return s.executeStop(ctx, stopID, "app-code")
 }
 
 // PlatePhotoForConfirmation donne la photo du plateau pour la vue de confirmation (nil si aucune caméra). fresh=true

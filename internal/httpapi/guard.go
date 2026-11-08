@@ -52,7 +52,7 @@ type Options struct {
 func isHumanPath(p string) bool {
 	switch {
 	case p == "/enroll" || strings.HasPrefix(p, "/enroll/"), p == "/api/session",
-		strings.HasPrefix(p, "/confirm/"), strings.HasPrefix(p, "/stop/"), strings.HasPrefix(p, "/setup/"),
+		strings.HasPrefix(p, "/confirm/"), strings.HasPrefix(p, "/stop/"), strings.HasPrefix(p, "/action/"), strings.HasPrefix(p, "/setup/"),
 		p == "/agents/pair", strings.HasPrefix(p, "/oauth/consent/"):
 		return true
 	}

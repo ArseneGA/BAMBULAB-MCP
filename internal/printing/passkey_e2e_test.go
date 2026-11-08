@@ -405,3 +405,40 @@ func TestPasskeyScriptIsStaticAndNotInline(t *testing.T) {
 		t.Fatal("le script ne doit pas être du JSON")
 	}
 }
+
+// Les actions /action/{id} (reprise, chargement, nettoyage) respectent « exiger une passkey » : le code et le bouton
+// simple sont refusés sans rien envoyer, la passkey exécute une seule commande.
+func TestPasskeyRequiredAppliesToActions(t *testing.T) {
+	r := launchRig(t)
+	r.humanSetLaunchCode(goodCode)
+	b := newPKBrowser(t, r)
+	a := passkeytest.Must(passkeytest.EdDSA)
+	b.register(a, "clé EdDSA")
+	_, body, _ := b.get("/setup/passkeys")
+	_, nonce := pageOptions(t, body)
+	if st, out := b.post("/setup/passkeys", url.Values{"nonce": {nonce}, "action": {"require_on"}}); st != 200 {
+		t.Fatalf("exiger : %d %s", st, out)
+	}
+	ld := r.call("load_filament", map[string]any{"printer_id": r.printerID})
+	id := str(ld, "action_id")
+	if m := r.call("validate_action_with_code", map[string]any{"action_id": id, "code": goodCode}); m["approved"] != false || str(m, "problem") != "not_set" {
+		t.Fatalf("code avec passkey exigée : %v", m)
+	}
+	st, body, _ := b.get("/action/" + id)
+	if st != 200 || strings.Contains(body, "Charger le filament</button>") || !strings.Contains(body, "Valider avec ma passkey") {
+		t.Fatalf("page d'action : %d %s", st, body)
+	}
+	_, nonce = pageOptions(t, body)
+	if st, _ := b.post("/action/"+id, url.Values{"nonce": {nonce}}); st != 403 {
+		t.Fatalf("bouton simple avec passkey exigée : %d", st)
+	}
+	if n := r.sim.CommandCount("ams_change_filament"); n != 0 {
+		t.Fatalf("%d commande(s) envoyée(s) sans passkey", n)
+	}
+	if st, out := b.approve(a, "/action/"+id, false); st != 200 {
+		t.Fatalf("approbation par passkey : %d %s", st, out)
+	}
+	if n := r.sim.CommandCount("ams_change_filament"); n != 1 {
+		t.Fatalf("%d commande(s), 1 attendue", n)
+	}
+}

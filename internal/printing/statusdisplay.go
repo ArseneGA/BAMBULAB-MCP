@@ -82,6 +82,10 @@ func (s *Service) describeStatus(ctx context.Context, o *PrinterStatus, st print
 		o.Display = conn + " · au repos"
 	case printer.StatePrinting:
 		o.Display = conn + " · impression en cours"
+		if last != nil && last.State == contracts.PrintCancelled && last.StoppedByUser && st.Temps.NozzleTarget == 0 && st.Temps.BedTarget == 0 {
+			o.Display = conn + " · arrêtée (état RUNNING résiduel)"
+			o.Explanation = "gcode_state RUNNING mais toutes les consignes de chauffe sont à 0 : l'arrêt validé a été appliqué et l'imprimante a gardé un état résiduel. " + restartAdvice
+		}
 	case printer.StatePreparing:
 		o.Display = conn + " · préparation"
 	}

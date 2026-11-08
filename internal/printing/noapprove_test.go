@@ -41,7 +41,7 @@ func TestNoMCPToolCanApproveAConfirmation(t *testing.T) {
 	called := 0
 	for _, tl := range tools.Tools {
 		low := strings.ToLower(tl.Name)
-		codeTool := tl.Name == "approve_print_with_code" || tl.Name == "approve_stop_with_code"
+		codeTool := tl.Name == "approve_print_with_code" || tl.Name == "approve_stop_with_code" || tl.Name == "validate_action_with_code"
 		if (strings.Contains(low, "approve") && !codeTool) || strings.Contains(low, "from_app") || low == "confirm_print" {
 			t.Fatalf("outil d'approbation interdit : %s", tl.Name)
 		}
