@@ -460,6 +460,29 @@ func allowedEntry(name string) bool {
 	return false
 }
 
+// drainTrailer lit r jusqu'à EOF (ce qui force le contrôle du CRC32 et de la taille de gzip) et refuse tout octet
+// non nul : après le marqueur de fin d'un tar, il ne peut rester que du remplissage à zéro.
+func drainTrailer(ctx context.Context, r io.Reader) error {
+	buf := make([]byte, 64<<10)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, err := r.Read(buf)
+		for _, b := range buf[:n] {
+			if b != 0 {
+				return errors.New("données après la fin de l'archive tar")
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
+
 // extract lit l'archive, vérifie chaque fichier contre le manifeste (lu à la fin) et écrit le contenu dans
 // staging. Si keepBlobs est faux, les blobs sont lus et vérifiés mais pas écrits (vérification seule).
 func extract(ctx context.Context, archive, staging string, keepBlobs bool) (*Manifest, error) {
@@ -541,6 +564,12 @@ func extract(ctx context.Context, archive, staging string, keepBlobs bool) (*Man
 			return nil, fmt.Errorf("lecture de %q : %w", h.Name, err)
 		}
 		seen[h.Name] = FileEntry{Path: h.Name, Size: n, SHA256: hex.EncodeToString(hs.Sum(nil))}
+	}
+	// Le lecteur tar s'arrête au marqueur de fin sans lire la suite du flux : le CRC32/ISIZE de gzip (contrôlés
+	// seulement à EOF) ne seraient jamais vérifiés. On lit donc TOUT le flux jusqu'à EOF et on refuse tout octet
+	// non nul après la fin de l'archive tar.
+	if err := drainTrailer(ctx, r); err != nil {
+		return nil, fmt.Errorf("archive corrompue : %w", err)
 	}
 	if man == nil {
 		return nil, errors.New("archive incomplète : manifeste absent (sauvegarde interrompue ou tronquée)")
