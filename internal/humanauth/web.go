@@ -23,6 +23,20 @@ func PageHeadersWithImages(w http.ResponseWriter) {
 	pageHeaders(w, "img-src 'self'; ")
 }
 
+// PageHeadersWith est PageHeaders pour les pages qui montrent une image de leur origine (images) et/ou chargent le
+// script statique des passkeys (script) : la CSP ajoute alors `img-src 'self'` et `script-src 'self'` AU MINIMUM, jamais
+// de script en ligne, jamais d'origine tierce. Sans l'une ni l'autre, c'est exactement PageHeaders.
+func PageHeadersWith(w http.ResponseWriter, images, script bool) {
+	extra := ""
+	if images {
+		extra += "img-src 'self'; "
+	}
+	if script {
+		extra += "script-src 'self'; "
+	}
+	pageHeaders(w, extra)
+}
+
 func pageHeaders(w http.ResponseWriter, extra string) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
