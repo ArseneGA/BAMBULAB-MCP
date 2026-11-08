@@ -50,10 +50,15 @@ type PrinterRecord struct {
 	// /setup/printer/{id} après qu'il l'a comparée au numéro de série ; effacée si l'hôte change.
 	// AllowStartFromFinish : accepte un nouveau départ depuis l'état « finished » (à valider sur le
 	// vrai matériel, J7 §5 point 8) ; faux par défaut ; non réglable par MCP/API.
-	AllowStartFromFinish bool      `json:"allow_start_from_finish,omitempty"`
-	PinnedSHA256         string    `json:"pinned_sha256,omitempty"`
-	PinnedAt             time.Time `json:"pinned_at,omitzero"`
-	CreatedAt            time.Time `json:"created_at"`
+	AllowStartFromFinish bool `json:"allow_start_from_finish,omitempty"`
+	// Link : transport de l'imprimante. « direct » (défaut, champ absent) : bambud parle lui-même à l'imprimante et
+	// garde le code d'accès. « agent » : un agent local appairé (AgentID, protocole /agent/v2) parle à l'imprimante
+	// et garde seul le code d'accès, jamais transmis au serveur. Réglé par PUT /api/printers/{id}/link.
+	Link         string    `json:"link,omitempty"`
+	AgentID      string    `json:"agent_id,omitempty"`
+	PinnedSHA256 string    `json:"pinned_sha256,omitempty"`
+	PinnedAt     time.Time `json:"pinned_at,omitzero"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // ToContract projette vers contracts.Printer.

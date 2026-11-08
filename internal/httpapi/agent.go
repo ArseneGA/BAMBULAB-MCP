@@ -27,6 +27,7 @@ func registerAgent(mux *http.ServeMux, c *core.Core, human *humanauth.Service) {
 		return
 	}
 	mux.Handle(agentlink.BasePath+"/", reg.Handler())
+	registerAgentV2(mux, c, reg) // /agent/v2 : agent local d'imprimante (docs/AGENT-V2.md) ; v1 reste inchangé
 
 	registerPairPage(mux, c, reg, human)
 	mux.HandleFunc("POST /api/agents/pairing", func(w http.ResponseWriter, r *http.Request) {
