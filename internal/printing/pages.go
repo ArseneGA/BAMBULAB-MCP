@@ -66,7 +66,11 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 {{define "done"}}{{template "head" .}}<h1>{{.Title}}</h1><p class="ok">{{.Msg}}</p>{{template "foot"}}{{end}}`))
 
 func (s *Service) render(w http.ResponseWriter, status int, name string, data any) {
-	humanauth.PageHeaders(w)
+	if name == "confirm" { // seule page qui montre une image (photo du plateau, même origine)
+		humanauth.PageHeadersWithImages(w)
+	} else {
+		humanauth.PageHeaders(w)
+	}
 	w.WriteHeader(status)
 	if err := pageTpl.ExecuteTemplate(w, name, data); err != nil {
 		s.log.Warn("page non rendue", "page", name, "err", err)
@@ -209,7 +213,7 @@ func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.Approved {
-		s.render(w, http.StatusOK, "done", map[string]any{"Title": "Déjà confirmée", "Msg": "Tu as déjà autorisé cette impression. Retourne dans Claude : il peut lancer (l'accord vaut 2 minutes)."})
+		s.render(w, http.StatusOK, "done", map[string]any{"Title": "Déjà confirmée", "Msg": "Tu as déjà autorisé cette impression (l'accord vaut 2 minutes). Le lancement suit ton accord : demande à Claude l'état de l'impression."})
 		return
 	}
 	d := map[string]any{"Title": "Confirmation de lancement", "V": v, "Nonce": s.issueNonce(id)}
@@ -231,7 +235,8 @@ func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plate := strings.EqualFold(r.PostFormValue("plate_clear"), "yes")
-	if _, err := s.Approve(r.Context(), id, plate, "web"); err != nil {
+	res, err := s.ApproveAndStart(r.Context(), id, plate, "web") // l'approbation humaine lance l'impression (autostart.go)
+	if err != nil {
 		st := http.StatusGone
 		msg := closedMsg(err)
 		if errors.Is(err, ErrNeedsApproval) {
@@ -240,7 +245,18 @@ func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {
 		s.render(w, st, "done", map[string]any{"Title": "Non confirmée", "Msg": msg})
 		return
 	}
-	s.render(w, http.StatusOK, "done", map[string]any{"Title": "Lancement autorisé", "Msg": "Autorisation enregistrée pour cette impression uniquement, valable 2 minutes. Retourne dans Claude et dis-lui que c'est fait : il lancera l'impression."})
+	title := "Lancement autorisé"
+	switch {
+	case res.Started() && res.Start.Outcome == "printing":
+		title = "Impression lancée"
+	case res.Started():
+		title = "Lancement envoyé"
+	case res.Start != nil:
+		title = "Lancement non effectué"
+	default:
+		title = "Autorisé, pas démarré"
+	}
+	s.render(w, http.StatusOK, "done", map[string]any{"Title": title, "Msg": res.Message() + " Tu n'as rien à dire à Claude."})
 }
 
 func (s *Service) stopGet(w http.ResponseWriter, r *http.Request) {

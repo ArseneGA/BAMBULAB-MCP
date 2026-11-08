@@ -124,6 +124,26 @@ func TestCatalogToolsEndToEnd(t *testing.T) {
 	}
 
 	// search_models : pagination, filtres.
+	// Le texte (seul contenu lu par le modèle quand la vue cartes s'affiche) liste nom, identifiant mdl_… et dimensions.
+	pr := call(t, cs, "search_models", map[string]any{"limit": 3, "tags": []string{"lot a"}})
+	var ptxt string
+	for _, c := range pr.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			ptxt += tc.Text
+		}
+	}
+	for _, m := range arr(t, structured(t, pr), "models") {
+		mm := m.(map[string]any)
+		if !strings.Contains(ptxt, mm["name"].(string)+" ("+mm["id"].(string)+")") {
+			t.Fatalf("le texte ne liste pas %v (%v) : %s", mm["name"], mm["id"], ptxt)
+		}
+	}
+	if !strings.Contains(ptxt, "mdl_") || !strings.Contains(ptxt, " mm") || strings.Count(ptxt, "\n- ") != 3 {
+		t.Fatalf("texte de search_models : %s", ptxt)
+	}
+	if ui, _ := pr.Meta["ui"].(map[string]any); ui["resourceUri"] != mcpserver.SearchViewURI {
+		t.Fatalf("_meta du résultat de search_models : %v", pr.Meta)
+	}
 	p1 := structured(t, call(t, cs, "search_models", map[string]any{"limit": 3, "tags": []string{"lot a"}}))
 	if p1["total"].(float64) != 4 || len(arr(t, p1, "models")) != 3 || p1["has_more"] != true || p1["next_offset"].(float64) != 3 {
 		t.Fatalf("page 1 : %v", p1)

@@ -31,7 +31,7 @@ func (s *Service) LaunchCodeStatus(ctx context.Context) (humanauth.LaunchCodeSta
 // La tentative n'est examinée que sur une confirmation vivante, non consommée, dont la liaison (imprimante,
 // empreinte, plateau, matières) n'a pas bougé ; l'accord qui en résulte ne vaut que pour CETTE confirmation et
 // 2 minutes (start_print, ConsumeConfirmation : inchangés). plateClear est l'attestation « plateau vide ».
-func (s *Service) ApproveWithCode(ctx context.Context, confID, code string, plateClear bool) (*ConfirmationView, error) {
+func (s *Service) ApproveWithCode(ctx context.Context, confID, code string, plateClear bool) (*ApprovalResult, error) {
 	if !plateClear {
 		return nil, fmt.Errorf("%w : l'attestation « plateau vide et dégagé » est obligatoire", ErrNeedsApproval)
 	}
@@ -49,7 +49,7 @@ func (s *Service) ApproveWithCode(ctx context.Context, confID, code string, plat
 		return nil, err
 	}
 	_ = s.d.Store.Audit(ctx, "human:app-code", "print.confirmation_code_accepted", "print_job", j.ID, map[string]any{"confirmation": confID})
-	return s.Approve(ctx, confID, true, "app-code")
+	return s.ApproveAndStart(ctx, confID, true, "app-code") // le démarrage suit l'accord, sans passer par le modèle
 }
 
 // StopWithCode arrête l'impression d'une demande d'arrêt précise si le code de lancement est correct.

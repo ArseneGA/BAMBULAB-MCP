@@ -10,13 +10,25 @@ import (
 	"strings"
 )
 
-// PageHeaders pose les en-têtes communs des pages humaines (anti-clickjacking, pas de cache, CSP stricte).
+// PageHeaders pose les en-têtes communs des pages humaines (anti-clickjacking, pas de cache, CSP stricte :
+// aucune image, aucun script).
 func PageHeaders(w http.ResponseWriter) {
+	pageHeaders(w, "")
+}
+
+// PageHeadersWithImages est PageHeaders pour une page qui affiche des images de SA PROPRE origine (photo du plateau
+// de /confirm) : la CSP ajoute `img-src 'self'`. Sans cette directive, `default-src 'none'` bloque toute <img> (icône
+// brisée alors que l'image est servie en 200). Jamais de `data:` ni d'origine tierce.
+func PageHeadersWithImages(w http.ResponseWriter) {
+	pageHeaders(w, "img-src 'self'; ")
+}
+
+func pageHeaders(w http.ResponseWriter, extra string) {
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Frame-Options", "DENY")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	h.Set("Content-Security-Policy", "default-src 'none'; "+extra+"style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("X-Content-Type-Options", "nosniff")
 }

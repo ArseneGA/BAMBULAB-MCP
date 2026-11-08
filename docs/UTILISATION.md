@@ -75,13 +75,11 @@ Pour affiner un profil à la main : « Passe les parois à 4 » → `modify_slic
 >
 > **Vous** : Oui, lance.
 >
-> **Claude** (`request_print_confirmation`) : Voici la page à ouvrir **dans ton navigateur enregistré** : `http://…:7878/confirm/…`. Elle liste le fichier, l'imprimante, l'empreinte, le plateau et la matière. Tu y coches « le plateau est vide et dégagé » puis tu cliques « Lancer l'impression ». Je ne peux pas le faire à ta place.
+> **Claude** (`request_print_confirmation`) : La carte de confirmation est affichée ci-dessus (fichier, imprimante, empreinte, plateau, matière, températures, photo du plateau) : cochez « plateau vide » et saisissez votre code de lancement. Je ne peux pas le faire à votre place. *(Sans code défini, la carte vous invite à le définir sur `/setup/launch-code` et propose le lien du navigateur `…/confirm/…`.)*
 >
-> *(vous cliquez ; votre accord vaut 2 minutes)*
+> *(vous cliquez « Lancer l'impression » dans la carte, ou sur la page du navigateur : **le serveur lance l'impression tout seul**, vous n'avez rien à dire à Claude)*
 >
-> **Vous** : C'est fait.
->
-> **Claude** (`start_print`, puis `get_print_status`) : Lancé : préparation en cours (chauffe, nivellement), puis impression. Couche 12/240, 5 %, 1 h 07 restantes.
+> **Claude** (`get_print_status`) : Lancé : préparation en cours (chauffe, nivellement), puis impression. Couche 12/240, 5 %, 1 h 07 restantes.
 
 Si ça se passe mal :
 
@@ -115,7 +113,7 @@ Ce qu'il faut savoir :
 Dans Claude Desktop, la confirmation s'affiche **dans la conversation** : résumé (fichier, imprimante, empreinte, plateau, matières), températures lues dans le G-code et « G-code de démarrage : profil officiel ✓ », photo du plateau si la caméra est configurée, case « le plateau est vide et dégagé », champ **code de lancement** et bouton « Lancer l'impression ». L'arrêt (« Arrête l'impression ») affiche la même chose avec un bouton « Arrêter l'impression ».
 
 1. **Définir son code une fois** : dans un navigateur enregistré, ouvrez `http://…:7878/setup/launch-code` et choisissez un code de **6 à 8 chiffres** (pas de suite ni de chiffres identiques). Il est stocké haché (argon2id), jamais affiché, jamais renvoyé, jamais journalisé. Changez-le ou révoquez-le sur la même page.
-2. **Lancer** : dans la vue, cochez « plateau vide », tapez votre code, cliquez « Lancer l'impression ». L'accord vaut pour **cette impression et 2 minutes** ; dites ensuite à Claude « c'est fait », il appelle `start_print` comme d'habitude.
+2. **Lancer** : dans la vue, cochez « plateau vide », tapez votre code, cliquez « Lancer l'impression ». L'accord vaut pour **cette impression** et **déclenche directement le démarrage** côté serveur (une seule commande, jamais renvoyée) : la carte et la page `/confirm` affichent « Impression lancée » (ou l'erreur, par exemple imprimante pas prête : rien n'est parti et l'accord reste valable **2 minutes à partir de votre clic**, Claude peut alors relancer avec `start_print`). Vous n'avez **rien à dire à Claude** : il suit l'état avec `get_print_status`. Si Claude appelle quand même `start_print`, il constate « déjà lancé » sans rien renvoyer.
 3. **Trois mauvais codes verrouillent tout** (même le bon code est alors refusé, pour le lancement comme pour l'arrêt). Deux essais doivent être espacés de quelques secondes. Déverrouillage : bouton « Déverrouiller » de la page `/setup/launch-code`, ou `bambud launch-code --unlock`.
 4. **Code oublié** : `bambud launch-code --reset` supprime le code (puis on en définit un autre sur la page). `bambud launch-code` seul affiche l'état (défini, verrouillé).
 5. **Sans code défini** (ou verrouillé), la vue affiche le **lien du navigateur** (`/confirm/…`, `/stop/…`), comme avant : il reste toujours disponible, y compris quand le code fonctionne.
@@ -123,6 +121,8 @@ Dans Claude Desktop, la confirmation s'affiche **dans la conversation** : résum
 > **Ne tapez JAMAIS ce code dans la conversation avec Claude.** Il se saisit uniquement dans le champ de la vue. Claude a pour consigne de ne jamais vous le demander ; s'il le fait quand même, ne répondez pas, et si vous l'avez écrit dans la conversation, changez-le tout de suite sur `/setup/launch-code`. Le serveur ne peut pas empêcher cette erreur (voir `docs/SECURITY.md` § 12).
 
 Claude Code (terminal) n'affiche pas les vues : utilisez le lien du navigateur.
+
+**Si la carte n'apparaît pas dans Claude Desktop (connecté par `npx mcp-remote`)** : le serveur annonce bien la vue (`_meta.ui.resourceUri` sur la définition de `request_print_confirmation` et dans son résultat, ressource `ui://bambu/print-confirm.html` en `text/html;profile=mcp-app`, vérifié par les tests et par le SDK TypeScript) ; l'affichage dépend du client. Vérifiez dans l'ordre : (1) `/health` répond `mcp_app_views: true` ; (2) Claude Desktop récent et `npx -y mcp-remote@latest` ; (3) acceptez la demande « Autoriser / Toujours autoriser » d'affichage de l'application dans la conversation ; (4) Aide > Dépannage > mode développeur, Ctrl+Maj+I : erreurs de la console de l'iframe ; (5) à défaut, la page du navigateur (`/confirm/…`) fait exactement la même chose, photo du plateau comprise. Photo du plateau : sur la page navigateur c'est une image du même site ; dans la carte, c'est une image réduite jointe au résultat (aucun domaine externe à autoriser). Durées : la confirmation vit **10 minutes** depuis la demande ; l'accord de **2 minutes** ne court qu'à partir de votre clic.
 
 ---
 

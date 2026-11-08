@@ -150,11 +150,15 @@ func (s *Service) confirmationView(j Job, conf contracts.PrintConfirmation) *Con
 	s.mu.Lock()
 	a := s.approv[conf.ID]
 	approved := a != nil && a.approved && s.now().Before(a.approvedAt.Add(s.approvalTTL()))
+	if conf.UsedAt != nil { // consommée : l'humain l'avait approuvée et le lancement est parti (autostart.go)
+		approved = true
+	}
 	s.mu.Unlock()
 	return &ConfirmationView{ConfirmationID: conf.ID, PrintJobID: j.ID, ExpiresAt: conf.ExpiresAt, ConfirmURL: s.BaseURL() + "/confirm/" + conf.ID,
 		Approved: approved, Binding: *d, State: j.State, Safety: safetyOf(j),
-		Instructions: "Demande à l'utilisateur d'ouvrir confirm_url dans son navigateur enregistré (sinon bambud enroll puis /enroll), de vérifier le résumé, de cocher « plateau vide » et de cliquer sur Lancer. " +
-			"Tu ne peux pas confirmer à sa place. Son accord ne vaut que 2 minutes ; ensuite appelle start_print avec confirmation_id et une idempotency_key."}
+		Instructions: "Dans Claude, la confirmation s'affiche dans la conversation : l'utilisateur vérifie le résumé, coche « plateau vide » et saisit son code de lancement personnel DANS LA CARTE (jamais dans le chat : ne le lui demande pas). " +
+			"Secours : il ouvre confirm_url dans son navigateur enregistré (sinon bambud enroll puis /enroll), coche « plateau vide » et clique sur Lancer. " +
+			"Tu ne peux pas confirmer à sa place. Dès qu'il approuve, le SERVEUR lance l'impression lui-même (n'appelle pas start_print, n'attends pas qu'il te dise « c'est bon ») : suis get_print_status. start_print reste une reprise (confirmation_id + idempotency_key) si le démarrage automatique a échoué (imprimante pas prête) dans les 2 minutes de l'accord."}
 }
 
 // GetConfirmation relit une confirmation (sans jeton).

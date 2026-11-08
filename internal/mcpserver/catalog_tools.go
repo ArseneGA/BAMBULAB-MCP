@@ -127,10 +127,44 @@ func (h *catalogHandlers) searchModels(ctx context.Context, _ *mcp.CallToolReque
 		return nil, catalog.SearchResult{}, err
 	}
 	txt := fmt.Sprintf("%d modèle(s) trouvé(s), page de %d à partir de %d.", r.Total, len(r.Models), r.Offset)
-	if r.HasMore {
-		txt += fmt.Sprintf(" Suite : offset=%d.", *r.NextOffset)
+	// Le contenu texte reste la seule chose que lit le modèle quand la vue cartes est affichée : il liste donc chaque
+	// résultat (nom, identifiant mdl_…, dimensions), borné pour rester court.
+	for i, m := range r.Models {
+		if i >= maxSearchTextRows {
+			txt += fmt.Sprintf("\n… et %d autre(s) de cette page (voir structuredContent.models).", len(r.Models)-i)
+			break
+		}
+		txt += "\n- " + modelLine(m)
 	}
-	return textResult(txt), *r, nil
+	if r.HasMore {
+		txt += fmt.Sprintf("\nSuite : offset=%d.", *r.NextOffset)
+	}
+	return withView(textResult(txt), "search_models"), *r, nil
+}
+
+// maxSearchTextRows : nombre maximal de résultats détaillés dans le texte de search_models.
+const maxSearchTextRows = 20
+
+// modelLine : « nom (mdl_…) · formats · X × Y × Z mm » (nom tronqué à 80 caractères).
+func modelLine(m catalog.ModelSummary) string {
+	name := []rune(m.Name)
+	n := string(name)
+	if len(name) > 80 {
+		n = string(name[:80]) + "…"
+	}
+	line := fmt.Sprintf("%s (%s)", n, m.ID)
+	if len(m.Formats) > 0 {
+		line += " · " + strings.ToUpper(strings.Join(m.Formats, "/"))
+	}
+	if d := m.Dimensions; d != nil {
+		line += fmt.Sprintf(" · %.1f × %.1f × %.1f mm", d.X, d.Y, d.Z)
+	} else {
+		line += " · dimensions inconnues"
+	}
+	if m.Availability == "windows_only" {
+		line += " · Windows seul"
+	}
+	return line
 }
 
 func (h *catalogHandlers) listCollection(ctx context.Context, _ *mcp.CallToolRequest, in catalog.ListCollectionInput) (*mcp.CallToolResult, catalog.CollectionListing, error) {
@@ -150,7 +184,7 @@ func (h *catalogHandlers) getModelDetails(ctx context.Context, _ *mcp.CallToolRe
 	if d.Model.DeletedAt != nil {
 		txt += " (en corbeille)"
 	}
-	return textResult(txt), *d, nil
+	return withView(textResult(txt), "get_model_details"), *d, nil
 }
 
 func (h *catalogHandlers) scanFolder(ctx context.Context, _ *mcp.CallToolRequest, in catalog.ScanInput) (*mcp.CallToolResult, catalog.ScanReport, error) {

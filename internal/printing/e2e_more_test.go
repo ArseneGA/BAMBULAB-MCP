@@ -34,7 +34,7 @@ func TestConcurrentStartsSendOneCommand(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			m, _, isErr := r.raw("start_print", map[string]any{"print_job_id": job, "confirmation_id": str(cf, "confirmation_id"), "idempotency_key": fmt.Sprintf("cle-concurrente-%d", i)})
-			if !isErr && str(m, "outcome") == "printing" {
+			if !isErr && str(m, "outcome") == "printing" && m["replayed"] != true { // aucun ne doit être l'exécutant : l'approbation a déjà lancé
 				mu.Lock()
 				printing++
 				mu.Unlock()
@@ -45,7 +45,7 @@ func TestConcurrentStartsSendOneCommand(t *testing.T) {
 	if n := len(r.sim.StartCommands()); n != 1 {
 		t.Fatalf("%d commande(s) project_file pour 5 lancements concurrents, 1 attendue", n)
 	}
-	if printing > 1 {
+	if printing > 0 {
 		t.Fatalf("%d réponses « printing »", printing)
 	}
 	// La confirmation est consommée une seule fois, en base.

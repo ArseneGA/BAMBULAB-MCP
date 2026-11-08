@@ -14,6 +14,11 @@ import (
 // Aucun de ces outils ne lance, ne confirme ni n'arrête une impression : la file prépare et informe, chaque
 // démarrage reste un geste humain sur la page /confirm (docs/SECURITY.md).
 
+// OptPrinterIDInput : imprimante visée ; facultative quand une seule est enregistrée.
+type OptPrinterIDInput struct {
+	PrinterID string `json:"printer_id,omitempty" jsonschema:"imprimante visée ; facultatif quand une seule imprimante est enregistrée (sinon list_printers)"`
+}
+
 // ListSpoolsInput filtre l'inventaire.
 type ListSpoolsInput struct {
 	PrinterID       string `json:"printer_id,omitempty" jsonschema:"seulement les bobines chargées sur cette imprimante"`
@@ -128,13 +133,13 @@ func registerAMSTools(s *mcp.Server, fs *filament.Service) {
 			"et le rapproche de l'inventaire : bobine inscrite, divergence de lecture, bobine proposée, emplacement non inscrit. " +
 			"Aucune commande n'est envoyée à l'imprimante. Met à jour les données observées des bobines (jamais leurs saisies).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in PrinterIDInput) (*mcp.CallToolResult, *filament.AMSView, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in OptPrinterIDInput) (*mcp.CallToolResult, *filament.AMSView, error) {
 		v, err := fs.GetAMS(ctx, in.PrinterID)
 		if err != nil {
 			return nil, nil, err
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "AMS de %s : ", in.PrinterID)
+		fmt.Fprintf(&sb, "AMS de %s : ", v.PrinterID)
 		switch {
 		case v.Error != "":
 			sb.WriteString("imprimante injoignable (" + v.Error + ").")

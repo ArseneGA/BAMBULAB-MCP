@@ -29,7 +29,7 @@ export interface StopViewState {
   stop: { stop_id: string; print_job_id: string; file: string; printer_name: string; percent: number; layer: number; total_layers: number; expires_at: string };
   stop_url: string; code_set: boolean; locked: boolean; attempts_left: number; setup_url: string;
 }
-export interface CodeApproval { approved: boolean; problem?: string; attempts_left: number; locked: boolean; seconds_left?: number; message: string }
+export interface CodeApproval { approved: boolean; started?: boolean; outcome?: string; problem?: string; attempts_left: number; locked: boolean; seconds_left?: number; message: string }
 
 /** Forme d'un code de lancement valide : 6 à 8 chiffres. */
 export const CODE_RE = /^[0-9]{6,8}$/;
@@ -176,7 +176,7 @@ export function LaunchConfirm({ app, first, pollMs = 3000 }: { app: AppLike; fir
         </figure>
       ) : ls?.photo_note ? <p className="small dim">{ls.photo_note}</p> : null}
       {approved ? (
-        <p className="msg" role="status"><Check size={14} aria-hidden /> Accord enregistré, pour cette impression seulement (2 minutes). Dites à l'assistant que c'est fait : il lancera l'impression.</p>
+        <p className="msg" role="status"><Check size={14} aria-hidden /> Accord enregistré, pour cette impression seulement. Le lancement part tout seul (rien à dire à Claude) : le résultat s'affiche ci-dessous.</p>
       ) : expired ? (
         <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> Confirmation expirée : demandez-en une nouvelle.</p>
       ) : codeUsable ? (
@@ -191,9 +191,12 @@ export function LaunchConfirm({ app, first, pollMs = 3000 }: { app: AppLike; fir
       ) : (
         <>
           {ls?.locked ? <p className="msg msg-err" role="alert"><Lock size={14} aria-hidden /> Approbation par code verrouillée après 3 échecs. Déverrouillez-la sur la page <span className="mono">/setup/launch-code</span> (navigateur enregistré) ou avec <span className="mono">bambud launch-code --unlock</span>.</p> : null}
-          <p className="small">{c.instructions}</p>
+          {ls && !ls.code_set && !ls.locked ? (
+            <p className="msg msg-err" role="status"><AlertTriangle size={14} aria-hidden /> Définissez votre code de lancement sur <span className="mono">{setupUrl}</span> (navigateur enregistré) pour lancer directement depuis cette carte ; cette carte se mettra à jour d'elle-même. En attendant, utilisez le lien du navigateur ci-dessous.</p>
+          ) : null}
+          {ls && !ls.code_set && !ls.locked && <BrowserLink app={app} url={setupUrl} text="Ouvrir la page du code de lancement" />}
           <BrowserLink app={app} url={c.confirm_url} text="Ouvrir la page de confirmation" />
-          <p className="small dim">Vous cochez « plateau vide » et confirmez sur cette page locale, dans votre navigateur.{ls && !ls.code_set ? <> Pour lancer directement ici, définissez un code de lancement sur <span className="mono">{setupUrl}</span>.</> : null}</p>
+          <p className="small dim">Dans le navigateur, vous cochez « plateau vide » et confirmez sur la page locale (sans code).</p>
           {ls?.locked && <BrowserLink app={app} url={setupUrl} text="Ouvrir la page du code de lancement" />}
         </>
       )}

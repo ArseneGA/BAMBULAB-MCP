@@ -638,6 +638,29 @@ func (s *Service) ListPrinters(ctx context.Context) ([]PrinterView, error) {
 	return out, nil
 }
 
+// ResolvePrinterID renvoie id s'il est donné ; sinon l'unique imprimante enregistrée. Plusieurs ou aucune : erreur
+// qui liste les choix (le modèle ne devine jamais une imprimante quand il y a ambiguïté).
+func (s *Service) ResolvePrinterID(ctx context.Context, id string) (string, error) {
+	if id = strings.TrimSpace(id); id != "" {
+		return id, nil
+	}
+	ps, err := s.ListPrinters(ctx)
+	if err != nil {
+		return "", err
+	}
+	switch len(ps) {
+	case 0:
+		return "", invalidf("printer_id requis : aucune imprimante n'est enregistrée (add_printer)")
+	case 1:
+		return ps[0].ID, nil
+	}
+	names := make([]string, 0, len(ps))
+	for _, p := range ps {
+		names = append(names, p.Name+" ("+p.ID+")")
+	}
+	return "", invalidf("printer_id requis : plusieurs imprimantes sont enregistrées : %s", strings.Join(names, ", "))
+}
+
 // SetAccessCode enregistre le code d'accès (appelé par la page locale uniquement).
 func (s *Service) SetAccessCode(ctx context.Context, printerID, code string) error {
 	if _, err := s.GetPrinterRecord(ctx, printerID); err != nil {

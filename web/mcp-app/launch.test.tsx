@@ -136,6 +136,19 @@ describe('LaunchConfirm', () => {
     }
   });
 
+  it('sans code défini : dit clairement de le définir sur /setup/launch-code, propose cette page et le lien navigateur de secours', async () => {
+    const { app } = mkApp({ get_launch_view_state: () => sc({ ...STATE, code_set: false }) });
+    await render(<LaunchConfirm app={app} first={CONF} pollMs={60_000} />);
+    expect(host.textContent).toContain('Définissez votre code de lancement sur');
+    expect(host.textContent).toContain('http://127.0.0.1:7878/setup/launch-code');
+    expect(q('input[type=password]')).toBeNull();
+    await act(async () => { click(btn(/Ouvrir la page du code de lancement/)); });
+    expect(app.openLink).toHaveBeenCalledWith({ url: STATE.setup_url });
+    expect(btn(/Ouvrir la page de confirmation/)).toBeTruthy();
+    // les consignes destinées au modèle ne sont jamais affichées à l'humain
+    expect(host.textContent).not.toContain('ne le lui demande pas');
+  });
+
   it('état introuvable (outil absent) : retombe sur le lien navigateur', async () => {
     const { app } = mkApp({ get_launch_view_state: () => { throw new Error('absent'); } });
     await render(<LaunchConfirm app={app} first={CONF} pollMs={60_000} />);

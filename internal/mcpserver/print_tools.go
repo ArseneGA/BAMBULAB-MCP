@@ -115,7 +115,15 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if err != nil {
 			return nil, PrintersOut{}, err
 		}
-		return textResult(fmt.Sprintf("%d imprimante(s).", len(ps))), PrintersOut{Printers: ps, Note: "Le code d'accès LAN n'apparaît jamais ici."}, nil
+		txt := fmt.Sprintf("%d imprimante(s).", len(ps))
+		for _, v := range ps {
+			code := "code d'accès enregistré"
+			if !v.AccessCodeSet {
+				code = "code d'accès à saisir sur " + v.SetupURL
+			}
+			txt += fmt.Sprintf("\n- %s (%s) · %s · série %s · hôte %s · buse %.1f mm · %d AMS · %s", v.Name, v.ID, v.ModelName, v.Serial, v.Host, v.NozzleMM, v.AMSUnits, code)
+		}
+		return textResult(txt), PrintersOut{Printers: ps, Note: "Le code d'accès LAN n'apparaît jamais ici."}, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -274,8 +282,11 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 			return nil, printing.ConfirmationView{}, err
 		}
 		b := v.Binding
-		return textResult(fmt.Sprintf("Confirmation %s créée pour %s sur %s (plateau %d, empreinte %s), valable jusqu'à %s. L'utilisateur doit ouvrir %s, vérifier, cocher « plateau vide » et cliquer Lancer (dans la vue avec son code de lancement personnel, ou sur cette page du navigateur). Ne lui demande jamais son code dans la conversation. Ensuite seulement : start_print.",
-			v.ConfirmationID, b.File, b.PrinterName, b.Plate, shortSHA(b.SHA256), v.ExpiresAt.Format("15:04:05"), v.ConfirmURL)), *v, nil
+		return withView(textResult(fmt.Sprintf("Confirmation %s créée pour %s sur %s (plateau %d, empreinte %s), valable jusqu'à %s.\n"+
+			"LA CONFIRMATION S'AFFICHE DANS LA CONVERSATION (carte « Confirmation de lancement » avec photo du plateau et températures) : dis simplement à l'utilisateur de la compléter (cocher « plateau vide », saisir son code de lancement personnel dans le champ de la carte, cliquer Lancer). "+
+			"Ne lui demande JAMAIS son code dans la conversation ; ne recopie pas le lien ci-dessous sauf si l'utilisateur dit ne voir aucune carte ou si aucun code n'est défini. "+
+			"Secours (navigateur enregistré) : %s . Sans code défini, la carte l'invite à le définir sur %s/setup/launch-code. Le serveur LANCE L'IMPRESSION LUI-MÊME dès que l'humain approuve (page ou code) : n'appelle PAS start_print et n'attends pas que l'utilisateur te dise « c'est bon » ; suis l'état avec get_print_status. start_print ne sert que de reprise (il dit si le démarrage a déjà eu lieu, sans renvoyer de commande).",
+			v.ConfirmationID, b.File, b.PrinterName, b.Plate, shortSHA(b.SHA256), v.ExpiresAt.Format("15:04:05"), v.ConfirmURL, p.BaseURL())), "request_print_confirmation"), *v, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -328,9 +339,10 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		}
 		txt := fmt.Sprintf("Impression %s : %s. %s", o.PrintJobID, o.Outcome, o.Note)
 		if o.Question != "" {
-			txt += " QUESTION À POSER : « " + o.Question + " » Lien à donner à l'utilisateur : " + o.StopURL
+			txt += " QUESTION À POSER : « " + o.Question + " » La validation d'arrêt s'affiche dans la conversation (carte « Arrêt d'impression », code de lancement saisi dans la carte, jamais dans le chat). " +
+				"Lien de secours seulement si aucune carte n'apparaît : " + o.StopURL
 		}
-		return textResult(txt), *o, nil
+		return withView(textResult(txt), "cancel_print"), *o, nil
 	})
 
 	addTool(s, &mcp.Tool{
