@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/agentv2"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
@@ -78,6 +79,9 @@ type Deps struct {
 	StartAckWait time.Duration
 	// PubAckWait : attente de l'accusé de transport MQTT de la commande de lancement (défaut 30 s).
 	PubAckWait time.Duration
+	// AgentHub : côté serveur du protocole /agent/v2 (transport « via agent »). nil : seules les imprimantes en
+	// transport direct (défaut) sont utilisables ; rien ne change pour elles.
+	AgentHub *agentv2.Hub
 }
 
 // Service est la chaîne d'impression.
@@ -682,18 +686,86 @@ func (s *Service) SetAccessCode(ctx context.Context, printerID, code string) err
 // ---- adaptateurs ----
 
 func (s *Service) defaultAdapter(_ context.Context, rec PrinterRecord, secret printer.SecretProvider, verifier printer.ProofVerifier) (printer.Adapter, error) {
+	if k, _ := printer.ParseLinkKind(rec.Link); k == printer.LinkAgent {
+		// Transport « via agent » : le serveur n'a ni code d'accès ni certificat à épingler ; tout cela reste dans l'agent.
+		if s.d.AgentHub == nil || rec.AgentID == "" {
+			return nil, fmt.Errorf("%w : l'imprimante %s est en mode agent mais aucun agent n'est associé (PUT /api/printers/%s/link)", ErrUnavailable, rec.Name, rec.ID)
+		}
+		return s.d.AgentHub.Link(rec.ID, rec.AgentID, verifier), nil
+	}
 	if rec.PinnedSHA256 == "" {
 		return nil, fmt.Errorf("%w : le certificat de %s n'est pas épinglé — l'humain doit valider son empreinte sur %s", ErrUnavailable, rec.Name, s.BaseURL()+"/setup/printer/"+rec.ID)
 	}
 	s.mu.Lock()
 	settle := s.d.ReconcileSettle
 	s.mu.Unlock()
-	return printer.NewBambu(printer.BambuConfig{
+	b, err := printer.NewBambu(printer.BambuConfig{
 		PrinterID: rec.ID, Host: rec.Host, Serial: rec.Serial, MQTTPort: rec.MQTTPort, FTPPort: rec.FTPPort,
 		Secrets: secret, TLS: printer.TLSOptions{PinnedSHA256: rec.PinnedSHA256}, Verifier: verifier, Logger: s.log,
 		AllowStartFromFinish: rec.AllowStartFromFinish, StartFromTerminal: true, ReconcileSettle: settle,
 		StartObserveTimeout: s.d.StartAckWait, PubAckTimeout: s.d.PubAckWait,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return printer.NewDirectLink(b), nil // transport direct : l'adaptateur Bambu LAN, inchangé
+}
+
+// isAgentLink dit si l'imprimante est servie par un agent local.
+func isAgentLink(rec PrinterRecord) bool {
+	k, _ := printer.ParseLinkKind(rec.Link)
+	return k == printer.LinkAgent
+}
+
+// SetPrinterLink règle le transport d'une imprimante : « direct » (défaut) ou « agent » avec l'identifiant de l'agent
+// appairé qui la sert. Passer en mode agent n'envoie rien à l'imprimante ; l'ancien adaptateur est fermé. Le code
+// d'accès enregistré côté serveur n'est ni lu ni effacé (le retour en « direct » le retrouve) mais n'est jamais
+// transmis à l'agent : l'agent a le sien.
+func (s *Service) SetPrinterLink(ctx context.Context, id, link, agentID string) (*PrinterView, error) {
+	k, err := printer.ParseLinkKind(link)
+	if err != nil {
+		return nil, invalidf("%v", err)
+	}
+	agentID = strings.TrimSpace(agentID)
+	if k == printer.LinkAgent {
+		if agentID == "" || len(agentID) > 64 {
+			return nil, invalidf("agent_id requis en mode agent (identifiant d'un agent appairé, voir /api/agents)")
+		}
+		if s.d.AgentHub == nil {
+			return nil, fmt.Errorf("%w : transport par agent non disponible", ErrUnavailable)
+		}
+	} else {
+		agentID = ""
+	}
+	rec, err := s.updatePrinter(ctx, id, func(r *PrinterRecord) error {
+		if k == printer.LinkDirect {
+			r.Link = "" // absent = direct : le document reste identique à celui d'avant
+		} else {
+			r.Link = string(k)
+		}
+		r.AgentID = agentID
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	s.dropAdapter(id)
+	_ = s.d.Store.Audit(ctx, actor, "printer.link_set", "printer", id, map[string]any{"link": string(k), "agent_id": agentID})
+	m, _ := s.GetPrinterModel(ctx, rec.ModelID)
+	return s.view(ctx, rec, m), nil
+}
+
+// AgentSnapshot lit une image de la caméra d'une imprimante en mode agent (relayée par l'agent local).
+func (s *Service) AgentSnapshot(ctx context.Context, printerID string) ([]byte, error) {
+	ad, _, err := s.adapter(ctx, printerID)
+	if err != nil {
+		return nil, err
+	}
+	l, ok := ad.(printer.Link)
+	if !ok {
+		return nil, fmt.Errorf("%w : transport sans instantané", ErrUnavailable)
+	}
+	return l.Snapshot(ctx)
 }
 
 func (s *Service) dropAdapter(id string) {
@@ -720,7 +792,7 @@ func (s *Service) adapter(ctx context.Context, printerID string) (printer.Adapte
 		return e.ad, e.rec, nil
 	}
 	s.mu.Unlock()
-	if !s.secrets.HasAccessCode(printerID) {
+	if !isAgentLink(rec) && !s.secrets.HasAccessCode(printerID) { // en mode agent, le code reste dans l'agent
 		return nil, rec, fmt.Errorf("%w : %w — l'humain doit le saisir sur %s", ErrUnavailable, ErrNoAccessCode, s.BaseURL()+"/setup/printer/"+printerID)
 	}
 	ad, err := s.d.Adapters(ctx, rec, accessCodeProvider{store: s.secrets, id: printerID}, s.verifyProof)

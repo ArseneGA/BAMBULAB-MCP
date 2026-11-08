@@ -32,6 +32,7 @@ Commandes :
   status    configuration et état de Bambu Studio (sans secret)
   studio    info | project | open FICHIER | probe --file FICHIER [--close]
   service   install | remove | run     (service Windows, voir docs/jalons/J8.md)
+  printer-link  agent local d'imprimante /agent/v2 (Raspberry Pi, Linux, Windows) : bambu-agent printer-link -h
 
 Options communes : --config CHEMIN (défaut %%LOCALAPPDATA%%\BambuAtelier\agent.json)
 `
@@ -59,6 +60,8 @@ func main() {
 		err = cmdStudio(args)
 	case "service":
 		err = cmdService(args)
+	case "printer-link":
+		err = cmdPrinterLink(args, log)
 	case "version", "--version":
 		fmt.Println("bambu-agent", agent.Version)
 	default:

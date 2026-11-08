@@ -35,6 +35,11 @@ func (b PrintingBackend) Target(ctx context.Context, printerID string) (Target, 
 	}
 	m, _ := b.P.GetPrinterModel(ctx, rec.ModelID)
 	t := Target{ID: rec.ID, Name: rec.Name, Host: rec.Host, Serial: rec.Serial, ModelID: rec.ModelID, ModelName: m.Name, PinnedSHA256: rec.PinnedSHA256}
+	if k, _ := printer.ParseLinkKind(rec.Link); k == printer.LinkAgent {
+		// Imprimante servie par un agent local : l'image est relayée par l'agent (le serveur n'a pas le code d'accès).
+		t.Snap = func(ctx context.Context) ([]byte, error) { return b.P.AgentSnapshot(ctx, printerID) }
+		return t, nil
+	}
 	if b.P.Secrets().HasAccessCode(printerID) {
 		t.Secrets = vaultSecret{b.P, printerID}
 	}

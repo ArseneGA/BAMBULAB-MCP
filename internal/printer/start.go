@@ -30,40 +30,7 @@ func equalInts(a, b []int) bool {
 // checkProofBinding vérifie, hors toute I/O, que la preuve est présente,
 // non expirée et liée à cette imprimante, ce fichier, ce plateau, ces matières.
 func (b *Bambu) checkProofBinding(req StartRequest) error {
-	if b.cfg.Verifier == nil {
-		return fmt.Errorf("%w: no verifier configured", ErrNoProof)
-	}
-	p := req.Proof
-	if p.Token == "" || p.SHA256 == "" || p.PrinterID == "" {
-		return ErrNoProof
-	}
-	if !p.ExpiresAt.After(b.cfg.Now()) {
-		return ErrProofExpired
-	}
-	if p.PrinterID != b.cfg.PrinterID {
-		return fmt.Errorf("%w: printer", ErrProofMismatch)
-	}
-	if !strings.EqualFold(p.SHA256, req.Remote.SHA256) {
-		return fmt.Errorf("%w: sha256", ErrProofMismatch)
-	}
-	if p.Plate != req.Plate {
-		return fmt.Errorf("%w: plate", ErrProofMismatch)
-	}
-	if !equalInts(p.AMSMapping, req.AMSMapping) {
-		return fmt.Errorf("%w: material mapping", ErrProofMismatch)
-	}
-	if !req.PlateClear {
-		return ErrPlateNotClear
-	}
-	if req.Remote.Name == "" || req.Plate < 1 {
-		return errors.New("printer: remote name and plate (>=1) are required")
-	}
-	for _, v := range req.AMSMapping {
-		if v < -1 || v > 253 {
-			return fmt.Errorf("printer: ams_mapping value %d out of range", v)
-		}
-	}
-	return nil
+	return CheckProofBinding(b.cfg.PrinterID, b.cfg.Verifier, b.cfg.Now(), req)
 }
 
 func (b *Bambu) projectFile(seq string, req StartRequest) map[string]any {

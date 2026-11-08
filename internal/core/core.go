@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/agentv2"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/calibration"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
@@ -82,6 +83,8 @@ type Core struct {
 	Goals *goals.Service
 	// Printing : chaîne d'impression (imprimantes, découpe, dépôt, confirmation, lancement).
 	Printing *printing.Service
+	// AgentV2 : côté serveur du protocole /agent/v2 (agent local d'imprimante), monté par httpapi.
+	AgentV2 *agentv2.Hub
 	// Library, Calibration : bibliothèque de gabarits paramétriques et calibration machine (library.go).
 	Library     *library.Service
 	Calibration *calibration.Service
@@ -204,14 +207,17 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		lock.release()
 		return nil, fmt.Errorf("objectifs : %w", err)
 	}
+	// Transport « via agent » (protocole /agent/v2) : aucun effet tant qu'aucune imprimante n'est en link=agent
+	// (ni clé, ni dossier créés avant la première utilisation).
+	hub := agentv2.NewHub(agentv2.HubConfig{Store: st, DataDir: cfg.DataDir, Log: cfg.Logger})
 	pr, err := printing.New(printing.Deps{Store: st, Blobs: blobs, Queue: q, Registry: reg, Goals: gs, Catalog: cat, Log: cfg.Logger,
-		DataDir: cfg.DataDir, Slicer: slFactory, AllowAnyPrinterHost: cfg.AllowAnyPrinterHost})
+		DataDir: cfg.DataDir, Slicer: slFactory, AllowAnyPrinterHost: cfg.AllowAnyPrinterHost, AgentHub: hub})
 	if err != nil {
 		st.Close()
 		lock.release()
 		return nil, fmt.Errorf("impression : %w", err)
 	}
-	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
+	c := &Core{Cfg: cfg, Store: st, Blobs: blobs, Queue: q, Registry: reg, Log: cfg.Logger, Catalog: cat, Goals: gs, Printing: pr, AgentV2: hub, StudioErr: studioErr, studioBin: studioBin, slicerFn: slFactory, lock: lock}
 	if err := c.wireLibrary(); err != nil {
 		st.Close()
 		lock.release()
