@@ -33,6 +33,12 @@ const (
 	// PrintConfirmViewURI : confirmation de lancement (liée à request_print_confirmation) ; l'humain y coche « plateau vide »
 	// puis confirme via l'outil réservé confirm_print_from_app. La vue ne lance JAMAIS l'impression.
 	PrintConfirmViewURI = "ui://bambu/print-confirm.html"
+	// ProgressViewURI : barre de progression (liée à get_job_status, get_upload_status et wait_for_job) ; la vue se
+	// rafraîchit en rappelant l'outil d'état qui l'a ouverte. Lecture seule.
+	ProgressViewURI = "ui://bambu/progress.html"
+	// LayersViewURI : visionneuse de trajectoires du G-code avec curseur de couche (liée à show_layers) ; les segments
+	// viennent de l'outil réservé get_layer_paths.
+	LayersViewURI = "ui://bambu/layers.html"
 )
 
 // MeshChunkBytes : octets bruts par tranche. En base64, 72 000 octets donnent
@@ -40,14 +46,21 @@ const (
 // caractères au-delà duquel certains hôtes remplacent le résultat par un fichier).
 const MeshChunkBytes = 72_000
 
-// MaxMeshBytes : taille maximale d'aperçu servie à la vue par cet outil.
-const MaxMeshBytes = 16 << 20
+// MaxMeshBytes : taille maximale d'aperçu servie à la vue par cet outil (environ 85 tranches). Au-delà, le GLB (déjà
+// simplifié à 200 000 triangles au plus) est jugé trop lourd pour passer par callServerTool : la vue affiche alors le
+// repli « capture_preview(views=all) ».
+const MaxMeshBytes = 6 << 20
 
-// toolViewMeta lie les outils du catalogue à leur vue (appliqué par addTool).
+// toolViewMeta lie les outils du catalogue à leur vue (appliqué par addTool : définition ET résultat de l'outil).
+// wait_for_job (autre branche) y est déjà : le lien s'applique dès que l'outil existe.
 var toolViewMeta = map[string]mcp.Meta{
 	"search_models":              AppToolMeta(SearchViewURI),
 	"get_model_details":          AppToolMeta(ModelViewURI),
 	"request_print_confirmation": AppToolMeta(PrintConfirmViewURI),
+	"get_job_status":             AppToolMeta(ProgressViewURI),
+	"get_upload_status":          AppToolMeta(ProgressViewURI),
+	"wait_for_job":               AppToolMeta(ProgressViewURI),
+	"show_layers":                AppToolMeta(LayersViewURI),
 }
 
 const fallbackViewHTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Atelier</title>
@@ -98,6 +111,11 @@ func registerAppViews(s *mcp.Server, svc *catalog.Service) {
 
 	addViewResource(s, PrintConfirmViewURI, "print_confirm_view", "Confirmation de lancement",
 		"Éléments liés d'une demande de confirmation d'impression (fichier, imprimante, empreinte, plateau, matières) ; l'humain coche « plateau vide » puis confirme. Ne lance rien.", html)
+
+	addViewResource(s, ProgressViewURI, "progress_view", "Progression",
+		"Barre de progression d'un travail ou d'un envoi (get_job_status, get_upload_status) : pourcentage, phase, octets, durée restante ; se rafraîchit seule.", html)
+	addViewResource(s, LayersViewURI, "layers_view", "Trajectoires par couche",
+		"Visionneuse des trajectoires d'extrusion du G-code avec curseur de couche (show_layers).", html)
 
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 	addTool(s, &mcp.Tool{
@@ -156,7 +174,7 @@ func (h *meshChunkHandler) get(ctx context.Context, _ *mcp.CallToolRequest, in M
 	}
 	size := st.Size()
 	if size > MaxMeshBytes {
-		return nil, MeshChunk{}, fmt.Errorf("aperçu trop volumineux pour la vue (%d octets, maximum %d) : utiliser l'interface web", size, int64(MaxMeshBytes))
+		return nil, MeshChunk{}, fmt.Errorf("aperçu trop volumineux pour la vue (%d octets, maximum %d) : voir le modèle avec capture_preview(model_id, views=[all]) ou l'interface web", size, int64(MaxMeshBytes))
 	}
 	count := int((size + MeshChunkBytes - 1) / MeshChunkBytes)
 	if count == 0 {

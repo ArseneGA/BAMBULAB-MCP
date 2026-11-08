@@ -367,17 +367,25 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 
 	addTool(s, &mcp.Tool{
 		Name: "capture_preview", Title: "Aperçu image",
-		Description: "PNG rendu côté serveur (Go pur, sans GPU) : vue isométrique orthographique d'un maillage (model_id) OU tracé 2D des trajectoires extrudées d'une couche du G-code (artifact_id / print_job_id, layer). " +
-			"La légende donne les paramètres de rendu et dit explicitement ce qui est représenté ou non ; un aperçu ne démontre ni résistance, ni aspect, ni étanchéité.",
+		Description: "Image rendue côté serveur (Go pur, sans GPU), renvoyée comme contenu image : fonctionne même quand l'hôte n'affiche aucune vue. " +
+			"mode mesh (model_id) : vue isométrique, ou planche de vues en UN appel avec views=[iso,front,side,top] ou [all]. " +
+			"mode layers (artifact_id / print_job_id) : tracé d'une couche (layer), ou planche-contact numérotée avec Z de plusieurs couches en UN appel (layers=[…] ou every_n, max_tiles ≤ 16), ou animation format=gif. " +
+			"mode first_layer : la couche 1 RÉELLE du G-code, îlots de contact avec le plateau en couleurs vives (nombre et aire de chacun en mm²) sur l'emprise en gris clair ; avant découpe (model_id), section du maillage à Z≈0. " +
+			"mode plate : EMPRISE projetée vue de dessus des pièces sur le plateau, PAS la surface en contact (pour celle-ci : first_layer). " +
+			"La légende donne les paramètres et dit ce qui est représenté ou non ; un aperçu ne démontre ni résistance, ni aspect, ni étanchéité.",
 		Annotations: ro,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.PreviewInput) (*mcp.CallToolResult, printing.PreviewOutput, error) {
 		o, err := p.CapturePreview(ctx, in)
 		if err != nil {
 			return nil, printing.PreviewOutput{}, err
 		}
+		mime := o.MIME
+		if mime == "" {
+			mime = "image/png"
+		}
 		res := &mcp.CallToolResult{Content: []mcp.Content{
 			&mcp.TextContent{Text: strings.Join(o.Legend, "\n") + "\nNon représenté : " + strings.Join(o.NotRepresented, " ; ")},
-			&mcp.ImageContent{Data: o.PNG, MIMEType: "image/png"},
+			&mcp.ImageContent{Data: o.PNG, MIMEType: mime},
 		}}
 		return res, *o, nil
 	})

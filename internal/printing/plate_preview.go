@@ -147,6 +147,7 @@ func renderPlate(bed PlateBed, title string, objs []drawObj, extra []string, w i
 	}
 	lines = append(lines, extra...)
 	lines = append(lines, fmt.Sprintf("Plateau %s x %s mm, grille 10 mm (traits forts tous les 50 mm), vue de dessus", trimF(bed.X), trimF(bed.Y)))
+	lines = append(lines, plateFootprintCaveat)
 	maxChars := (img.Bounds().Dx() - 24) / 12
 	var wrapped []struct {
 		t   string
@@ -207,10 +208,13 @@ func renderPlate(bed PlateBed, title string, objs []drawObj, extra []string, w i
 		return nil, err
 	}
 	return &PreviewOutput{Kind: "plate", Width: out.Bounds().Dx(), Height: out.Bounds().Dy(), Legend: lines, PNG: buf.Bytes(),
-		Represented:    []string{"plateau réel de l'imprimante (profil machine), grille 10 mm, zones interdites", "empreinte et orientation réelles de chaque pièce vue de dessus", "numéro de pièce = ligne de la légende"},
-		NotRepresented: []string{"jupe, bordure (brim) et tour d'essuyage", "supports", "trajectoires d'impression", "temps par pièce (le temps est celui de la plaque entière)"},
+		Represented:    []string{"plateau réel de l'imprimante (profil machine), grille 10 mm, zones interdites", "EMPRISE PROJETÉE vue de dessus et orientation de chaque pièce (silhouette), pas sa surface de contact", "numéro de pièce = ligne de la légende"},
+		NotRepresented: []string{"la surface réellement en contact avec le plateau (pieds, creux, évidements : voir le mode first_layer)", "jupe, bordure (brim) et tour d'essuyage", "supports", "trajectoires d'impression", "temps par pièce (le temps est celui de la plaque entière)"},
 		Render:         map[string]any{"bed_mm": []float64{bed.X, bed.Y}, "px_per_mm": sc, "objects": len(objs), "grid_mm": 10, "exclusions": len(bed.Exclusions)}}, nil
 }
+
+// plateFootprintCaveat : légende obligatoire du mode plate (retour terrain : l'emprise était prise pour la surface de contact).
+const plateFootprintCaveat = "ATTENTION : emprise projetee vue de dessus, PAS la surface en contact avec le plateau (une piece sur pieds touche peu). Surface de contact reelle : mode first_layer."
 
 func trimF(v float64) string { return strconv.FormatFloat(math.Round(v*10)/10, 'f', -1, 64) }
 
@@ -270,8 +274,8 @@ type msObject struct {
 	} `xml:"metadata"`
 }
 
-// previewArchivePlate lit les pièces dans le 3MF d'une plaque découpée.
-func (s *Service) previewArchivePlate(ctx context.Context, path, sha string, plate int, bed PlateBed, sum *ArtifactSummary, model string, width int) (*PreviewOutput, error) {
+// archivePlateObjects lit les pièces d'une plaque dans le 3MF découpé (coordonnées de la plaque, comme le G-code).
+func archivePlateObjects(path string, plate int, bed PlateBed) ([]drawObj, error) {
 	if plate <= 0 {
 		plate = 1
 	}
@@ -384,6 +388,18 @@ func (s *Service) previewArchivePlate(ctx context.Context, path, sha string, pla
 		return nil, fmt.Errorf("%w : aucune pièce sur la plaque %d de l'archive", ErrNotFound, plate)
 	}
 	sort.SliceStable(objs, func(a, b int) bool { return objs[a].name < objs[b].name })
+	return objs, nil
+}
+
+// previewArchivePlate lit les pièces dans le 3MF d'une plaque découpée et dessine le plateau.
+func (s *Service) previewArchivePlate(ctx context.Context, path, sha string, plate int, bed PlateBed, sum *ArtifactSummary, model string, width int) (*PreviewOutput, error) {
+	if plate <= 0 {
+		plate = 1
+	}
+	objs, err := archivePlateObjects(path, plate, bed)
+	if err != nil {
+		return nil, err
+	}
 	var extra []string
 	if sum != nil {
 		for _, p := range sum.Plates {

@@ -2,7 +2,6 @@ package printing
 
 import (
 	"archive/zip"
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -21,30 +20,39 @@ import (
 
 // PreviewInput est l'entrée de capture_preview.
 type PreviewInput struct {
-	ModelID    string `json:"model_id,omitempty" jsonschema:"modèle à représenter (maillage, vue isométrique)"`
-	VersionID  string `json:"version_id,omitempty" jsonschema:"version du modèle (défaut : la plus récente)"`
-	ArtifactID string `json:"artifact_id,omitempty" jsonschema:"empreinte sha256 d'un .gcode.3mf : aperçu d'une couche du G-code"`
-	PrintJobID string `json:"print_job_id,omitempty" jsonschema:"à la place d'artifact_id : l'artefact de cette impression"`
-	PrinterID  string `json:"printer_id,omitempty" jsonschema:"pour dessiner le contour du plateau dans l'aperçu de couche"`
-	Plate      int    `json:"plate,omitempty" jsonschema:"plaque du G-code (défaut 1)"`
-	Layer      int    `json:"layer,omitempty" jsonschema:"couche à tracer, à partir de 1 (défaut : couche médiane)"`
-	Width      int    `json:"width,omitempty" jsonschema:"largeur en pixels (200 à 2000, défaut 900)"`
-	Height     int    `json:"height,omitempty" jsonschema:"hauteur en pixels (200 à 2000, défaut 700)"`
-	Mode       string `json:"mode,omitempty" jsonschema:"mesh (vue isométrique d'un modèle) | layers (une couche du G-code) | plate (vue de dessus du plateau de l'imprimante avec les pièces à leur position réelle, lues dans le plan ou dans le 3MF découpé) ; défaut déduit des autres champs"`
-	PlanID     string `json:"plan_id,omitempty" jsonschema:"mode plate : plan de plateau (plan_plate), AVANT découpe ; plate choisit la plaque"`
+	ModelID    string   `json:"model_id,omitempty" jsonschema:"modèle à représenter (maillage, vue isométrique)"`
+	VersionID  string   `json:"version_id,omitempty" jsonschema:"version du modèle (défaut : la plus récente)"`
+	ArtifactID string   `json:"artifact_id,omitempty" jsonschema:"empreinte sha256 d'un .gcode.3mf : aperçu d'une couche du G-code"`
+	PrintJobID string   `json:"print_job_id,omitempty" jsonschema:"à la place d'artifact_id : l'artefact de cette impression"`
+	PrinterID  string   `json:"printer_id,omitempty" jsonschema:"pour dessiner le contour du plateau dans l'aperçu de couche"`
+	Plate      int      `json:"plate,omitempty" jsonschema:"plaque du G-code (défaut 1)"`
+	Layer      int      `json:"layer,omitempty" jsonschema:"couche à tracer, à partir de 1 (défaut : couche médiane)"`
+	Width      int      `json:"width,omitempty" jsonschema:"largeur en pixels (200 à 2000, défaut 900)"`
+	Height     int      `json:"height,omitempty" jsonschema:"hauteur en pixels (200 à 2000, défaut 700)"`
+	Mode       string   `json:"mode,omitempty" jsonschema:"mesh (vue isométrique d'un modèle) | layers (une couche du G-code, ou une planche-contact de plusieurs) | plate (EMPRISE vue de dessus des pièces sur le plateau : PAS la surface en contact avec le plateau) | first_layer (couche 1 RÉELLE : îlots de contact avec le plateau, aire de chacun en mm², sur l'emprise en gris clair ; avant découpe, section du maillage à Z≈0) ; défaut déduit des autres champs"`
+	PlanID     string   `json:"plan_id,omitempty" jsonschema:"mode plate : plan de plateau (plan_plate), AVANT découpe ; plate choisit la plaque"`
+	Views      []string `json:"views,omitempty" jsonschema:"mode mesh : planche de vues PNG en UN appel, parmi iso, front, side, top ; [all] = les quatre. Absent = une seule vue isométrique"`
+	Layers     []int    `json:"layers,omitempty" jsonschema:"mode layers : numéros de couches (à partir de 1) à réunir dans UNE planche-contact (vignettes numérotées avec Z), au plus max_tiles"`
+	EveryN     int      `json:"every_n,omitempty" jsonschema:"mode layers : une couche sur N (1, 1+N, 1+2N…) dans une planche-contact ; réduit régulièrement si plus de max_tiles"`
+	MaxTiles   int      `json:"max_tiles,omitempty" jsonschema:"planche-contact : nombre maximal de vignettes (1 à 16, défaut 9 ; jusqu'à 48 images pour un gif)"`
+	Format     string   `json:"format,omitempty" jsonschema:"png (défaut) | gif (animation des couches choisies par layers / every_n, une image par couche, taille bornée)"`
 }
 
 // PreviewOutput décrit l'image et ce qu'elle représente (l'image elle-même est le contenu image du résultat).
 type PreviewOutput struct {
-	Kind           string         `json:"kind" jsonschema:"mesh_iso | gcode_layer"`
-	Width          int            `json:"width"`
-	Height         int            `json:"height"`
-	PNGSHA256      string         `json:"png_sha256" jsonschema:"empreinte du PNG conservé dans le stockage"`
-	Legend         []string       `json:"legend"`
-	Represented    []string       `json:"represented"`
-	NotRepresented []string       `json:"not_represented"`
-	Render         map[string]any `json:"render" jsonschema:"paramètres de rendu"`
-	PNG            []byte         `json:"-"`
+	Kind           string          `json:"kind" jsonschema:"mesh_iso | mesh_views | gcode_layer | gcode_layers | gcode_animation | plate | first_layer"`
+	Width          int             `json:"width"`
+	Height         int             `json:"height"`
+	PNGSHA256      string          `json:"png_sha256" jsonschema:"empreinte de l'image conservée dans le stockage (PNG, ou GIF si mime=image/gif)"`
+	MIME           string          `json:"mime,omitempty" jsonschema:"image/png (défaut) ou image/gif"`
+	Legend         []string        `json:"legend"`
+	Represented    []string        `json:"represented"`
+	NotRepresented []string        `json:"not_represented"`
+	Render         map[string]any  `json:"render" jsonschema:"paramètres de rendu"`
+	Islands        []ContactIsland `json:"islands,omitempty" jsonschema:"mode first_layer : îlots de contact avec le plateau, du plus grand au plus petit"`
+	ContactAreaMM2 float64         `json:"contact_area_mm2,omitempty" jsonschema:"mode first_layer : somme des aires des îlots (mm²)"`
+	Layers         []int           `json:"layers,omitempty" jsonschema:"planche ou animation : couches représentées"`
+	PNG            []byte          `json:"-"`
 }
 
 var palette = []color.RGBA{{0x2a, 0x4d, 0x8f, 255}, {0xc2, 0x57, 0x2d, 255}, {0x3b, 0x8a, 0x5a, 255}, {0x8a, 0x3b, 0x7a, 255}, {0xb0, 0x92, 0x1f, 255}, {0x1f, 0x8a, 0x92, 255}, {0x6b, 0x6b, 0x6b, 255}}
@@ -68,11 +76,34 @@ func (s *Service) CapturePreview(ctx context.Context, in PreviewInput) (*Preview
 	var out *PreviewOutput
 	var err error
 	switch in.Mode {
-	case "", "mesh", "layers", "plate":
+	case "", "mesh", "layers", "plate", "first_layer":
 	default:
-		return nil, invalidf("mode : mesh, layers ou plate")
+		return nil, invalidf("mode : mesh, layers, plate ou first_layer")
+	}
+	switch in.Format {
+	case "", "png", "gif":
+	default:
+		return nil, invalidf("format : png ou gif")
+	}
+	wantSheet := len(in.Layers) > 0 || in.EveryN > 0 || in.MaxTiles > 0 || in.Format == "gif"
+	wantViews := len(in.Views) > 0
+	hasGcode := in.ArtifactID != "" || in.PrintJobID != ""
+	if (wantSheet && (in.Mode == "mesh" || in.Mode == "plate" || in.Mode == "first_layer")) || (wantSheet && in.Mode == "" && !hasGcode) {
+		return nil, invalidf("layers, every_n, max_tiles et format gif (planche de couches) : mode layers avec print_job_id ou artifact_id")
+	}
+	if wantViews && (in.Mode == "layers" || in.Mode == "plate" || in.Mode == "first_layer" || (in.Mode == "" && in.ModelID == "")) {
+		return nil, invalidf("views : mode mesh avec model_id")
+	}
+	if in.MaxTiles < 0 || in.EveryN < 0 {
+		return nil, invalidf("max_tiles et every_n doivent être positifs")
 	}
 	switch {
+	case in.Mode == "first_layer":
+		out, err = s.previewFirstLayer(ctx, in, w, h)
+	case wantSheet:
+		out, err = s.previewLayerSheet(ctx, in, w, h)
+	case wantViews:
+		out, err = s.previewMeshViews(ctx, in, w, h)
 	case in.Mode == "plate" && in.PlanID == "" && in.ArtifactID == "" && in.PrintJobID == "":
 		return nil, invalidf("mode plate : plan_id, print_job_id ou artifact_id requis")
 	case in.Mode == "layers" && in.ArtifactID == "" && in.PrintJobID == "":
@@ -176,6 +207,9 @@ func (s *Service) CapturePreview(ctx context.Context, in PreviewInput) (*Preview
 	}
 	if err != nil {
 		return nil, err
+	}
+	if out.MIME == "" {
+		out.MIME = "image/png"
 	}
 	sha, _, perr := s.d.Blobs.Put(bytes.NewReader(out.PNG), "")
 	if perr == nil {
@@ -332,6 +366,25 @@ func finish(img *image.RGBA, legend []string) ([]byte, error) {
 // renderIso : vue isométrique orthographique, Lambert, z-buffer logiciel, suréchantillonnage 2x.
 func renderIso(m *mesh.Mesh, name, sha string, w, h int) *PreviewOutput {
 	const yaw, elev = 45.0, 35.264 // isométrique vraie
+	bb := m.Bounds()
+	img := projectMesh(m, yaw, elev, w, h)
+	legend := []string{
+		"Apercu maillage - " + name,
+		fmt.Sprintf("Boite englobante %.1f x %.1f x %.1f mm, %d triangles", bb.Size.X, bb.Size.Y, bb.Size.Z, len(m.T)),
+		"Projection orthographique isometrique (lacet 45 deg, elevation 35.3 deg), eclairage Lambert, z-buffer logiciel 2x",
+		"Representation de la geometrie seule: ni materiau, ni couleur, ni supports, ni trajectoires",
+	}
+	b, _ := finish(img, legend)
+	return &PreviewOutput{Kind: "mesh_iso", Width: w, Height: h + legendH, Legend: legend, PNG: b,
+		Represented:    []string{"surface triangulée du modèle", "volumes relatifs sous éclairage directionnel fixe"},
+		NotRepresented: []string{"matériau et couleur réels", "supports et jupe", "trajectoires d'impression", "défauts de maillage (non surlignés)"},
+		Render: map[string]any{"projection": "orthographique isométrique", "yaw_deg": yaw, "elevation_deg": elev, "lighting": "Lambert, 1 source", "supersampling": 2,
+			"triangles": len(m.T), "source_sha256": sha, "bbox_mm": []float64{bb.Size.X, bb.Size.Y, bb.Size.Z}}}
+}
+
+// projectMesh : projection orthographique (lacet yaw autour de Z, élévation elev), Lambert, z-buffer logiciel,
+// suréchantillonnage 2x. yaw 0 / élévation 0 = vue de face (on regarde vers +Y) ; élévation 90 = vue de dessus.
+func projectMesh(m *mesh.Mesh, yaw, elev float64, w, h int) *image.RGBA {
 	cy, sy := math.Cos(yaw*math.Pi/180), math.Sin(yaw*math.Pi/180)
 	ce, se := math.Cos(elev*math.Pi/180), math.Sin(elev*math.Pi/180)
 	bb := m.Bounds()
@@ -369,19 +422,7 @@ func renderIso(m *mesh.Mesh, name, sha string, w, h int) *PreviewOutput {
 			cv.tri(a.x*sc+ox, oy-a.y*sc, a.d, b.x*sc+ox, oy-b.y*sc, b.d, c.x*sc+ox, oy-c.y*sc, c.d, col)
 		}
 	}
-	img := cv.downsample2()
-	legend := []string{
-		"Apercu maillage - " + name,
-		fmt.Sprintf("Boite englobante %.1f x %.1f x %.1f mm, %d triangles", bb.Size.X, bb.Size.Y, bb.Size.Z, len(m.T)),
-		"Projection orthographique isometrique (lacet 45 deg, elevation 35.3 deg), eclairage Lambert, z-buffer logiciel 2x",
-		"Representation de la geometrie seule: ni materiau, ni couleur, ni supports, ni trajectoires",
-	}
-	b, _ := finish(img, legend)
-	return &PreviewOutput{Kind: "mesh_iso", Width: w, Height: h + legendH, Legend: legend, PNG: b,
-		Represented:    []string{"surface triangulée du modèle", "volumes relatifs sous éclairage directionnel fixe"},
-		NotRepresented: []string{"matériau et couleur réels", "supports et jupe", "trajectoires d'impression", "défauts de maillage (non surlignés)"},
-		Render: map[string]any{"projection": "orthographique isométrique", "yaw_deg": yaw, "elevation_deg": elev, "lighting": "Lambert, 1 source", "supersampling": 2,
-			"triangles": len(m.T), "source_sha256": sha, "bbox_mm": []float64{bb.Size.X, bb.Size.Y, bb.Size.Z}}}
+	return cv.downsample2()
 }
 
 // ---- aperçu de couche (G-code) ----
@@ -421,91 +462,7 @@ func renderLayer(archive, sha string, plate, layer, w, h int, bed *contracts.Dim
 	if zf == nil {
 		return nil, fmt.Errorf("%w : %s absent de l'archive", ErrNotFound, entry)
 	}
-	scan := func(want int, collect bool) (total int, segs []seg, z float64, feats []string, err error) {
-		rc, err := zf.Open()
-		if err != nil {
-			return 0, nil, 0, nil, err
-		}
-		defer rc.Close()
-		br := bufio.NewReaderSize(rc, 1<<20)
-		cur, abs, absE := 0, true, false
-		var x, y, e, curZ float64
-		feat := -1
-		featIdx := map[string]int{}
-		for {
-			line, rerr := br.ReadString('\n')
-			if len(line) > 4096 { // lignes de configuration énormes
-				line = line[:4096]
-			}
-			l := strings.TrimSpace(line)
-			switch {
-			case strings.HasPrefix(l, "; CHANGE_LAYER"):
-				cur++
-			case strings.HasPrefix(l, "; Z_HEIGHT:") && cur == want:
-				z, _ = strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(l, "; Z_HEIGHT:")), 64)
-			case strings.HasPrefix(l, "; FEATURE:"):
-				name := strings.TrimSpace(strings.TrimPrefix(l, "; FEATURE:"))
-				i, ok := featIdx[name]
-				if !ok {
-					i = len(feats)
-					featIdx[name] = i
-					feats = append(feats, name)
-				}
-				feat = i
-			case l == "G90":
-				abs = true
-			case l == "G91":
-				abs = false
-			case l == "M82":
-				absE = true
-			case l == "M83":
-				absE = false
-			case strings.HasPrefix(l, "G1 ") || strings.HasPrefix(l, "G2 ") || strings.HasPrefix(l, "G3 "):
-				if i := strings.IndexByte(l, ';'); i >= 0 {
-					l = l[:i]
-				}
-				nx, hx := parseCoord(l, 'X')
-				ny, hy := parseCoord(l, 'Y')
-				ne, he := parseCoord(l, 'E')
-				if zz, ok := parseCoord(l, 'Z'); ok && abs {
-					curZ = zz
-				}
-				px, py := x, y
-				if hx {
-					if abs {
-						x = nx
-					} else {
-						x += nx
-					}
-				}
-				if hy {
-					if abs {
-						y = ny
-					} else {
-						y += ny
-					}
-				}
-				extr := false
-				if he {
-					if absE {
-						extr = ne > e+1e-9
-						e = ne
-					} else {
-						extr = ne > 0
-					}
-				}
-				if extr && (hx || hy) && cur == want && collect {
-					segs = append(segs, seg{px, py, x, y, feat})
-				}
-			}
-			if rerr != nil {
-				break
-			}
-		}
-		_ = curZ
-		return cur, segs, z, feats, nil
-	}
-	total, _, _, _, err := scan(-1, false)
+	total, err := countGcodeLayers(zf)
 	if err != nil {
 		return nil, err
 	}
@@ -518,10 +475,16 @@ func renderLayer(archive, sha string, plate, layer, w, h int, bed *contracts.Dim
 	if layer > total {
 		return nil, invalidf("couche %d hors plage (1..%d)", layer, total)
 	}
-	_, segs, z, feats, err := scan(layer, true)
+	gs, err := scanGcode(zf, map[int]bool{layer: true})
 	if err != nil {
 		return nil, err
 	}
+	var segs []seg
+	var z float64
+	if ld := gs.Layers[layer]; ld != nil {
+		segs, z = ld.Segs, ld.Z
+	}
+	feats := gs.Feats
 	W, H := w*2, h*2
 	cv := newCanvas(W, H, color.RGBA{0xf3, 0xf1, 0xed, 255})
 	minX, maxX, minY, maxY := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)

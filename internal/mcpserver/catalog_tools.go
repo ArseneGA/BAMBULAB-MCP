@@ -85,7 +85,8 @@ func registerCatalogTools(s *mcp.Server, c *catalogHandlers) {
 	}, c.repairMesh)
 	addTool(s, &mcp.Tool{
 		Name: "get_preview_asset", Title: "Aperçu 3D d'un modèle",
-		Description: "Référence de l'aperçu GLB (viewer) avec une URL HTTP locale signée qui expire ; pas de contenu en base64. L'aperçu est dérivé et simplifié : il ne remplace jamais l'original de fabrication.",
+		Description: "Référence de l'aperçu GLB (viewer) avec une URL HTTP locale signée qui expire (1 h) et n'est joignable que depuis le réseau privé de l'atelier : INUTILE pour montrer un modèle dans Claude. " +
+			"Pour VOIR un modèle : get_model_details (viewer 3D interactif dans la conversation) ou capture_preview(model_id, views=[all]) (planche de 4 vues PNG, fonctionne sans vue). L'aperçu est dérivé et simplifié : il ne remplace jamais l'original de fabrication.",
 		Annotations: revers,
 	}, c.getPreviewAsset)
 	addTool(s, &mcp.Tool{
@@ -226,6 +227,9 @@ func (h *catalogHandlers) getModelDetails(ctx context.Context, _ *mcp.CallToolRe
 	if sz := d.Analysis.SizeMM; sz != nil {
 		txt += fmt.Sprintf("\nDimensions : %.1f × %.1f × %.1f mm.", sz.X, sz.Y, sz.Z)
 	}
+	if d.Preview.State == catalog.PreviewReady {
+		txt += " Le viewer 3D interactif (rotation, zoom, vues, sous-parties) s'affiche dans la conversation ; si l'utilisateur n'en voit aucun, appeler capture_preview(model_id=\"" + d.Model.ID + "\", views=[\"all\"]) : planche de 4 vues PNG, sans vue ni réseau privé."
+	}
 	return withView(textResult(txt), "get_model_details"), *d, nil
 }
 
@@ -287,7 +291,11 @@ func (h *catalogHandlers) getPreviewAsset(ctx context.Context, _ *mcp.CallToolRe
 	if err != nil {
 		return nil, catalog.PreviewAsset{}, err
 	}
-	return textResult(fmt.Sprintf("Aperçu %s. %s", r.Preview.State, r.Note)), *r, nil
+	txt := fmt.Sprintf("Aperçu %s. %s", r.Preview.State, r.Note)
+	if r.Preview.State == catalog.PreviewReady {
+		txt += " L'URL signée n'est joignable que depuis le réseau privé et expire : pour voir le modèle dans Claude, appeler get_model_details (viewer 3D) ou capture_preview(model_id=\"" + r.ModelID + "\", views=[\"all\"])."
+	}
+	return textResult(txt), *r, nil
 }
 
 func (h *catalogHandlers) tagModels(ctx context.Context, _ *mcp.CallToolRequest, in catalog.TagInput) (*mcp.CallToolResult, catalog.TagResult, error) {
