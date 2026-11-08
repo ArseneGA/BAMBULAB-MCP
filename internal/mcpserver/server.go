@@ -31,6 +31,11 @@ func New(c *core.Core) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "bambu-mcp", Title: "Atelier Bambu Lab", Version: core.Version},
 		&mcp.ServerOptions{
 			Logger: c.Log,
+			InitializedHandler: func(_ context.Context, req *mcp.InitializedRequest) {
+				if c.Log != nil {
+					logClientInitialized(c.Log, req) // preuve : le client a-t-il annoncé les vues MCP Apps ?
+				}
+			},
 			Instructions: "Atelier 3D pour imprimantes Bambu Lab. Les travaux longs renvoient un job_id : " +
 				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
 				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
@@ -246,7 +251,7 @@ func (h *handlers) cancelJob(ctx context.Context, _ *mcp.CallToolRequest, in Job
 		}
 		out.Outcome, out.State, out.Note = o.Outcome, contracts.JobState(o.State), o.Note
 		if o.Question != "" {
-			out.Note += " " + o.Question + " Lien à donner à l'utilisateur (lui seul peut valider l'arrêt) : " + o.StopURL
+			out.Note += " " + o.Question + " Lien à donner à l'utilisateur (lui seul peut valider l'arrêt) : " + o.StopURL + " (valable jusqu'à " + o.StopExpiresAtLocal + ")"
 		}
 		return textResult(out.Note), out, nil
 	}

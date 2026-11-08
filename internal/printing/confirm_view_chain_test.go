@@ -88,7 +88,7 @@ func TestConfirmationViewChain(t *testing.T) {
 			txt += tc.Text
 		}
 	}
-	for _, want := range []string{"S'AFFICHE DANS LA CONVERSATION", "JAMAIS son code", "/setup/launch-code", "LANCE L'IMPRESSION LUI-MÊME", "n'appelle PAS start_print"} {
+	for _, want := range []string{"Ce client n'a pas annoncé", "JAMAIS son code", "/setup/launch-code", "LANCE L'IMPRESSION LUI-MÊME", "n'appelle PAS start_print"} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("le texte du résultat ne contient pas %q : %s", want, txt)
 		}

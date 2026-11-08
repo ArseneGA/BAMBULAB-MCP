@@ -28,7 +28,7 @@ Règle commune : tout est utilisable depuis Claude (outil MCP + rendu texte/imag
 ## Lot « qualité 3D » (audit FDM du 2026-11-07)
 
 1. ~~Liste blanche des surcharges, `*_gcode` interdits, bornes, scan thermique du G-code, températures sur /confirm~~ — **fait** (+ bug `include` des profils BBL corrigé).
-2. Premier essai sur la vraie P1S : URL de `project_file`, `md5`, `bed_leveling`/`bed_levelling` (session de branchement).
+2. Premier essai sur la vraie P1S : URL de `project_file`, `md5` (session de branchement). `bed_leveling` **et** `bed_levelling` sont envoyés à `true` par défaut (option `bed_leveling` de `request_print_confirmation`, affichée et liée à l'approbation, 2026-11-08) ; reste à **constater sur la vraie P1S** que la mise à niveau a bien lieu.
 3. ~~CI GitHub Actions~~ (fait : `.github/workflows/ci.yml`, voir `docs/jalons/QUALITE.md`).
 4. ~~Calibrations d'extrusion~~ — **fait** (séries de pièces par valeur, débit, rétraction, débit volumétrique, première couche ; avance de pression : réglage manuel, pas de clé BBL). Le pilotage des calibrations natives de Studio reste impossible par CLI (interface graphique).
 5. ~~Retrait sur deux tailles~~ — **fait** (`shrink_sizes`, `xy_contour_compensation` / `xy_hole_compensation` proposés).

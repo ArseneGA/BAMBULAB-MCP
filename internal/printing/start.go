@@ -10,6 +10,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
 )
 
@@ -205,9 +206,11 @@ func (s *Service) startHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	if err := s.d.Store.GetDoc(bg, "print_confirmations", p.Conf, &conf); err != nil {
 		return notSent(err)
 	}
+	opts := printer.DefaultStartOptions()
+	opts.BedLeveling = !j.NoBedLeveling // ce que l'humain a vu et approuvé (liaison de la confirmation) ; défaut : oui
 	req := printer.StartRequest{
 		Remote: *j.Remote, Plate: j.Plate, UseAMS: j.UseAMS, AMSMapping: j.AMSMapping, PlateClear: a.plateClear,
-		Options: printer.DefaultStartOptions(),
+		Options: opts,
 		Proof: printer.ConfirmationProof{PrinterID: j.PrinterID, SHA256: j.ArtifactSHA256, Plate: j.Plate, AMSMapping: j.AMSMapping,
 			Token: proofToken(p.Conf, a.token, jc.Job.ID), ExpiresAt: conf.ExpiresAt},
 	}
@@ -527,14 +530,15 @@ type CancelInput struct {
 
 // CancelOutput : résultat explicite.
 type CancelOutput struct {
-	PrintJobID    string               `json:"print_job_id"`
-	Outcome       string               `json:"outcome" jsonschema:"cancelled | stop_requested | stopped | refused"`
-	State         contracts.PrintState `json:"state"`
-	StopURL       string               `json:"stop_url,omitempty" jsonschema:"page que l'HUMAIN ouvre (navigateur enregistré) pour arrêter l'impression ; rien n'est arrêté tant qu'il n'a pas validé"`
-	StopExpiresAt time.Time            `json:"stop_expires_at,omitzero"`
-	Question      string               `json:"question,omitempty"`
-	Note          string               `json:"note"`
-	Job           Job                  `json:"job"`
+	PrintJobID         string               `json:"print_job_id"`
+	Outcome            string               `json:"outcome" jsonschema:"cancelled | stop_requested | stopped | refused"`
+	State              contracts.PrintState `json:"state"`
+	StopURL            string               `json:"stop_url,omitempty" jsonschema:"page que l'HUMAIN ouvre (navigateur enregistré) pour arrêter l'impression ; rien n'est arrêté tant qu'il n'a pas validé"`
+	StopExpiresAt      time.Time            `json:"stop_expires_at,omitzero"`
+	StopExpiresAtLocal string               `json:"stop_expires_at_local,omitempty" jsonschema:"même instant, lisible, dans le fuseau de l utilisateur"`
+	Question           string               `json:"question,omitempty"`
+	Note               string               `json:"note"`
+	Job                Job                  `json:"job"`
 }
 
 // CancelPrint annule selon la phase. En PRINTING : CRÉE une demande d'arrêt et renvoie l'URL /stop/{id} ;
@@ -558,6 +562,7 @@ func (s *Service) CancelPrint(ctx context.Context, in CancelInput) (*CancelOutpu
 	case contracts.PrintPrinting:
 		id, exp := s.requestStop(j.ID)
 		out.StopURL, out.StopExpiresAt = s.BaseURL()+"/stop/"+id, exp
+		out.StopExpiresAtLocal = localtime.Full(exp)
 		out.Question = fmt.Sprintf("Veux-tu vraiment arrêter l'impression de %s en cours sur l'imprimante ? Le travail en cours sera perdu.", j.Name)
 		_ = s.d.Store.Audit(ctx, actor, "print.stop_requested", "print_job", j.ID, map[string]any{"expires": exp})
 		return finish("stop_requested", "Rien n'est arrêté. Demande à l'utilisateur d'ouvrir stop_url dans son navigateur enregistré et de valider l'arrêt ; tu ne peux pas le faire à sa place.")
@@ -595,14 +600,15 @@ func (s *Service) requestStop(jobID string) (string, time.Time) {
 
 // StopView : ce que la page /stop/{id} montre à l'humain.
 type StopView struct {
-	StopID      string    `json:"stop_id"`
-	PrintJobID  string    `json:"print_job_id"`
-	File        string    `json:"file"`
-	PrinterName string    `json:"printer_name"`
-	Percent     int       `json:"percent"`
-	Layer       int       `json:"layer"`
-	TotalLayers int       `json:"total_layers"`
-	ExpiresAt   time.Time `json:"expires_at"`
+	StopID         string    `json:"stop_id"`
+	PrintJobID     string    `json:"print_job_id"`
+	File           string    `json:"file"`
+	PrinterName    string    `json:"printer_name"`
+	Percent        int       `json:"percent"`
+	Layer          int       `json:"layer"`
+	TotalLayers    int       `json:"total_layers"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	ExpiresAtLocal string    `json:"expires_at_local" jsonschema:"même instant, lisible, dans le fuseau de l utilisateur"`
 }
 
 // GetStop relit une demande d'arrêt valide (sans la consommer).
@@ -619,7 +625,7 @@ func (s *Service) GetStop(ctx context.Context, stopID string) (*StopView, error)
 		return nil, fmt.Errorf("%w : %s", ErrState, stopGoneMessage("finished", j.State))
 	}
 	rec, _ := s.GetPrinterRecord(ctx, j.PrinterID)
-	v := &StopView{StopID: stopID, PrintJobID: j.ID, File: j.Name, PrinterName: rec.Name, ExpiresAt: r.expires}
+	v := &StopView{StopID: stopID, PrintJobID: j.ID, File: j.Name, PrinterName: rec.Name, ExpiresAt: r.expires, ExpiresAtLocal: localtime.Full(r.expires)}
 	if j.Print != nil {
 		v.Percent, v.Layer, v.TotalLayers = j.Print.Percent, j.Print.Layer, j.Print.TotalLayers
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/oauth"
 )
 
@@ -166,7 +167,7 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 				host = u.Host
 			}
 			oauthPage(w, http.StatusOK, "gate", map[string]any{"Title": "Autoriser une application ?", "Client": name, "ID": res.Pending.ID,
-				"IP": res.Pending.RemoteIP, "At": res.Pending.RequestedAt.Local().Format("15:04:05"), "Host": host})
+				"IP": res.Pending.RemoteIP, "At": localtime.Page(res.Pending.RequestedAt), "Host": host})
 		}
 	})
 
@@ -190,7 +191,7 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 			local = u.Scheme == "http"
 		}
 		oauthPage(w, http.StatusOK, "consent", map[string]any{"Title": "Autoriser cette application ?", "Client": name, "Host": host, "Local": local,
-			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce, "IP": p.RemoteIP, "At": p.RequestedAt.Local().Format("15:04:05")})
+			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce, "IP": p.RemoteIP, "At": localtime.Page(p.RequestedAt)})
 	})))
 	mux.Handle("POST /oauth/consent/{id}", human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 4096)

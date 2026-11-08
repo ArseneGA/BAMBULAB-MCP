@@ -160,12 +160,12 @@ func (s *Service) ExecuteHeadlessSlice(ctx context.Context, in SliceInput) (*Job
 		name = m.Name
 	}
 	// fabricabilité AVANT découpe : refuse tôt, avec les dimensions et la zone utile réelle de la machine
-	fabWarn, ferr := s.checkFabricable(ctx, spec)
+	fabWarn, adh, ferr := s.checkFabricable(ctx, spec)
 	if ferr != nil {
 		return nil, ferr
 	}
 	j, err := s.createJob(ctx, Job{PrinterID: in.PrinterID, ModelID: in.ModelID, VersionID: ver.ID, ProfileRevision: revID,
-		Plate: in.Plate, Name: cleanStem(name) + ".gcode.3mf", Slice: spec})
+		Plate: in.Plate, Name: cleanStem(name) + ".gcode.3mf", Slice: spec, Adhesion: adh})
 	if err != nil {
 		return nil, err
 	}

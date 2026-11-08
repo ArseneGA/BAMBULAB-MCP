@@ -249,7 +249,8 @@ func (r *rig) humanGet(pageURL string) (int, string, string) {
 	defer res.Body.Close()
 	b, _ := io.ReadAll(res.Body)
 	nonce := ""
-	if m := nonceRe.FindSubmatch(b); m != nil {
+	if all := nonceRe.FindAllSubmatch(b, -1); len(all) > 0 { // le formulaire principal est le dernier (le bouton « Reprendre la photo » le précède)
+		m := all[len(all)-1]
 		nonce = string(m[1])
 	}
 	return res.StatusCode, string(b), nonce

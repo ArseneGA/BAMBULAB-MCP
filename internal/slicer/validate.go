@@ -128,6 +128,8 @@ type ArchiveInfo struct {
 	FilamentIDs    []string          `json:"filament_settings_id"`
 	Nozzles        []string          `json:"nozzle_diameter"`
 	BedType        string            `json:"bed_type,omitempty"`
+	BrimType       string            `json:"brim_type,omitempty"`  // bordure du procédé réellement tranché (project_settings.config)
+	BrimWidth      string            `json:"brim_width,omitempty"` // largeur de bordure (mm), telle qu'écrite par Studio
 	Plates         []PlateResult     `json:"plates"`
 	Settings       map[string]string `json:"-"`
 	// GcodeProfile : le G-code de démarrage/fin est-il celui du profil machine officiel ?
@@ -266,6 +268,8 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 	info.FilamentIDs = allStrings(settings["filament_settings_id"])
 	info.Nozzles = allStrings(settings["nozzle_diameter"])
 	info.BedType = firstString(settings["curr_bed_type"])
+	info.BrimType = firstString(settings["brim_type"])
+	info.BrimWidth = firstString(settings["brim_width"])
 
 	// slice_info.config (XML)
 	var si siConfig

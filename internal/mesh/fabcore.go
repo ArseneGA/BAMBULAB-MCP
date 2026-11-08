@@ -96,6 +96,11 @@ func Fabricability(m *Mesh, opt FabOptions) (*FabReport, error) {
 		}
 	}
 
+	r.Adhesion = Adhesion(m)
+	if r.Adhesion.Risky() {
+		r.Warnings = append(r.Warnings, r.Adhesion.Summary())
+	}
+
 	tol := opt.WeldTol
 	if tol <= 0 {
 		tol = math.Max(1e-6, 1e-6*bb.Size.Len())

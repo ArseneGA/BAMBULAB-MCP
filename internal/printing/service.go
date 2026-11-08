@@ -126,6 +126,7 @@ type Service struct {
 	evMu       sync.Mutex
 	evSubs     []func(Event)
 	platePhoto func(ctx context.Context, printerID string) PlatePhoto
+	photoCache map[string]PlatePhoto // dernière photo RÉUSSIE par imprimante (réutilisée moins de PhotoMaxAge)
 }
 
 type adapterEntry struct {

@@ -56,6 +56,9 @@ type ConfirmationBinding struct {
 	ArtifactSHA256 string           `json:"artifact_sha256"`
 	Plate          int              `json:"plate"`
 	Materials      []SlotAssignment `json:"materials"`
+	// NoBedLeveling : le lancement approuvé n'effectue PAS la mise à niveau du plateau. Absent (faux) par défaut :
+	// l'empreinte des liaisons « mise à niveau activée » reste inchangée (omitempty).
+	NoBedLeveling bool `json:"no_bed_leveling,omitempty"`
 }
 
 // Fingerprint est une empreinte canonique (matières triées par emplacement).

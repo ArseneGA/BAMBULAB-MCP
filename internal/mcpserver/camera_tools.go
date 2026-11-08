@@ -11,6 +11,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 )
 
@@ -118,7 +119,7 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 		}
 		cfg := struct{ Width, Height int }{p.Width, p.Height}
 		out := SnapshotOut{PrinterID: id, TakenAt: p.TakenAt, SHA256: p.SHA256, SizeBytes: p.Size, Width: cfg.Width, Height: cfg.Height,
-			Note: "Image prise à " + p.TakenAt.Format("15:04:05") + ". Une photo ne prouve pas que le plateau est vide : l'attestation reste humaine (page de confirmation)."}
+			Note: "Image prise à " + localtime.Full(p.TakenAt) + ". Une photo ne prouve pas que le plateau est vide : l'attestation reste humaine (page de confirmation)."}
 		return imageResult(fmt.Sprintf("Instantané de %s pris à %s (%dx%d).", id, p.TakenAt.Format(time.RFC3339), cfg.Width, cfg.Height), p.JPEG), out, nil
 	})
 

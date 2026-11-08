@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
@@ -73,25 +74,32 @@ const (
 )
 
 // ConfirmationView est ce que reçoit le modèle : jamais le jeton.
+//
+// Le contenu structuré reste COURT (binding et safety sont déjà des sous-objets, pas de consignes longues) : certains hôtes
+// l'affichent tel quel en tableau clé/valeur quand ils ne montrent pas la vue. Les consignes au modèle sont dans le texte
+// du résultat de l'outil, pas ici.
 type ConfirmationView struct {
 	ConfirmationID string               `json:"confirmation_id"`
 	PrintJobID     string               `json:"print_job_id"`
-	ExpiresAt      time.Time            `json:"expires_at"`
+	ExpiresAt      time.Time            `json:"expires_at" jsonschema:"RFC 3339"`
+	ExpiresAtLocal string               `json:"expires_at_local" jsonschema:"même instant, lisible, dans le fuseau de l'utilisateur (ex. 21:03 (08/11/2026, Europe/Paris))"`
 	ConfirmURL     string               `json:"confirm_url" jsonschema:"page locale que l'HUMAIN ouvre pour confirmer ; le jeton n'est pas dans ce lien"`
 	Approved       bool                 `json:"approved" jsonschema:"vrai seulement après le clic de l'humain"`
-	Binding        PromptDetails        `json:"binding" jsonschema:"ce que l'humain approuve : fichier, imprimante, empreinte, plateau, matières"`
-	Safety         *SafetyView          `json:"safety" jsonschema:"températures et origine du G-code lues dans l'archive (anomalies à signaler à l'utilisateur)"`
-	Instructions   string               `json:"instructions"`
+	Binding        PromptDetails        `json:"binding" jsonschema:"ce que l'humain approuve : fichier, imprimante, empreinte, plateau, matières, mise à niveau du plateau"`
+	Safety         *SafetyView          `json:"safety,omitempty" jsonschema:"températures et origine du G-code lues dans l'archive (anomalies à signaler à l'utilisateur)"`
 	State          contracts.PrintState `json:"state"`
 }
 
 // RequestConfirmationInput est l'entrée de request_print_confirmation.
 type RequestConfirmationInput struct {
 	PrintJobID string `json:"print_job_id"`
+	// BedLeveling : mise à niveau automatique du plateau au démarrage. Défaut : oui. L'humain la voit sur /confirm et
+	// dans la vue, et elle fait partie de la liaison qu'il approuve ; la changer exige une nouvelle confirmation.
+	BedLeveling *bool `json:"bed_leveling,omitempty" jsonschema:"mise à niveau du plateau au démarrage (défaut true) ; affichée à l'humain et incluse dans ce qu'il approuve"`
 }
 
 func newBinding(j Job) contracts.ConfirmationBinding {
-	b := contracts.ConfirmationBinding{PrinterID: j.PrinterID, ArtifactSHA256: j.ArtifactSHA256, Plate: j.Plate}
+	b := contracts.ConfirmationBinding{PrinterID: j.PrinterID, ArtifactSHA256: j.ArtifactSHA256, Plate: j.Plate, NoBedLeveling: j.NoBedLeveling}
 	for _, a := range j.Assignments {
 		b.Materials = append(b.Materials, contracts.SlotAssignment{Slot: bindingSlot(a), MaterialID: a.MaterialID})
 	}
@@ -110,6 +118,8 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 	if j.Remote == nil || j.Plate < 1 || len(j.Assignments) == 0 {
 		return nil, fmt.Errorf("%w : dépôt, plateau et matières requis avant la confirmation", ErrState)
 	}
+	noBL := in.BedLeveling != nil && !*in.BedLeveling
+	j.NoBedLeveling = noBL // liaison de CETTE confirmation ; enregistrée sur l'impression plus bas
 	id := contracts.NewID("cf")
 	conf, token, err := contracts.NewConfirmation(id, j.ID, newBinding(j), s.d.ConfirmationTTL, s.now())
 	if err != nil {
@@ -129,6 +139,7 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 			return fmt.Errorf("%w : %s", ErrState, x.State)
 		}
 		old, x.ConfirmationID = x.ConfirmationID, id
+		x.NoBedLeveling = noBL
 		x.event("confirmation_issued", x.State, x.State, "confirmation "+id+" émise (jeton non transmis au modèle)", s.now())
 		return nil
 	})
@@ -155,10 +166,7 @@ func (s *Service) confirmationView(j Job, conf contracts.PrintConfirmation) *Con
 	}
 	s.mu.Unlock()
 	return &ConfirmationView{ConfirmationID: conf.ID, PrintJobID: j.ID, ExpiresAt: conf.ExpiresAt, ConfirmURL: s.BaseURL() + "/confirm/" + conf.ID,
-		Approved: approved, Binding: *d, State: j.State, Safety: safetyOf(j),
-		Instructions: "Dans Claude, la confirmation s'affiche dans la conversation : l'utilisateur vérifie le résumé, coche « plateau vide » et saisit son code de lancement personnel DANS LA CARTE (jamais dans le chat : ne le lui demande pas). " +
-			"Secours : il ouvre confirm_url dans son navigateur enregistré (sinon bambud enroll puis /enroll), coche « plateau vide » et clique sur Lancer. " +
-			"Tu ne peux pas confirmer à sa place. Dès qu'il approuve, le SERVEUR lance l'impression lui-même (n'appelle pas start_print, n'attends pas qu'il te dise « c'est bon ») : suis get_print_status. start_print reste une reprise (confirmation_id + idempotency_key) si le démarrage automatique a échoué (imprimante pas prête) dans les 2 minutes de l'accord."}
+		Approved: approved, Binding: *d, State: j.State, Safety: safetyOf(j), ExpiresAtLocal: localtime.Full(conf.ExpiresAt)}
 }
 
 // GetConfirmation relit une confirmation (sans jeton).

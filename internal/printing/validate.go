@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
@@ -255,6 +256,20 @@ func (s *Service) ValidateArtifact(ctx context.Context, in ValidateInput) (*Vali
 			sum.StudioVersion = firstNonEmpty(sum.StudioVersion, j.Summary.StudioVersion)
 		}
 		j.Summary = sum
+		rep.BrimType, rep.BrimWidth = info.BrimType, info.BrimWidth
+	}
+	// Risque de décollement : avertissement jamais bloquant, avec la bordure réellement tranchée.
+	adh := j.Adhesion
+	if adh == nil && j.Slice != nil && j.Slice.Plan == nil {
+		if pm, perr := s.partMesh(j.Slice); perr == nil {
+			adh = mesh.Adhesion(pm)
+		}
+	}
+	if adh != nil {
+		rep.Adhesion = adh
+		if adh.Risky() && !brimPresent(rep.BrimType, rep.BrimWidth) {
+			rep.Warnings = append(rep.Warnings, "adhesion_risk : "+adh.Summary()+" Profil actuel : "+brimLabel(rep.BrimType, rep.BrimWidth)+".")
+		}
 	}
 	rep.OK = len(rep.Blocking) == 0
 	j, err = s.update(ctx, j.ID, func(x *Job) error {

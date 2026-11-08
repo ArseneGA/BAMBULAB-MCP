@@ -7,6 +7,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/agentlink"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 )
 
 var pairTpl = template.Must(template.New("pair").Parse(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
@@ -34,6 +35,6 @@ func registerPairPage(mux *http.ServeMux, c *core.Core, reg *agentlink.Registry,
 			return
 		}
 		humanauth.PageHeaders(w)
-		_ = pairTpl.Execute(w, map[string]any{"Token": tok, "Expires": exp.Local().Format("15:04:05"), "Server": c.Catalog.BaseURL()})
+		_ = pairTpl.Execute(w, map[string]any{"Token": tok, "Expires": localtime.Page(exp), "Server": c.Catalog.BaseURL()})
 	})))
 }

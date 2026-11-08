@@ -3,6 +3,7 @@ package printing
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
@@ -31,35 +32,49 @@ func (s *Service) partMesh(spec *SliceSpec) (*mesh.Mesh, error) {
 }
 
 // checkFabricable juge la pièce contre la zone utile de la machine AVANT la découpe (zones exclues du profil
-// machine). Retourne une erreur claire si la pièce ne peut pas tenir ; les réserves (pièce à la limite) vont
-// dans warn. Sans profils Bambu Studio lisibles, ne bloque rien.
-func (s *Service) checkFabricable(ctx context.Context, spec *SliceSpec) (warn string, err error) {
-	if spec.Plan != nil {
-		return "", nil
-	}
-	sl, serr := s.slicerInst()
-	if serr != nil {
-		return "", nil
-	}
+// machine). Retourne une erreur claire si la pièce ne peut pas tenir ; les réserves (pièce à la limite, risque de
+// décollement sans bordure demandée) vont dans warn. Sans profils Bambu Studio lisibles, ne bloque rien.
+// adh : risque de décollement estimé d'après la surface de contact de la première couche (nil si maillage illisible).
+func (s *Service) checkFabricable(ctx context.Context, spec *SliceSpec) (warn string, adh *mesh.AdhesionReport, err error) {
 	_ = ctx
-	t, serr := s.targetOf(sl, spec)
-	if serr != nil {
-		return "", nil
+	if spec.Plan != nil {
+		return "", nil, nil
 	}
 	m, perr := s.partMesh(spec)
 	if perr != nil || len(m.T) == 0 {
-		return "", nil // illisible : la découpe le dira
+		return "", nil, nil // illisible : la découpe le dira
 	}
-	c := t.CheckFootprint(m.Bounds().Size)
-	switch {
-	case !c.Fits || c.TooTall:
-		return "", fmt.Errorf("%w : %s", ErrIncompatible, c.Message)
-	case c.SafeNeedsRotation:
-		return c.Message, nil
-	case !c.FitsSafe:
-		return c.Message, nil
+	adh = mesh.Adhesion(m)
+	var notes []string
+	if sl, serr := s.slicerInst(); serr == nil {
+		if t, terr := s.targetOf(sl, spec); terr == nil {
+			c := t.CheckFootprint(m.Bounds().Size)
+			switch {
+			case !c.Fits || c.TooTall:
+				return "", adh, fmt.Errorf("%w : %s", ErrIncompatible, c.Message)
+			case c.SafeNeedsRotation, !c.FitsSafe:
+				notes = append(notes, c.Message)
+			}
+		}
 	}
-	return "", nil
+	if adh.Risky() && !overridesHaveBrim(spec.Overrides) {
+		notes = append(notes, adh.Summary()+" (aucune bordure demandée dans les surcharges ; le profil de procédé peut en avoir une, vérifiée à la validation)")
+	}
+	return strings.Join(notes, " — "), adh, nil
+}
+
+// overridesHaveBrim : les surcharges de découpe demandent-elles une vraie bordure (≥ 3 mm) ?
+func overridesHaveBrim(ov []slicer.Override) bool {
+	var typ, width string
+	for _, o := range ov {
+		switch o.Key {
+		case "brim_type":
+			typ = fmt.Sprint(o.Value)
+		case "brim_width":
+			width = fmt.Sprint(o.Value)
+		}
+	}
+	return brimPresent(typ, width)
 }
 
 func (s *Service) targetOf(sl *slicer.Slicer, spec *SliceSpec) (mesh.Target, error) {
