@@ -11,6 +11,8 @@ import type { LoadedModel } from '../src/viewer/glbEngine';
 import type { ModelDetails, SearchResult } from '../src/api/types';
 import type { ConfirmationView } from '../src/api/printTypes';
 import { LaunchConfirm, StopConfirm } from './launch';
+import { ProgressCard, normalizeProgress, type Prog } from './progress';
+import { LayerViewer, isLayersInfo, type LayersInfo } from './layers';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
@@ -21,7 +23,7 @@ import { LaunchConfirm, StopConfirm } from './launch';
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
 interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string }>; isError?: boolean }
 
@@ -30,6 +32,9 @@ const textOf = (r: ToolResultLike) => (r.content ?? []).filter((c) => c.type ===
 function classify(r: ToolResultLike): View {
   if (r.isError) return { kind: 'error', text: textOf(r) || "L'outil a renvoyé une erreur." };
   const s = r.structuredContent as Record<string, unknown> | undefined;
+  if (isLayersInfo(s) && Array.isArray((s as { sheet_layers?: unknown }).sheet_layers)) return { kind: 'layers', data: s };
+  const prog = normalizeProgress(s);
+  if (prog && !(s && (typeof s.confirmation_id === 'string' || Array.isArray(s.models)))) return { kind: 'progress', data: prog };
   if (s && typeof s.confirmation_id === 'string' && typeof s.binding === 'object') return { kind: 'confirm', data: s as unknown as ConfirmationView };
   if (s && s.outcome === 'stop_requested' && typeof s.stop_url === 'string') return { kind: 'stop', stopUrl: s.stop_url, question: typeof s.question === 'string' ? s.question : undefined };
   if (s && Array.isArray(s.models) && typeof s.total === 'number') return { kind: 'search', data: s as unknown as SearchResult };
@@ -93,6 +98,8 @@ function Root() {
   if (!app) return null;
   if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
   if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
+  if (view.kind === 'progress') return <Box><ProgressCard app={app} first={view.data} /></Box>;
+  if (view.kind === 'layers') return <Box><LayerViewer app={app} info={view.data} /></Box>;
   if (view.kind === 'confirm') return <Box><LaunchConfirm app={app} first={view.data} /></Box>;
   if (view.kind === 'stop') return <Box><StopConfirm app={app} stopUrl={view.stopUrl} question={view.question} /></Box>;
   if (view.kind === 'search') return <Box><Search app={app} data={view.data} onOpen={(d) => setView({ kind: 'model', data: d, from: view.data })} /></Box>;

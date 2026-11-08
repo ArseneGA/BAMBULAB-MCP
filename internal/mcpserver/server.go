@@ -77,7 +77,7 @@ func New(c *core.Core) *mcp.Server {
 	})
 	addTool(s, &mcp.Tool{
 		Name: "show_atelier", Title: "Ouvrir l'atelier",
-		Description: "Affiche la vue Atelier (démonstration) dans l'interface de Claude quand l'hôte gère MCP Apps ; renvoie aussi un résumé texte.",
+		Description: "Affiche la vue Atelier (démonstration technique) dans l'interface de Claude quand l'hôte gère MCP Apps ; renvoie aussi un résumé texte. Ce n'est PAS un viewer : pour voir un modèle, utiliser get_model_details (viewer 3D) ou capture_preview(model_id, views=[all]) ; pour une couche ou la couche 1, capture_preview (layers, first_layer) ou show_layers.",
 		Annotations: roAnn,
 		Meta:        AppToolMeta(AtelierURI),
 	}, h.showAtelier)
@@ -95,6 +95,7 @@ func New(c *core.Core) *mcp.Server {
 	if c.Printing != nil {
 		AddPrintTools(s, c.Printing) // chaîne d'impression (print_tools.go)
 		AddPlateTools(s, c.Printing) // plateau multi-pièces (plate_tools.go)
+		AddLayerTools(s, c.Printing) // visionneuse de trajectoires : show_layers, get_layer_paths (layer_tools.go)
 		AddLaunchTools(s, c)         // approbation par code de lancement depuis la vue (launch_tools.go)
 	}
 	if c.Camera != nil && c.Notify != nil {
@@ -113,10 +114,28 @@ func New(c *core.Core) *mcp.Server {
 func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	t.InputSchema = contracts.MustSchemaFor[In]()
 	t.OutputSchema = objectOnly(contracts.MustSchemaFor[Out]())
-	if m, ok := toolViewMeta[t.Name]; ok && t.Meta == nil {
-		t.Meta = m // lien outil -> vue MCP App (app_views.go)
+	if m, ok := toolViewMeta[t.Name]; ok {
+		if t.Meta == nil {
+			t.Meta = m // lien outil -> vue MCP App (app_views.go)
+		}
+		h = withViewMeta(m, h) // le résultat porte aussi le lien (certains hôtes le lisent dans le résultat)
 	}
 	mcp.AddTool(s, t, h)
+}
+
+// withViewMeta ajoute le lien vers la vue au résultat d'un outil lié à une vue, sans toucher à son contenu : les
+// handlers n'ont pas à appeler withView (le contenu texte reste la seule chose lue par le modèle).
+func withViewMeta[In, Out any](meta mcp.Meta, h mcp.ToolHandlerFor[In, Out]) mcp.ToolHandlerFor[In, Out] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		res, out, err := h(ctx, req, in)
+		if res != nil && err == nil && res.Meta == nil {
+			res.Meta = mcp.Meta{}
+			for k, v := range meta {
+				res.Meta[k] = v
+			}
+		}
+		return res, out, err
+	}
 }
 
 // objectOnly ramène un schéma de sortie à `type: "object"` exact. Une sortie en

@@ -56,3 +56,43 @@ body { margin: 0; }
 .linkbtn:focus-visible { outline: none; box-shadow: var(--focus); }
 .alt { font-size: var(--fs-sm); }
 .alt summary { cursor: pointer; color: var(--text-2); margin-bottom: var(--sp-2); }
+
+/* ---- progression (progress.tsx) : vert calme, DM Sans quand l'hôte la fournit, sinon police système ---- */
+.prog { --g-primary: #16a06b; --g-light: #3ee39c; --g-deep: #095a40; --g-track: #dcebe4;
+  display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--g-primary); border-radius: var(--r-3);
+  font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif; }
+[data-theme='dark'] .prog { --g-track: #1c2b25; }
+.prog-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.prog-head h1 { font-size: var(--fs-lg); font-weight: 600; color: var(--g-deep); margin: 0; }
+[data-theme='dark'] .prog-head h1 { color: var(--g-light); }
+.prog-state { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-sm); color: var(--g-deep); }
+[data-theme='dark'] .prog-state { color: var(--g-light); }
+.prog-bar { position: relative; height: 10px; border-radius: 999px; background: var(--g-track); overflow: hidden; }
+.prog-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--g-primary), var(--g-light)); transition: width 600ms var(--ease); position: relative; overflow: hidden; }
+.prog:not(.prog-done):not(.prog-failed) .prog-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%); transform: translateX(-100%); animation: prog-shine 2.2s ease-in-out infinite; }
+.prog-done .prog-fill { background: var(--g-primary); }
+.prog-failed .prog-fill { background: var(--err); }
+.prog-failed { border-left-color: var(--err); }
+.prog-failed .prog-state { color: var(--err); }
+.prog-indet .prog-fill { width: 35%; animation: prog-slide 1.6s ease-in-out infinite; }
+.prog-line { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.prog-pct { font-size: var(--fs-xl); font-weight: 600; color: var(--g-deep); font-variant-numeric: tabular-nums; }
+[data-theme='dark'] .prog-pct { color: var(--g-light); }
+.prog-phase { font-size: var(--fs-md); color: var(--text-2); }
+.prog-meta { margin: 0; font-size: var(--fs-sm); color: var(--text-2); }
+.prog-warn { display: flex; gap: var(--sp-2); align-items: center; color: var(--warn); }
+@keyframes prog-shine { to { transform: translateX(100%); } }
+@keyframes prog-slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+
+/* ---- visionneuse de trajectoires (layers.tsx) ---- */
+.layers { display: grid; gap: var(--sp-2); }
+.layers-canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--viewer-bg); }
+.layers-ctl { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.layers-slider { flex: 1 1 160px; min-width: 120px; accent-color: #16a06b; }
+.layers-num { font-size: var(--fs-sm); min-width: 9rem; text-align: right; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--control-h); height: var(--control-h); background: transparent; border: 1px solid var(--line-strong); border-radius: var(--r-2); color: var(--text-2); cursor: pointer; }
+.icon-btn:hover:not(:disabled) { background: var(--surface-2); }
+.icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.icon-btn:focus-visible, .layers-slider:focus-visible { outline: none; box-shadow: var(--focus); }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--sp-3); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-2); }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; }

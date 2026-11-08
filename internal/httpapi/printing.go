@@ -156,7 +156,11 @@ func registerPrinting(mux *http.ServeMux, c *core.Core, human *humanauth.Service
 			return
 		}
 		defer f.Close()
-		w.Header().Set("Content-Type", "image/png")
+		ct := "image/png"
+		if head := make([]byte, 4); func() bool { n, _ := f.ReadAt(head, 0); return n == 4 }() && string(head) == "GIF8" {
+			ct = "image/gif" // animation (capture_preview format=gif)
+		}
+		w.Header().Set("Content-Type", ct)
 		w.Header().Set("Cache-Control", "private, max-age=3600")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		st, _ := f.Stat()
