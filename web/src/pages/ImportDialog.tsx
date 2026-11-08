@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FolderSearch, Upload } from 'lucide-react';
-import { Button, Field, Input, Segmented, Tag, Toggle } from '../components';
+import { Button, Field, Input, ProgressBar, Segmented, Tag, Toggle } from '../components';
 import { api, describeError, waitForJob } from '../api/client';
 import { useConnection } from '../api/hooks';
 import type { ImportReport, Job, ScanReport } from '../api/types';
@@ -123,10 +123,10 @@ export function ImportDialog({ open, onClose, onImported }: { open: boolean; onC
 
       {(step === 'running' || step === 'done' || step === 'failed') && job && (
         <>
-          <div className="progress" role="progressbar" aria-valuenow={Math.round(job.progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="Avancement de l'import"><span style={{ width: `${Math.round(job.progress * 100)}%` }} /></div>
+          <ProgressBar source={job} label="Avancement de l'import" large />
           <p style={{ margin: 0 }} role="status">
             <Tag tone={job.state === 'succeeded' ? 'ok' : job.state === 'failed' ? 'err' : undefined}>{stateLabel(job.state)}</Tag>{' '}
-            <span className="mono">{job.id}</span> · {Math.round(job.progress * 100)} % {job.message && <>· {job.message}</>}
+            <span className="mono">{job.id}</span> {job.message && <>· {job.message}</>}
           </p>
           {job.error && <Notice tone="err" title="L'import a échoué">{job.error.message} <span className="mono">({job.error.code})</span></Notice>}
           {report && (

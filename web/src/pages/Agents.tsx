@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, RefreshCw } from 'lucide-react';
-import { Button, EmptyState, List, Panel, StatusDot, Tag, useToast } from '../components';
+import { Button, EmptyState, List, Panel, ProgressBar, StatusDot, Tag, useToast } from '../components';
 import { api, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import type { AgentStatus } from '../api/printTypes';
@@ -138,7 +138,7 @@ function Tasks() {
             {d.tasks.map((t: AgentTask) => (
               <li key={t.id}>
                 <strong>{t.kind}</strong> <Tag tone={TASK_STATE[t.state]?.tone}>{TASK_STATE[t.state]?.label ?? t.state}</Tag>
-                {['queued', 'assigned', 'running'].includes(t.state) && <div className="progress" role="progressbar" aria-valuenow={Math.round(t.progress * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`Avancement de ${t.kind}`}><span style={{ width: `${Math.round(t.progress * 100)}%` }} /></div>}
+                {['queued', 'assigned', 'running'].includes(t.state) && <ProgressBar source={t} label={`Avancement de ${t.kind}`} />}
                 {t.message && <span className="hint"> {t.message}</span>}
                 <span className="mono dim"> {t.id}</span>
               </li>

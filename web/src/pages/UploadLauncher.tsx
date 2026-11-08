@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link2, Upload } from 'lucide-react';
-import { Button, Field, Input, Tag } from '../components';
+import { Button, Field, Input, ProgressBar, Tag } from '../components';
 import { describeError } from '../api/client';
 import { ACCEPT, importFromUrl, isSupported, uploadFile, uploadLimits } from '../api/upload';
 import type { UploadLimits, UploadedFile } from '../api/upload';
@@ -124,9 +124,7 @@ export function UploadLauncher({ onUploaded }: { onUploaded: () => void }) {
                 <span className="nm">{i.file.name}</span>
                 <span className="sub mono">{fmtBytes(i.file.size)}</span>
                 {(i.state === 'sending' || i.state === 'done') && (
-                  <div className="progress" role="progressbar" aria-label={`Envoi de ${i.file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((i.sent / i.file.size) * 100)}>
-                    <span style={{ width: `${Math.round((i.sent / i.file.size) * 100)}%` }} />
-                  </div>
+                  <div className="up-bar"><ProgressBar label={`Envoi de ${i.file.name}`} source={{ state: i.state === 'done' ? 'succeeded' : 'running', done_bytes: i.sent, total_bytes: i.file.size, phase_label: i.state === 'done' ? 'Envoyé' : 'Envoi vers le serveur' }} /></div>
                 )}
                 {i.state === 'done' && i.result && (
                   <span className="up-res"><Tag tone="ok">{STATUS_LABEL[i.result.status] ?? i.result.status}</Tag>

@@ -3,6 +3,7 @@
  * Fichier autonome : n'ajoute rien à `api` de client.ts. Rien n'est publié ; le téléchargement passe par un lien signé
  * à durée limitée (POST /api/exports/{id}/link) lisible sans jeton.
  */
+import type { StableProgress } from './types';
 import { ApiError, BASE, CSRF_HEADER } from './client';
 
 async function call<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
@@ -57,7 +58,7 @@ export interface ExportRecord {
 export interface ExportStarted { export_id: string; job_id: string; plan: ExportPlan }
 export interface ExportStatus {
   export: ExportRecord;
-  job?: { state: string; progress?: number; message?: string };
+  job?: { state: string; progress?: number; message?: string } & StableProgress;
   publish_steps?: string[];
 }
 export interface ExportLink { url: string; path: string; expires_at: string; file_name: string; size_bytes: number }

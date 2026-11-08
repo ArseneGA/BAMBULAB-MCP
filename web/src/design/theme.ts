@@ -23,5 +23,5 @@ export function useTheme() {
 
 /** Jetons exposés pour la page /design (valeurs documentaires, la source reste tokens.css). */
 export const spacingScale = [1, 2, 3, 4, 5, 6, 8, 10, 12].map((n) => ({ name: `--sp-${n}`, px: n * 4 }));
-export const radii = ['--r-1', '--r-2', '--r-3'];
-export const colorTokens = ['--bg', '--surface', '--surface-2', '--surface-3', '--line', '--line-strong', '--text', '--text-2', '--text-3', '--accent', '--ok', '--warn', '--err', '--off'];
+export const radii = ['--r-xs', '--r-sm', '--r-md', '--r-lg'];
+export const colorTokens = ['--bg', '--glass', '--well', '--hairline', '--text-1', '--text-2', '--text-3', '--p-strong', '--primary', '--primary-subtle', '--text-accent', '--st-ok', '--st-wait', '--st-fail'];

@@ -6,7 +6,7 @@
 .up-opts { display: grid; gap: var(--sp-3, 12px); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .up-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2, 8px); max-height: 40vh; overflow: auto; }
 .up-item { display: grid; grid-template-columns: 1fr auto; gap: 4px var(--sp-3, 12px); padding: var(--sp-2, 8px) var(--sp-3, 12px); border: 1px solid var(--line, #e2e8f0); border-radius: var(--r-2, 8px); }
-.up-item .progress, .up-item .up-res, .up-item .up-err { grid-column: 1 / -1; }
+.up-item .up-bar, .up-item .up-res, .up-item .up-err { grid-column: 1 / -1; }
 .up-err { color: var(--err, #b91c1c); }
 .up-url { border: 1px solid var(--line, #e2e8f0); border-radius: var(--r-2, 8px); padding: var(--sp-3, 12px); display: grid; gap: var(--sp-2, 8px); }
 .up-url-row { display: flex; gap: var(--sp-2, 8px); }

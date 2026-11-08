@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ExternalLink, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { Button, EmptyState, Field, Input, Panel, Select, Tabs, Tag, useToast } from '../components';
+import { Button, EmptyState, Field, Input, Panel, ProgressBar, Select, Tabs, Tag, useToast } from '../components';
 import { api, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import { filamentApi } from '../api/filamentApi';
 import type { AMSTrayView, ColorPlan, ColorWish, QueueEntry, QueueState, Spool, SpoolInput } from '../api/filamentApi';
-import type { PrintJob } from '../api/printTypes';
+import type { JobProgress, PrintJob } from '../api/printTypes';
+import { printSource } from '../api/progress';
 import { Async, Dialog, Notice, fmtDate, fmtNum } from './common';
 import './filament.css';
 
@@ -13,7 +14,7 @@ type Tab = 'bobines' | 'multicolore' | 'file';
 
 const SOURCE: Record<string, string> = { human: 'saisi', ams: 'lu sur l\'AMS', consumption: 'décompté', default: 'bobine neuve présumée' };
 const STATUS: Record<string, { label: string; tone?: 'ok' | 'warn' | 'err' }> = { ok: { label: 'suffisante', tone: 'ok' }, low: { label: 'presque vide', tone: 'warn' }, empty: { label: 'vide', tone: 'err' }, archived: { label: 'archivée' } };
-const QSTATE: Record<QueueState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
+export const QSTATE: Record<QueueState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
   slicing: { label: 'découpe', tone: 'warn' }, needs_assignments: { label: 'affectation à choisir', tone: 'warn' }, waiting: { label: 'en attente' }, uploading: { label: 'envoi en cours', tone: 'warn' },
   ready: { label: 'prête : attend votre accord', tone: 'ok' }, printing: { label: 'en cours', tone: 'ok' }, done: { label: 'terminée', tone: 'ok' }, failed: { label: 'échec', tone: 'err' }, removed: { label: 'retirée' },
 };
@@ -56,7 +57,7 @@ function SpoolsTab({ printerId }: { printerId?: string }) {
   return (
     <div className="fil-grid">
       <Panel title="AMS" actions={<Button size="sm" icon={<RefreshCw size={13} />} onClick={ams.reload}>Relire</Button>}>
-        {!printerId ? <EmptyState title="Aucune imprimante" text="Ajoutez une imprimante dans l'espace Impression." /> : (
+        {!printerId ? <EmptyState title="Aucune imprimante" text="Ajoutez une imprimante dans l'écran Imprimantes." /> : (
           <Async state={ams} label="Lecture de l'AMS">
             {(v) => !v ? null : (
               <>
@@ -75,22 +76,28 @@ function SpoolsTab({ printerId }: { printerId?: string }) {
         <Async state={spools} label="Chargement de l'inventaire" empty={(d) => d.spools.length === 0 ? <EmptyState title="Aucune bobine" text="Inscrivez vos bobines pour suivre leur poids restant, leur prix et être prévenu avant qu'une impression ne manque de matière." action={<Button size="sm" variant="primary" onClick={() => setEdit('new')}>Ajouter une bobine</Button>} /> : null}>
           {(d) => (
             <>
-              <div className="mat-table-wrap">
-                <table className="mat-table" aria-label="Bobines">
-                  <thead><tr><th scope="col">Bobine</th><th scope="col">Restant</th><th scope="col">Prix/kg</th><th scope="col">Emplacement</th><th scope="col">Séchage</th><th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
-                  <tbody>
-                    {d.spools.map((sp) => (
-                      <tr key={sp.id}>
-                        <th scope="row"><span className="fil-name"><Swatch color={sp.color_hex} />{[sp.brand, sp.material, sp.name].filter(Boolean).join(' ')}</span><span className="mono sub">{sp.id}</span></th>
-                        <td><Tag tone={STATUS[sp.status]?.tone}>{fmtNum(sp.remaining_g, 0)} g{sp.remaining_percent >= 0 ? ` (${sp.remaining_percent} %)` : ''}</Tag><span className="sub">{SOURCE[sp.remaining_source]}</span></td>
-                        <td className="mono">{sp.price_per_kg !== undefined ? fmtNum(sp.price_per_kg, 2) : <span className="unknown">inconnu</span>}</td>
-                        <td className="mono">{sp.slot ?? <span className="unknown">rangée</span>}</td>
-                        <td>{sp.last_dried_at ? fmtDate(sp.last_dried_at) : <span className="unknown">—</span>}</td>
-                        <td><Button size="sm" onClick={() => setEdit(sp)}>Modifier</Button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="spools" role="list" aria-label="Bobines">
+                {d.spools.map((sp) => {
+                  const pct = sp.remaining_percent >= 0 ? sp.remaining_percent : Math.min(100, Math.round((sp.remaining_g / Math.max(1, sp.net_weight_g)) * 100));
+                  const lowish = sp.status === 'low' || sp.status === 'empty';
+                  return (
+                    <article key={sp.id} role="listitem" className="panel spool-card">
+                      <div className="spool">
+                        <span className="reel" style={sp.color_hex ? { background: sp.color_hex } : undefined} role="img" aria-label={sp.color_hex ? `Couleur ${sp.color_hex}` : 'couleur inconnue'} />
+                        <div><b>{[sp.brand, sp.material, sp.name].filter(Boolean).join(' ')}</b><small>{sp.material} · {sp.diameter_mm} mm{sp.slot ? ` · ${sp.slot}` : ' · rangée'}</small></div>
+                      </div>
+                      <div className="rest"><span>{fmtNum(sp.remaining_g, 0)} g</span><span className="muted">sur {fmtNum(sp.net_weight_g, 0)} g</span></div>
+                      <div className="progress" role="progressbar" aria-label={`Restant de ${sp.name ?? sp.material}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%`, background: lowish ? 'var(--st-wait)' : undefined }} /></div>
+                      <p className="spool-meta"><Tag tone={STATUS[sp.status]?.tone}>{STATUS[sp.status]?.label ?? sp.status}</Tag> <span className="sub">{SOURCE[sp.remaining_source]}</span></p>
+                      {lowish && <p className="sub spool-low">Bientôt vide</p>}
+                      <dl className="spool-facts">
+                        <div><dt>Prix/kg</dt><dd className="mono">{sp.price_per_kg !== undefined ? fmtNum(sp.price_per_kg, 2) : <span className="unknown">inconnu</span>}</dd></div>
+                        <div><dt>Séchage</dt><dd>{sp.last_dried_at ? fmtDate(sp.last_dried_at) : <span className="unknown">—</span>}</dd></div>
+                      </dl>
+                      <div className="spool-act"><span className="mono sub">{sp.id}</span><Button size="sm" onClick={() => setEdit(sp)}>Modifier</Button></div>
+                    </article>
+                  );
+                })}
               </div>
               <MarginEditor margin={d.alert_margin} onSaved={spools.reload} />
             </>
@@ -196,7 +203,7 @@ function ColorsTab({ printerId }: { printerId?: string }) {
   return (
     <div className="fil-grid">
       <Panel title="Impression à colorer">
-        <Async state={jobs} label="Chargement des impressions" empty={() => candidates.length === 0 ? <EmptyState title="Aucune impression découpée" text="Découpez d'abord un modèle multicolore (espace Impression), puis revenez ici pour choisir les bobines." /> : null}>
+        <Async state={jobs} label="Chargement des impressions" empty={() => candidates.length === 0 ? <EmptyState title="Aucune impression découpée" text="Découpez d'abord un modèle multicolore (écran Impressions), puis revenez ici pour choisir les bobines." /> : null}>
           {() => (
             <>
               <Field label="Impression"><Select value={job?.id ?? ''} onChange={(e) => setJid(e.target.value)} options={candidates.map((j) => ({ value: j.id, label: `${j.name ?? j.id} · ${j.state}` }))} /></Field>
@@ -258,6 +265,8 @@ function QueueTab() {
   const reloadRef = useRef(q.reload); reloadRef.current = q.reload;
   useEffect(() => { const t = window.setInterval(() => reloadRef.current(), 5000); return () => window.clearInterval(t); }, []);
   const jobs = useAsync((s) => api.printJobs(s), []);
+  const jobsReload = useRef(jobs.reload); jobsReload.current = jobs.reload;
+  useEffect(() => { const t = window.setInterval(() => jobsReload.current(), 5000); return () => window.clearInterval(t); }, []);
   const toast = useToast();
   const [jid, setJid] = useState('');
   const entries = q.data?.queue ?? [];
@@ -284,7 +293,7 @@ function QueueTab() {
         <Async state={q} label="Chargement de la file" empty={() => active.length === 0 ? <EmptyState title="File vide" text="Ajoutez une impression découpée ci-dessous. La file prépare la suivante (envoi du fichier) mais ne la lance jamais seule." /> : null}>
           {() => (
             <ol className="fil-queue">
-              {active.map((e, i) => <QueueRow key={e.id} e={e} first={i === 0} last={i === active.length - 1} onMove={(d) => move(i, d)}
+              {active.map((e, i) => <QueueRow key={e.id} e={e} job={jobs.data?.print_jobs.find((j) => j.id === e.print_job_id)} prog={jobs.data?.progress?.[e.print_job_id]} first={i === 0} last={i === active.length - 1} onMove={(d) => move(i, d)}
                 onRemove={() => act(filamentApi.removeFromQueue(e.id), 'Retirée de la file')} onRenew={() => act(filamentApi.renewConfirmation(e.id), 'Nouveau lien de confirmation')} />)}
             </ol>
           )}
@@ -304,7 +313,7 @@ function QueueTab() {
   );
 }
 
-function QueueRow({ e, first, last, onMove, onRemove, onRenew }: { e: QueueEntry; first: boolean; last: boolean; onMove: (d: number) => void; onRemove: () => void; onRenew: () => void }) {
+function QueueRow({ e, job, prog, first, last, onMove, onRemove, onRenew }: { e: QueueEntry; job?: PrintJob; prog?: JobProgress; first: boolean; last: boolean; onMove: (d: number) => void; onRemove: () => void; onRenew: () => void }) {
   const st = QSTATE[e.state];
   return (
     <li className="fil-qrow">
@@ -313,6 +322,7 @@ function QueueRow({ e, first, last, onMove, onRemove, onRenew }: { e: QueueEntry
         <strong>{e.file_name ?? e.print_job_id}</strong>
         <span className="sub">{e.note ? `${e.note} · ` : ''}{e.estimated_minutes ? `${fmtNum(e.estimated_minutes, 0)} min` : ''}{e.estimated_grams ? ` · ${fmtNum(e.estimated_grams, 1)} g` : ''}</span>
         <span className="hint">{e.message}</span>
+        {['slicing', 'uploading', 'printing'].includes(e.state) && <div className="fil-qbar"><ProgressBar label={`Avancement : ${e.file_name ?? e.print_job_id}`} source={printSource(job ?? { state: e.state === 'printing' ? 'PRINTING' : 'SLICING' }, prog)} /></div>}
       </div>
       <Tag tone={st.tone}>{st.label}</Tag>
       <div className="row-wrap">

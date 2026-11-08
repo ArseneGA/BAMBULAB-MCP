@@ -3,13 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Atelier</title>
-    <link rel="icon" href="data:,">
+    <title>%PRODUCT_NAME%</title>
+    <meta name="description" content="%PRODUCT_NAME% : %TAGLINE%" />
+    <meta name="theme-color" content="#0f1714" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f7f5" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Polices non bloquantes : si Google Fonts est lent ou injoignable, l'interface s'affiche avec les polices système. -->
-    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" /></noscript>
+    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" /></noscript>
+    <script>
+      /* Thème appliqué avant le premier rendu (évite le flash clair en mode sombre). */
+      try { var t = localStorage.getItem('atelier-theme'); if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

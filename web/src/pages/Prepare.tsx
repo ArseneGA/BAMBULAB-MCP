@@ -9,6 +9,7 @@ import { GlbView } from '../viewer/LazyGlbView';
 import { Async, Notice, PendingBanner, fmtDims } from './common';
 import { PartsPanel, SettingsPanel } from './PrepareParts';
 import { PlatePanel } from './PlatePanel';
+import { PrepareNav } from './PrepareNav';
 import type { Part } from '../api/extraTypes';
 import './model.css';
 import './prepare.css';
@@ -27,8 +28,7 @@ function loadDraft(id: string): Draft {
 export function PreparePage() {
   const [sp, setSp] = useSearchParams();
   const id = sp.get('model');
-  if (!id) return <PickModel onPick={(m) => setSp({ model: m })} />;
-  return <PrepareView key={id} id={id} />;
+  return <><PrepareNav />{id ? <PrepareView key={id} id={id} /> : <PickModel onPick={(m) => setSp({ model: m })} />}</>;
 }
 
 function PickModel({ onPick }: { onPick: (id: string) => void }) {

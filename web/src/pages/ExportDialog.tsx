@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
-import { Button, Field, Input, Toggle } from '../components';
+import { Button, Field, Input, ProgressBar, Toggle } from '../components';
 import { describeError } from '../api/client';
 import { exportApi } from '../api/exportApi';
 import type { ExportPlan, ExportRecord, ExportStatus } from '../api/exportApi';
@@ -103,7 +103,7 @@ export function ExportDialog({ open, onClose, collection, collectionName }: { op
       {step === 'running' && (
         <div className="exp-progress" role="status" aria-live="polite">
           <p>Préparation de l'archive{plan ? ` : ${plan.parts.length} pièce(s), ${plan.files} fichier(s), ${fmtBytes(plan.total_bytes)}` : ''}…</p>
-          <progress value={Math.round((status?.job?.progress ?? 0) * 100)} max={100} />
+          <ProgressBar source={status?.job ?? { state: 'queued' }} label="Avancement de l'export" large />
           <p className="hint">{status?.job?.message ?? 'En file'}</p>
         </div>
       )}
