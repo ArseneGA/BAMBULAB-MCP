@@ -301,8 +301,17 @@ func TestCorruptedAndTruncatedArchives(t *testing.T) {
 
 	// 1. Octet altéré au milieu : l'empreinte .sha256 le détecte avant toute lecture.
 	bad := filepath.Join(t.TempDir(), "bad.tar.gz")
+	// Certains octets du flux deflate (en-têtes de blocs) peuvent être inversés sans changer le contenu décompressé :
+	// ce n'est pas une altération du contenu (CRC valide, manifeste vérifié). On part du milieu et on avance jusqu'à
+	// un octet dont l'inversion modifie réellement le contenu.
 	cp := append([]byte(nil), raw...)
-	cp[len(cp)/2] ^= 0xFF
+	for i := len(cp) / 2; ; i++ {
+		cp = append([]byte(nil), raw...)
+		cp[i] ^= 0xFF
+		if !sameDecoded(raw, cp) {
+			break
+		}
+	}
 	os.WriteFile(bad, cp, 0o600)
 	os.WriteFile(bad+".sha256", mustRead(t, out+".sha256"), 0o600) // sidecar d'origine
 	if _, _, err := backup.VerifyArchive(ctx, bad); err == nil {
