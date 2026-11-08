@@ -53,6 +53,9 @@ func applyRealColors(j *Job, loaded []LoadedSpoolSummary) {
 		fs := append([]slicer.FilamentUse(nil), j.Summary.Plates[pi].Filaments...)
 		for fi := range fs {
 			tray := trayOf(j.Assignments, fs[fi].Slot)
+			if fs[fi].ColorSource == "" && fs[fi].Color != "" && fs[fi].ProfileColor == "" {
+				fs[fi].ProfileColor = fs[fi].Color // la couleur voulue par le fichier reste lisible (plan_colors)
+			}
 			if l, ok := trayColor(loaded, tray); ok {
 				fs[fi].Color, fs[fi].ColorSource = strings.ToUpper(l.Color), colorSourceLabel(l.Source)
 			} else {

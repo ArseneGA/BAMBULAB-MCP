@@ -259,7 +259,7 @@ func (s *Service) ValidateArtifact(ctx context.Context, in ValidateInput) (*Vali
 		e := effectiveOf(info, plate)
 		eff = &e
 		e.fillSummary(sum)
-		rep.BrimType, rep.BrimWidth = e.BrimType, e.BrimWidth
+		rep.BrimType, rep.BrimWidth, rep.RaftLayers = e.BrimType, e.BrimWidth, e.RaftLayers
 		// Couleur : celle de la bobine réellement chargée (AMS / bobine déclarée), jamais celle du preset lu dans
 		// l'archive : la même valeur à chaque étape (découpe, validation, dépôt).
 		tmp := Job{Summary: sum, Assignments: assign}

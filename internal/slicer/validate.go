@@ -89,11 +89,27 @@ type FilamentUse struct {
 	Color string `json:"color,omitempty"`
 	// ColorSource : d'où vient Color. Vide = couleur du profil de découpe (valeur par défaut du preset, par exemple
 	// le vert Bambu #00AE42), qui n'est PAS la couleur de la bobine chargée.
-	ColorSource string  `json:"color_source,omitempty"`
-	TrayInfo    string  `json:"tray_info_idx,omitempty"`
-	Meters      float64 `json:"used_m"`
-	Grams       float64 `json:"used_g"`
-	Nozzle      float64 `json:"nozzle_diameter,omitempty"`
+	ColorSource string `json:"color_source,omitempty" jsonschema:"origine de color : AMS, bobine déclarée, ou vide/profil (couleur du preset ou du fichier, non confirmée) ; inconnue (...) si aucune bobine connue"`
+	// ProfileColor : couleur du preset / du fichier (non confirmée) quand Color est devenue la couleur RÉELLE de la bobine
+	// (ou « inconnue »). C'est la couleur VOULUE par le fichier, utile pour choisir la bobine (plan_colors).
+	ProfileColor string  `json:"profile_color,omitempty"`
+	TrayInfo     string  `json:"tray_info_idx,omitempty"`
+	Meters       float64 `json:"used_m"`
+	Grams        float64 `json:"used_g"`
+	Nozzle       float64 `json:"nozzle_diameter,omitempty"`
+}
+
+// WantedColor : couleur VOULUE par le fichier pour ce filament (preset ou couleur du projet), pour choisir la bobine.
+// Après remplacement de Color par la couleur réelle de la bobine, c'est ProfileColor ; tant que Color n'a pas été
+// remplacée (ColorSource vide), c'est Color ; vide si le fichier n'en dit rien.
+func (f FilamentUse) WantedColor() string {
+	if f.ProfileColor != "" {
+		return f.ProfileColor
+	}
+	if f.ColorSource == "" {
+		return f.Color
+	}
+	return ""
 }
 
 // PlateResult regroupe ce qui est lisible d'une plaque tranchée.
