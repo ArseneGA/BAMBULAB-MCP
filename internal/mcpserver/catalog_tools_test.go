@@ -84,6 +84,17 @@ func arr(t *testing.T, m map[string]any, key string) []any {
 	return a
 }
 
+// resultText concatène le contenu texte d'un résultat d'outil (seul contenu lu par le modèle).
+func resultText(r *mcp.CallToolResult) string {
+	var s string
+	for _, c := range r.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			s += tc.Text
+		}
+	}
+	return s
+}
+
 func TestCatalogToolsEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	c, root := startCatalogCore(t)
@@ -165,12 +176,21 @@ func TestCatalogToolsEndToEnd(t *testing.T) {
 	}
 
 	// list_collection.
-	lc := structured(t, call(t, cs, "list_collection", map[string]any{"collection": "lot"}))
+	lcRes := call(t, cs, "list_collection", map[string]any{"collection": "lot"})
+	lc := structured(t, lcRes)
 	if len(arr(t, lc, "subcollections")) != 1 || lc["models"].(map[string]any)["total"].(float64) != 2 {
 		t.Fatalf("list_collection : %v", lc)
 	}
+	// Le texte liste les éléments (noms + identifiants), pas seulement des compteurs.
+	if lt := resultText(lcRes); !strings.Contains(lt, "mdl_") || !strings.Contains(lt, "\n- ") {
+		t.Fatalf("texte de list_collection sans éléments : %s", lt)
+	}
 
 	// get_model_details.
+	dRes := call(t, cs, "get_model_details", map[string]any{"model_id": id})
+	if dt := resultText(dRes); !strings.Contains(dt, id) || !strings.Contains(dt, "fichier ") || !strings.Contains(dt, "Dimensions : 10.0") {
+		t.Fatalf("texte de get_model_details sans fichiers ni identifiant : %s", dt)
+	}
 	d := structured(t, call(t, cs, "get_model_details", map[string]any{"model_id": id}))
 	if len(arr(t, d, "files")) != 1 || len(arr(t, d, "versions")) != 1 || d["analysis"].(map[string]any)["state"] != "ok" {
 		t.Fatalf("détails : %v", d)
