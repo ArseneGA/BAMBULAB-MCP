@@ -60,6 +60,21 @@ describe('LaunchConfirm', () => {
     expect(t).toContain('Ne tapez jamais ce code dans la conversation');
   });
 
+  it('affiche la mise à niveau du plateau, l\'heure locale, le risque de décollement et reprend une photo fraîche à la demande', async () => {
+    const conf: ConfirmationView = { ...CONF, expires_at_local: '21:03 (08/11/2026, Europe/Paris)',
+      binding: { ...CONF.binding, bed_leveling: false, adhesion_warnings: ['Risque de décollement ÉLEVÉ : pièce de 204 mm'] } };
+    const { app, calls } = mkApp({ get_launch_view_state: () => sc({ ...STATE, photo: { mime: 'image/jpeg', data: 'AAAA', taken_at: new Date().toISOString(), taken_at_local: '20:55 (08/11/2026, Europe/Paris)', age_seconds: 12 } }) });
+    await render(<LaunchConfirm app={app} first={conf} pollMs={60_000} />);
+    const t = host.textContent ?? '';
+    expect(t).toContain('Mise à niveau du plateau'); expect(t).toContain('non (désactivée pour cette impression)');
+    expect(t).toContain('21:03 (08/11/2026, Europe/Paris)'); expect(t).toContain('il y a 12 s');
+    expect(t).toContain('Risque de décollement'); expect(t).toContain('204 mm');
+    expect(calls[0].arguments.fresh_photo).toBeUndefined(); // ouverture : le serveur peut réutiliser une photo de moins de 15 s
+    await act(async () => { btn(/Reprendre la photo/).click(); await Promise.resolve(); });
+    await flush();
+    expect(calls.some((c) => c.name === 'get_launch_view_state' && c.arguments.fresh_photo === true && c.arguments.with_photo === true)).toBe(true);
+  });
+
   it('montre en rouge un profil non officiel', async () => {
     const bad = { ...CONF, safety: { ...CONF.safety!, gcode_official: false, gcode_profile_line: 'G-code de démarrage : DIFFÉRENT du profil officiel ✗ (machine_start_gcode)', anomalies: ['G-code de démarrage : DIFFÉRENT du profil officiel ✗ (machine_start_gcode)'] } };
     const { app } = mkApp({ get_launch_view_state: () => sc(STATE) });

@@ -211,8 +211,21 @@ func TestCameraEndToEnd(t *testing.T) {
 	// la caméra tombe en panne : la page l'annonce sans photo périmée
 	time.Sleep(4 * time.Second) // le flux MJPEG partagé se ferme 3 s après le dernier spectateur
 	_ = cam.SetFault(sim.CameraFaultDown, true)
-	if _, body, _ := r.humanGet(confURL); !strings.Contains(body, "Photo du plateau indisponible") || strings.Contains(body, "<img") {
-		t.Fatalf("panne de caméra sur /confirm : %s", body)
+	// Un simple rechargement réutilise une photo de moins de 15 s (avec son âge affiché) ; le bouton « Reprendre la
+	// photo » en force une nouvelle, et la panne est alors annoncée sans photo périmée.
+	_, again, _ := r.humanGet(confURL)
+	if !strings.Contains(again, "il y a ") || !strings.Contains(again, "Reprendre la photo") {
+		t.Fatalf("âge de la photo ou bouton absent : %s", again)
+	}
+	pm := regexp.MustCompile(`action="(/confirm/[^"]+/photo)"><input type="hidden" name="nonce" value="([^"]+)"`).FindStringSubmatch(again)
+	if pm == nil {
+		t.Fatalf("formulaire « Reprendre la photo » absent : %s", again)
+	}
+	if st, body := r.humanPost(r.web.URL+pm[1], url.Values{"nonce": {pm[2]}}); st != 200 || !strings.Contains(body, "Photo du plateau indisponible") || strings.Contains(body, "<img") {
+		t.Fatalf("panne de caméra sur /confirm après « Reprendre la photo » : %d %s", st, body)
+	}
+	if st, _ := r.humanPost(r.web.URL+pm[1], url.Values{"nonce": {pm[2]}}); st != 403 {
+		t.Fatalf("le nonce du bouton est à usage unique : %d", st)
 	}
 	_ = cam.SetFault(sim.CameraFaultDown, false)
 	_, _, _ = r.humanGet(confURL) // photo fraîche = image de référence « plateau vide »

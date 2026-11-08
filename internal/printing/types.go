@@ -3,10 +3,13 @@ package printing
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 )
@@ -132,20 +135,25 @@ type Job struct {
 	Summary         *ArtifactSummary     `json:"summary,omitempty"`
 	Validation      *ValidationReport    `json:"validation,omitempty"`
 	ConfirmationID  string               `json:"confirmation_id,omitempty"`
-	SliceJobID      string               `json:"slice_job_id,omitempty"`
-	UploadJobID     string               `json:"upload_job_id,omitempty"`
-	StartJobID      string               `json:"start_job_id,omitempty"`
-	Print           *PrintProgress       `json:"print,omitempty"`
-	LastError       string               `json:"last_error,omitempty"`
-	StopConfirmID   string               `json:"stop_confirm_id,omitempty"`
-	Archived        bool                 `json:"archived,omitempty" jsonschema:"impression terminée masquée de l'historique par défaut"`
-	Trashed         bool                 `json:"trashed,omitempty" jsonschema:"impression terminée à la corbeille (récupérable)"`
-	StoppedByUser   bool                 `json:"stopped_by_user,omitempty" jsonschema:"vrai si l'impression a été arrêtée par l'humain via la page /stop"`
-	Events          []JobEvent           `json:"events,omitempty"`
-	CreatedAt       time.Time            `json:"created_at"`
-	UpdatedAt       time.Time            `json:"updated_at"`
-	Slice           *SliceSpec           `json:"slice,omitempty" jsonschema:"paramètres figés de la découpe"`
-	Next            string               `json:"next,omitempty" jsonschema:"prochaine étape autorisée de la séquence"`
+	// NoBedLeveling : l'humain a approuvé un lancement SANS mise à niveau du plateau (défaut : mise à niveau activée).
+	// Fait partie de la liaison approuvée (contracts.ConfirmationBinding.NoBedLeveling).
+	NoBedLeveling bool `json:"no_bed_leveling,omitempty" jsonschema:"vrai si le lancement approuvé désactive la mise à niveau du plateau (défaut : elle est activée)"`
+	// Adhesion : risque de décollement estimé d'après la géométrie de la pièce (mesh.Adhesion), évalué à la découpe.
+	Adhesion      *mesh.AdhesionReport `json:"adhesion,omitempty" jsonschema:"risque de décollement estimé à la découpe (heuristique)"`
+	SliceJobID    string               `json:"slice_job_id,omitempty"`
+	UploadJobID   string               `json:"upload_job_id,omitempty"`
+	StartJobID    string               `json:"start_job_id,omitempty"`
+	Print         *PrintProgress       `json:"print,omitempty"`
+	LastError     string               `json:"last_error,omitempty"`
+	StopConfirmID string               `json:"stop_confirm_id,omitempty"`
+	Archived      bool                 `json:"archived,omitempty" jsonschema:"impression terminée masquée de l'historique par défaut"`
+	Trashed       bool                 `json:"trashed,omitempty" jsonschema:"impression terminée à la corbeille (récupérable)"`
+	StoppedByUser bool                 `json:"stopped_by_user,omitempty" jsonschema:"vrai si l'impression a été arrêtée par l'humain via la page /stop"`
+	Events        []JobEvent           `json:"events,omitempty"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+	Slice         *SliceSpec           `json:"slice,omitempty" jsonschema:"paramètres figés de la découpe"`
+	Next          string               `json:"next,omitempty" jsonschema:"prochaine étape autorisée de la séquence"`
 }
 
 // SliceSpec fige ce qui sert à découper (reproductibilité).
@@ -206,6 +214,53 @@ type ValidationReport struct {
 	Blocking   []string       `json:"blocking,omitempty"`
 	Warnings   []string       `json:"warnings,omitempty"`
 	Validator  string         `json:"validator" jsonschema:"slicer.ValidateArchive, ou un validateur substitué (tests)"`
+	// BrimType / BrimWidth : bordure du procédé réellement tranché (project_settings.config de l'archive) ; vides si illisibles.
+	BrimType  string `json:"brim_type,omitempty"`
+	BrimWidth string `json:"brim_width,omitempty"`
+	// Adhesion : risque de décollement (surface de contact de la première couche), avec la bordure réellement présente.
+	Adhesion *mesh.AdhesionReport `json:"adhesion,omitempty"`
+}
+
+// brimPresent dit si la bordure du procédé est une vraie bordure extérieure/intérieure d'au moins 3 mm.
+// « auto_brim » et « brim_ears » ne comptent pas : leur effet dépend de Studio et n'est pas garanti pour une pièce élancée.
+func brimPresent(brimType, width string) bool {
+	switch strings.ToLower(strings.TrimSpace(brimType)) {
+	case "outer_only", "inner_only", "outer_and_inner", "outer and inner", "outer brim only", "inner brim only", "outer and inner brim":
+		w, err := strconv.ParseFloat(strings.TrimSpace(width), 64)
+		return err == nil && w >= 3
+	}
+	return false
+}
+
+// brimLabel décrit la bordure pour l'humain.
+func brimLabel(brimType, width string) string {
+	t := strings.TrimSpace(brimType)
+	if t == "" {
+		return "bordure du profil inconnue"
+	}
+	if w := strings.TrimSpace(width); w != "" && t != "no_brim" {
+		return "bordure du profil : " + t + " (" + w + " mm)"
+	}
+	return "bordure du profil : " + t
+}
+
+// adhesionNotes : avertissements à montrer à l'humain avant le lancement (jamais bloquants).
+func (j Job) adhesionNotes() []string {
+	a := j.Adhesion
+	if a == nil && j.Validation != nil {
+		a = j.Validation.Adhesion
+	}
+	if !a.Risky() {
+		return nil
+	}
+	var bt, bw string
+	if j.Validation != nil {
+		bt, bw = j.Validation.BrimType, j.Validation.BrimWidth
+	}
+	if brimPresent(bt, bw) {
+		return nil // une bordure est déjà prévue : le risque est couvert
+	}
+	return []string{a.Summary() + " Profil actuel : " + brimLabel(bt, bw) + ". Non bloquant : à toi de décider de lancer ou de redécouper avec bordure."}
 }
 
 func (v *ValidationReport) add(compat bool, name string, ok bool, level, detail string) {

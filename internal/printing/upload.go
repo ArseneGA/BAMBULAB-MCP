@@ -35,6 +35,8 @@ type PromptDetails struct {
 	EstimatedMin float64              `json:"estimated_minutes,omitempty"`
 	WeightG      float64              `json:"estimated_grams,omitempty"`
 	Alerts       []string             `json:"alerts,omitempty" jsonschema:"alertes de matière (bobine qui risque de manquer) : à lire avant de lancer"`
+	BedLeveling  bool                 `json:"bed_leveling" jsonschema:"mise à niveau automatique du plateau au démarrage (oui par défaut) ; fait partie de ce que l'humain approuve"`
+	Adhesion     []string             `json:"adhesion_warnings,omitempty" jsonschema:"avertissements de risque de décollement (pièce élancée sur peu de surface, sans bordure) : non bloquants, à lire avant de lancer"`
 	Colors       []FilamentColor      `json:"colors,omitempty" jsonschema:"couleur de chaque filament d'après la bobine RÉELLEMENT chargée (inventaire, AMS, bobine externe déclarée) ; « inconnue » sinon, jamais la couleur par défaut du profil"`
 	Reminder     string               `json:"reminder"`
 }
@@ -61,7 +63,7 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	if short == "" {
 		short = rec.Name
 	}
-	d := &PromptDetails{Colors: s.colorsFor(j), File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments,
+	d := &PromptDetails{Colors: s.colorsFor(j), File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments, BedLeveling: !j.NoBedLeveling, Adhesion: j.adhesionNotes(),
 		Reminder: "Vérifie que le plateau est vide et dégagé : l'imprimante ne peut pas le savoir. Le dépôt du fichier n'a déclenché ni chauffe ni mouvement."}
 	if j.Validation != nil {
 		for _, w := range j.Validation.Warnings {

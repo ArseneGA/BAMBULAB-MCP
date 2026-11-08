@@ -32,7 +32,7 @@ export interface PrintJob {
   archived?: boolean; trashed?: boolean; stopped_by_user?: boolean;
   last_error?: string; events?: Array<{ at: string; event: string; from: string; to: string; note?: string }>; created_at: string; updated_at: string; next?: string;
 }
-export interface PromptDetails { file: string; printer_name: string; printer_model: string; sha256: string; plate: number; materials: FilamentAssignment[]; estimated_minutes?: number; estimated_grams?: number; alerts?: string[] }
+export interface PromptDetails { file: string; printer_name: string; printer_model: string; sha256: string; plate: number; materials: FilamentAssignment[]; estimated_minutes?: number; estimated_grams?: number; alerts?: string[]; bed_leveling?: boolean; adhesion_warnings?: string[] }
 /** Températures et origine du G-code lues dans l'archive (internal/printing/safety_view.go). */
 export interface SafetyView {
   analysed: boolean; materials?: string[]; nozzle_start_max_c: number; nozzle_first_layer_c: number; nozzle_print_min_c: number; nozzle_print_max_c: number;
@@ -40,7 +40,7 @@ export interface SafetyView {
 }
 export interface UploadOutput { print_job_id: string; state: PrintState; done: boolean; replayed: boolean; question?: string; details?: PromptDetails; note: string; job: PrintJob }
 export interface ConfirmationView {
-  confirmation_id: string; print_job_id: string; expires_at: string; confirm_url: string; approved: boolean; binding: PromptDetails; safety?: SafetyView | null; instructions: string; state: PrintState;
+  confirmation_id: string; print_job_id: string; expires_at: string; expires_at_local?: string; confirm_url: string; approved: boolean; binding: PromptDetails; safety?: SafetyView | null; instructions?: string; state: PrintState;
 }
 export interface PrintStatus { job: PrintJob; printer?: PrinterStatus; note?: string }
 export interface StartOutput { print_job_id: string; state: PrintState; outcome: string; replayed: boolean; note: string; job: PrintJob }

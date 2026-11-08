@@ -18,6 +18,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 )
 
@@ -65,13 +66,16 @@ type CodeApprovalOut struct {
 type LaunchViewStateInput struct {
 	ConfirmationID string `json:"confirmation_id"`
 	WithPhoto      bool   `json:"with_photo,omitempty" jsonschema:"prendre et joindre une photo réduite du plateau (si une caméra est configurée)"`
+	FreshPhoto     bool   `json:"fresh_photo,omitempty" jsonschema:"avec with_photo : forcer une NOUVELLE photo (bouton « Actualiser la photo ») au lieu de réutiliser une photo de moins de 15 s"`
 }
 
 // LaunchPhoto : photo réduite du plateau (JPEG base64) pour la vue.
 type LaunchPhoto struct {
-	MIME    string    `json:"mime"`
-	Data    string    `json:"data" jsonschema:"JPEG en base64"`
-	TakenAt time.Time `json:"taken_at"`
+	MIME         string    `json:"mime"`
+	Data         string    `json:"data" jsonschema:"JPEG en base64"`
+	TakenAt      time.Time `json:"taken_at"`
+	TakenAtLocal string    `json:"taken_at_local" jsonschema:"heure de la prise de vue dans le fuseau de l'utilisateur"`
+	AgeSeconds   int       `json:"age_seconds" jsonschema:"âge de la photo au moment de la réponse"`
 }
 
 // LaunchViewState : ce que la vue de confirmation a besoin de savoir en plus de la confirmation. Aucun secret.
@@ -166,7 +170,7 @@ func AddLaunchTools(s *mcp.Server, c *core.Core) {
 		out := LaunchViewState{ConfirmationID: v.ConfirmationID, Approved: v.Approved, CodeSet: st.Set, Locked: st.Locked, AttemptsLeft: st.AttemptsLeft,
 			SetupURL: p.BaseURL() + "/setup/launch-code", SecondsLeft: int(p.ConfirmationApprovalLeft(in.ConfirmationID).Seconds())}
 		if in.WithPhoto {
-			out.Photo, out.PhotoNote = platePhotoForView(ctx, c, in.ConfirmationID)
+			out.Photo, out.PhotoNote = platePhotoForView(ctx, c, in.ConfirmationID, in.FreshPhoto)
 		}
 		return textResult("État de la confirmation " + v.ConfirmationID), out, nil
 	})
@@ -202,11 +206,11 @@ func codeFailure(ctx context.Context, p *printing.Service, err error) (*mcp.Call
 }
 
 // platePhotoForView prend la photo du plateau via le fournisseur de la chaîne d'impression et la réduit (≤ ~60 Ko).
-func platePhotoForView(ctx context.Context, c *core.Core, confID string) (*LaunchPhoto, string) {
+func platePhotoForView(ctx context.Context, c *core.Core, confID string, fresh bool) (*LaunchPhoto, string) {
 	if c.Camera == nil {
 		return nil, "Aucune caméra configurée : vérifie le plateau à l'œil."
 	}
-	ph, err := c.Printing.PlatePhotoForConfirmation(ctx, confID)
+	ph, err := c.Printing.PlatePhotoForConfirmation(ctx, confID, fresh)
 	if err != nil {
 		return nil, "Photo indisponible."
 	}
@@ -224,7 +228,8 @@ func platePhotoForView(ctx context.Context, c *core.Core, confID string) (*Launc
 	if err != nil {
 		return nil, "Photo illisible."
 	}
-	return &LaunchPhoto{MIME: "image/jpeg", Data: base64.StdEncoding.EncodeToString(small), TakenAt: ph.TakenAt}, ""
+	return &LaunchPhoto{MIME: "image/jpeg", Data: base64.StdEncoding.EncodeToString(small), TakenAt: ph.TakenAt,
+		TakenAtLocal: localtime.Full(ph.TakenAt), AgeSeconds: max(0, int(time.Since(ph.TakenAt).Seconds()))}, ""
 }
 
 // shrinkJPEG réduit un JPEG à maxW pixels de large au plus (moyenne par blocs) : une photo de caméra pleine taille

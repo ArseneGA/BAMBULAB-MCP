@@ -12,13 +12,15 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 )
 
 // Pages HTML serveur (sans JavaScript) : saisie du code d'accès (avec épinglage du certificat),
 // confirmation de lancement et validation d'arrêt. Ce sont les canaux HUMAINS : leur contenu n'est
 // jamais renvoyé au modèle, et elles exigent un navigateur enregistré (humanauth.Require).
 
-var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
+// lt formate une heure dans le fuseau de l'utilisateur (BAMBU_TIMEZONE) : « 21:03:26 (08/11/2026) », jamais en UTC.
+var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": localtime.Page}).Parse(`{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
 <title>{{.Title}}</title><style>` + humanauth.Style + `</style></head><body><main>{{end}}
 {{define "foot"}}</main></body></html>{{end}}
@@ -46,12 +48,15 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 {{if .V.Binding.EstimatedMin}}<dt>Durée estimée</dt><dd>{{printf "%.0f" .V.Binding.EstimatedMin}} min (estimation du slicer){{if .V.Binding.WeightG}}, {{printf "%.1f" .V.Binding.WeightG}} g{{end}}</dd>{{end}}
 {{with .V.Safety}}<dt>Températures<br><small>lues dans le G-code</small></dt><dd>{{if .Analysed}}buse : démarrage jusqu'à {{printf "%.0f" .NozzleStartMaxC}} °C, 1re couche {{printf "%.0f" .NozzleFirstLayerC}} °C, impression {{printf "%.0f" .NozzlePrintMinC}} à {{printf "%.0f" .NozzlePrintMaxC}} °C<br>plateau : 1re couche {{printf "%.0f" .BedFirstLayerC}} °C (de {{printf "%.0f" .BedMinC}} à {{printf "%.0f" .BedMaxC}} °C){{if .ChamberMaxC}}<br>chambre : jusqu'à {{printf "%.0f" .ChamberMaxC}} °C{{end}}{{else}}<span class="bad">non lues : G-code non analysé</span>{{end}}</dd>
 {{if .Materials}}<dt>Matières lues dans le G-code</dt><dd>{{range .Materials}}{{.}}<br>{{end}}</dd>{{end}}{{end}}
-<dt>Valable jusqu'à</dt><dd>{{.V.ExpiresAt.Format "15:04:05 (02/01/2006)"}}</dd></dl>
+<dt>Mise à niveau du plateau</dt><dd>{{if .V.Binding.BedLeveling}}oui (automatique au démarrage){{else}}<strong>non</strong> (désactivée pour cette impression){{end}}</dd>
+<dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
 {{with .V.Safety}}<style>.bad{color:#c00000;font-weight:600}@media (prefers-color-scheme:dark){.bad{color:#ff7b7b}}</style>
 {{if .GcodeOfficial}}<p class="ok">{{.GcodeProfileLine}}</p>{{else}}<p class="warn bad">{{.GcodeProfileLine}}</p>{{end}}
 {{range .Anomalies}}{{if ne . $.V.Safety.GcodeProfileLine}}<p class="warn bad">Anomalie du G-code : {{.}}</p>{{end}}{{end}}{{end}}
-{{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" style="max-width:100%;border:1px solid #888;border-radius:6px"><figcaption>Photo du plateau prise à {{.Photo.TakenAt.Format "15:04:05 (02/01/2006)"}} par la caméra de l'imprimante, à l'ouverture de cette page. Vérifie sur cette image que le plateau est vide et dégagé.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>{{end}}
+{{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" style="max-width:100%;border:1px solid #888;border-radius:6px"><figcaption>Photo du plateau prise à {{lt .Photo.TakenAt}}, <strong>{{.PhotoAge}}</strong>, par la caméra de l'imprimante. Vérifie sur cette image que le plateau est vide et dégagé ; si tu viens de le dégager, reprends la photo.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>
+<form method="post" action="/confirm/{{.ID}}/photo"><input type="hidden" name="nonce" value="{{.PhotoNonce}}"><button type="submit">Reprendre la photo</button></form>{{end}}
 {{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
+{{range .V.Binding.Adhesion}}<p class="warn"><strong>Risque de décollement.</strong> {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}">
 <label class="chk"><input type="checkbox" name="plate_clear" value="yes" required> Le plateau est vide et dégagé, l'imprimante est surveillée.</label>
@@ -60,7 +65,7 @@ var pageTpl = template.Must(template.New("p").Parse(`{{define "head"}}<!doctype 
 {{if .Closed}}<p class="warn">{{.Closed}}</p>{{else}}
 <dl><dt>Fichier</dt><dd><code>{{.V.File}}</code></dd><dt>Imprimante</dt><dd>{{.V.PrinterName}}</dd>
 <dt>Avancement</dt><dd>{{.V.Percent}} % (couche {{.V.Layer}} / {{.V.TotalLayers}})</dd>
-<dt>Valable jusqu'à</dt><dd>{{.V.ExpiresAt.Format "15:04:05 (02/01/2006)"}}</dd></dl>
+<dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
 <p class="warn">L'arrêt est <strong>définitif</strong> : le travail en cours est perdu. Rien n'est arrêté tant que tu n'as pas cliqué.</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}"><button type="submit">Arrêter l'impression</button></form>{{end}}{{template "foot"}}{{end}}
 {{define "done"}}{{template "head" .}}<h1>{{.Title}}</h1><p class="ok">{{.Msg}}</p>{{template "foot"}}{{end}}`))
@@ -88,6 +93,7 @@ func (s *Service) RegisterPages(mux *http.ServeMux, require func(http.Handler) h
 	mux.Handle("POST /setup/printer/{id}", h(s.setupPost))
 	mux.Handle("GET /confirm/{id}", h(s.confirmGet))
 	mux.Handle("POST /confirm/{id}", h(s.confirmPost))
+	mux.Handle("POST /confirm/{id}/photo", h(s.photoPost))
 	mux.Handle("GET /stop/{id}", h(s.stopGet))
 	mux.Handle("POST /stop/{id}", h(s.stopPost))
 }
@@ -216,11 +222,37 @@ func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusOK, "done", map[string]any{"Title": "Déjà confirmée", "Msg": "Tu as déjà autorisé cette impression (l'accord vaut 2 minutes). Le lancement suit ton accord : demande à Claude l'état de l'impression."})
 		return
 	}
-	d := map[string]any{"Title": "Confirmation de lancement", "V": v, "Nonce": s.issueNonce(id)}
-	if ph := s.platePhotoFor(r.Context(), cj.PrinterID); ph != nil {
+	d := map[string]any{"Title": "Confirmation de lancement", "V": v, "Nonce": s.issueNonce(id), "ID": id, "TZ": localtime.Name()}
+	// Chaque ouverture ou rechargement reprend une photo si la dernière date de plus de PhotoMaxAge (~15 s).
+	if ph := s.platePhotoFor(r.Context(), cj.PrinterID, false); ph != nil {
 		d["Photo"] = ph
+		d["PhotoNonce"] = s.issueNonce("photo:" + id)
+		if ph.URL != "" {
+			d["PhotoAge"] = localtime.Age(ph.TakenAt, s.now())
+		}
 	}
 	s.render(w, http.StatusOK, "confirm", d)
+}
+
+// photoPost : bouton « Reprendre la photo ». Même protection que le reste de /confirm (navigateur enregistré, garde
+// cross-origin / Sec-Fetch de l'API, nonce à usage unique lié à cette confirmation) ; il ne fait QUE reprendre une
+// photo (aucun effet sur l'approbation ni sur l'imprimante), puis recharge la page.
+func (s *Service) photoPost(w http.ResponseWriter, r *http.Request) {
+	id := trimLinkPunct(r.PathValue("id"))
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil {
+		s.render(w, http.StatusBadRequest, "done", map[string]any{"Title": "Requête invalide", "Msg": "Formulaire illisible."})
+		return
+	}
+	if !s.useNonce(r.PostFormValue("nonce"), "photo:"+id) {
+		s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Formulaire périmé", "Msg": "Recharge la page de confirmation puis recommence."})
+		return
+	}
+	if err := s.RefreshPlatePhoto(r.Context(), id); err != nil {
+		s.render(w, http.StatusGone, "confirm", map[string]any{"Title": "Confirmation", "Closed": closedMsg(err)})
+		return
+	}
+	http.Redirect(w, r, "/confirm/"+id, http.StatusSeeOther)
 }
 
 func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +302,7 @@ func (s *Service) stopGet(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusGone, "stop", map[string]any{"Title": "Arrêt", "Closed": strings.ToUpper(msg[:1]) + msg[1:] + "."})
 		return
 	}
-	s.render(w, http.StatusOK, "stop", map[string]any{"Title": "Arrêt d'impression", "V": v, "Nonce": s.issueNonce("stop:" + id)})
+	s.render(w, http.StatusOK, "stop", map[string]any{"Title": "Arrêt d'impression", "V": v, "Nonce": s.issueNonce("stop:" + id), "TZ": localtime.Name()})
 }
 
 func (s *Service) stopPost(w http.ResponseWriter, r *http.Request) {

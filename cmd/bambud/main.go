@@ -19,6 +19,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 )
 
@@ -219,7 +220,10 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
 	c.Catalog.SetBaseURL(publicBase(sc.HTTP.PublicURL, ln.Addr().String())) // jamais « http://[::]:port »
-	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version)
+	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version, "timezone", localtime.Name())
+	if w := localtime.Warning(); w != "" {
+		log.Warn("fuseau horaire", "detail", w)
+	}
 	if !mcpserver.ViewsBuilt() {
 		log.Warn("vue MCP App non embarquée : Claude affichera « Vue non construite » au lieu du viewer 3D ; construire avec scripts/build.sh release (ou npm run build dans web/) avant go build")
 	}

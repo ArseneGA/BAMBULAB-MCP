@@ -107,6 +107,15 @@ curl -i  https://atelier.example.ts.net/api/capabilities                   # doi
 3. Le navigateur s'ouvre sur bambud : **Continuer**, vérifier l'application et l'adresse de retour (`claude.ai`), **Autoriser**.
 4. Révoquer : `bambud oauth --revoke <id>` ; déconnecter aussi le connecteur dans Claude.
 
+### Pourquoi brancher le connecteur distant : avoir les vues (carte de confirmation, visionneuse 3D)
+
+Constat (2026-11-08) : derrière `cmd /c npx -y mcp-remote http://…:7878/mcp --allow-http --header Authorization:…`, Claude Desktop affichait le résultat de `request_print_confirmation` en tableau « Requête / Réponse » au lieu de la carte `ui://bambu/print-confirm.html`.
+
+- **Vérifié (code, tests, spécification, SDK `@modelcontextprotocol/ext-apps` 2.0.4)** : le serveur annonce correctement la vue (`_meta.ui.resourceUri` + clé historique `ui/resourceUri`, MIME `text/html;profile=mcp-app`) ; la spécification fait annoncer la prise en charge par le **client** (`capabilities.extensions["io.modelcontextprotocol/ui"].mimeTypes`), et c'est facultatif côté serveur ; bambud ne conditionne rien à cette annonce et la **journalise** désormais (`client MCP initialisé … ui_extension=…`). La documentation d'Anthropic montre aussi des serveurs stdio locaux qui affichent des vues ; `mcp-remote` y est présenté comme moyen de **tester** un serveur distant.
+- **Non prouvé** : la cause exacte côté Claude Desktop. Hypothèse : le chemin « serveur local + `mcp-remote` » ne reçoit pas le même traitement qu'un connecteur distant (annonce d'extension non relayée, ou version de Desktop). À trancher avec le journal (`ui_extension=`), puis avec l'exemple officiel `@modelcontextprotocol/server-map --stdio` (s'il affiche sa vue dans le même Desktop, le problème est sur le chemin bambud/`mcp-remote`).
+- **Marche à suivre pour essayer le connecteur distant** : (1) `tailscale funnel` sur **`/mcp`, `/.well-known/*` et `/oauth/*` seulement** (voir § 3 ; ne jamais exposer `/confirm`, `/stop`, `/setup`, `/enroll`) ; `BAMBU_PUBLIC_URL` en `https://…` en premier ; (2) `bambud enroll` et enregistrement du navigateur sur l'URL https ; (3) Claude > Paramètres > Connecteurs > Ajouter un connecteur personnalisé > `https://<nom>.ts.net/mcp`, ID/secret client vides ; autoriser dans le navigateur ; (4) **retirer l'entrée `mcp-remote`** de `claude_desktop_config.json` (deux serveurs « Atelier » sinon) ; (5) demander une confirmation de lancement : la carte doit apparaître ; sinon relever `ui_extension=` dans les journaux et utiliser le lien `/confirm/…` (même contenu, même sécurité).
+- Avertissement : un Funnel expose `/mcp` à Internet. La barrière est l'OAuth (ou le Bearer) ; l'approbation d'un lancement reste humaine (code de lancement ou page enregistrée), jamais un outil appelé par le modèle.
+
 ## 4. Limites connues
 
 - **CIMD** (client_id = URL) non implémenté ; DCR suffit à Claude (qui s'enregistre à chaque nouvelle connexion : les clients inutilisés sont purgés au bout d'une heure).

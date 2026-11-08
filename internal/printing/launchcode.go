@@ -65,13 +65,14 @@ func (s *Service) StopWithCode(ctx context.Context, stopID, code string) (*Cance
 	return s.ExecuteStop(ctx, stopID)
 }
 
-// PlatePhotoForConfirmation prend la photo du plateau pour la vue de confirmation (nil si aucune caméra).
-func (s *Service) PlatePhotoForConfirmation(ctx context.Context, confID string) (*PlatePhoto, error) {
+// PlatePhotoForConfirmation donne la photo du plateau pour la vue de confirmation (nil si aucune caméra). fresh=true
+// (bouton « Actualiser la photo ») prend toujours une nouvelle photo ; sinon une photo de moins de PhotoMaxAge est réutilisée.
+func (s *Service) PlatePhotoForConfirmation(ctx context.Context, confID string, fresh bool) (*PlatePhoto, error) {
 	_, j, err := s.confirmable(ctx, confID)
 	if err != nil {
 		return nil, err
 	}
-	return s.platePhotoFor(ctx, j.PrinterID), nil
+	return s.platePhotoFor(ctx, j.PrinterID, fresh), nil
 }
 
 // ConfirmationApprovalLeft : durée restante de l'accord humain (0 si non approuvé).

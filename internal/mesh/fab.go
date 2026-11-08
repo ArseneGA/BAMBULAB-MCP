@@ -125,6 +125,8 @@ type FabReport struct {
 	Overhang        OverhangReport     `json:"overhang"`
 	Thin            ThinReport         `json:"thin_walls"`
 	Orientation     *OrientationReport `json:"orientation,omitempty"`
+	// Adhesion : risque de décollement estimé d'après la surface de contact de la première couche (adhesion.go).
+	Adhesion *AdhesionReport `json:"adhesion,omitempty"`
 	// Integrity et SelfIntersections : défauts du maillage constatés pendant l'analyse (réparer avant impression).
 	Integrity         *Integrity              `json:"integrity,omitempty"`
 	SelfIntersections *SelfIntersectionReport `json:"self_intersections,omitempty"`

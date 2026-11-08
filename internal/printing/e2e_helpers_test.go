@@ -251,7 +251,7 @@ func (r *rig) waitState(id string, d time.Duration, want ...string) string {
 	return last
 }
 
-var nonceRe = regexp.MustCompile(`name="nonce" value="([^"]+)"`)
+var nonceRe = regexp.MustCompile(`<form method="post"(?: autocomplete="off")?><input type="hidden" name="nonce" value="([^"]+)"`)
 
 // humanGet ouvre une page comme un navigateur et en extrait le nonce du formulaire.
 func (r *rig) humanGet(pageURL string) (status int, body, nonce string) {

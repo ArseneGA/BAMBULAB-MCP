@@ -21,7 +21,7 @@ export interface AppLike {
   openLink(p: { url: string }): Promise<unknown>;
 }
 
-export interface LaunchPhoto { mime: string; data: string; taken_at: string }
+export interface LaunchPhoto { mime: string; data: string; taken_at: string; taken_at_local?: string; age_seconds?: number }
 export interface LaunchViewState {
   confirmation_id: string; approved: boolean; seconds_left?: number; code_set: boolean; locked: boolean; attempts_left: number; setup_url: string; photo?: LaunchPhoto | null; photo_note?: string;
 }
@@ -73,10 +73,12 @@ function Summary({ c }: { c: ConfirmationView }) {
         <div><dt>Plaque</dt><dd>{b.plate}</dd></div>
         <div><dt>Matières</dt><dd>{b.materials.map((m) => `f${m.filament_slot} → ${m.tray} : ${m.material_id}`).join(' ; ') || '—'}</dd></div>
         {b.estimated_minutes ? <div><dt>Durée estimée</dt><dd>{Math.round(b.estimated_minutes)} min{b.estimated_grams ? ` · ${b.estimated_grams.toFixed(1)} g` : ''}</dd></div> : null}
-        <div><dt>Valable jusqu'à</dt><dd>{new Date(c.expires_at).toLocaleTimeString('fr-FR')}</dd></div>
+        <div><dt>Mise à niveau du plateau</dt><dd>{b.bed_leveling === false ? <strong>non (désactivée pour cette impression)</strong> : 'oui (automatique au démarrage)'}</dd></div>
+        <div><dt>Valable jusqu'à</dt><dd>{c.expires_at_local || new Date(c.expires_at).toLocaleTimeString('fr-FR')}</dd></div>
       </dl>
       {c.safety && <Temps s={c.safety} />}
       {(b.alerts ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> Alerte matière : {a}</p>)}
+      {(b.adhesion_warnings ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> <strong>Risque de décollement.</strong> {a}</p>)}
     </>
   );
 }
@@ -136,15 +138,23 @@ export function LaunchConfirm({ app, first, pollMs = 3000 }: { app: AppLike; fir
   const approved = c.approved || ls?.approved === true;
   const setupUrl = ls?.setup_url || `${originOf(c.confirm_url)}/setup/launch-code`;
 
-  const refresh = useCallback(async (withPhoto: boolean) => {
+  const [tick, setTick] = useState(() => Date.now());
+  const photoRecvAt = useRef(Date.now());
+
+  /** fresh=true : « Reprendre la photo » force une nouvelle prise de vue (sinon le serveur réutilise une photo de moins de 15 s). */
+  const refresh = useCallback(async (withPhoto: boolean, fresh = false) => {
     try {
-      const r = await app.callServerTool({ name: 'get_launch_view_state', arguments: { confirmation_id: first.confirmation_id, with_photo: withPhoto } });
+      const r = await app.callServerTool({ name: 'get_launch_view_state', arguments: { confirmation_id: first.confirmation_id, with_photo: withPhoto, ...(fresh ? { fresh_photo: true } : {}) } });
       const s = sc<LaunchViewState>(r);
-      if (alive.current && s && !(r as ToolResultLike).isError) setLs((prev) => ({ ...s, photo: withPhoto ? s.photo : prev?.photo, photo_note: withPhoto ? s.photo_note : prev?.photo_note }));
+      if (alive.current && s && !(r as ToolResultLike).isError) {
+        if (withPhoto) { photoRecvAt.current = Date.now(); setTick(Date.now()); }
+        setLs((prev) => ({ ...s, photo: withPhoto ? s.photo : prev?.photo, photo_note: withPhoto ? s.photo_note : prev?.photo_note }));
+      }
     } catch { /* l'état reste inconnu : la vue retombe sur le lien du navigateur */ }
   }, [app, first.confirmation_id]);
 
   useEffect(() => { alive.current = true; void refresh(true); return () => { alive.current = false; }; }, [refresh]);
+  useEffect(() => { const t = window.setInterval(() => setTick(Date.now()), 5000); return () => window.clearInterval(t); }, []);
   useEffect(() => {
     if (approved) return;
     const t = window.setInterval(() => { void refresh(false); }, pollMs);
@@ -162,7 +172,9 @@ export function LaunchConfirm({ app, first, pollMs = 3000 }: { app: AppLike; fir
       setLs((s) => (s ? { ...s, attempts_left: out.attempts_left, locked: out.locked } : s));
     } catch (e) { setNote({ ok: false, text: (e as Error).message }); } finally { setBusy(false); }
   };
-  const reloadPhoto = async () => { setPhotoBusy(true); await refresh(true); setPhotoBusy(false); };
+  const reloadPhoto = async () => { setPhotoBusy(true); await refresh(true, true); setPhotoBusy(false); };
+  const ageS = ls?.photo ? Math.max(0, Math.round((ls.photo.age_seconds ?? Math.max(0, (photoRecvAt.current - new Date(ls.photo.taken_at).getTime()) / 1000)) + (tick - photoRecvAt.current) / 1000)) : 0;
+  const ageLabel = ageS < 90 ? `il y a ${ageS} s` : ageS < 5400 ? `il y a ${Math.round(ageS / 60)} min` : `il y a ${Math.round(ageS / 3600)} h`;
 
   const codeUsable = ls?.code_set === true && !ls.locked;
   return (
@@ -172,7 +184,7 @@ export function LaunchConfirm({ app, first, pollMs = 3000 }: { app: AppLike; fir
       {ls?.photo ? (
         <figure className="plate">
           <img src={`data:${ls.photo.mime};base64,${ls.photo.data}`} alt="Photo du plateau prise par la caméra de l'imprimante" />
-          <figcaption className="small dim">Prise à {new Date(ls.photo.taken_at).toLocaleTimeString('fr-FR')}. Vérifiez que le plateau est vide et dégagé. <button type="button" className="linkbtn" disabled={photoBusy} onClick={reloadPhoto}>Actualiser la photo</button></figcaption>
+          <figcaption className="small dim">Prise à {ls.photo.taken_at_local || new Date(ls.photo.taken_at).toLocaleTimeString('fr-FR')}, <strong>{ageLabel}</strong>. Vérifiez que le plateau est vide et dégagé ; si vous venez de le dégager, reprenez la photo. <button type="button" className="linkbtn" disabled={photoBusy} onClick={reloadPhoto}>Reprendre la photo</button></figcaption>
         </figure>
       ) : ls?.photo_note ? <p className="small dim">{ls.photo_note}</p> : null}
       {approved ? (

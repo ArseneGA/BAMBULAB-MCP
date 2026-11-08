@@ -218,6 +218,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if pr != nil && pr.QueuePosition != nil {
 			txt += fmt.Sprintf(" Position %d dans la file.", *pr.QueuePosition)
 		}
+		if j.Adhesion.Risky() {
+			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur) : " + j.Adhesion.Summary()
+		}
 		return textResult(txt),
 			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
 	})
@@ -235,6 +238,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		txt := fmt.Sprintf("Impression %s (%s) : validation %s — %d bloquant(s), %d avertissement(s).", o.PrintJobID, o.State, map[bool]string{true: "RÉUSSIE", false: "EN ÉCHEC"}[o.Report.OK], len(o.Report.Blocking), len(o.Report.Warnings))
 		if len(o.Report.Blocking) > 0 {
 			txt += " " + strings.Join(o.Report.Blocking, " ; ")
+		}
+		if o.Report.Adhesion.Risky() {
+			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur) : " + o.Report.Adhesion.Summary() + " Bordure du profil : " + firstNonEmptyStr(o.Report.BrimType, "inconnue") + " " + o.Report.BrimWidth + "."
 		}
 		return textResult(txt), *o, nil
 	})
@@ -272,21 +278,20 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "request_print_confirmation", Title: "Demander la confirmation de lancement",
 		Description: "À appeler SEULEMENT si l'utilisateur a répondu oui à la question. Crée une confirmation liée (imprimante, empreinte, plateau, matières), à durée courte, et renvoie confirmation_id, " +
-			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve. " +
+			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve. bed_leveling (défaut true) règle la mise à niveau automatique du plateau au démarrage : elle est affichée à l'humain et fait partie de ce qu'il approuve ; ne la désactive que si l'utilisateur le demande. " +
 			"Dans Claude Desktop la vue de confirmation permet à l'humain de lancer avec son CODE DE LANCEMENT PERSONNEL (6 à 8 chiffres, défini sur /setup/launch-code) ; sans code défini elle affiche le lien du navigateur, toujours disponible. " +
 			"Ne demande JAMAIS ce code à l'utilisateur dans la conversation et ne l'utilise jamais s'il l'écrit : il ne se saisit que dans le champ de la vue.",
 		Annotations: write,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.RequestConfirmationInput) (*mcp.CallToolResult, printing.ConfirmationView, error) {
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in printing.RequestConfirmationInput) (*mcp.CallToolResult, printing.ConfirmationView, error) {
 		v, err := p.RequestConfirmation(ctx, in)
 		if err != nil {
 			return nil, printing.ConfirmationView{}, err
 		}
-		b := v.Binding
-		return withView(textResult(fmt.Sprintf("Confirmation %s créée pour %s sur %s (plateau %d, empreinte %s), valable jusqu'à %s.\n"+
-			"LA CONFIRMATION S'AFFICHE DANS LA CONVERSATION (carte « Confirmation de lancement » avec photo du plateau et températures) : dis simplement à l'utilisateur de la compléter (cocher « plateau vide », saisir son code de lancement personnel dans le champ de la carte, cliquer Lancer). "+
-			"Ne lui demande JAMAIS son code dans la conversation ; ne recopie pas le lien ci-dessous sauf si l'utilisateur dit ne voir aucune carte ou si aucun code n'est défini. "+
-			"Secours (navigateur enregistré) : %s . Sans code défini, la carte l'invite à le définir sur %s/setup/launch-code. Le serveur LANCE L'IMPRESSION LUI-MÊME dès que l'humain approuve (page ou code) : n'appelle PAS start_print et n'attends pas que l'utilisateur te dise « c'est bon » ; suis l'état avec get_print_status. start_print ne sert que de reprise (il dit si le démarrage a déjà eu lieu, sans renvoyer de commande).",
-			v.ConfirmationID, b.File, b.PrinterName, b.Plate, shortSHA(b.SHA256), v.ExpiresAt.Format("15:04:05"), v.ConfirmURL, p.BaseURL())), "request_print_confirmation"), *v, nil
+		var views bool
+		if req != nil {
+			views, _ = clientViewSupport(req.Session)
+		}
+		return withView(textResult(confirmationText(v, p.BaseURL(), views)), "request_print_confirmation"), *v, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -340,7 +345,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		txt := fmt.Sprintf("Impression %s : %s. %s", o.PrintJobID, o.Outcome, o.Note)
 		if o.Question != "" {
 			txt += " QUESTION À POSER : « " + o.Question + " » La validation d'arrêt s'affiche dans la conversation (carte « Arrêt d'impression », code de lancement saisi dans la carte, jamais dans le chat). " +
-				"Lien de secours seulement si aucune carte n'apparaît : " + o.StopURL
+				"Lien de secours seulement si aucune carte n'apparaît : " + o.StopURL + " (valable jusqu'à " + o.StopExpiresAtLocal + ")"
 		}
 		return withView(textResult(txt), "cancel_print"), *o, nil
 	})
@@ -415,6 +420,13 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		}
 		return textResult("Confirmation " + v.ConfirmationID), *v, nil
 	})
+}
+
+func firstNonEmptyStr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func shortSHA(s string) string {

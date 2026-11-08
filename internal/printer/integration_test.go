@@ -287,6 +287,10 @@ loop:
 		p["url"] != "ftp:///"+ref.Name || p["subtask_name"] == "" || p["sequence_id"] == "" {
 		t.Fatalf("bad project_file payload: %v", p)
 	}
+	// mise à niveau du plateau : les DEUX orthographes (Bambu Studio / implémentations connues) sont envoyées à true
+	if p["bed_leveling"] != true || p["bed_levelling"] != true {
+		t.Fatalf("bed leveling flags missing from project_file: %v", p)
+	}
 	if m, _ := p["ams_mapping"].([]any); len(m) != 5 {
 		t.Fatalf("ams_mapping = %v", p["ams_mapping"])
 	}

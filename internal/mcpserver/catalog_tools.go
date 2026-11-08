@@ -8,6 +8,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/catalog"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/localtime"
 )
 
 // Outils du catalogue (jalon 2, dossier §14.2 et §6). Les schémas viennent de
@@ -278,7 +279,7 @@ func (h *catalogHandlers) previewOps(ctx context.Context, _ *mcp.CallToolRequest
 		return nil, catalog.OpPreview{}, err
 	}
 	return textResult(fmt.Sprintf("Aperçu : %d changement(s) sur %d modèle(s), %d fichier(s), %d vers la corbeille. Rien n'est appliqué ; jeton valable jusqu'à %s.",
-		len(r.Changes), r.Models, r.Files, r.ToTrash, r.ExpiresAt.Format("15:04:05"))), *r, nil
+		len(r.Changes), r.Models, r.Files, r.ToTrash, localtime.Full(r.ExpiresAt))), *r, nil
 }
 
 func (h *catalogHandlers) applyOps(ctx context.Context, _ *mcp.CallToolRequest, in ApplyInput) (*mcp.CallToolResult, catalog.ApplyResult, error) {

@@ -66,13 +66,46 @@ func (s *Service) SetPlatePhotoProvider(fn func(ctx context.Context, printerID s
 	s.evMu.Unlock()
 }
 
-func (s *Service) platePhotoFor(ctx context.Context, printerID string) *PlatePhoto {
+// PhotoMaxAge : une photo du plateau plus récente que cela est réutilisée à l'ouverture (ou au rechargement) de la page ;
+// au-delà, chaque ouverture en reprend une. Le bouton « Reprendre la photo » ignore ce délai.
+const PhotoMaxAge = 15 * time.Second
+
+// platePhotoFor renvoie la photo du plateau. force=false : réutilise la dernière photo réussie si elle a moins de
+// PhotoMaxAge (évite de solliciter la caméra à chaque rechargement) ; force=true : prend toujours une nouvelle photo.
+func (s *Service) platePhotoFor(ctx context.Context, printerID string, force bool) *PlatePhoto {
 	s.evMu.Lock()
 	fn := s.platePhoto
+	if !force {
+		if c, ok := s.photoCache[printerID]; ok && c.URL != "" && s.now().Sub(c.TakenAt) < PhotoMaxAge && !c.TakenAt.After(s.now()) {
+			s.evMu.Unlock()
+			return &c
+		}
+	}
 	s.evMu.Unlock()
 	if fn == nil {
 		return nil
 	}
 	p := fn(ctx, printerID)
+	s.evMu.Lock()
+	if s.photoCache == nil {
+		s.photoCache = map[string]PlatePhoto{}
+	}
+	if p.URL != "" {
+		s.photoCache[printerID] = p
+	} else {
+		delete(s.photoCache, printerID) // une panne ne doit pas laisser traîner une ancienne photo
+	}
+	s.evMu.Unlock()
 	return &p
+}
+
+// RefreshPlatePhoto (bouton « Reprendre la photo » de /confirm/{id}) prend une nouvelle photo du plateau de
+// l'imprimante de cette confirmation, sans tenir compte du cache.
+func (s *Service) RefreshPlatePhoto(ctx context.Context, confID string) error {
+	_, j, err := s.confirmable(ctx, confID)
+	if err != nil {
+		return err
+	}
+	s.platePhotoFor(ctx, j.PrinterID, true)
+	return nil
 }
