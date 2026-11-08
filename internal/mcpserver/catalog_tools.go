@@ -173,7 +173,27 @@ func (h *catalogHandlers) listCollection(ctx context.Context, _ *mcp.CallToolReq
 	if err != nil {
 		return nil, catalog.CollectionListing{}, err
 	}
-	return textResult(fmt.Sprintf("Collection « %s » : %d sous-collection(s), %d modèle(s).", r.Collection.Path, len(r.Subcollections), r.Models.Total)), *r, nil
+	txt := fmt.Sprintf("Collection « %s » : %d sous-collection(s), %d modèle(s).", r.Collection.Path, len(r.Subcollections), r.Models.Total)
+	rows := 0
+	for _, c := range r.Subcollections {
+		if rows >= maxSearchTextRows {
+			break
+		}
+		txt += fmt.Sprintf("\n- sous-collection : %s (%s) · %d modèle(s)", c.Name, c.ID, c.TotalModel)
+		rows++
+	}
+	for i, m := range r.Models.Models {
+		if rows >= maxSearchTextRows {
+			txt += fmt.Sprintf("\n… et %d autre(s) modèle(s) de cette page (voir structuredContent.models.models).", len(r.Models.Models)-i)
+			break
+		}
+		txt += "\n- " + modelLine(m)
+		rows++
+	}
+	if r.Models.HasMore && r.Models.NextOffset != nil {
+		txt += fmt.Sprintf("\nSuite : offset=%d.", *r.Models.NextOffset)
+	}
+	return textResult(txt), *r, nil
 }
 
 func (h *catalogHandlers) getModelDetails(ctx context.Context, _ *mcp.CallToolRequest, in ModelRefInput) (*mcp.CallToolResult, catalog.ModelDetails, error) {
@@ -184,6 +204,27 @@ func (h *catalogHandlers) getModelDetails(ctx context.Context, _ *mcp.CallToolRe
 	txt := fmt.Sprintf("%s : %d fichier(s), %d version(s), aperçu %s, analyse %s.", d.Model.Name, len(d.Files), len(d.Versions), d.Preview.State, d.Analysis.State)
 	if d.Model.DeletedAt != nil {
 		txt += " (en corbeille)"
+	}
+	txt += "\nIdentifiant : " + d.Model.ID
+	if d.CollectionPath != "" {
+		txt += " · collection : " + d.CollectionPath
+	}
+	for i, f := range d.Files {
+		if i >= maxSearchTextRows {
+			txt += fmt.Sprintf("\n… et %d autre(s) fichier(s).", len(d.Files)-i)
+			break
+		}
+		txt += fmt.Sprintf("\n- fichier %s (%s) · %s · %.1f Kio · %s", f.Name, f.ID, strings.ToUpper(string(f.Format)), float64(f.SizeBytes)/1024, f.Availability)
+	}
+	for i, v := range d.Versions {
+		if i >= 5 {
+			txt += fmt.Sprintf("\n… et %d autre(s) version(s).", len(d.Versions)-i)
+			break
+		}
+		txt += fmt.Sprintf("\n- version %s (%s)", v.Label, v.ID)
+	}
+	if sz := d.Analysis.SizeMM; sz != nil {
+		txt += fmt.Sprintf("\nDimensions : %.1f × %.1f × %.1f mm.", sz.X, sz.Y, sz.Z)
 	}
 	return withView(textResult(txt), "get_model_details"), *d, nil
 }

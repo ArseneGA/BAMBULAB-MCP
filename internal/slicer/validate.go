@@ -89,11 +89,27 @@ type FilamentUse struct {
 	Color string `json:"color,omitempty"`
 	// ColorSource : d'où vient Color. Vide = couleur du profil de découpe (valeur par défaut du preset, par exemple
 	// le vert Bambu #00AE42), qui n'est PAS la couleur de la bobine chargée.
-	ColorSource string  `json:"color_source,omitempty"`
-	TrayInfo    string  `json:"tray_info_idx,omitempty"`
-	Meters      float64 `json:"used_m"`
-	Grams       float64 `json:"used_g"`
-	Nozzle      float64 `json:"nozzle_diameter,omitempty"`
+	ColorSource string `json:"color_source,omitempty" jsonschema:"origine de color : AMS, bobine déclarée, ou vide/profil (couleur du preset ou du fichier, non confirmée) ; inconnue (...) si aucune bobine connue"`
+	// ProfileColor : couleur du preset / du fichier (non confirmée) quand Color est devenue la couleur RÉELLE de la bobine
+	// (ou « inconnue »). C'est la couleur VOULUE par le fichier, utile pour choisir la bobine (plan_colors).
+	ProfileColor string  `json:"profile_color,omitempty"`
+	TrayInfo     string  `json:"tray_info_idx,omitempty"`
+	Meters       float64 `json:"used_m"`
+	Grams        float64 `json:"used_g"`
+	Nozzle       float64 `json:"nozzle_diameter,omitempty"`
+}
+
+// WantedColor : couleur VOULUE par le fichier pour ce filament (preset ou couleur du projet), pour choisir la bobine.
+// Après remplacement de Color par la couleur réelle de la bobine, c'est ProfileColor ; tant que Color n'a pas été
+// remplacée (ColorSource vide), c'est Color ; vide si le fichier n'en dit rien.
+func (f FilamentUse) WantedColor() string {
+	if f.ProfileColor != "" {
+		return f.ProfileColor
+	}
+	if f.ColorSource == "" {
+		return f.Color
+	}
+	return ""
 }
 
 // PlateResult regroupe ce qui est lisible d'une plaque tranchée.
@@ -128,8 +144,12 @@ type ArchiveInfo struct {
 	FilamentIDs    []string          `json:"filament_settings_id"`
 	Nozzles        []string          `json:"nozzle_diameter"`
 	BedType        string            `json:"bed_type,omitempty"`
-	BrimType       string            `json:"brim_type,omitempty"`  // bordure du procédé réellement tranché (project_settings.config)
-	BrimWidth      string            `json:"brim_width,omitempty"` // largeur de bordure (mm), telle qu'écrite par Studio
+	BrimType       string            `json:"brim_type,omitempty"`               // bordure du procédé réellement tranché (project_settings.config)
+	BrimWidth      string            `json:"brim_width,omitempty"`              // largeur de bordure (mm), telle qu'écrite par Studio
+	RaftLayers     string            `json:"raft_layers,omitempty"`             // couches de radeau du procédé tranché
+	EnableSupport  string            `json:"enable_support,omitempty"`          // « 1 » / « 0 » : supports activés dans le procédé tranché
+	SupportType    string            `json:"support_type,omitempty"`            // normal(auto), tree(auto), normal(manual), tree(manual)
+	SupportAngle   string            `json:"support_threshold_angle,omitempty"` // seuil de surplomb (°, pente depuis l'horizontale) ; « 0 » = automatique
 	Plates         []PlateResult     `json:"plates"`
 	Settings       map[string]string `json:"-"`
 	// GcodeProfile : le G-code de démarrage/fin est-il celui du profil machine officiel ?
@@ -270,6 +290,10 @@ func ValidateArchive(archivePath string, exp Expect) (*ArchiveInfo, *Validation,
 	info.BedType = firstString(settings["curr_bed_type"])
 	info.BrimType = firstString(settings["brim_type"])
 	info.BrimWidth = firstString(settings["brim_width"])
+	info.RaftLayers = firstString(settings["raft_layers"])
+	info.EnableSupport = firstString(settings["enable_support"])
+	info.SupportType = firstString(settings["support_type"])
+	info.SupportAngle = firstString(settings["support_threshold_angle"])
 
 	// slice_info.config (XML)
 	var si siConfig

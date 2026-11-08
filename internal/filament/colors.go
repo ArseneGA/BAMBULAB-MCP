@@ -193,7 +193,7 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 			continue
 		}
 		w := wishes[f.Slot]
-		wantType, wantColor := orStr(w.Material, f.Type), orStr(normHex(w.ColorHex), normHex(f.Color))
+		wantType, wantColor := orStr(w.Material, f.Type), orStr(normHex(w.ColorHex), normHex(f.WantedColor()))
 		for i, c := range cands {
 			if used[c.tray] || !sameMaterial(c.typ, wantType) {
 				continue
@@ -225,7 +225,7 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 	costKnown, allPriced, usedSettings := false, true, false
 	for _, f := range fils {
 		w := wishes[f.Slot]
-		sl := ColorSlotPlan{FilamentSlot: f.Slot, Parts: w.Part, WantedColor: orStr(normHex(w.ColorHex), normHex(f.Color)), WantedType: orStr(w.Material, f.Type),
+		sl := ColorSlotPlan{FilamentSlot: f.Slot, Parts: w.Part, WantedColor: orStr(normHex(w.ColorHex), normHex(f.WantedColor())), WantedType: orStr(w.Material, f.Type),
 			NeededG: round2(f.Grams), PurgeG: round2(purgeOf(f.Slot)), Quality: "aucune", DeltaE: 999}
 		if tray, ok := pinned[f.Slot]; ok {
 			sl.Pinned = true

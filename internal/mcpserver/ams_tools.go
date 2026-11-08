@@ -106,7 +106,19 @@ func registerAMSTools(s *mcp.Server, fs *filament.Service) {
 		if len(sp) == 0 {
 			note += " Inventaire vide : créer des bobines avec update_spool (ou lire l'AMS avec get_ams_state)."
 		}
-		return textResult(note), ListSpoolsOut{Spools: sp, Settings: fs.GetSettings(ctx), Note: note}, nil
+		txt := note
+		for i, x := range sp {
+			if i >= maxSearchTextRows {
+				txt += fmt.Sprintf("\n… et %d autre(s) (voir structuredContent.spools).", len(sp)-i)
+				break
+			}
+			xs := x
+			txt += fmt.Sprintf("\n- %s (%s) · %.0f g restants (%d %%) · %s", xs.Label(), xs.ID, xs.RemainingG, xs.RemainingPercent, xs.Status)
+			if xs.Slot != "" {
+				txt += " · " + xs.Slot
+			}
+		}
+		return textResult(txt), ListSpoolsOut{Spools: sp, Settings: fs.GetSettings(ctx), Note: note}, nil
 	})
 
 	addTool(s, &mcp.Tool{

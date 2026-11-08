@@ -109,6 +109,13 @@ type ArtifactSummary struct {
 	Nozzles       []string             `json:"nozzles,omitempty"`
 	BedType       string               `json:"bed_type,omitempty"`
 	StudioVersion string               `json:"studio_version,omitempty"`
+	// Réglages EFFECTIFS de la découpe (project_settings.config de l'archive) : adhérence et supports. Valeur lue dans
+	// l'archive, ou défaut de Bambu Studio quand le profil ne la définit pas (jamais null).
+	BrimType      string `json:"brim_type,omitempty"`
+	BrimWidth     string `json:"brim_width,omitempty"`
+	RaftLayers    string `json:"raft_layers,omitempty"`
+	EnableSupport *bool  `json:"enable_support,omitempty"`
+	SupportType   string `json:"support_type,omitempty"`
 	// Objects : matière et couches par pièce de la plaque (lues dans le G-code), pour un plan multi-pièces.
 	Objects []slicer.ObjectUse `json:"objects,omitempty"`
 	// GcodeProfile : le G-code de démarrage/fin est-il celui du profil machine officiel (empreinte) ?
@@ -219,6 +226,12 @@ type ValidationReport struct {
 	BrimWidth string `json:"brim_width,omitempty"`
 	// Adhesion : risque de décollement (surface de contact de la première couche), avec la bordure réellement présente.
 	Adhesion *mesh.AdhesionReport `json:"adhesion,omitempty"`
+	// RaftLayers, EnableSupport, SupportType : réglages réellement tranchés (archive), défaut de Bambu Studio si le profil se tait.
+	RaftLayers    string `json:"raft_layers,omitempty"`
+	EnableSupport *bool  `json:"enable_support,omitempty"`
+	SupportType   string `json:"support_type,omitempty"`
+	// Overhang : surplombs de la pièce au seuil d'angle du profil, croisés avec le réglage de supports.
+	Overhang *mesh.OverhangSupportCheck `json:"overhang,omitempty"`
 }
 
 // brimPresent dit si la bordure du procédé est une vraie bordure extérieure/intérieure d'au moins 3 mm.
@@ -253,14 +266,55 @@ func (j Job) adhesionNotes() []string {
 	if !a.Risky() {
 		return nil
 	}
-	var bt, bw string
+	var bt, bw, raft string
 	if j.Validation != nil {
-		bt, bw = j.Validation.BrimType, j.Validation.BrimWidth
+		bt, bw, raft = j.Validation.BrimType, j.Validation.BrimWidth, j.Validation.RaftLayers
 	}
-	if brimPresent(bt, bw) {
-		return nil // une bordure est déjà prévue : le risque est couvert
+	if adhesionCovered(bt, bw, raft) {
+		return nil // une bordure (≥ 3 mm) ou un radeau est déjà prévu : le risque est couvert
 	}
-	return []string{a.Summary() + " Profil actuel : " + brimLabel(bt, bw) + ". Non bloquant : à toi de décider de lancer ou de redécouper avec bordure."}
+	return []string{a.Summary() + " Profil actuel : " + brimLabel(bt, bw) + raftLabel(raft) + ". Non bloquant : à toi de décider de lancer ou de redécouper avec bordure ou radeau."}
+}
+
+// raftPresent : le procédé tranché comporte au moins une couche de radeau.
+func raftPresent(raftLayers string) bool {
+	n, err := strconv.ParseFloat(strings.TrimSpace(raftLayers), 64)
+	return err == nil && n > 0
+}
+
+// adhesionCovered : une vraie bordure (≥ 3 mm) OU un radeau couvre le risque de décollement.
+func adhesionCovered(brimType, width, raftLayers string) bool {
+	return brimPresent(brimType, width) || raftPresent(raftLayers)
+}
+
+func raftLabel(raftLayers string) string {
+	if strings.TrimSpace(raftLayers) == "" {
+		return ""
+	}
+	return ", radeau : " + strings.TrimSpace(raftLayers) + " couche(s)"
+}
+
+// OverhangWarning : phrase « surplombs sans supports » du rapport (vide si supports actifs ou surplombs négligeables).
+func (v *ValidationReport) OverhangWarning() string {
+	if v == nil || v.Overhang == nil {
+		return ""
+	}
+	return v.Overhang.UnsupportedSummary(v.EnableSupport != nil && *v.EnableSupport)
+}
+
+// overhangNotes : avertissement FORT « surplombs sans supports », à montrer à l'humain avant le lancement.
+// Non bloquant, mais affiché sur la page de confirmation et dans la liaison, comme le risque de décollement.
+func (j Job) overhangNotes() []string {
+	v := j.Validation
+	if v == nil || v.Overhang == nil {
+		return nil
+	}
+	on := v.EnableSupport != nil && *v.EnableSupport
+	s := v.Overhang.UnsupportedSummary(on)
+	if s == "" {
+		return nil
+	}
+	return []string{s + " Non bloquant : à toi de décider de lancer ou de redécouper avec supports."}
 }
 
 func (v *ValidationReport) add(compat bool, name string, ok bool, level, detail string) {

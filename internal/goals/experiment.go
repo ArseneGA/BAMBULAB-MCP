@@ -9,12 +9,14 @@ import (
 	"io"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
@@ -235,7 +237,7 @@ func (s *Service) CreateExperiment(ctx context.Context, in CreateExperimentInput
 	if count <= 0 {
 		count = s.cfg.DefaultCandidates
 	}
-	var notes []string
+	notes := append([]string(nil), rb.notes...)
 	if in.Budget.MaxCandidates > 0 && count > in.Budget.MaxCandidates {
 		notes = append(notes, fmt.Sprintf("nombre de variantes ramené de %d à %d par le budget", count, in.Budget.MaxCandidates))
 		count = in.Budget.MaxCandidates
@@ -262,7 +264,7 @@ func (s *Service) CreateExperiment(ctx context.Context, in CreateExperimentInput
 		}
 		cands = append(cands, Candidate{
 			Index: len(cands), Kind: "variant", Label: cc.Label, Rationale: orDefault(cc.Rationale, "Variante fournie par l'appelant."),
-			Overrides: cc.Overrides, Changes: []Change{}, Factors: len(cc.Overrides), Tradeoffs: []string{},
+			Overrides: cc.Overrides, Changes: customChanges(rb.process, rb.filament, cc.Overrides), Factors: len(cc.Overrides), Tradeoffs: []string{},
 			Notes: []string{"variante personnalisée : valeurs validées contre les profils, justification non vérifiée par les règles"},
 		})
 	}
@@ -321,6 +323,57 @@ func (s *Service) CreateExperiment(ctx context.Context, in CreateExperimentInput
 		}
 	}
 	return s.GetExperiment(ctx, expID)
+}
+
+// customChanges décrit les réglages réellement appliqués par une variante personnalisée (clé, valeur avant dans le
+// profil de base, valeur après) : sans cela le tableau comparatif affichait « changes: [] » alors que les surcharges
+// étaient bien appliquées.
+func customChanges(process, filament *profiles.Resolved, ovs []slicer.Override) []Change {
+	out := make([]Change, 0, len(ovs))
+	for _, o := range ovs {
+		target := o.Target
+		var cur any
+		found := false
+		look := func(t string, r *profiles.Resolved) {
+			if r == nil || found || (target != "" && target != t) {
+				return
+			}
+			if v, ok := r.Config[o.Key]; ok {
+				cur, found, target = shortList(strsOf(v)), true, t
+			}
+		}
+		if sp, ok := slicer.SpecFor(o.Key); ok && target == "" {
+			target = sp.Target
+		}
+		look("process", process)
+		look("filament", filament)
+		var from any = cur
+		if !found {
+			if d, ok := slicer.BambuDefault(o.Key); ok {
+				from = d + " (défaut Bambu Studio)"
+			}
+		}
+		out = append(out, Change{Criterion: "personnalisée", CriterionType: "custom", Lever: "custom", Key: o.Key, Target: target,
+			From: from, To: displayValue(o.Value), Effect: "réglage fourni par l'appelant", Tradeoff: "non évalué par les règles"})
+	}
+	return out
+}
+
+// displayValue met en forme la valeur d'une surcharge (scalaire ou liste) comme celles des variantes générées.
+func displayValue(v any) any {
+	switch t := v.(type) {
+	case []any:
+		s := make([]string, len(t))
+		for i, e := range t {
+			s[i] = fmt.Sprint(e)
+		}
+		return shortList(s)
+	case []string:
+		return shortList(t)
+	case float64:
+		return strconv.FormatFloat(t, 'f', -1, 64)
+	}
+	return fmt.Sprint(v)
 }
 
 func orDefault(a, b string) string {

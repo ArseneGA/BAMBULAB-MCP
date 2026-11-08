@@ -111,6 +111,7 @@ func init() {
 	numP("ironing_spacing", 0.05, 5, "espacement du repassage (mm)")
 	speedP("ironing_speed", 1, "vitesse du repassage (mm/s)")
 	enumP("draft_shield", "bouclier thermique", "disabled", "enabled")
+	enumP("curr_bed_type", "plateau installé (type de plaque) : sa température vient du filament (cool_plate_temp, eng_plate_temp, hot_plate_temp, textured_plate_temp, supertack_plate_temp)", BedTypes...)
 	enumP("brim_type", "bordure (brim)", "auto_brim", "brim_ears", "no_brim", "outer_only", "inner_only", "outer_and_inner")
 	numP("brim_width", 0, 30, "largeur de bordure (mm)")
 	numP("brim_object_gap", 0, 5, "écart bordure/pièce (mm)")

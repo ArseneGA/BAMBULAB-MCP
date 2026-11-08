@@ -361,6 +361,7 @@ func (s *Service) sliceHandler(ctx context.Context, jc *jobs.JobCtx) (json.RawMe
 	}
 	if res.Archive != nil {
 		sum.PrinterModel, sum.BedType, sum.Nozzles = res.Archive.PrinterModel, res.Archive.BedType, res.Archive.Nozzles
+		effectiveOf(res.Archive, plateOrOne(spec.Plate)).fillSummary(sum)
 	}
 	clearProfileColors(sum)
 	if spec.Plan != nil {

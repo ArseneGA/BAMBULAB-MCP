@@ -483,31 +483,58 @@ func strsOf(v any) []string {
 	return nil
 }
 
-func whenOK(rule *CriterionRule, c Criterion, w *When) bool {
+// whenReason évalue la condition d'un levier et, quand elle n'est pas remplie, dit PRÉCISÉMENT pourquoi :
+// quel paramètre du critère, quelle valeur il a (ou « absent »), et quelle(s) valeur(s) le levier attend.
+func whenReason(rule *CriterionRule, c Criterion, w *When) (bool, string) {
 	if w == nil {
-		return true
+		return true, ""
 	}
 	val := c.ParamString(w.Param)
+	given := val
 	if val == "" {
 		if sp, ok := rule.Params[w.Param]; ok && contains(sp.Values, "unknown") {
 			val = "unknown"
 		}
 	}
-	if len(w.In) > 0 && !contains(w.In, val) {
-		return false
+	okIn := len(w.In) == 0 || contains(w.In, val)
+	okNot := len(w.NotIn) == 0 || !contains(w.NotIn, val)
+	if okIn && okNot {
+		return true, ""
 	}
-	if len(w.NotIn) > 0 && contains(w.NotIn, val) {
-		return false
+	have := "paramètre absent"
+	if given != "" {
+		have = fmt.Sprintf("valeur « %s »", given)
+	} else if val != "" {
+		have = fmt.Sprintf("paramètre absent (lu comme « %s »)", val)
 	}
-	return true
+	want := ""
+	switch {
+	case len(w.In) > 0:
+		want = fmt.Sprintf("attendu : %s", quoteList(w.In))
+	case len(w.NotIn) > 0:
+		want = fmt.Sprintf("attendu : toute valeur sauf %s", quoteList(w.NotIn))
+	}
+	fix := ""
+	if len(w.In) > 0 {
+		fix = fmt.Sprintf(" ; renseigner params.%s = %s dans le critère %s pour activer ce levier", w.Param, quoteList(w.In), c.ID)
+	}
+	return false, fmt.Sprintf("condition non remplie : paramètre « %s » du critère « %s » : %s, %s%s", w.Param, c.Type, have, want, fix)
+}
+
+func quoteList(l []string) string {
+	q := make([]string, len(l))
+	for i, s := range l {
+		q[i] = "« " + s + " »"
+	}
+	return strings.Join(q, " ou ")
 }
 
 // resolveLever évalue un levier contre le profil de base. Renvoie nil et la
 // raison s'il ne s'applique pas.
 func resolveLever(in GenInput, c Criterion, l Lever, orientRep *mesh.OrientationReport) (*leverInst, string) {
 	rule := in.Rules.Criteria[c.Type]
-	if !whenOK(rule, c, l.When) {
-		return nil, "condition non remplie (paramètre du critère)"
+	if ok, why := whenReason(rule, c, l.When); !ok {
+		return nil, why
 	}
 	if !contains(l.Families, "*") {
 		if in.Family == "" {

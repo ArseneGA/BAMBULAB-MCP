@@ -36,8 +36,10 @@ type Override struct {
 type AppliedOverride struct {
 	Target string `json:"target"`
 	Key    string `json:"key"`
-	Old    any    `json:"old"`
-	New    any    `json:"new"`
+	Old    any    `json:"old" jsonschema:"valeur avant la surcharge ; si le profil ne la définit pas, le défaut de Bambu Studio (voir old_is_default), jamais null pour une clé connue"`
+	// OldIsDefault : Old est le défaut de Bambu Studio (le profil, hérité compris, ne définit pas la clé).
+	OldIsDefault bool `json:"old_is_default,omitempty"`
+	New          any  `json:"new"`
 }
 
 // protectedKeys désigne l'identité des profils et la cohérence machine : on
@@ -173,12 +175,23 @@ func applyOverrides(st *profiles.Store, machine, process *profiles.Resolved, fil
 			if nv, err = enforceValue(spec, nv, boundCtx{machine: machine, fil: filOf(h.target, cfg), lim: lim, cur: maxNum(old)}); err != nil {
 				return nil, err
 			}
+			oldDefault := false
 			if !present {
 				old = nil
+				if d, ok := bambuDefaults[key]; ok {
+					old, oldDefault = d, true // valeur effective avant la surcharge : le défaut de Bambu Studio
+				}
+			}
+			if key == "curr_bed_type" {
+				if bt, ok := nv.(string); ok {
+					if err := checkBedTypeCoherence(bt, fils); err != nil {
+						return nil, err
+					}
+				}
 			}
 			cfg.Config[key] = nv
 			cfg.Source[key] = "override"
-			applied = append(applied, AppliedOverride{Target: h.target, Key: key, Old: old, New: nv})
+			applied = append(applied, AppliedOverride{Target: h.target, Key: key, Old: old, OldIsDefault: oldDefault, New: nv})
 		}
 	}
 	return applied, nil

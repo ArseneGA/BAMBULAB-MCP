@@ -18,6 +18,8 @@ import (
 //     de 15 × 15 mm ≈ 7,9 (cas réel décollé en PETG, chambre à 5 °C, sans bordure).
 //   - îlot « petit » : aire < smallIslandMM2 (100 mm², ≈ 10 × 10 mm) ; il compte dès que la pièce dépasse
 //     tallPartMM (40 mm) de haut : risque « moderate » au moins.
+//   - îlot « minuscule » : aire < tinyIslandMM2 (50 mm², ≈ 7 mm de côté) sous une pièce de plus de tallPartMM : risque « high »
+//     (cas réel : 4 îlots de ≈ 3 mm de diamètre, ≈ 7 mm² chacun, sous une pièce de 204 mm) ;
 //   - aucune face plane au contact (sphère, pointe) sur une pièce de plus de 20 mm : « high ».
 const (
 	contactBandMM   = 0.25
@@ -25,6 +27,7 @@ const (
 	slenderModerate = 4.0
 	slenderHigh     = 6.0
 	smallIslandMM2  = 100.0
+	tinyIslandMM2   = 50.0 // îlot minuscule : sous une pièce de plus de tallPartMM, le risque est ÉLEVÉ à lui seul
 	tallPartMM      = 40.0
 	noContactMinH   = 20.0
 	vertexSnapMM    = 0.01
@@ -39,18 +42,20 @@ const (
 
 // AdhesionReport est le résultat de Adhesion.
 type AdhesionReport struct {
-	Level            string    `json:"level" jsonschema:"ok | moderate | high : risque de décollement estimé d'après la géométrie seule (heuristique)"`
-	HeightMM         float64   `json:"height_mm"`
-	ContactAreaMM2   float64   `json:"contact_area_mm2" jsonschema:"aire de contact de la première couche avec le plateau (faces tournées vers le bas à moins de 0,25 mm du plan Z min)"`
-	FootprintAreaMM2 float64   `json:"footprint_area_mm2" jsonschema:"aire du rectangle englobant au sol"`
-	ContactRatio     float64   `json:"contact_ratio" jsonschema:"contact / rectangle englobant au sol (1 = pose pleine)"`
-	Islands          int       `json:"islands" jsonschema:"nombre d'îlots de contact distincts"`
-	SmallIslands     int       `json:"small_islands" jsonschema:"îlots de moins de 100 mm²"`
-	IslandAreasMM2   []float64 `json:"island_areas_mm2,omitempty" jsonschema:"aires des îlots, du plus grand au plus petit (10 premiers)"`
-	Slenderness      float64   `json:"slenderness" jsonschema:"hauteur / racine carrée de l'aire de contact (plafonné à 999)"`
-	VolumeCM3        float64   `json:"volume_cm3,omitempty"`
-	Reasons          []string  `json:"reasons,omitempty"`
-	Recommendation   string    `json:"recommendation,omitempty"`
+	Level             string    `json:"level" jsonschema:"ok | moderate | high : risque de décollement estimé d'après la géométrie seule (heuristique)"`
+	HeightMM          float64   `json:"height_mm"`
+	ContactAreaMM2    float64   `json:"contact_area_mm2" jsonschema:"aire de contact de la première couche avec le plateau (faces tournées vers le bas à moins de 0,25 mm du plan Z min)"`
+	FootprintAreaMM2  float64   `json:"footprint_area_mm2" jsonschema:"aire du rectangle englobant au sol"`
+	ContactRatio      float64   `json:"contact_ratio" jsonschema:"contact / rectangle englobant au sol (1 = pose pleine)"`
+	Islands           int       `json:"islands" jsonschema:"nombre d'îlots de contact distincts"`
+	SmallIslands      int       `json:"small_islands" jsonschema:"îlots de moins de 100 mm²"`
+	SmallestIslandMM2 float64   `json:"smallest_island_mm2,omitempty" jsonschema:"aire du plus petit îlot de contact"`
+	TinyIslands       int       `json:"tiny_islands,omitempty" jsonschema:"îlots de moins de 50 mm² (risque élevé sous une pièce de plus de 40 mm)"`
+	IslandAreasMM2    []float64 `json:"island_areas_mm2,omitempty" jsonschema:"aires des îlots, du plus grand au plus petit (10 premiers)"`
+	Slenderness       float64   `json:"slenderness" jsonschema:"hauteur / racine carrée de l'aire de contact (plafonné à 999)"`
+	VolumeCM3         float64   `json:"volume_cm3,omitempty"`
+	Reasons           []string  `json:"reasons,omitempty"`
+	Recommendation    string    `json:"recommendation,omitempty"`
 }
 
 // Risky dit si un avertissement doit être émis.
@@ -69,7 +74,7 @@ func (r *AdhesionReport) Summary() string {
 		lv, r.HeightMM, r.ContactAreaMM2, r.Islands, r.Recommendation)
 }
 
-const adhesionAdvice = "Ajouter une bordure : brim_type outer_only, brim_width 5 à 8 mm (surcharges de découpe), et chauffer/fermer la chambre pour les matières qui voilent (PETG, ABS, ASA)."
+const adhesionAdvice = "Ajouter une bordure : brim_type outer_only, brim_width 5 à 8 mm (surcharges de découpe) — ou un radeau (raft_layers ≥ 1) —, et chauffer/fermer la chambre pour les matières qui voilent (PETG, ABS, ASA)."
 
 // Adhesion estime le risque de décollement de la pièce posée telle quelle (Z vers le haut, plan Z = min sur le plateau).
 func Adhesion(m *Mesh) *AdhesionReport {
@@ -144,6 +149,12 @@ func Adhesion(m *Mesh) *AdhesionReport {
 		if a < smallIslandMM2 {
 			r.SmallIslands++
 		}
+		if r.SmallestIslandMM2 == 0 || round1(a) < r.SmallestIslandMM2 {
+			r.SmallestIslandMM2 = round1(a)
+		}
+		if a < tinyIslandMM2 {
+			r.TinyIslands++
+		}
 	}
 	sort.Sort(sort.Reverse(sort.Float64Slice(r.IslandAreasMM2)))
 	r.Islands = len(r.IslandAreasMM2)
@@ -180,6 +191,10 @@ func Adhesion(m *Mesh) *AdhesionReport {
 	if r.SmallIslands > 0 && r.HeightMM >= tallPartMM {
 		raise(AdhesionModerate)
 		r.Reasons = append(r.Reasons, fmt.Sprintf("%d îlot(s) de contact de moins de %.0f mm² sous une pièce de %.0f mm de haut", r.SmallIslands, smallIslandMM2, r.HeightMM))
+	}
+	if r.TinyIslands > 0 && r.HeightMM >= tallPartMM {
+		raise(AdhesionHigh)
+		r.Reasons = append(r.Reasons, fmt.Sprintf("%d îlot(s) de contact de moins de %.0f mm² (le plus petit : %.1f mm²) sous une pièce de %.0f mm de haut : trop peu de surface pour tenir sans bordure ni radeau", r.TinyIslands, tinyIslandMM2, r.SmallestIslandMM2, r.HeightMM))
 	}
 	if r.Islands >= 2 && r.ContactRatio < 0.15 && r.HeightMM >= tallPartMM {
 		raise(AdhesionModerate)

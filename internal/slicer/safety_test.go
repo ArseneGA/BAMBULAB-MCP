@@ -233,7 +233,7 @@ func TestOverrideNormalisesAndAddsAbsentKeys(t *testing.T) {
 	if l := fs[0].Strings("nozzle_temperature"); len(l) != 2 || l[0] != "220" || l[1] != "220" {
 		t.Errorf("nozzle_temperature %v", l)
 	}
-	if len(ap) != 4 || ap[1].Old != nil {
+	if len(ap) != 4 || ap[1].Old != "auto_brim" || !ap[1].OldIsDefault { // valeur effective avant : défaut de Bambu Studio, jamais null
 		t.Errorf("appliquées: %+v", ap)
 	}
 	// brim_type n'existe que côté process

@@ -10,11 +10,13 @@ const unknownColor = "inconnue"
 
 // FilamentColor : couleur réelle d'un filament de l'impression.
 type FilamentColor struct {
-	Slot     int    `json:"filament_slot"`
-	Tray     string `json:"tray,omitempty"`
-	Color    string `json:"color"`  // #RRGGBB, ou « inconnue »
-	Source   string `json:"source"` // inventaire / AMS / « non déclarée : déclarer la bobine avec update_spool »
-	Material string `json:"material,omitempty"`
+	Slot   int    `json:"filament_slot"`
+	Tray   string `json:"tray,omitempty"`
+	Color  string `json:"color"`  // #RRGGBB, ou « inconnue »
+	Source string `json:"source"` // inventaire / AMS / « non déclarée : déclarer la bobine avec update_spool »
+	// ColorSource : origine normalisée de Color : « AMS », « bobine déclarée » ou « profil » (jamais confirmée) ; vide si inconnue.
+	ColorSource string `json:"color_source,omitempty"`
+	Material    string `json:"material,omitempty"`
 }
 
 // clearProfileColors retire des plaques la couleur par défaut du preset (ex. #00AE42, vert Bambu), que le
@@ -51,8 +53,11 @@ func applyRealColors(j *Job, loaded []LoadedSpoolSummary) {
 		fs := append([]slicer.FilamentUse(nil), j.Summary.Plates[pi].Filaments...)
 		for fi := range fs {
 			tray := trayOf(j.Assignments, fs[fi].Slot)
+			if fs[fi].ColorSource == "" && fs[fi].Color != "" && fs[fi].ProfileColor == "" {
+				fs[fi].ProfileColor = fs[fi].Color // la couleur voulue par le fichier reste lisible (plan_colors)
+			}
 			if l, ok := trayColor(loaded, tray); ok {
-				fs[fi].Color, fs[fi].ColorSource = strings.ToUpper(l.Color), l.Source
+				fs[fi].Color, fs[fi].ColorSource = strings.ToUpper(l.Color), colorSourceLabel(l.Source)
 			} else {
 				fs[fi].Color, fs[fi].ColorSource = "", unknownColor+" (bobine non déclarée à cet emplacement)"
 			}
@@ -77,7 +82,7 @@ func (s *Service) colorsFor(j Job) []FilamentColor {
 			fc := FilamentColor{Slot: f.Slot, Tray: tray, Color: unknownColor, Material: f.Type,
 				Source: "non déclarée : déclarer la bobine (update_spool, slot « ext » pour la bobine externe) ou charger l'AMS"}
 			if l, ok := trayColor(loaded, tray); ok {
-				fc.Color, fc.Source = strings.ToUpper(l.Color), l.Source
+				fc.Color, fc.Source, fc.ColorSource = strings.ToUpper(l.Color), l.Source, colorSourceLabel(l.Source)
 				if l.Material != "" {
 					fc.Material = l.Material
 				}

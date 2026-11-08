@@ -212,7 +212,7 @@ func (s *Service) alternatives(ctx context.Context, cur *Spool, cs CheckSlot, p 
 	} else {
 		for _, f := range p.Filaments {
 			if f.Slot == a.FilamentSlot {
-				wantMat, wantColor = f.Type, f.Color
+				wantMat, wantColor = f.Type, f.WantedColor()
 			}
 		}
 	}

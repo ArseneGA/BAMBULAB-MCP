@@ -137,7 +137,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if err != nil {
 			return nil, printing.FilamentList{}, err
 		}
-		return textResult(fmt.Sprintf("%d filament(s) compatibles avec %s dans %d famille(s).", l.Total, in.PrinterID, len(l.Families))), *l, nil
+		return textResult(filamentListText(l, in.PrinterID)), *l, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -150,8 +150,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if err != nil {
 			return nil, printing.History{}, err
 		}
-		return textResult(fmt.Sprintf("%d impression(s) dans la vue %s (actives %d, terminées %d, échecs %d, archivées %d, corbeille %d).",
-			len(h.Jobs), h.View, h.Counts["active"], h.Counts["finished"], h.Counts["failed"], h.Counts["archived"], h.Counts["trash"])), *h, nil
+		return textResult(historyText(h)), *h, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -241,6 +240,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		}
 		if o.Report.Adhesion.Risky() {
 			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur) : " + o.Report.Adhesion.Summary() + " Bordure du profil : " + firstNonEmptyStr(o.Report.BrimType, "inconnue") + " " + o.Report.BrimWidth + "."
+		}
+		if w := o.Report.OverhangWarning(); w != "" {
+			txt += " AVERTISSEMENT FORT (non bloquant, à signaler à l'utilisateur, qui doit en prendre acte avant le lancement) : " + w
 		}
 		return textResult(txt), *o, nil
 	})

@@ -2,7 +2,6 @@ package printing
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -13,7 +12,6 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mesh"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
-	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
 )
 
 // ValidateInput est l'entrée de validate_print_artifact.
@@ -141,11 +139,12 @@ func (s *Service) checkAssignments(ctx context.Context, rep *ValidationReport, r
 				rep.add(true, "assignment_unused", false, "warn", fmt.Sprintf("le filament %d n'est pas utilisé par la plaque %d", a.FilamentSlot, plate.Index))
 			}
 		}
-		var mat contracts.Material
-		if err := s.d.Store.GetDoc(ctx, "materials", a.MaterialID, &mat); err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				rep.add(true, "material_known", false, "warn", fmt.Sprintf("matière %q absente du catalogue : compatibilité non vérifiée", a.MaterialID))
-			}
+		mat, known, merr := s.lookupMaterial(ctx, a.MaterialID, model.Name, rec.NozzleMM)
+		if merr != nil {
+			continue
+		}
+		if !known {
+			rep.add(true, "material_known", false, "warn", fmt.Sprintf("matière %q absente du catalogue (ni matière enregistrée, ni préréglage filament Bambu Studio) : compatibilité non vérifiée", a.MaterialID))
 			continue
 		}
 		if u, ok := used[a.FilamentSlot]; ok && u.Type != "" && !strings.EqualFold(u.Type, mat.Family) {
@@ -232,6 +231,7 @@ func (s *Service) ValidateArtifact(ctx context.Context, in ValidateInput) (*Vali
 		exp.BedArea = []profiles.Point{{X: 0, Y: 0}, {X: bv.X, Y: 0}, {X: bv.X, Y: bv.Y}, {X: 0, Y: bv.Y}}
 		exp.PrintableZ = bv.Z
 	}
+	var eff *effectiveSlice
 	info, val, verr := s.d.Validator(path, exp)
 	if val != nil {
 		for _, c := range val.Checks {
@@ -255,21 +255,38 @@ func (s *Service) ValidateArtifact(ctx context.Context, in ValidateInput) (*Vali
 		if j.Summary != nil {
 			sum.StudioVersion = firstNonEmpty(sum.StudioVersion, j.Summary.StudioVersion)
 		}
+		// Réglages EFFECTIFS (archive, sinon défaut de Bambu Studio) reportés dans le résumé et le rapport.
+		e := effectiveOf(info, plate)
+		eff = &e
+		e.fillSummary(sum)
+		rep.BrimType, rep.BrimWidth, rep.RaftLayers = e.BrimType, e.BrimWidth, e.RaftLayers
+		// Couleur : celle de la bobine réellement chargée (AMS / bobine déclarée), jamais celle du preset lu dans
+		// l'archive : la même valeur à chaque étape (découpe, validation, dépôt).
+		tmp := Job{Summary: sum, Assignments: assign}
+		applyRealColors(&tmp, s.loadedSpools(in.PrinterID))
 		j.Summary = sum
-		rep.BrimType, rep.BrimWidth = info.BrimType, info.BrimWidth
 	}
-	// Risque de décollement : avertissement jamais bloquant, avec la bordure réellement tranchée.
-	adh := j.Adhesion
-	if adh == nil && j.Slice != nil && j.Slice.Plan == nil {
-		if pm, perr := s.partMesh(j.Slice); perr == nil {
-			adh = mesh.Adhesion(pm)
+	// La pièce (orientation appliquée), lue une fois pour le décollement et les surplombs.
+	var pm *mesh.Mesh
+	if j.Slice != nil && j.Slice.Plan == nil {
+		if m, perr := s.partMesh(j.Slice); perr == nil && len(m.T) > 0 {
+			pm = m
 		}
+	}
+	// Risque de décollement : avertissement jamais bloquant ; couvert par une bordure ≥ 3 mm OU un radeau tranchés.
+	adh := j.Adhesion
+	if adh == nil && pm != nil {
+		adh = mesh.Adhesion(pm)
 	}
 	if adh != nil {
 		rep.Adhesion = adh
-		if adh.Risky() && !brimPresent(rep.BrimType, rep.BrimWidth) {
-			rep.Warnings = append(rep.Warnings, "adhesion_risk : "+adh.Summary()+" Profil actuel : "+brimLabel(rep.BrimType, rep.BrimWidth)+".")
+		if adh.Risky() && !adhesionCovered(rep.BrimType, rep.BrimWidth, rep.RaftLayers) {
+			rep.Warnings = append(rep.Warnings, "adhesion_risk : "+adh.Summary()+" Profil actuel : "+brimLabel(rep.BrimType, rep.BrimWidth)+raftLabel(rep.RaftLayers)+".")
 		}
+	}
+	// Surplombs sans supports : avertissement FORT, jamais bloquant mais affiché à l'humain avant le lancement.
+	if eff != nil {
+		eff.fillReport(rep, pm)
 	}
 	rep.OK = len(rep.Blocking) == 0
 	j, err = s.update(ctx, j.ID, func(x *Job) error {
