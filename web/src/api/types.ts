@@ -174,7 +174,9 @@ export interface ImportStarted { job_id: string; state: string; done: boolean; r
 
 /* ---- travaux ---- */
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'unknown';
-export interface Job {
+/** Champs d'avancement stables ajoutés côté serveur aux statuts de travaux (tous optionnels : on retombe sur `progress` et `message`). */
+export interface StableProgress { percent?: number; done_bytes?: number; total_bytes?: number; eta_seconds?: number; phase?: string; phase_label?: string }
+export interface Job extends StableProgress {
   id: string; kind: string; class: string; state: JobState; progress: number; message?: string; logs?: string[];
   result?: unknown; error?: { code: string; message: string }; cancel_requested?: boolean;
   created_at: string; started_at?: string; finished_at?: string;

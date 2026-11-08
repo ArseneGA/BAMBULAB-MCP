@@ -130,7 +130,7 @@ export function PlatePanel({ initialModelId }: { initialModelId?: string }) {
           </div>
         )}
         {sliced && (
-          <Notice tone="info" title="Découpe en file" actions={<Link to="/impression"><Button size="sm">Suivre les impressions</Button></Link>}>
+          <Notice tone="info" title="Découpe en file" actions={<Link to="/impressions"><Button size="sm">Suivre les impressions</Button></Link>}>
             {sliced.jobs.map((j) => <span key={j.id}><Tag>plaque {j.plate}</Tag> <span className="mono">{j.id}</span> {j.state}{' '}</span>)}
           </Notice>
         )}

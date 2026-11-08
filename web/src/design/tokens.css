@@ -1,51 +1,122 @@
-/* Tokens du système de design "Atelier". Variables CSS natives, 2 thèmes. */
+/*
+ * Jetons du système de design (charte Atelier : verre, halos, sidebar arrondie, DM Sans + JetBrains Mono),
+ * déclinés en vert « Printalk » à partir de l'icône docs/logo/atelier-icon.svg.
+ *   clair  #3ee39c, vert d'icône #16a06b, profond #095a40 ; fond clair #f4f7f5 ; fond sombre #0f1714.
+ * Contrastes vérifiés (WCAG AA, texte 14 px) :
+ *   clair : --text-1 #14201b / fond ≈ 15:1 ; --text-2 #4a5750 ≈ 6,8:1 ; --text-3 #5b6862 ≈ 5,4:1 ;
+ *           texte blanc sur --primary #0f7a52 ≈ 5,3:1 ; --text-accent #0b6a46 sur le fond ≈ 6:1 ;
+ *           --ok-text #18714a, --warn-text #8a5700, --fail-text #b42f34 ≥ 5:1 sur le fond et sur leurs pastilles.
+ *   sombre : --text-1 #eaf2ee, --text-2 #b2beb8, --text-3 #9aa8a1 ≥ 7:1 sur #0f1714 ;
+ *            texte #052018 sur --primary #3ee39c ≈ 11:1.
+ * Les anciens noms (--surface, --line, --accent, --r-1…) restent définis : ils alimentent les écrans existants.
+ */
 :root, [data-theme='light'] {
-  --bg: #ecebe6;          /* établi : papier gris chaud */
-  --surface: #f6f5f1;     /* panneaux */
-  --surface-2: #e3e1da;   /* zones enfoncées, survol */
-  --surface-3: #d6d3ca;
-  --line: #c4c0b5;
-  --line-strong: #8f8a7d;
-  --text: #1a1916;
-  --text-2: #55514a;
-  --text-3: #5e594f;      /* >= 4.5:1 sur --surface, --surface-2 et --viewer-bg */
-  --accent: #b83c08;      /* orange de sécurité, assombri pour le contraste */
-  --accent-hover: #9c3206;
-  --accent-soft: #f8e8de;
+  --p-bg: #f4f7f5;
+  --p-strong: #16a06b;          /* vert d'icône : marque, barres, halos */
+  --p-light: #3ee39c;
+  --p-deep: #095a40;
+  --p-soft: #d6eee3;
+  --p-mid: #b4e3cd;
+  --p-claim: #c77a0a;           /* accent chaud rare (halo discret) */
+
+  --bg: var(--p-bg);
+  --text-1: #14201b; --text-2: #4a5750; --text-3: #5b6862; --text-faint: #98a39d;
+  --text-accent: #0b6a46;
+  --primary: #0f7a52;           /* fond des boutons : contraste AA avec le texte blanc */
+  --primary-text: #ffffff;
+  --primary-subtle: color-mix(in srgb, var(--p-strong) 13%, transparent);
+  --accent-subtle: color-mix(in srgb, var(--p-claim) 12%, transparent);
+  --hairline: color-mix(in srgb, var(--p-deep) 16%, transparent);
+  --well: color-mix(in srgb, var(--p-deep) 5.5%, transparent);
+  --well-strong: color-mix(in srgb, var(--p-deep) 10%, transparent);
+
+  --glass-thin: rgba(255, 255, 255, .52);
+  --glass: rgba(255, 255, 255, .7);
+  --glass-thick: rgba(255, 255, 255, .86);
+  --solid: #ffffff;
+  --shadow-sm: 0 1px 2px color-mix(in srgb, var(--p-deep) 5%, transparent), 0 6px 18px -8px color-mix(in srgb, var(--p-deep) 14%, transparent);
+  --shadow-md: 0 1px 2px color-mix(in srgb, var(--p-deep) 5%, transparent), 0 14px 36px -14px color-mix(in srgb, var(--p-deep) 24%, transparent);
+  --shadow-inner: inset 0 1px 1.5px rgba(255, 255, 255, .75);
+  --shadow-primary: inset 0 1px 0 rgba(255, 255, 255, .22), 0 8px 18px -10px color-mix(in srgb, var(--p-strong) 65%, transparent);
+
+  --st-run: var(--p-strong); --st-ok: #2fbf7c; --st-fail: #e5484d; --st-wait: #f5a524;
+  --ok-text: #18714a; --fail-text: #b42f34; --wait-text: #8a5700;
+
+  /* ----- noms hérités (écrans existants) ----- */
+  --surface: rgba(255, 255, 255, .72);
+  --surface-2: #e6efea;
+  --surface-3: #d6e4dc;
+  --line: #cddbd3;
+  --line-strong: #9db3a8;
+  --text: var(--text-1);
+  --accent: var(--primary);
+  --accent-hover: #0c6844;
+  --accent-soft: #dcf1e7;
   --on-accent: #ffffff;
-  --ok: #2f6f3e;  --warn: #8a5a00;  --err: #b3261e;  --off: #5e594f;
-  --ok-soft: #dcebdf; --warn-soft: #f1e3c2; --err-soft: #f4d9d6; --off-soft: #dedbd3;
-  --viewer-bg: #dcdad2;
-  --shadow-pop: 0 6px 20px rgb(26 25 22 / 0.16);
-  --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+  --ok: #18714a; --warn: #8a5700; --err: #b42f34; --off: #5b6862;
+  --ok-soft: #d9efe3; --warn-soft: #f6e8c8; --err-soft: #f7dcdc; --off-soft: #e1e8e4;
+  --viewer-bg: #e3ece7;
+  --shadow-pop: 0 10px 30px rgb(9 90 64 / 0.2);
+  --focus: 0 0 0 2px var(--p-bg), 0 0 0 4px var(--primary);
 }
 [data-theme='dark'] {
-  --bg: #121211;
-  --surface: #1b1a18;
-  --surface-2: #262420;
-  --surface-3: #33312c;
-  --line: #3b3832;
-  --line-strong: #6b665b;
-  --text: #ece9e2;
-  --text-2: #b0aa9d;
-  --text-3: #a29b8e;
-  --accent: #ff8a4c;
-  --accent-hover: #ffa070;
-  --accent-soft: #3d2415;
-  --on-accent: #1a0c04;
-  --ok: #6fc283;  --warn: #e0b04a;  --err: #ff7a70;  --off: #a29b8e;
-  --ok-soft: #1d3324; --warn-soft: #3a2f12; --err-soft: #40201d; --off-soft: #2a2824;
-  --viewer-bg: #0d0d0c;
-  --shadow-pop: 0 6px 24px rgb(0 0 0 / 0.55);
+  --p-bg: #0f1714;
+  --p-strong: #3ee39c;
+  --p-deep: #0b2a20;
+  --p-mid: #14513c;
+  --p-soft: #0f3a2b;
+  --p-claim: #e4a06a;
+
+  --text-1: #eaf2ee; --text-2: #b2beb8; --text-3: #9aa8a1; --text-faint: #6c7a73;
+  --text-accent: #5fe8b0;
+  --primary: #3ee39c;
+  --primary-text: #052018;
+  --primary-subtle: color-mix(in srgb, var(--p-strong) 16%, transparent);
+  --accent-subtle: color-mix(in srgb, var(--p-claim) 18%, transparent);
+  --hairline: rgba(255, 255, 255, .13);
+  --well: rgba(255, 255, 255, .055);
+  --well-strong: rgba(255, 255, 255, .1);
+
+  --glass-thin: rgba(26, 38, 33, .46);
+  --glass: rgba(24, 36, 31, .62);
+  --glass-thick: rgba(22, 33, 28, .84);
+  --solid: #16211c;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px -8px rgba(0, 0, 0, .5);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, .3), 0 14px 36px -14px rgba(0, 0, 0, .65);
+  --shadow-inner: inset 0 1px 1.5px rgba(255, 255, 255, .08);
+  --shadow-primary: inset 0 1px 0 rgba(255, 255, 255, .3), 0 8px 18px -10px rgba(62, 227, 156, .55);
+
+  --st-ok: #4cd37a; --st-fail: #ef5a5f; --st-wait: #f5a524;
+  --ok-text: #6fe09a; --fail-text: #f08084; --wait-text: #f7bb55;
+
+  --surface: rgba(24, 36, 31, .66);
+  --surface-2: #1e2d27;
+  --surface-3: #2a3c34;
+  --line: #2b3b34;
+  --line-strong: #4f665b;
+  --accent-hover: #6dedb4;
+  --accent-soft: #123a2b;
+  --on-accent: #052018;
+  --ok: #6fe09a; --warn: #f7bb55; --err: #f08084; --off: #9aa8a1;
+  --ok-soft: #14351f; --warn-soft: #3a2f12; --err-soft: #40201d; --off-soft: #25302b;
+  --viewer-bg: #0b120f;
+  --shadow-pop: 0 10px 30px rgb(0 0 0 / 0.6);
+  --focus: 0 0 0 2px var(--p-bg), 0 0 0 4px var(--primary);
 }
 :root {
-  --font-sans: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  --fs-xs: 0.6875rem; --fs-sm: 0.8125rem; --fs-md: 0.875rem; --fs-lg: 1rem; --fs-xl: 1.25rem; --fs-2xl: 1.625rem;
-  --lh-tight: 1.2; --lh-body: 1.45;
+  --sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+
+  --t-title-1: 26px; --t-title-2: 18px; --t-title-3: 16px; --t-headline: 14.5px; --t-body: 14px; --t-row: 13.5px; --t-meta: 12.5px; --t-caption: 11.5px; --t-overline: 10.5px;
+  --fs-xs: 0.7188rem; --fs-sm: 0.8125rem; --fs-md: 0.875rem; --fs-lg: 1rem; --fs-xl: 1.125rem; --fs-2xl: 1.625rem;
+  --lh-tight: 1.2; --lh-body: 1.5;
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
-  --r-1: 2px; --r-2: 4px; --r-3: 6px;
-  --control-h: 32px; --control-h-sm: 26px;
+  --r-xs: 6px; --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-xl: 22px; --r-2xl: 24px; --r-full: 9999px;
+  --r-1: 6px; --r-2: 10px; --r-3: 14px;
+  --blur-thin: 14px; --blur: 26px; --blur-thick: 40px; --sat: 185%; --inset: 10px; --sidebar-w: 226px;
+  --control-h: 34px; --control-h-sm: 28px;
   --dur-fast: 90ms; --dur: 160ms; --dur-slow: 240ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }

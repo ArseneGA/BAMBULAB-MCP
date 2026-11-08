@@ -150,7 +150,7 @@ export function MaterialsPage() {
             <Panel title="Imprimantes enregistrées">
               <Async state={printers} label="Chargement du parc">
                 {(d) => d.printers.length === 0
-                  ? <p className="hint" style={{ margin: 0 }}>Aucune imprimante enregistrée. Ajoutez-en une depuis <Link to="/impression">Impression</Link>.</p>
+                  ? <p className="hint" style={{ margin: 0 }}>Aucune imprimante enregistrée. Ajoutez-en une depuis <Link to="/imprimantes">Imprimantes</Link>.</p>
                   : <ul style={{ margin: 0, paddingLeft: 'var(--sp-4)' }}>{d.printers.map((p) => <li key={p.id}><strong>{p.name}</strong> · {p.model_name} · buse <span className="mono">{p.nozzle_mm} mm</span> · AMS {p.ams_units} · firmware {p.firmware ?? 'inconnu'}</li>)}</ul>}
               </Async>
             </Panel>

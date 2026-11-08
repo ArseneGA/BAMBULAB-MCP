@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, ClipboardCheck, SlidersHorizontal } from 'lucide-react';
-import { Button, EmptyState, Panel, Tag } from '../components';
+import { Button, EmptyState, Panel, ProgressBar, Tag } from '../components';
 import { api, ApiError, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import type { ApplyOutput, CompareCandidate, CompareOutput, Experiment, Metric } from '../api/goalTypes';
 import type { ExperimentSummary, PrintResult } from '../api/extraTypes';
 import { MemoryPanel, RecordDialog } from './RecordResult';
+import { PrepareNav } from './PrepareNav';
 import { Async, Dialog, Notice, fmtDate, fmtNum } from './common';
 import './model.css';
 import './compare.css';
@@ -20,6 +21,13 @@ const METRIC_ORDER: Array<[string, string]> = [
   ['layer_height_mm', 'Hauteur de couche'], ['support_g', 'Supports'], ['height_mm', 'Hauteur'],
 ];
 
+/** Avancement global de la découpe : variantes terminées sur total (le serveur ne publie pas de pourcentage par variante). */
+function sliceSource(c: CompareOutput) {
+  const total = c.candidates.length;
+  const done = c.candidates.filter((k) => !['pending', 'queued', 'running'].includes(k.state)).length;
+  return { state: 'running', percent: total > 0 ? (done / total) * 100 : undefined, phase_label: `${done} variante${done > 1 ? 's' : ''} découpée${done > 1 ? 's' : ''} sur ${total}` };
+}
+
 function fmtMetric(id: string, m: Metric): string {
   if (id === 'print_time_s') { const s = Math.round(m.value); const h = Math.floor(s / 3600), mn = Math.floor((s % 3600) / 60); return h ? `${h} h ${String(mn).padStart(2, '0')} min` : `${mn} min ${String(s % 60).padStart(2, '0')} s`; }
   return `${fmtNum(m.value, 2)} ${m.unit}`;
@@ -29,8 +37,7 @@ export function ComparePage() {
   const [sp] = useSearchParams();
   let id = sp.get('experiment');
   if (!id) { try { id = (JSON.parse(localStorage.getItem('atelier-last-experiment') ?? 'null') as { experiment_id?: string } | null)?.experiment_id ?? null; } catch { /* ignore */ } }
-  if (!id) return <ExperimentIndex />;
-  return <CompareView key={id} id={id} />;
+  return <><PrepareNav />{id ? <CompareView key={id} id={id} /> : <ExperimentIndex />}</>;
 }
 
 const EXP_STATE: Record<ExperimentSummary['state'], { label: string; tone?: 'ok' | 'warn' }> = {
@@ -93,7 +100,12 @@ function CompareView({ id }: { id: string }) {
               </div>
               {exp.data && <Link to={`/preparation?model=${exp.data.model_id}`}><Button icon={<SlidersHorizontal size={15} />}>Retour à la préparation</Button></Link>}
             </div>
-            {!c.complete && <Notice tone="info" icon={<span className="spinner" aria-hidden />} title="Découpe des variantes en cours">Bambu Studio découpe chaque candidat ; le tableau se complète tout seul ({c.pending?.length ?? 0} en attente).</Notice>}
+            {!c.complete && (
+              <Notice tone="info" icon={<span className="spinner" aria-hidden />} title="Découpe des variantes en cours">
+                Bambu Studio découpe chaque candidat ; le tableau se complète tout seul ({c.pending?.length ?? 0} en attente).
+                <ProgressBar label="Avancement de la découpe des variantes" source={sliceSource(c)} />
+              </Notice>
+            )}
             <Table c={c} exp={exp.data} onApply={setApply} onRecord={setRecord} />
             <Rankings c={c} />
             {c.not_evaluable.length > 0 && (

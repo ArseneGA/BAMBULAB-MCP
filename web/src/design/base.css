@@ -1,14 +1,20 @@
 *, *::before, *::after { box-sizing: border-box; }
-html, body, #root { height: 100%; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 400 var(--fs-md)/var(--lh-body) var(--font-sans); -webkit-font-smoothing: antialiased; }
+html { color-scheme: light; }
+html[data-theme='dark'] { color-scheme: dark; }
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text-1); font: 400 var(--t-body)/var(--lh-body) var(--sans); -webkit-font-smoothing: antialiased; }
 h1, h2, h3, h4, p { margin: 0; }
-h1 { font-size: var(--fs-2xl); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.01em; }
-h2 { font-size: var(--fs-xl); line-height: var(--lh-tight); font-weight: 600; }
-h3 { font-size: var(--fs-lg); font-weight: 600; }
-.mono, code { font-family: var(--font-mono); font-feature-settings: 'zero' 1; }
-.eyebrow { font: 600 var(--fs-xs)/1 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
-a { color: inherit; }
+h1 { font-size: var(--t-title-1); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.02em; }
+h2 { font-size: var(--t-title-2); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.015em; }
+h3 { font-size: var(--t-title-3); font-weight: 600; }
+.mono, code { font-family: var(--mono); font-feature-settings: 'zero' 1; }
+.muted { color: var(--text-3); }
+.eyebrow, .overline { font: 500 var(--t-overline)/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3); }
+a { color: var(--text-accent); }
 button { font: inherit; color: inherit; }
+img { max-width: 100%; }
 :focus-visible { outline: none; box-shadow: var(--focus); }
-::selection { background: var(--accent-soft); color: var(--text); }
+::selection { background: var(--accent-soft); color: var(--text-1); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-sm); background: var(--solid); color: var(--text-1); box-shadow: var(--shadow-md); transition: top var(--dur-fast); }
+.skip-link:focus { top: var(--sp-3); }

@@ -176,11 +176,11 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   await human.getByText(/enregistré/i).first().waitFor();
   step('navigateur enregistré par code à usage unique');
   const sim = process.env.SIM_CODE ?? '12345678'; // code d'accès par défaut du simulateur local (valeur de test du dépôt)
-  await page.goto(`${web}/impression`);
+  await page.goto(`${web}/imprimantes`); // registre des imprimantes (écran Imprimantes)
   const known = () => afetch(`${web}/api/printers`).then((r) => r.json()).then((d) => d.printers.find((p) => p.serial === (process.env.SIM_SERIAL ?? '01P00A000000001')));
   if (!(await known())) { // empreinte inconnue (simulateur relancé : nouveau certificat) : nouvelle imprimante
     await page.reload();
-    await page.getByRole('button', { name: 'Ajouter', exact: true }).first().click();
+    await page.getByRole('button', { name: /Ajouter une imprimante/ }).first().click();
     await page.getByLabel("Nom d'usage").fill(`Simulateur ${Date.now() % 10000}`);
     await page.getByRole('dialog').locator('select').first().selectOption('p1s');
     await page.getByLabel(/Adresse sur le réseau/).fill('127.0.0.1');
@@ -190,8 +190,7 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   let simPrinter; for (let i = 0; i < 20 && !simPrinter; i++) { simPrinter = await known(); if (!simPrinter) await page.waitForTimeout(500); }
   assert(simPrinter, 'imprimante simulée non enregistrée (série déjà utilisée ?)');
   await page.reload();
-  await page.getByRole('listbox', { name: 'Imprimantes' }).getByRole('option', { name: new RegExp(`^${simPrinter.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Bambu`) }).click();
-  const link = page.getByRole('link', { name: /Ouvrir la page de saisie/ });
+  const link = page.getByRole('region', { name: `Imprimante ${simPrinter.name}` }).getByRole('link', { name: /Ouvrir la page de saisie/ });
   if (await link.count()) {
     const setup = human;
     await setup.goto(new URL(await link.getAttribute('href'), web).toString().replace(web, process.env.BAMBU_URL ?? 'http://127.0.0.1:7878'));
@@ -203,6 +202,7 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   await page.reload();
   await page.getByText('Joignable').waitFor({ timeout: 20000 });
   step('imprimante joignable (état lu)');
+  await page.goto(`${web}/impressions`); // nouvelle impression : écran Impressions
   const cale = (await (await afetch(`${web}/api/models?q=cale`)).json()).models[0];
   await page.getByLabel(/^Modèle \(dernière/).selectOption(cale.id);
   await page.locator('.prt-new select').nth(1).selectOption(simPrinter.id);
@@ -230,7 +230,7 @@ if (process.env.SIM_PIN && caps.features.find((f) => f.id === 'print_chain')?.av
   step('impression lancée après accord sur la page de confirmation');
 
   // Suivi jusqu'à la fin (le simulateur imprime pendant quelques dizaines de secondes), puis retour d'expérience.
-  await page.getByRole('progressbar', { name: /Avancement/ }).waitFor({ timeout: 30000 });
+  await page.getByRole('progressbar', { name: /Avancement/ }).first().waitFor({ timeout: 30000 });
   await snap(page, '4-suivi-impression');
   step("suivi : barre d'avancement affichée pendant l'impression");
   await page.getByRole('heading', { name: 'Impression terminée' }).waitFor({ timeout: 180000 });

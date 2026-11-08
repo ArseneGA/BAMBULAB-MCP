@@ -5,7 +5,7 @@
 .v3-seg, .v3-acts { display: flex; gap: 2px; padding: 2px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-3); }
 .v3-seg-btn, .v3-act { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-2); background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-sm); font-weight: 500; cursor: pointer; white-space: nowrap; }
 .v3-seg-btn:hover, .v3-act:hover { background: var(--surface-2); color: var(--text); }
-.v3-seg-btn[aria-pressed='true'], .v3-act[aria-pressed='true'] { background: var(--accent); color: #fff; font-weight: 600; }
+.v3-seg-btn[aria-pressed='true'], .v3-act[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .v3-seg-btn:focus-visible, .v3-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .v3-compact .v3-seg-btn, .v3-compact .v3-act { height: 22px; padding: 0 7px; font-size: var(--fs-xs); }
 .v3-caption { position: absolute; left: var(--sp-3); bottom: var(--sp-2); font-size: var(--fs-xs); color: var(--text-3); pointer-events: none; }

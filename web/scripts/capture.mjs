@@ -144,9 +144,9 @@ try {
   void up;
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
-  await page.goto(`${base}/impression`); await theme(page, 'light');
-  await page.getByText('Joignable').waitFor({ timeout: 20000 });
-  await page.getByRole('listbox', { name: 'Impressions' }).getByRole('option').first().click();
+  await page.goto(`${base}/impressions`); await theme(page, 'light');
+  await page.getByRole('list', { name: 'Impressions' }).waitFor({ timeout: 20000 });
+  await page.getByRole('list', { name: 'Impressions' }).getByRole('button', { pressed: false }).first().click();
   await page.getByRole('button', { name: /Demander la confirmation/ }).waitFor();
   await page.waitForTimeout(400); await shot(page, 'impression-1440-light');
   await page.getByRole('button', { name: /Demander la confirmation/ }).click();
