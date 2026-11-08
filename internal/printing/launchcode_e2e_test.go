@@ -44,6 +44,30 @@ func leakSinkAdd(txt string, m map[string]any) {
 }
 
 // assertNoLeak : le code n'est dans aucune réponse, aucun journal, aucun audit, aucun fichier de données.
+// indexCode cherche le code comme VALEUR isolée (jamais au milieu d'un nombre, d'un identifiant ou des décimales d'un
+// horodatage) : six chiffres peuvent coïncider par hasard avec un fragment d'horodatage ou d'identifiant aléatoire,
+// ce qui n'est pas une fuite. Renvoie -1 si absent.
+func indexCode(hay, code string) int {
+	isWord := func(b byte) bool {
+		return b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b == '_'
+	}
+	for from := 0; from < len(hay); {
+		j := strings.Index(hay[from:], code)
+		if j < 0 {
+			return -1
+		}
+		i := from + j
+		end := i + len(code)
+		before := i == 0 || !(isWord(hay[i-1]) || hay[i-1] == '.')
+		after := end >= len(hay) || !isWord(hay[end])
+		if before && after {
+			return i
+		}
+		from = i + 1
+	}
+	return -1
+}
+
 func (r *rig) assertNoLeak(codes ...string) {
 	r.t.Helper()
 	sinkMu.Lock()
@@ -62,14 +86,13 @@ func (r *rig) assertNoLeak(codes ...string) {
 	rows.Close()
 	for _, c := range codes {
 		for name, hay := range map[string]string{"journaux": logs, "réponses d'outils": rsp, "audit": audit.String()} {
-			if strings.Contains(hay, c) {
-				i := strings.Index(hay, c)
+			if i := indexCode(hay, c); i >= 0 {
 				r.t.Errorf("le code %q apparaît dans %s : …%s…", c, name, hay[max(i-60, 0):min(i+60, len(hay))])
 			}
 		}
 		_ = filepath.Walk(r.dataDir, func(p string, info os.FileInfo, err error) error {
 			if err == nil && !info.IsDir() && !strings.HasSuffix(p, ".db") && !strings.HasSuffix(p, "-wal") && !strings.HasSuffix(p, "-shm") {
-				if b, _ := os.ReadFile(p); strings.Contains(string(b), c) {
+				if b, _ := os.ReadFile(p); indexCode(string(b), c) >= 0 {
 					r.t.Errorf("code en clair dans %s", p)
 				}
 			}

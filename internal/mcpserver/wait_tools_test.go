@@ -24,6 +24,15 @@ func TestWaitForJobReturnsOnStateChange(t *testing.T) {
 	t0 := time.Now()
 	res := call(t, cs, "wait_for_job", map[string]any{"job_id": j.ID, "timeout_seconds": 20})
 	st := structured(t, res)
+	// wait_for_job rend dès le PREMIER changement d'état : si le worker n'a pas encore pris le travail au moment de
+	// l'appel (queued), il rend à « running ». On rappelle alors, comme le ferait un client, jusqu'à l'état terminal.
+	for i := 0; i < 5 && st["state"] != "succeeded" && st["state"] != "failed"; i++ {
+		if st["state"] != "queued" && st["state"] != "running" {
+			break
+		}
+		res = call(t, cs, "wait_for_job", map[string]any{"job_id": j.ID, "timeout_seconds": 20})
+		st = structured(t, res)
+	}
 	if st["state"] != "succeeded" {
 		t.Fatalf("état : %v", st["state"])
 	}
@@ -56,6 +65,16 @@ func TestWaitForJobTimeoutKeepsJobRunning(t *testing.T) {
 	c := startCore(t)
 	cs := connectClient(t, mcpserver.New(c))
 	long, _, _ := c.Queue.Enqueue(ctx, jobsParams("system.selftest", `{"steps":1000,"step_ms":50}`))
+	// wait_for_job rend dès le premier changement d'état : on attend d'abord que le worker ait pris le travail
+	// (queued -> running), sinon l'appel rendrait à cette transition, bien avant l'échéance.
+	for dl := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if cur, err := c.Queue.Get(ctx, long.ID); err == nil && cur.State != "queued" {
+			break
+		}
+		if time.Now().After(dl) {
+			t.Fatal("le travail n'a pas démarré")
+		}
+	}
 	t0 := time.Now()
 	st := structured(t, call(t, cs, "wait_for_job", map[string]any{"job_id": long.ID, "timeout_seconds": 1}))
 	if el := time.Since(t0); el < 900*time.Millisecond || el > 6*time.Second {
@@ -118,7 +137,10 @@ func TestWaitForJobEmitsProgressNotifications(t *testing.T) {
 	}
 	last := -1.0
 	for _, n := range got {
-		if n.ProgressToken != "tok-barre-1" || n.Total != 100 || n.Progress <= last || !strings.Contains(n.Message, "%") {
+		// Tant que le travail attend son tour (la course avec le worker est légitime), la ligne est « En file d'attente
+		// (position N) » à 0 % : sans pourcentage par construction. Dès qu'il tourne, la barre texte porte « NN % ».
+		enFile := n.Progress == 0 && strings.HasPrefix(n.Message, "En file d'attente")
+		if n.ProgressToken != "tok-barre-1" || n.Total != 100 || n.Progress <= last || !(enFile || strings.Contains(n.Message, "%")) {
 			t.Fatalf("notification invalide : %+v (précédent %v)", n, last)
 		}
 		last = n.Progress

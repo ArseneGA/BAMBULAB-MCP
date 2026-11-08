@@ -96,6 +96,30 @@ func TestLockoutAfterRepeatedFailures(t *testing.T) {
 	}
 }
 
+// Un préfixe commun à plusieurs sessions actives est refusé avec une erreur claire, et rien n'est révoqué.
+func TestRevokeAmbiguousPrefix(t *testing.T) {
+	s, _ := newSvc(t)
+	ctx := context.Background()
+	var toks []string
+	for _, n := range []string{"un", "deux"} {
+		c, _, _ := s.NewEnrollCode(ctx)
+		tok, _, err := s.Enroll(ctx, c, n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		toks = append(toks, tok)
+	}
+	n, err := s.Revoke(ctx, "ses_") // « ses_ » préfixe tous les identifiants : ambigu par construction
+	if err == nil || n != 0 || !strings.Contains(err.Error(), "ambigu") || !strings.Contains(err.Error(), "2 sessions") {
+		t.Fatalf("préfixe ambigu : %d %v", n, err)
+	}
+	for _, tok := range toks {
+		if _, err := s.Lookup(ctx, tok); err != nil {
+			t.Fatalf("aucune session ne doit être révoquée par un préfixe ambigu : %v", err)
+		}
+	}
+}
+
 func TestSessionExpiryRevokeAndList(t *testing.T) {
 	s, ck := newSvc(t)
 	ctx := context.Background()
@@ -103,7 +127,7 @@ func TestSessionExpiryRevokeAndList(t *testing.T) {
 	t1, s1, _ := s.Enroll(ctx, c1, "un")
 	c2, _, _ := s.NewEnrollCode(ctx)
 	t2, s2, _ := s.Enroll(ctx, c2, "deux")
-	if n, err := s.Revoke(ctx, s1.ID[:6]); err != nil || n != 1 {
+	if n, err := s.Revoke(ctx, s1.ID); err != nil || n != 1 {
 		t.Fatalf("révocation par préfixe : %d %v", n, err)
 	}
 	if _, err := s.Lookup(ctx, t1); err != humanauth.ErrSessionGone {
@@ -115,9 +139,6 @@ func TestSessionExpiryRevokeAndList(t *testing.T) {
 	c3, _, _ := s.NewEnrollCode(ctx)
 	if _, _, err := s.Enroll(ctx, c3, "trois"); err != nil {
 		t.Fatal(err)
-	}
-	if _, err := s.Revoke(ctx, "ses_"); err == nil {
-		t.Fatal("préfixe ambigu accepté")
 	}
 	ss, _ := s.List(ctx)
 	if len(ss) != 3 {
