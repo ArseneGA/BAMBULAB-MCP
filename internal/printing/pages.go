@@ -62,24 +62,37 @@ var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": local
 {{range .V.Binding.Adhesion}}<p class="warn"><strong>Risque de décollement.</strong> {{.}}</p>{{end}}
 {{range .V.Binding.Overhang}}<p class="warn"><strong>Surplombs sans supports.</strong> {{.}}</p>{{end}}
 <p class="warn">L'imprimante ne peut pas savoir si le plateau est vide. Cette autorisation vaut pour <strong>cette impression seulement</strong>, pendant <strong>2 minutes</strong> ; changer le fichier, le plateau, l'imprimante ou les matières l'annule.</p>
-<form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}">
+<form method="post"{{if .PasskeyOptions}} data-pk-mode="get" data-pk-options="{{.PasskeyOptions}}"{{end}}><input type="hidden" name="nonce" value="{{.Nonce}}">
 <label class="chk"><input type="checkbox" name="plate_clear" value="yes" required> Le plateau est vide et dégagé, l'imprimante est surveillée.</label>
-<button type="submit">Lancer l'impression</button></form>{{end}}{{template "foot"}}{{end}}
+{{if not .PasskeyRequired}}<button type="submit">Lancer l'impression</button>{{end}}
+{{if .PasskeyOptions}}<button type="button" data-pk-go hidden>Approuver avec ma passkey</button>{{end}}
+{{if .PasskeyRequired}}<p class="warn">Une passkey est exigée (réglage de <code>/setup/passkeys</code>) : le bouton simple et le code de lancement sont indisponibles.{{if not .PasskeyOptions}} {{if .PasskeyErr}}Passkey indisponible ici : {{.PasskeyErr}}{{else}}Aucune passkey n'est disponible : enregistre-en une sur <code>/setup/passkeys</code> ou lance <code>bambud passkey --require=off</code>.{{end}}{{end}}</p>{{end}}
+{{if and .PasskeyErr (not .PasskeyRequired)}}<p class="dim"><small>Passkey indisponible ici : {{.PasskeyErr}}</small></p>{{end}}
+<p id="pk-msg" role="status" hidden></p></form>{{if .PasskeyOptions}}<script src="/setup/passkeys/passkey.js" defer></script>{{end}}{{end}}{{template "foot"}}{{end}}
 {{define "stop"}}{{template "head" .}}<h1>Arrêter cette impression ?</h1>
 {{if .Closed}}<p class="warn">{{.Closed}}</p>{{else}}
 <dl><dt>Fichier</dt><dd><code>{{.V.File}}</code></dd><dt>Imprimante</dt><dd>{{.V.PrinterName}}</dd>
 <dt>Avancement</dt><dd>{{.V.Percent}} % (couche {{.V.Layer}} / {{.V.TotalLayers}})</dd>
 <dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
 <p class="warn">L'arrêt est <strong>définitif</strong> : le travail en cours est perdu. Rien n'est arrêté tant que tu n'as pas cliqué.</p>
-<form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}"><button type="submit">Arrêter l'impression</button></form>{{end}}{{template "foot"}}{{end}}
+<form method="post"{{if .PasskeyOptions}} data-pk-mode="get" data-pk-options="{{.PasskeyOptions}}"{{end}}><input type="hidden" name="nonce" value="{{.Nonce}}">
+{{if not .PasskeyRequired}}<button type="submit">Arrêter l'impression</button>{{end}}
+{{if .PasskeyOptions}}<button type="button" data-pk-go hidden>Arrêter avec ma passkey</button>{{end}}
+{{if .PasskeyRequired}}<p class="warn">Une passkey est exigée (réglage de <code>/setup/passkeys</code>) : le bouton simple et le code de lancement sont indisponibles.{{if not .PasskeyOptions}} {{if .PasskeyErr}}Passkey indisponible ici : {{.PasskeyErr}}{{else}}Aucune passkey n'est disponible : enregistre-en une sur <code>/setup/passkeys</code> ou lance <code>bambud passkey --require=off</code>.{{end}}{{end}}</p>{{end}}
+{{if and .PasskeyErr (not .PasskeyRequired)}}<p class="dim"><small>Passkey indisponible ici : {{.PasskeyErr}}</small></p>{{end}}
+<p id="pk-msg" role="status" hidden></p></form>{{if .PasskeyOptions}}<script src="/setup/passkeys/passkey.js" defer></script>{{end}}{{end}}{{template "foot"}}{{end}}
 {{define "done"}}{{template "head" .}}<h1>{{.Title}}</h1><p class="ok">{{.Msg}}</p>{{template "foot"}}{{end}}`))
 
 func (s *Service) render(w http.ResponseWriter, status int, name string, data any) {
-	if name == "confirm" { // seule page qui montre une image (photo du plateau, même origine)
-		humanauth.PageHeadersWithImages(w)
-	} else {
-		humanauth.PageHeaders(w)
+	// CSP au minimum : img-src 'self' pour la seule page /confirm (photo du plateau, même origine) ; script-src 'self'
+	// seulement quand la page porte une cérémonie de passkey (script statique, jamais de JavaScript en ligne).
+	script := false
+	if m, ok := data.(map[string]any); ok {
+		if o, _ := m["PasskeyOptions"].(string); o != "" {
+			script = true
+		}
 	}
+	humanauth.PageHeadersWith(w, name == "confirm", script)
 	w.WriteHeader(status)
 	if err := pageTpl.ExecuteTemplate(w, name, data); err != nil {
 		s.log.Warn("page non rendue", "page", name, "err", err)
@@ -212,7 +225,7 @@ func closedMsg(err error) string {
 
 func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 	id := trimLinkPunct(r.PathValue("id"))
-	_, cj, err := s.confirmable(r.Context(), id)
+	cc, cj, err := s.confirmable(r.Context(), id)
 	if err != nil {
 		s.render(w, http.StatusGone, "confirm", map[string]any{"Title": "Confirmation", "Closed": closedMsg(err)})
 		return
@@ -227,6 +240,9 @@ func (s *Service) confirmGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := map[string]any{"Title": "Confirmation de lancement", "V": v, "Nonce": s.issueNonce(id), "ID": id, "TZ": localtime.Name()}
+	// Passkey (facultative) : le challenge est lié à CETTE confirmation et à son empreinte de liaison.
+	d["PasskeyRequired"] = s.PasskeyRequired(r.Context())
+	d["PasskeyOptions"], d["PasskeyErr"] = s.passkeyBegin(r.Context(), r, humanauth.ApprovalSubject{Kind: "print", ID: id, Binding: cc.BindingFingerprint})
 	// Chaque ouverture ou rechargement reprend une photo si la dernière date de plus de PhotoMaxAge (~15 s).
 	if ph := s.platePhotoFor(r.Context(), cj.PrinterID, false); ph != nil {
 		d["Photo"] = ph
@@ -261,7 +277,7 @@ func (s *Service) photoPost(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {
 	id := trimLinkPunct(r.PathValue("id"))
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, humanauth.PasskeyMaxBody+4096)
 	if err := r.ParseForm(); err != nil {
 		s.render(w, http.StatusBadRequest, "done", map[string]any{"Title": "Requête invalide", "Msg": "Formulaire illisible."})
 		return
@@ -271,12 +287,25 @@ func (s *Service) confirmPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plate := strings.EqualFold(r.PostFormValue("plate_clear"), "yes")
-	res, err := s.ApproveAndStart(r.Context(), id, plate, "web") // l'approbation humaine lance l'impression (autostart.go)
+	var res *ApprovalResult
+	var err error
+	if r.PostFormValue("method") == "passkey" {
+		a := r.PostFormValue("assertion")
+		if len(a) > humanauth.PasskeyMaxBody {
+			a = ""
+		}
+		res, err = s.ApproveWithPasskey(r.Context(), id, plate, []byte(a), r) // vérifie la passkey puis ApproveAndStart
+	} else {
+		res, err = s.ApproveAndStart(r.Context(), id, plate, "web") // l'approbation humaine lance l'impression (autostart.go)
+	}
 	if err != nil {
 		st := http.StatusGone
 		msg := closedMsg(err)
-		if errors.Is(err, ErrNeedsApproval) {
+		switch {
+		case errors.Is(err, ErrNeedsApproval):
 			st, msg = http.StatusBadRequest, "Coche l'attestation « plateau vide » pour autoriser."
+		case isPasskeyError(err):
+			st, msg = http.StatusForbidden, err.Error()+". Recharge la page de confirmation puis recommence."
 		}
 		s.render(w, st, "done", map[string]any{"Title": "Non confirmée", "Msg": msg})
 		return
@@ -306,12 +335,15 @@ func (s *Service) stopGet(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusGone, "stop", map[string]any{"Title": "Arrêt", "Closed": strings.ToUpper(msg[:1]) + msg[1:] + "."})
 		return
 	}
-	s.render(w, http.StatusOK, "stop", map[string]any{"Title": "Arrêt d'impression", "V": v, "Nonce": s.issueNonce("stop:" + id), "TZ": localtime.Name()})
+	d := map[string]any{"Title": "Arrêt d'impression", "V": v, "Nonce": s.issueNonce("stop:" + id), "TZ": localtime.Name()}
+	d["PasskeyRequired"] = s.PasskeyRequired(r.Context())
+	d["PasskeyOptions"], d["PasskeyErr"] = s.passkeyBegin(r.Context(), r, humanauth.ApprovalSubject{Kind: "stop", ID: id, Binding: v.PrintJobID})
+	s.render(w, http.StatusOK, "stop", d)
 }
 
 func (s *Service) stopPost(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, humanauth.PasskeyMaxBody+4096)
 	if err := r.ParseForm(); err != nil {
 		s.render(w, http.StatusBadRequest, "done", map[string]any{"Title": "Requête invalide", "Msg": "Formulaire illisible."})
 		return
@@ -320,7 +352,25 @@ func (s *Service) stopPost(w http.ResponseWriter, r *http.Request) {
 		s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Formulaire périmé", "Msg": "Recharge la page d'arrêt puis recommence."})
 		return
 	}
-	if _, err := s.ExecuteStop(r.Context(), id); err != nil {
+	var err error
+	switch {
+	case r.PostFormValue("method") == "passkey":
+		a := r.PostFormValue("assertion")
+		if len(a) > humanauth.PasskeyMaxBody {
+			a = ""
+		}
+		_, err = s.StopWithPasskey(r.Context(), id, []byte(a), r)
+		if err != nil && isPasskeyError(err) {
+			s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Arrêt refusé", "Msg": err.Error() + ". Recharge la page d'arrêt puis recommence."})
+			return
+		}
+	case s.PasskeyRequired(r.Context()):
+		s.render(w, http.StatusForbidden, "done", map[string]any{"Title": "Arrêt refusé", "Msg": humanauth.ErrPasskeyRequired.Error() + "."})
+		return
+	default:
+		_, err = s.ExecuteStop(r.Context(), id)
+	}
+	if err != nil {
 		s.log.Warn("arrêt refusé", "stop", id, "err", err)
 		s.render(w, http.StatusConflict, "done", map[string]any{"Title": "Arrêt non effectué", "Msg": "L'arrêt n'a pas pu être effectué : " + err.Error()})
 		return

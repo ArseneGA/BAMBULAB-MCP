@@ -70,6 +70,11 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	human := humanauth.New(c.Store, humanauth.Options{Secure: opts.requestHTTPS, ClientKey: opts.clientAddr})
 	human.RegisterPages(mux)
 	human.RegisterLaunchCodePages(mux) // /setup/launch-code : code de lancement personnel (launchcode_web.go)
+	// Passkeys (WebAuthn) : RP ID et origines dérivés de BAMBU_PUBLIC_URL, https détecté comme pour le cookie ;
+	// /setup/passkeys (navigateur enregistré) et son script statique (passkey_web.go). Facultatif : sans passkey
+	// enregistrée, rien ne change.
+	humanauth.PasskeysFor(c.Store).Configure(humanauth.PasskeyConfig{PublicURLs: opts.publicURLs(), Secure: opts.requestHTTPS})
+	human.RegisterPasskeyPages(mux)
 
 	registerCatalog(mux, c)
 	registerUpload(mux, c) // envoi de fichiers, import par lien (upload.go)

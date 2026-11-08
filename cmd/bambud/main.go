@@ -101,6 +101,8 @@ func main() {
 			os.Exit(enrollMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "launch-code":
 			os.Exit(launchCodeMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "passkey":
+			os.Exit(passkeyMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "backup":
 			os.Exit(backupMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "restore":
