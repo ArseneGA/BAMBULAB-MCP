@@ -211,3 +211,33 @@ Spec complète : [docs/specs/G10-refonte-navigation-tableau-de-bord.md](specs/G1
 |---|---|---|---|
 | R1 | **Résultat de RDM dans Blender** | Après un calcul de résistance, la pièce colorée par les contraintes (zones fragiles, déplacements, légende, étiquette « hypothèse » sur les charges supposées) s'ouvre dans le Blender du PC via l'extension Printalk pour Blender (jamais de Blender côté serveur). Le serveur prépare le maillage coloré ; l'extension l'importe. | Extension Blender, test de résistance |
 | R2 | **PDF d'un projet, granularité au choix, commenté par Claude** | « Le PDF du projet » avec niveau choisi : vue d'ensemble (chiffres, avancement), par pièce (versions, profils, impressions), par impression (photos tous les 10 %, réglages réels, verdict). Claude ajoute ses commentaires par section ou par photo : il les écrit dans la conversation et les passe à l'outil ; le serveur ne fait que la mise en page (aucune API d'IA). | G9 (PJ2, PJ5, PJ10), export de projet (22) |
+
+## ★ PREMIÈRE TÂCHE — Carnet de bord des dysfonctionnements (demande du 2026-11-09)
+
+| Code | Idée | Contenu |
+|---|---|---|
+| FB0 | **Carnet de bord des dysfonctionnements** | Dès que l'agent (Claude, ChatGPT…) constate un comportement anormal du MCP en cours d'usage (outil qui refuse à tort, réponse incohérente, fausse alerte, donnée périmée, réponse trop lourde…), il le note via un outil dédié (ex. `report_issue` : titre, gravité P0-P3, outil concerné, ce qui était attendu / observé, identifiants d'impression ou d'imprimante, horodatage). Rangé en base (migration additive), sans secret (filtrage des codes et jetons), dédoublonné (même outil + même symptôme → compteur d'occurrences). Consultable d'un coup d'œil : page web « Dysfonctionnements » (Réglages ou Accueil › À faire), carte MCP, outil de lecture et export Markdown à coller à l'agent qui code. États : nouveau → vu → corrigé (commit) / écarté. Instruction serveur demandant à l'agent de l'utiliser spontanément. Aucune API d'IA : le serveur range, l'agent écrit. |
+
+## Retours d'usage du 2026-11-09 (agent utilisateur du MCP, P1S, impressions pj_740… et pj_7d68…)
+
+Déjà amélioré : rapport d'étapes avec mise à niveau prouvée et horodatée ; décodage des codes d'erreur ; FAILED lançable ; arrêt enregistré avec sa cause ; `first_layer` (îlots réels) ; planches-contact en un appel ; faux `material_known` sur PETG Translucent disparu.
+
+| Code | Prio | Problème | À faire |
+|---|---|---|---|
+| FB1 | P0 | Spaghetti non détecté (tronc de support couché vers 100 mm, buse dans le vide) ; `analyze_print_frame` : « pas d'image de référence » | Capturer automatiquement l'image de référence du plateau vide juste après la confirmation humaine ; détection visuelle active par défaut |
+| FB2 | P0 | Fausse alerte « bloquée » pendant la mise à niveau du plateau | Pas d'alerte de blocage pendant chauffe, nettoyage, mise à niveau, calibrations (ou seuil par étape) |
+| FB3 | P0 | Codes d'erreur périmés dans `causes` (`0300_0D00_0002_0001` alors que `hms_count: 0`, `print_error: 0`) | Séparer codes actifs et historique, horodatés |
+| FB4 | P1 | Supports hauts et fins (élancement) non signalés par `validate_print_artifact` : cause de l'échec du 9/11 | Contrôle « tronc plus haut que N × sa section » avec avertissement à acquitter |
+| FB5 | P1 | Accroche analysée sur le maillage (7 îlots, 2 685 mm², « ajouter une bordure ») alors que bordure et bases sont dans le G-code (réel : 14 îlots, 10 331 mm²) | Baser l'avertissement d'accroche sur la couche 1 réelle du G-code |
+| FB6 | P1 | Liste blanche des clés trop courte : refus de `slow_down_layer_time`, `tree_support_branch_diameter`, `tree_support_wall_count`, `curr_bed_type` | Les ajouter (bornes de sécurité) |
+| FB7 | P1 | `flow_cali` et `vibration_cali` à `true` mais « non observée » ; étape 54 « inconnue » | Vérifier l'envoi et l'observation des calibrations ; identifier l'étape 54 |
+| FB8 | P2 | Test de résistance : pas de zone pour le plan de pose (base coupée à Z = 2 mm) ; 36 % de réaction « en traction » sur l'appui | Détecter automatiquement la surface de contact au sol comme zone d'appui |
+| FB9 | P2 | Calcul non convergé (20 000 itérations, ~600 s, 68 N de réaction pour 81 N) | Préconditionneur ou maillage plus grossier par défaut ; verdict explicitement « non convergé » |
+| FB10 | P3 | Planches-contact trompeuses avec supports en arbre (1 143 « couches » au lieu de 841) | Choix des vignettes par hauteur Z, ou couches de la pièce seulement |
+| FB11 | P3 | `get_print_status` énorme (validation complète répétée deux fois) | Mode compact par défaut |
+| FB12 | P3 | Bobine non déclarée : contrôle filament « inconnu » | La confirmation demande le restant et le compare à la masse prévue + marge |
+| FB13 | P3 | Lien d'export : 10 min seulement et réseau privé uniquement | Durée plus longue et accès via l'adresse publique restreinte |
+| FB14 | P3 | Historique de `pj_740…` incomplet (arrêts, redémarrages, relance depuis l'écran la nuit du 8/11) | Enregistrer les événements faits hors Printalk |
+
+Critère d'acceptation : rejouer l'impression du 9/11 — troncs élancés signalés avant la confirmation, pas de « bloquée » pendant la mise à niveau, alerte spontanée à l'apparition du spaghetti.
+
