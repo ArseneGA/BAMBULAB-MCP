@@ -155,3 +155,13 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 | B10 ✅ retenue | **Projets MakerWorld multi-plaques** (3MF avec plaques et couleurs) importés tels quels, découpés et lancés plaque par plaque | Les projets populaires en un geste |
 | B11 ✅ retenue | **Publication MakerWorld assistée** : fiche, photos de la galerie (N22), profils testés, sans publication automatique : tout ce qui peut être fait et simplifié passe par le MCP, l'humain ne fait que le geste final minimal | Partager ses créations proprement |
 | B12 ✅ retenue | **Calibrations natives Bambu** déclenchées et relues (débit dynamique, vibrations) avec historique par buse et par matière | Lien avec S10 |
+
+## Règle d'architecture (2026-11-09)
+**Aucune API d'IA dans Printalk.** Tout ce que fait le serveur est du calcul déterministe (géométrie, découpe Bambu Studio, éléments finis, statistiques). L'intelligence conversationnelle vient uniquement du Claude (ou autre client MCP) de l'utilisateur, avec son propre abonnement. Les résumés produits par le serveur sont des textes construits à partir de chiffres, que Claude présente.
+
+## Idées « effet waouh » retenues (2026-11-09)
+
+| # | Fonction | Comment |
+|---|---|---|
+| W1 | **Sauver une impression ratée à 80 %** | 1) Hauteur saine : dernière couche réussie transmise par l'imprimante + **mesure au pied à coulisse demandée à l'humain** (fait foi). 2) L'humain arase le haut abîmé et donne la nouvelle hauteur ; Printalk **coupe le modèle à cette cote** et garde la partie haute. 3) Alignement au choix : **collier** (la partie haute descend de quelques mm et s'emboîte autour de la base), **gabarit de perçage** imprimé qui épouse la section + goupilles intégrées dans la partie haute, ou **collage à plat** si la surface est grande. 4) Découpe de la partie haute (souvent tête en bas pour une face de collage plane), confirmation humaine habituelle. 5) Conseil de colle selon la matière (CA, époxy pour PETG) et temps de séchage. Pure géométrie (lien S1 couper, N5 logements). |
+| W2 | **L'optimiseur de nuit (sans IA)** | Tâche planifiée la nuit sur le serveur : pour chaque pièce de la semaine, essai systématique de dizaines d'orientations et de réglages, notés par des mesures (surplombs et volume de supports, surface de contact, **temps et grammes réels via Bambu Studio**, résistance via le calcul par éléments finis). Garde les meilleures, écrit un résumé chiffré (« orientation 30° : −40 % de temps, même résistance, supports −60 % »), présenté par Claude à l'ouverture de la conversation et visible dans une carte. Bornes de CPU, n'interfère jamais avec une impression ou une découpe en cours. |
