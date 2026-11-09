@@ -39,7 +39,8 @@ func New(c *core.Core) *mcp.Server {
 			Instructions: "Atelier 3D pour imprimantes Bambu Lab. Les travaux longs renvoient un job_id : " +
 				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
 				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
-				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation.",
+				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation. " +
+				"Pour toute question d'avancement (où en est l'impression, combien de temps, progression), appeler get_print_status ou get_printer_status : la carte de suivi s'affiche.",
 		})
 	if mw := mcpLogMiddleware(c.Log); mw != nil {
 		s.AddReceivingMiddleware(mw) // journal INFO des requêtes MCP (mcplog.go) ; BAMBU_LOG_MCP=off pour le couper

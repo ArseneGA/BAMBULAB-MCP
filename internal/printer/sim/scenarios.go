@@ -111,3 +111,11 @@ func (s *Sim) onFilamentCommand(cmd, seq string) {
 	s.respond(cmd, seq, nil)
 	s.publishDelta(false)
 }
+
+// Commands : toutes les commandes d'impression reçues, dans l'ordre (project_file, pause, resume, stop, ams_*...). Pour prouver
+// qu'un redémarrage du service n'a envoyé AUCUNE commande à l'imprimante.
+func (s *Sim) Commands() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.cmds...)
+}

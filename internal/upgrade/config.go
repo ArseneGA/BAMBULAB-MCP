@@ -1,5 +1,5 @@
 // Package upgrade met à jour automatiquement le serveur Linux : le serveur TIRE les mises à jour (git fetch de
-// origin/main), n'installe que les commits dont la CI GitHub est verte, ne redémarre jamais pendant une impression,
+// origin/main), n'installe que les commits dont la CI GitHub est verte, ne redémarre pas pendant un dépôt, une confirmation ou un lancement en cours (une impression en cours est tolérée, ATELIER_UPDATE_ALLOW_DURING_PRINT),
 // sauvegarde avant, construit dans releases/<sha>, bascule le lien `current`, contrôle la santé et revient en arrière
 // (en restaurant la sauvegarde si le schéma de la base a changé) en cas d'échec.
 //
@@ -69,16 +69,21 @@ type Config struct {
 	PublicURL   string            // BAMBU_PUBLIC_URL : base des liens des notifications
 	AppEnv      map[string]string // atelier.env : jamais journalisé (contient le jeton d'API)
 
-	Window         Window
-	Pin            string // sha ou préfixe ; vide = suivre la branche
-	Disabled       bool
-	KeepReleases   int
-	KeepBackups    int
-	RefreshUpdater bool // ATELIER_UPDATE_REFRESH_UPDATER=1 : remplacer l'outil exécuté en root par celui de la version installée (déconseillé)
-	RequiredChecks []string
-	SmokeMode      string
-	HealthWait     time.Duration
-	StableWait     time.Duration
+	Window       Window
+	Pin          string // sha ou préfixe ; vide = suivre la branche
+	Disabled     bool
+	KeepReleases int
+	KeepBackups  int
+	// AllowDuringPrint : une impression en cours (PRINTING) ou lancée depuis Studio / le téléphone ne retarde PAS la mise à jour
+	// (ATELIER_UPDATE_ALLOW_DURING_PRINT, défaut 1). Redémarrer bambud n'interrompt pas l'impression : le fichier est sur la carte
+	// SD de l'imprimante et le suivi reprend à la reconnexion MQTT. Un dépôt FTPS, une confirmation / un arrêt / une action en
+	// attente de l'humain, un lancement en cours d'accusé (START_REQUESTED, START_UNKNOWN) et un travail en cours bloquent toujours.
+	AllowDuringPrint bool
+	RefreshUpdater   bool // ATELIER_UPDATE_REFRESH_UPDATER=1 : remplacer l'outil exécuté en root par celui de la version installée (déconseillé)
+	RequiredChecks   []string
+	SmokeMode        string
+	HealthWait       time.Duration
+	StableWait       time.Duration
 }
 
 // DisabledFile, PinFile : chemins des interrupteurs.
@@ -186,6 +191,12 @@ func LoadConfig(confDir string, getenv func(string) string) (Config, error) {
 		return c, fmt.Errorf("ATELIER_UPDATE_WINDOW : %w", err)
 	}
 	c.RefreshUpdater = get("REFRESH_UPDATER", "") == "1"
+	switch strings.ToLower(get("ALLOW_DURING_PRINT", "1")) {
+	case "0", "false", "no", "non", "off":
+		c.AllowDuringPrint = false
+	default:
+		c.AllowDuringPrint = true
+	}
 	for _, n := range strings.Split(get("REQUIRED_CHECKS", ""), ";") {
 		if n = strings.TrimSpace(n); n != "" {
 			c.RequiredChecks = append(c.RequiredChecks, n)

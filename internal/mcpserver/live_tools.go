@@ -47,6 +47,10 @@ const (
 func init() {
 	toolViewMeta["get_print_status"] = AppToolMeta(LiveViewURI)
 	toolViewMeta["wait_for_print_change"] = AppToolMeta(LiveViewURI)
+	// « Ça en est où ? » : le modèle appelle souvent get_printer_status au lieu de get_print_status. La carte de suivi doit
+	// s'afficher dans les deux cas : elle retrouve seule l'impression active à partir de l'imprimante (get_live_state(printer_id)),
+	// ou affiche l'état de l'imprimante quand aucune impression n'est suivie.
+	toolViewMeta["get_printer_status"] = AppToolMeta(LiveViewURI)
 }
 
 // LiveFrameInput : imprimante (facultative s'il n'y en a qu'une).
@@ -71,7 +75,8 @@ type LiveFrame struct {
 
 // LiveStateInput : impression suivie.
 type LiveStateInput struct {
-	PrintJobID     string `json:"print_job_id"`
+	PrintJobID     string `json:"print_job_id,omitempty" jsonschema:"impression suivie ; facultatif si printer_id est donné (l'impression active de l'imprimante est retrouvée)"`
+	PrinterID      string `json:"printer_id,omitempty" jsonschema:"imprimante : sans print_job_id, retrouve l'impression active (PRINTING, START_REQUESTED, START_UNKNOWN) ; sinon rend l'état de l'imprimante sans impression"`
 	WithFinalPhoto bool   `json:"with_final_photo,omitempty" jsonschema:"si l'impression est terminée : joindre la photo de fin (réduite)"`
 }
 
@@ -97,6 +102,7 @@ type LiveState struct {
 	HeightTotalMM   *float64             `json:"height_total_mm,omitempty"`
 	CameraAvailable bool                 `json:"camera_available" jsonschema:"une caméra est configurée sur ce serveur (le modèle d'imprimante peut quand même ne pas en avoir une lisible)"`
 	Final           *LiveFinal           `json:"final,omitempty"`
+	NoActivePrint   bool                 `json:"no_active_print,omitempty" jsonschema:"vrai quand la carte a été demandée par imprimante et qu'aucune impression active n'y est suivie : seul status.printer est renseigné"`
 }
 
 // liveCam partage l'image réduite entre tous les appelants : camera.LiveFrame ne capture qu'une fois par fenêtre, et la
@@ -203,10 +209,29 @@ func AddLiveTools(s *mcp.Server, c *core.Core) {
 
 	addTool(s, &mcp.Tool{
 		Name: "get_live_state", Title: "État du suivi en direct",
-		Description: "RÉSERVÉ À LA VUE DE SUIVI (non destiné au modèle ; utiliser get_print_status) : le suivi complet de l'impression (progression, couche, températures, étapes, alertes) plus l'heure de fin locale, la hauteur imprimée et, " +
+		Description: "RÉSERVÉ À LA VUE DE SUIVI (non destiné au modèle ; utiliser get_print_status ou get_printer_status) : avec print_job_id OU printer_id (impression active de l'imprimante, sinon no_active_print=true et l'état de l'imprimante) le suivi complet de l'impression (progression, couche, températures, étapes, alertes) plus l'heure de fin locale, la hauteur imprimée et, " +
 			"une fois terminée, le résumé final (durée réelle, grammes, photo de fin). Même effet de bord local que get_print_status.",
 		Annotations: obs, Meta: appOnlyMeta(),
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in LiveStateInput) (*mcp.CallToolResult, LiveState, error) {
+		if in.PrintJobID == "" { // carte ouverte depuis get_printer_status : retrouver l'impression active de l'imprimante
+			id, err := resolvePrinter(ctx, c, in.PrinterID)
+			if err != nil {
+				return nil, LiveState{}, err
+			}
+			jobID, err := activePrintJobID(ctx, p, id)
+			if err != nil {
+				return nil, LiveState{}, err
+			}
+			if jobID == "" {
+				ps, err := p.GetPrinterStatus(ctx, id)
+				if err != nil {
+					return nil, LiveState{}, err
+				}
+				out := LiveState{Status: printing.PrintStatus{Job: printing.Job{PrinterID: id}, Printer: ps}, NoActivePrint: true, CameraAvailable: live != nil}
+				return textResult(fmt.Sprintf("Aucune impression suivie sur %s : imprimante %s.", id, ps.State)), out, nil
+			}
+			in.PrintJobID = jobID
+		}
 		st, err := p.GetPrintStatus(ctx, in.PrintJobID)
 		if err != nil {
 			return nil, LiveState{}, err
@@ -214,6 +239,25 @@ func AddLiveTools(s *mcp.Server, c *core.Core) {
 		out := buildLiveState(ctx, c, live, st, in.WithFinalPhoto)
 		return textResult(printStatusText(st)), out, nil
 	})
+}
+
+// activePrintJobID : l'impression la plus récente de l'imprimante qui est en cours (ou dont le lancement est en cours ou
+// incertain) ; vide s'il n'y en a pas.
+func activePrintJobID(ctx context.Context, p *printing.Service, printerID string) (string, error) {
+	jobs, err := p.ListJobs(ctx, "", 0) // du plus récent au plus ancien
+	if err != nil {
+		return "", err
+	}
+	for _, j := range jobs {
+		if j.PrinterID != printerID {
+			continue
+		}
+		switch j.State {
+		case contracts.PrintPrinting, contracts.PrintStartRequested, contracts.PrintStartUnknown:
+			return j.ID, nil
+		}
+	}
+	return "", nil
 }
 
 func isTerminalPrint(s contracts.PrintState) bool {

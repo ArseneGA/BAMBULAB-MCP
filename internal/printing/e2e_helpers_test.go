@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -44,6 +45,8 @@ type rig struct {
 	printerID string
 	// human : client HTTP d'un navigateur ENREGISTRÉ (cookie obtenu par le flux enroll, comme le ferait l'humain).
 	human *http.Client
+	// stop arrête ce service (idempotent) : sert à simuler un redémarrage de bambud sur le même dossier de données.
+	stop func()
 }
 
 func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
@@ -84,7 +87,12 @@ func fakeWorker(_ context.Context, cmd string, req map[string]any) (json.RawMess
 
 func newRig(t *testing.T, studio string) *rig {
 	t.Helper()
-	dir := t.TempDir()
+	return openRig(t, studio, t.TempDir(), true)
+}
+
+// openRig ouvre un service sur le dossier dir (neuf, ou celui d'un service arrêté : redémarrage).
+func openRig(t *testing.T, studio, dir string, enroll bool) *rig {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	c, err := core.Open(ctx, core.Config{DataDir: dir, Logger: captureLogger(), StudioPath: studio, Catalog: catalog.Config{Worker: fakeWorker},
 		PollInterval: 20 * time.Millisecond, HeartbeatInterval: 100 * time.Millisecond, AllowAnyPrinterHost: true /* simulateur en loopback */})
@@ -104,16 +112,22 @@ func newRig(t *testing.T, studio string) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cs.Close()
-		ss.Close()
-		web.Close()
-		cancel()
-		<-done
-		c.Close()
-	})
-	r := &rig{t: t, c: c, web: web, cs: cs, dataDir: dir}
-	r.human = r.enrollBrowser()
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			cs.Close()
+			ss.Close()
+			web.Close()
+			cancel()
+			<-done
+			c.Close()
+		})
+	}
+	t.Cleanup(stop)
+	r := &rig{t: t, c: c, web: web, cs: cs, dataDir: dir, stop: stop}
+	if enroll {
+		r.human = r.enrollBrowser()
+	}
 	c.Printing.SetReconcileSettle(200 * time.Millisecond)
 	return r
 }

@@ -32,7 +32,7 @@ export interface PrintJob {
   archived?: boolean; trashed?: boolean; stopped_by_user?: boolean;
   last_error?: string; events?: Array<{ at: string; event: string; from: string; to: string; note?: string }>; created_at: string; updated_at: string; next?: string;
 }
-export interface PromptDetails { file: string; printer_name: string; printer_model: string; sha256: string; plate: number; materials: FilamentAssignment[]; estimated_minutes?: number; estimated_grams?: number; alerts?: string[]; bed_leveling?: boolean; adhesion_warnings?: string[] }
+export interface PromptDetails { file: string; printer_name: string; printer_model: string; sha256: string; plate: number; materials: FilamentAssignment[]; estimated_minutes?: number; estimated_grams?: number; alerts?: string[]; bed_leveling?: boolean; flow_cali?: boolean; vibration_cali?: boolean; timelapse?: boolean; adhesion_warnings?: string[]; overhang_warnings?: string[] }
 /** Températures et origine du G-code lues dans l'archive (internal/printing/safety_view.go). */
 export interface SafetyView {
   analysed: boolean; materials?: string[]; nozzle_start_max_c: number; nozzle_first_layer_c: number; nozzle_print_min_c: number; nozzle_print_max_c: number;

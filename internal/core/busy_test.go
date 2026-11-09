@@ -34,7 +34,7 @@ func TestBusyFreeWhenNothingRuns(t *testing.T) {
 func TestBusyPrintStates(t *testing.T) {
 	ctx := context.Background()
 	for state, want := range map[contracts.PrintState]string{
-		contracts.PrintPrinting:       printing.BusyPrintActive,
+		contracts.PrintPrinting:       printing.BusyPrintRunning,
 		contracts.PrintStartRequested: printing.BusyPrintActive,
 		contracts.PrintStartUnknown:   printing.BusyPrintActive,
 		contracts.PrintUploading:      printing.BusyDepositProgress,
