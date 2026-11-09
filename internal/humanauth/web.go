@@ -61,32 +61,14 @@ func pageHeadersFA(w http.ResponseWriter, extra, origin string) {
 	h.Set("X-Content-Type-Options", "nosniff")
 }
 
-// Style est la feuille de style commune des pages humaines.
-const Style = `:root{color-scheme:light dark;--bg:#f6f5f2;--fg:#1d2024;--mut:#5b6068;--line:#cfcbc2;--acc:#1f4f8f;--warn:#9a3412}
-@media (prefers-color-scheme:dark){:root{--bg:#15171a;--fg:#e8e9eb;--mut:#a0a5ad;--line:#33373d;--acc:#7fb0ee;--warn:#f0a070}}
-body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;margin:0;padding:24px 16px}
-main{max-width:640px;margin:0 auto}h1{font-size:1.35rem;margin:0 0 .75rem}
-dl{display:grid;grid-template-columns:max-content 1fr;gap:.35rem 1rem;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:.9rem 0;margin:1rem 0}
-dt{color:var(--mut)}dd{margin:0;overflow-wrap:anywhere}code{font:13px ui-monospace,monospace}
-.warn{border-left:4px solid var(--warn);padding:.5rem .8rem;margin:1rem 0}
-label.chk{display:flex;gap:.6rem;align-items:flex-start;margin:1rem 0;font-weight:600}
-input[type=password],input[type=text]{width:100%;box-sizing:border-box;padding:.55rem;font:inherit;border:1px solid var(--line);background:transparent;color:inherit}
-button{font:inherit;font-weight:600;padding:.6rem 1.2rem;border:2px solid var(--acc);background:var(--acc);color:var(--bg);cursor:pointer}
-button:focus-visible,input:focus-visible{outline:3px solid var(--warn);outline-offset:2px}
-.ok{border-left:4px solid var(--acc);padding:.5rem .8rem}`
-
-var tpl = template.Must(template.New("h").Parse(`{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>{{.Title}}</title><style>` + Style + `</style></head><body><main>{{end}}
-{{define "foot"}}</main></body></html>{{end}}
-{{define "enroll"}}{{template "head" .}}<h1>Enregistrer ce navigateur</h1>
+var tpl = template.Must(template.New("h").Parse(Layout("", "", "") + `{{define "enroll"}}{{template "head" .}}<h1>Enregistrer ce navigateur</h1>
 {{if .Msg}}<p class="warn">{{.Msg}}</p>{{end}}
 <p>Les autorisations de lancer ou d'arrêter une impression ne se donnent que depuis un navigateur enregistré. Sur le poste qui fait tourner bambud, ouvre un terminal et lance <code>bambud enroll</code> : le code à 8 caractères s'affiche dans ce terminal (il n'est jamais transmis à Claude). Saisis-le ici.</p>
 <form method="post" action="/enroll" autocomplete="off"><input type="hidden" name="next" value="{{.Next}}">
 <p><label>Code d'enregistrement<br><input type="text" name="code" required minlength="8" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false"></label></p>
 <p><label>Nom de ce navigateur (facultatif)<br><input type="text" name="label" maxlength="80" autocomplete="off"></label></p>
 <p><button type="submit">Enregistrer</button></p></form>{{template "foot"}}{{end}}
-{{define "done"}}{{template "head" .}}<h1>{{.Title}}</h1><p class="ok">{{.Msg}}</p>{{if .Form}}<form method="post" action="/enroll/logout"><button type="submit">Retirer ce navigateur</button></form>{{end}}{{template "foot"}}{{end}}`))
+{{define "done"}}{{template "head" .}}<h1>{{.Title}}</h1><p class="ok">{{.Msg}}</p>{{if .Form}}<form method="post" action="/enroll/logout"><button type="submit" class="danger">Retirer ce navigateur</button></form>{{end}}{{template "foot"}}{{end}}`))
 
 // SafeNext n'accepte qu'un chemin local (jamais une URL absolue ni un « // »).
 func SafeNext(n string) string {

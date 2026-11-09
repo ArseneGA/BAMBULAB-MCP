@@ -20,19 +20,15 @@ var passkeyJS []byte
 // Derrière Require (navigateur enregistré + Sec-Fetch de navigation + nonce à usage unique lié à CE navigateur). La
 // cérémonie WebAuthn est jouée par le script statique ; le résultat revient par un formulaire classique (navigation).
 
-var passkeyTpl = template.Must(template.New("pk").Funcs(template.FuncMap{"lt": localtime.Page}).Parse(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>Passkeys</title><style>` + Style + `
-table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border-bottom:1px solid var(--line);padding:.35rem .5rem;text-align:left;vertical-align:top}
-.revoked{color:var(--mut);text-decoration:line-through}</style></head><body><main>
+var passkeyTpl = template.Must(template.New("pk").Funcs(template.FuncMap{"lt": localtime.Page}).Parse(Layout("Passkeys", "", "") + `{{template "head" .}}
 <h1>Passkeys</h1>
 <p id="pk-msg" role="status" {{if or .Msg .Err}}class="{{if .Err}}warn{{else}}ok{{end}}"{{else}}hidden{{end}}>{{if .Err}}{{.Err}}{{else}}{{.Msg}}{{end}}</p>
 <p>Une passkey permet d'approuver un lancement ou un arrêt avec ton empreinte, ton visage, le code de ton appareil ou une clé de sécurité, <strong>sans code à taper</strong>. Elle est liée à ce site : la clé privée ne quitte jamais ton appareil, bambud ne garde que la clé publique. <strong>Elle est facultative</strong> : le bouton, le code de lancement et le lien du navigateur continuent de marcher tant que tu n'exiges pas la passkey.</p>
 {{if .EnvErr}}<p class="warn" role="alert">{{.EnvErr}}</p>{{else}}<dl><dt>Site (RP ID)</dt><dd><code>{{.Env.RPID}}</code></dd><dt>Origine</dt><dd><code>{{.Env.Origin}}</code></dd></dl>{{end}}
 <h2>Passkeys enregistrées</h2>
-{{if .Keys}}<table><thead><tr><th>Nom</th><th>Créée</th><th>Dernier usage</th><th></th></tr></thead><tbody>
+{{if .Keys}}<div class="tw"><table><thead><tr><th>Nom</th><th>Créée</th><th>Dernier usage</th><th></th></tr></thead><tbody>
 {{range .Keys}}<tr{{if .Revoked}} class="revoked"{{end}}><td>{{.Label}}{{if .Synced}} <small>(synchronisée)</small>{{end}}<br><small><code>{{.ID}}</code> · <code>{{.RPID}}</code></small></td><td>{{lt .CreatedAt}}</td><td>{{if .LastUsedAt.IsZero}}jamais{{else}}{{lt .LastUsedAt}}{{end}}</td>
-<td>{{if .Revoked}}révoquée{{else}}<form method="post"><input type="hidden" name="nonce" value="{{$.Nonce}}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="id" value="{{.ID}}"><button type="submit">Révoquer</button></form>{{end}}</td></tr>{{end}}</tbody></table>
+<td>{{if .Revoked}}révoquée{{else}}<form method="post"><input type="hidden" name="nonce" value="{{$.Nonce}}"><input type="hidden" name="action" value="revoke"><input type="hidden" name="id" value="{{.ID}}"><button type="submit" class="danger">Révoquer</button></form>{{end}}</td></tr>{{end}}</tbody></table></div>
 {{else}}<p>Aucune passkey enregistrée.</p>{{end}}
 {{if .Options}}<h2>Enregistrer une passkey</h2>
 <form method="post" autocomplete="off" data-pk-mode="create" data-pk-options="{{.Options}}"><input type="hidden" name="nonce" value="{{.Nonce}}"><input type="hidden" name="action" value="register">
@@ -47,7 +43,7 @@ table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border-bottom:1px 
 {{else}}<p><small>Enregistre d'abord une passkey pour pouvoir l'exiger.</small></p>{{end}}{{end}}
 <p><small>Hors secours : <code>bambud passkey --require=off</code> sur le poste du service lève l'exigence, <code>bambud passkey --list</code> / <code>--revoke ID</code> gère les passkeys.</small></p>
 <script src="` + PasskeyScriptPath + `" defer></script>
-</main></body></html>`))
+{{template "foot"}}`))
 
 // RegisterPasskeyPages monte GET/POST /setup/passkeys (derrière Require) et le script statique.
 func (s *Service) RegisterPasskeyPages(mux *http.ServeMux) {

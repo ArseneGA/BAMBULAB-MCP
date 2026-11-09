@@ -7,11 +7,14 @@ package webui
 import (
 	"bytes"
 	"embed"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 )
 
 //go:embed all:assets
@@ -105,14 +108,16 @@ func handlerFor(f fs.FS) http.Handler {
 	})
 }
 
-const notBuiltPage = `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Atelier : interface non construite</title>
-<style>:root{color-scheme:light dark}body{font:15px/1.5 system-ui,'Segoe UI',sans-serif;margin:0;padding:48px 24px;max-width:640px}
-h1{font-size:20px;margin:0 0 8px}code{font:13px ui-monospace,Consolas,monospace;background:rgba(127,127,127,.18);padding:2px 5px;border-radius:3px}
-p{margin:8px 0}.ok{opacity:.75}</style></head><body>
+// notBuiltTpl : page humaine « interface non construite », dans le gabarit commun (humanauth.Layout).
+var notBuiltTpl = template.Must(template.New("nb").Parse(humanauth.Layout("Interface non construite", "", "") + `{{template "head" .}}
 <h1>Interface non construite</h1>
 <p>Le service <code>bambud</code> fonctionne, mais le binaire a été compilé sans l'interface web.</p>
 <p>Construire l'interface puis le binaire : <code>scripts/build.ps1</code> (Windows) ou <code>make build</code>.</p>
-<p class="ok">L'API (<code>/api</code>) et le serveur MCP (<code>/mcp</code>) restent disponibles.</p>
-</body></html>`
+<p class="dim">L'API (<code>/api</code>) et le serveur MCP (<code>/mcp</code>) restent disponibles.</p>
+{{template "foot"}}`))
+
+var notBuiltPage = func() string {
+	var b strings.Builder
+	_ = notBuiltTpl.Execute(&b, nil)
+	return b.String()
+}()

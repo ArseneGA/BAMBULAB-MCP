@@ -37,13 +37,11 @@ func (o Options) httpsRequired(w http.ResponseWriter, r *http.Request) {
 	if base := o.firstHTTPSURL(); base != "" {
 		link = base + r.URL.RequestURI()
 	}
-	_ = httpsRequiredTpl.Execute(w, map[string]any{"Msg": HTTPSRequiredMessage, "Link": link, "Style": template.CSS(humanauth.Style)})
+	_ = httpsRequiredTpl.Execute(w, map[string]any{"Msg": HTTPSRequiredMessage, "Link": link})
 }
 
-var httpsRequiredTpl = template.Must(template.New("https").Parse(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>HTTPS requis</title><style>{{.Style}}</style></head><body><main><h1>HTTPS requis</h1>
+var httpsRequiredTpl = template.Must(template.New("https").Parse(humanauth.Layout("HTTPS requis", "", "") + `{{template "head" .}}<h1>HTTPS requis</h1>
 <p class="warn">{{.Msg}}</p>
 {{if .Link}}<p>Cette page exige HTTPS : ouvrez <a href="{{.Link}}">{{.Link}}</a></p>
 {{else}}<p>Aucune URL https n'est configurée (BAMBU_PUBLIC_URL). Exposez bambud en https (par exemple <code>tailscale serve</code>) ou ouvrez cette page depuis le poste de bambud via <code>http://localhost</code>. L'API JSON et /mcp restent utilisables en http avec le jeton.</p>{{end}}
-</main></body></html>`))
+{{template "foot"}}`))
