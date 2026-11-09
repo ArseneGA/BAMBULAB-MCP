@@ -134,24 +134,24 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 | N21 | **Commande vocale depuis le téléphone** : « Printalk, où en est l'impression ? » | Suivre l'atelier les mains prises |
 | N22 ✅ retenue | **Galerie / portfolio** des objets réalisés (photos finales, réglages, coût) + modèles 3D interactifs, versions et journal photo (N19), exportable en page web ou PDF | Montrer ce qu'on fabrique |
 
-### Blender dans Printalk (réponse à N16, 2026-11-09)
-Deux niveaux possibles :
-1. **Blender sans écran sur le serveur** (`blender -b` + scripts Python versionnés dans le dépôt) : remaillage propre, booléens, lissage, décimation, rendus réalistes (N2 : vraie matière, translucidité, chrome), animations type reel. Printalk l'appelle comme il appelle Bambu Studio. Faisable dans notre code, sans dépendre du PC.
-2. **Le Blender interactif du PC** reste piloté par le MCP Blender existant ; Claude enchaîne les deux. Option : l'agent Windows (bambu-agent) relaie les fichiers entre Blender et Printalk (dossier d'échange surveillé), pour l'aller-retour sculpture → réparation/chiffrage → carte de résistance réimportée en couleurs.
-Recommandation : faire (1) dans Printalk, garder (2) comme pont.
+### Blender dans Printalk (décision du 2026-11-09)
+**Uniquement le Blender de l'ordinateur de l'utilisateur**, pas de Blender sur le serveur.
+- Printalk fournit son **propre module complémentaire Blender** (un fichier .zip téléchargeable depuis l'interface et depuis Claude) qui se connecte à Printalk et expose ses fonctions dans Blender (envoyer la sculpture vers Printalk, recevoir la pièce réparée/orientée, la carte de résistance en couleurs, les rendus) et aux outils MCP.
+- Si Printalk détecte qu'aucun Blender n'est relié, il le dit et recommande : « c'est mieux d'avoir Blender sur ton ordinateur : installe Blender, puis ce module (.zip) : Édition > Préférences > Modules complémentaires > Installer depuis le disque ». Sans Blender, tout le reste de Printalk fonctionne.
+- Les rendus réalistes (N2) passent par ce Blender quand il est relié ; sinon, rendu simplifié côté serveur.
 
 ### Idées dans l'univers Bambu Lab — B1 à B12 (à arbitrer)
 | # | Idée | Pourquoi |
 |---|---|---|
-| B1 | **MakerWorld complet** : chercher, importer un modèle avec ses profils d'impression, comparer avec nos réglages, suivre les remixes | La bibliothèque Bambu à portée de phrase |
-| B2 | **Lecture des puces RFID des bobines Bambu** (via AMS) : inventaire automatique (matière, couleur exacte, lot, poids restant) | Plus aucune saisie de bobine |
-| B3 | **Catalogue officiel des filaments Bambu** (couleurs hex, finitions, températures) pour l'aperçu réaliste et le choix de couleur | Couleurs justes partout |
+| B1 ✅ retenue | **MakerWorld complet** : chercher, importer un modèle avec ses profils d'impression, comparer avec nos réglages, suivre les remixes | La bibliothèque Bambu à portée de phrase |
+| B2 ✅ retenue | **Lecture des puces RFID des bobines Bambu** (via AMS) : inventaire automatique (matière, couleur exacte, lot, poids restant) | Plus aucune saisie de bobine |
+| B3 ✅ retenue | **Catalogue officiel des filaments Bambu** (couleurs hex, finitions, températures) pour l'aperçu réaliste et le choix de couleur | Couleurs justes partout |
 | B4 | **Plan d'entretien** : graissage des tiges, nettoyage carbone, buse à changer, courroies, selon les heures réelles d'impression ; rappels et guides pas à pas | Une P1S qui dure |
 | B5 | **Buses et plaques** : détection/déclaration de la buse (0,2/0,4/0,6/0,8, acier trempé), refus des matières abrasives sur buse laiton, plaque conseillée par matière | Éviter les erreurs coûteuses |
 | B6 | **Résultats des inspections natives** (lidar X1, première couche, caméra) remontés dans le journal et le diagnostic d'échec | Exploiter tous les capteurs Bambu |
 | B7 | **Modules H2D** : buse double, laser et découpe (gravure, découpe de carton/bois) avec les mêmes garde-fous humains | Toute la gamme Bambu |
 | B8 | **AMS 2 Pro / AMS HT** : séchage des bobines piloté, réglage d'humidité par matière | Lien avec N10 |
-| B9 | **Firmware** : suivi des versions, notes de version, alerte si une mise à jour touche le mode LAN/développeur (risque Authorization Control) | Ne pas se faire surprendre |
-| B10 | **Projets MakerWorld multi-plaques** (3MF avec plaques et couleurs) importés tels quels, découpés et lancés plaque par plaque | Les projets populaires en un geste |
-| B11 | **Publication MakerWorld assistée** : fiche, photos de la galerie (N22), profils testés, sans publication automatique (geste humain) | Partager ses créations proprement |
-| B12 | **Calibrations natives Bambu** déclenchées et relues (débit dynamique, vibrations) avec historique par buse et par matière | Lien avec S10 |
+| B9 ✅ retenue | **Firmware** : suivi des versions, notes de version, alerte si une mise à jour touche le mode LAN/développeur (risque Authorization Control) | Ne pas se faire surprendre |
+| B10 ✅ retenue | **Projets MakerWorld multi-plaques** (3MF avec plaques et couleurs) importés tels quels, découpés et lancés plaque par plaque | Les projets populaires en un geste |
+| B11 ✅ retenue | **Publication MakerWorld assistée** : fiche, photos de la galerie (N22), profils testés, sans publication automatique : tout ce qui peut être fait et simplifié passe par le MCP, l'humain ne fait que le geste final minimal | Partager ses créations proprement |
+| B12 ✅ retenue | **Calibrations natives Bambu** déclenchées et relues (débit dynamique, vibrations) avec historique par buse et par matière | Lien avec S10 |
