@@ -72,7 +72,7 @@ func TestSystemBusyEndpoint(t *testing.T) {
 		t.Fatalf("impression active : %d %v", st, out)
 	}
 	rs, _ := out["reasons"].([]any)
-	if len(rs) == 0 || rs[0].(map[string]any)["code"] != printing.BusyPrintActive {
+	if len(rs) == 0 || rs[0].(map[string]any)["code"] != printing.BusyPrintRunning {
 		t.Fatalf("raisons : %v", out["reasons"])
 	}
 }

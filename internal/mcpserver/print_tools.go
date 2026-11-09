@@ -187,7 +187,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "get_printer_status", Title: "État de l'imprimante",
 		Description: "État normalisé lu via l'adaptateur (idle, preparing, printing...), progression, températures, erreurs, FRAÎCHEUR (âge de la dernière information, stale). " +
-			"Un état idle ne prouve pas que le plateau est vide.",
+			"Un état idle ne prouve pas que le plateau est vide. " +
+			"Pour toute question d'avancement (où en est l'impression, combien de temps, progression) : appeler get_print_status ou get_printer_status, la carte de suivi en direct s'affiche (pendant une impression : caméra, progression, couche, temps restant, boutons Arrêter/Reprendre validés par l'humain).",
 		Annotations: ro,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in PrinterIDInput) (*mcp.CallToolResult, printing.PrinterStatus, error) {
 		st, err := p.GetPrinterStatus(ctx, in.PrinterID)
@@ -207,7 +208,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			"Modèle, imprimante, révision de profil (ou variante appliquée). Filaments : preset exact OU nom libre (« PETG transparent », « PLA mat »), voir list_filaments. " +
 			"RETOUR IMMÉDIAT avec un job_id : la découpe dure de quelques secondes à plusieurs minutes et continue en arrière-plan (une seule à la fois, les suivantes sont « en file, position n »). " +
 			"Ne JAMAIS considérer l'appel comme échoué parce que la découpe n'est pas finie : suivre avec get_job_status(job_id) (pourcentage estimé, phase, durée restante) ou get_print_status jusqu'à VALIDATED. " +
-			"Refuse tout de suite une pièce qui ne tient pas sur la machine (message avec dimensions et zone utile). L'artefact est conservé par empreinte. Aucun envoi à l'imprimante.",
+			"Refuse tout de suite une pièce qui ne tient pas sur la machine (message avec dimensions et zone utile). L'artefact est conservé par empreinte. Aucun envoi à l'imprimante. " +
+			"Une fois découpée (VALIDATED), appeler show_gcode_preview(print_job_id) : visionneuse 3D couche par couche de la découpe réelle.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.SliceInput) (*mcp.CallToolResult, SliceOut, error) {
 		j, err := p.ExecuteHeadlessSlice(ctx, in)
@@ -215,7 +217,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			return nil, SliceOut{}, err
 		}
 		pr := p.ProgressFor(ctx, *j)
-		txt := fmt.Sprintf("Impression %s : %s. Découpe mise en file (job_id %s) : elle continue en arrière-plan, suivre avec get_job_status.", j.ID, j.State, j.SliceJobID)
+		txt := fmt.Sprintf("Impression %s : %s. Découpe mise en file (job_id %s) : elle continue en arrière-plan, suivre avec get_job_status. %s", j.ID, j.State, j.SliceJobID, GcodeSuggestion)
 		if pr != nil && pr.QueuePosition != nil {
 			txt += fmt.Sprintf(" Position %d dans la file.", *pr.QueuePosition)
 		}
@@ -223,7 +225,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur) : " + j.Adhesion.Summary()
 		}
 		return textResult(txt),
-			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
+			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis show_gcode_preview(print_job_id) pour montrer la découpe, puis validate_print_artifact avec l'imprimante réelle."}, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -318,7 +320,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			"stage_report : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression d'après son étape courante (mise à niveau du plateau, chauffe, nettoyage de la buse, calibrations) avec l'heure de chaque étape ; " +
 			"printer.error_details : print_error et HMS décodés. wait_seconds (1 à 60) : attend qu'un état ou une étape change avant de répondre. " +
 			"with_photo (défaut vrai pendant l'impression) joint un instantané de la caméra comme IMAGE : regarde-la et dis ce que tu y vois (pièce, buse, spaghetti, décollement) ; with_photo=false pour du texte seul. " +
-			"Dans Claude Desktop une carte de suivi en direct (caméra, progression, températures, boutons Arrêter/Reprendre validés par l'humain) s'affiche ; sinon ce texte et cette image suffisent. " +
+			"À appeler pour toute question d'avancement (où en est, combien de temps, progression). Dans Claude Desktop une carte de suivi en direct (caméra, progression, températures, boutons Arrêter/Reprendre validés par l'humain) s'affiche ; sinon ce texte et cette image suffisent. " +
 			"Effet de bord local : relit l'imprimante et met à jour l'impression (pas en lecture seule au sens strict).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in PrintStatusInput) (*mcp.CallToolResult, printing.PrintStatus, error) {

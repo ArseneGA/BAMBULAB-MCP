@@ -134,10 +134,19 @@ Constat (2026-11-08) : derrière `cmd /c npx -y mcp-remote http://…:7878/mcp -
 | `/oauth/register`, `/oauth/token` | POST | DCR, jetons |
 | `/oauth/authorize` | GET | page « Continuer » |
 | `/oauth/consent/{id}` | GET, POST | cookie d'un **navigateur enregistré** (voir 3 bis.3) |
+| `/upload/{jeton}` | PUT, POST | **envoi d'un fichier 3D par lien à usage unique** (`create_upload_link`) : jeton de 43 caractères `[A-Za-z0-9_-]`, 10 minutes, une seule fois, taille et types bornés ; aucune autre authentification (voir 3 bis.1 bis) |
 | `/health` | GET | réduit à `{"status":"ok"}` (ni version, ni schéma, ni état des vues) |
 | `/about`, `/privacy`, `/icon.svg`, `/robots.txt` | GET | pages statiques en français, sans script ni ressource externe ; contact = `BAMBU_CONTACT_EMAIL` (sinon « contact non configuré ») |
 
 **Tout le reste répond 404** (pas 401, pour ne rien révéler), avec ou sans Bearer : `/confirm`, `/stop`, `/action`, `/setup/*`, `/enroll`, `/agents`, `/api/*` (dont `/api/system/busy`), `/agent/v1`, `/agent/v2`, la SPA, tout autre `.well-known`. Le filtre passe **avant** le garde (Host, Origin, jeton). Aucun jeton OAuth ne vaut hors `/mcp`. L'écouteur principal est **inchangé**. Tests : `internal/httpapi/public_test.go` (liste blanche exacte, flux OAuth complet sur l'écouteur public, limites), `cmd/bambud/doctor_test.go`.
+
+### 3 bis.1 bis Envoi d'un fichier par lien (`create_upload_link`)
+
+Le seul chemin d'écriture ajouté à la liste blanche. Claude (mode connecteur) crée un fichier dans son espace de code ; il appelle `create_upload_link(filename, size, sha256)` et exécute la commande `curl -sS -X PUT -T <fichier> '<url>'` renvoyée, puis `get_upload_status(link_id)` si besoin et `get_model_details(model_id)` pour la carte 3D. `<url>` = `BAMBU_PUBLIC_LISTEN_URL` + `/upload/<jeton>` (sans écouteur public : adresse privée, `internet_reachable=false`, et le modèle retombe sur `upload_file` par morceaux).
+
+- **Pré-requis réseau** : l'environnement de code de Claude doit pouvoir joindre l'adresse publique (Funnel) en HTTPS ; s'il n'a pas d'accès sortant, `upload_file` (morceaux base64 de 75 000 octets) ou la carte « Déposer un fichier » (`show_file_drop`) prennent le relais.
+- **Sécurité** : jeton aléatoire de 256 bits, 10 minutes, usage unique, taille et types bornés, limite `upload` par minute et par adresse (`BAMBU_PUBLIC_RATE_LIMIT=upload=30`), aucun autre accès ; détail et risque résiduel dans `docs/SECURITY.md` § 18. Tout autre chemin d'envoi reste 404 sur l'écouteur public.
+- **Test à la main** : `curl -sS -X PUT -T cube.stl "$(…url renvoyée…)"` → JSON `{"file":{"status":"imported","model_id":"…","sha256":"…"}}` ; un second PUT sur la même URL → 404.
 
 ### 3 bis.2 Réglages
 
@@ -149,7 +158,7 @@ BAMBU_PUBLIC_LISTEN=127.0.0.1:7879                         # second écouteur, s
 BAMBU_PUBLIC_LISTEN_URL=https://atelier.tail4442b5.ts.net  # adresse PUBLIQUE vue d'Internet : émetteur OAuth et ressource /mcp
 BAMBU_ALLOWED_HOSTS=atelier.tail4442b5.ts.net
 BAMBU_CONTACT_EMAIL=                                       # facultatif, affiché par /privacy
-BAMBU_PUBLIC_RATE_LIMIT=register=10,token=60,mcp=60        # facultatif (valeurs par défaut)
+BAMBU_PUBLIC_RATE_LIMIT=register=10,token=60,mcp=60,upload=30   # facultatif (valeurs par défaut ; upload par minute)
 ```
 
 Équivalents en ligne de commande : `--public-listen`, `--public-listen-url`, `--public-rate-limit`. **Pourquoi un réglage de plus que `BAMBU_PUBLIC_URL`** : Funnel n'accepte que les ports 443, 8443 et 10000, et un même nom d'hôte ne peut pas servir à la fois l'adresse privée et l'adresse publique sur le port 443. L'adresse publique prend donc 443 (URL de connecteur propre, sans port) et l'adresse privée passe sur 8443. `BAMBU_PUBLIC_URL` garde **un seul rôle : les liens que l'humain suit** ; `BAMBU_PUBLIC_LISTEN_URL` donne l'émetteur et la ressource de l'écouteur public. Si les deux étaient identiques, bambud le signale au démarrage (les liens pointeraient vers la surface publique, qui répond 404).

@@ -26,9 +26,7 @@ type nonceEntry struct {
 	expires                time.Time
 }
 
-var pageTpl = template.Must(template.New("c").Parse(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>Caméra : certificat</title><style>` + humanauth.Style + `</style></head><body><main>
+var pageTpl = template.Must(template.New("c").Parse(humanauth.Layout("Caméra : certificat", "", "") + `{{template "head" .}}
 <h1>Caméra de l'imprimante : certificat</h1>
 {{if .Msg}}<p class="ok">{{.Msg}}</p>{{end}}{{if .Err}}<p class="warn">{{.Err}}</p>{{end}}
 <dl><dt>Imprimante</dt><dd>{{.Name}} (<code>{{.Serial}}</code>)</dd>
@@ -38,7 +36,7 @@ var pageTpl = template.Must(template.New("c").Parse(`<!doctype html><html lang="
 {{if .Same}}<p class="ok">La caméra présente le même certificat que le broker MQTT : rien à faire.</p>{{end}}
 {{if .CanPin}}<p class="warn">La caméra présente un certificat <strong>différent</strong> de celui de MQTT. Ne l'épingle que si tu sais que c'est bien ton imprimante (même réseau, tu viens de l'allumer).</p>
 <form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}"><p><button type="submit">Épingler cette empreinte pour la caméra</button></p></form>{{end}}
-</main></body></html>`))
+{{template "foot"}}`))
 
 func (s *Service) newNonce(printerID, fp string) string {
 	b := make([]byte, 24)

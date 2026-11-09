@@ -25,9 +25,17 @@ def require_cadquery(code: str) -> Any:
 def ping(_req: dict[str, Any]) -> dict[str, Any]:
     """Vérification de santé : importe réellement CadQuery/OCP (sinon cad_unavailable) et rend les versions."""
     import platform  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    from . import __version__  # noqa: PLC0415
+    from .fingerprint import code_fingerprint  # noqa: PLC0415
 
     cq = require_cadquery("cad_unavailable")
-    return {"cadquery": str(getattr(cq, "__version__", "inconnue")), "python": platform.python_version()}
+    # « worker » : version et empreinte du code RÉELLEMENT importé (la mise à jour automatique les compare à la version installée).
+    return {
+        "cadquery": str(getattr(cq, "__version__", "inconnue")), "python": platform.python_version(),
+        "worker": {"version": __version__, "code_sha256": code_fingerprint(), "path": str(Path(__file__).resolve().parent)},
+    }
 
 
 def tessellate(shape: Any, tolerance: float, angular_tolerance: float) -> MeshData:

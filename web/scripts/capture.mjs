@@ -114,9 +114,9 @@ try {
   await page.waitForFunction(() => window.__host);
   await page.evaluate(() => window.__host.run('search_models', { limit: 5 }));
   const fr = page.frameLocator('iframe');
-  await fr.locator('.results').waitFor({ timeout: 15000 });
+  await fr.locator('.lc-grid').waitFor({ timeout: 15000 });
   await shot(page, 'mcp-app-resultats-light');
-  await fr.locator('.result').first().click();
+  await fr.locator('.lc-tile').first().click();
   await fr.locator('.v3-bar').waitFor({ timeout: 20000 });
   await page.waitForTimeout(600);
   await shot(page, 'mcp-app-fiche-light');

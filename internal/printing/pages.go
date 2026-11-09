@@ -20,11 +20,7 @@ import (
 // jamais renvoyé au modèle, et elles exigent un navigateur enregistré (humanauth.Require).
 
 // lt formate une heure dans le fuseau de l'utilisateur (BAMBU_TIMEZONE) : « 21:03:26 (08/11/2026) », jamais en UTC.
-var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": localtime.Page}).Parse(`{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>{{.Title}}</title><style>` + humanauth.Style + `</style></head><body><main>{{end}}
-{{define "foot"}}</main></body></html>{{end}}
-{{define "setup"}}{{template "head" .}}<h1>Imprimante : certificat et code d'accès</h1>
+var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": localtime.Page}).Parse(humanauth.Layout("", "", "") + `{{define "setup"}}{{template "head" .}}<h1>Imprimante : certificat et code d'accès</h1>
 <dl><dt>Imprimante</dt><dd>{{.Name}}</dd><dt>Modèle</dt><dd>{{.Model}}</dd><dt>Adresse</dt><dd><code>{{.Host}}</code></dd>
 <dt>Numéro de série attendu</dt><dd><code>{{.Serial}}</code></dd>
 <dt>Code enregistré</dt><dd>{{if .Set}}oui (sa valeur n'est jamais affichée){{else}}non{{end}}</dd>
@@ -53,11 +49,10 @@ var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": local
 <dt>Calibration des vibrations</dt><dd>{{if .V.Binding.VibrationCali}}oui (automatique au démarrage){{else}}<strong>non</strong> (désactivée pour cette impression){{end}}</dd>
 <dt>Timelapse</dt><dd>{{if .V.Binding.Timelapse}}<strong>oui</strong> (enregistré pendant l'impression){{else}}non{{end}}</dd>
 <dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
-{{with .V.Safety}}<style>.bad{color:#c00000;font-weight:600}@media (prefers-color-scheme:dark){.bad{color:#ff7b7b}}</style>
-{{if .GcodeOfficial}}<p class="ok">{{.GcodeProfileLine}}</p>{{else}}<p class="warn bad">{{.GcodeProfileLine}}</p>{{end}}
+{{with .V.Safety}}{{if .GcodeOfficial}}<p class="ok">{{.GcodeProfileLine}}</p>{{else}}<p class="warn bad">{{.GcodeProfileLine}}</p>{{end}}
 {{range .Anomalies}}{{if ne . $.V.Safety.GcodeProfileLine}}<p class="warn bad">Anomalie du G-code : {{.}}</p>{{end}}{{end}}{{end}}
-{{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" style="max-width:100%;border:1px solid #888;border-radius:6px"><figcaption>Photo du plateau prise à {{lt .Photo.TakenAt}}, <strong>{{.PhotoAge}}</strong>, par la caméra de l'imprimante. Vérifie sur cette image que le plateau est vide et dégagé ; si tu viens de le dégager, reprends la photo.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>
-<form method="post" action="/confirm/{{.ID}}/photo"><input type="hidden" name="nonce" value="{{.PhotoNonce}}"><button type="submit">Reprendre la photo</button></form>{{end}}
+{{if .Photo}}<figure>{{if .Photo.URL}}<img src="{{.Photo.URL}}" alt="Photo du plateau" class="plate-photo"><figcaption>Photo du plateau prise à {{lt .Photo.TakenAt}}, <strong>{{.PhotoAge}}</strong>, par la caméra de l'imprimante. Vérifie sur cette image que le plateau est vide et dégagé ; si tu viens de le dégager, reprends la photo.</figcaption>{{else}}<p class="warn">Photo du plateau indisponible ({{.Photo.Err}}). Vérifie le plateau à l'œil, devant l'imprimante.</p>{{end}}</figure>
+<form method="post" action="/confirm/{{.ID}}/photo"><input type="hidden" name="nonce" value="{{.PhotoNonce}}"><button type="submit" class="sec">Reprendre la photo</button></form>{{end}}
 {{range .V.Binding.Alerts}}<p class="warn">Alerte matière : {{.}}</p>{{end}}
 {{range .V.Binding.Adhesion}}<p class="warn"><strong>Risque de décollement.</strong> {{.}}</p>{{end}}
 {{range .V.Binding.Overhang}}<p class="warn"><strong>Surplombs sans supports.</strong> {{.}}</p>{{end}}
@@ -76,8 +71,8 @@ var pageTpl = template.Must(template.New("p").Funcs(template.FuncMap{"lt": local
 <dt>Valable jusqu'à</dt><dd>{{lt .V.ExpiresAt}}<br><small>fuseau : {{.TZ}}</small></dd></dl>
 <p class="warn">L'arrêt est <strong>définitif</strong> : le travail en cours est perdu. Rien n'est arrêté tant que tu n'as pas cliqué.</p>
 <form method="post"{{if .PasskeyOptions}} data-pk-mode="get" data-pk-options="{{.PasskeyOptions}}"{{end}}><input type="hidden" name="nonce" value="{{.Nonce}}">
-{{if not .PasskeyRequired}}<button type="submit">Arrêter l'impression</button>{{end}}
-{{if .PasskeyOptions}}<button type="button" data-pk-go hidden>Arrêter avec ma passkey</button>{{end}}
+{{if not .PasskeyRequired}}<button type="submit" class="danger">Arrêter l'impression</button>{{end}}
+{{if .PasskeyOptions}}<button type="button" class="danger" data-pk-go hidden>Arrêter avec ma passkey</button>{{end}}
 {{if .PasskeyRequired}}<p class="warn">Une passkey est exigée (réglage de <code>/setup/passkeys</code>) : le bouton simple et le code de lancement sont indisponibles.{{if not .PasskeyOptions}} {{if .PasskeyErr}}Passkey indisponible ici : {{.PasskeyErr}}{{else}}Aucune passkey n'est disponible : enregistre-en une sur <code>/setup/passkeys</code> ou lance <code>bambud passkey --require=off</code>.{{end}}{{end}}</p>{{end}}
 {{if and .PasskeyErr (not .PasskeyRequired)}}<p class="dim"><small>Passkey indisponible ici : {{.PasskeyErr}}</small></p>{{end}}
 <p id="pk-msg" role="status" hidden></p></form>{{if .PasskeyOptions}}<script src="/setup/passkeys/passkey.js" defer></script>{{end}}{{end}}{{template "foot"}}{{end}}

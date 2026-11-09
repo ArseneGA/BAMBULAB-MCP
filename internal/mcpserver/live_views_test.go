@@ -24,7 +24,7 @@ func TestLiveViewLinks(t *testing.T) {
 	for _, tt := range tl.Tools {
 		tools[tt.Name] = tt
 	}
-	for _, name := range []string{"get_print_status", "wait_for_print_change"} {
+	for _, name := range []string{"get_print_status", "wait_for_print_change", "get_printer_status"} {
 		tt := tools[name]
 		if tt == nil {
 			t.Fatalf("outil %s absent", name)

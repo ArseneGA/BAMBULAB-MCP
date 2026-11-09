@@ -88,6 +88,11 @@ check "timer : 5 minutes après la fin du passage précédent" bash -c "grep -q 
 check "réglages : fenêtre horaire et chemin de construction" bash -c "grep -q '^ATELIER_UPDATE_WINDOW=\"07:00-23:00\"' '$ETC/auto-update.env' && grep -q '^ATELIER_UPDATE_PATH=\"/usr/bin\"' '$ETC/auto-update.env'"
 check "auto-update.env sans aucun secret" bash -c "! grep -qi 'jeton-de-test' '$ETC/auto-update.env' '$UNITS/atelier-update.service'"
 check "le timer est activé" grep -q '^enable --now atelier-update.timer' "$LOG"
+check "réglage : impression en cours tolérée par défaut (ATELIER_UPDATE_ALLOW_DURING_PRINT=1)" grep -q '^ATELIER_UPDATE_ALLOW_DURING_PRINT="1"' "$ETC/auto-update.env"
+# Contrôles de la branche « root réel » (runuser, non jouable en mode test : vérifiés dans le texte du script ; la preuve réelle
+# est à jouer sur le serveur Linux avec sudo bash deploy/linux/enable-auto-update.sh).
+check "contrôle du compte de construction : « go version » (go refuse « go --version »)" bash -c "grep -q 'go) vflag=version' '$SCRIPT' && ! grep -E 'go --version' '$SCRIPT'"
+check "toute commande runuser part de « / » (dossier courant de root illisible)" bash -c "! grep -E 'runuser -u' '$SCRIPT' | grep -v 'cd / &&' | grep -v '^ *#' | grep -q ."
 # SANS INTERRUPTION : le service n'est jamais arrêté ni redémarré.
 check "aucun stop / restart / reload de atelier.service" bash -c "! grep -E '(stop|restart|reload|kill).*atelier\.service|^(stop|restart) ' '$LOG'"
 

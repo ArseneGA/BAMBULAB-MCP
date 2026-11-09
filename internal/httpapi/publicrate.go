@@ -29,6 +29,7 @@ type PublicRateLimits struct {
 	RegisterPerHour int // POST /oauth/register (défaut 10)
 	TokenPerMinute  int // POST /oauth/token (défaut 60)
 	MCPPerMinute    int // /mcp sans jeton valide (défaut 60)
+	UploadPerMinute int // PUT|POST /upload/<jeton> (défaut 30)
 }
 
 // Bornes : une limite configurable reste une limite.
@@ -36,7 +37,7 @@ const maxPublicRate = 100000
 
 // DefaultPublicRateLimits : valeurs par défaut.
 func DefaultPublicRateLimits() PublicRateLimits {
-	return PublicRateLimits{RegisterPerHour: 10, TokenPerMinute: 60, MCPPerMinute: 60}
+	return PublicRateLimits{RegisterPerHour: 10, TokenPerMinute: 60, MCPPerMinute: 60, UploadPerMinute: 30}
 }
 
 func (l PublicRateLimits) withDefaults() PublicRateLimits {
@@ -49,6 +50,9 @@ func (l PublicRateLimits) withDefaults() PublicRateLimits {
 	}
 	if l.MCPPerMinute <= 0 {
 		l.MCPPerMinute = d.MCPPerMinute
+	}
+	if l.UploadPerMinute <= 0 {
+		l.UploadPerMinute = d.UploadPerMinute
 	}
 	return l
 }
@@ -74,8 +78,10 @@ func ParsePublicRateLimits(s string) (PublicRateLimits, error) {
 			out.TokenPerMinute = n
 		case "mcp":
 			out.MCPPerMinute = n
+		case "upload":
+			out.UploadPerMinute = n
 		default:
-			return out, fmt.Errorf("limite %q inconnue : clés register, token, mcp", part)
+			return out, fmt.Errorf("limite %q inconnue : clés register, token, mcp, upload", part)
 		}
 	}
 	return out, nil
@@ -108,6 +114,8 @@ func (l *publicLimiter) allow(cat, ip string) (bool, time.Duration) {
 		burst, per = l.lim.RegisterPerHour, time.Hour
 	case "token":
 		burst, per = l.lim.TokenPerMinute, time.Minute
+	case "upload":
+		burst, per = l.lim.UploadPerMinute, time.Minute
 	default:
 		burst, per = l.lim.MCPPerMinute, time.Minute
 	}
@@ -184,6 +192,8 @@ func (l *publicLimiter) wrap(o Options, next http.Handler) http.Handler {
 			cat = "token"
 		case r.URL.Path == "/mcp" && !authed(r):
 			cat = "mcp"
+		case isUploadLinkRequest(r):
+			cat = "upload"
 		}
 		if cat != "" {
 			if ok, wait := l.allow(cat, o.clientAddr(r)); !ok {

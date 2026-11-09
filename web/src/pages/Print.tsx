@@ -8,6 +8,7 @@ import type { HistoryView, JobProgress, CancelOutput, ConfirmationView, Reconcil
 import { printSource } from '../api/progress';
 import { Async, Dialog, Notice, fmtDate } from './common';
 import { CompletedBox } from './CompletedBox';
+import { GcodePanel } from './GcodePanel';
 import './print.css';
 
 export const STATE_LABEL: Record<PrintState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
@@ -237,6 +238,7 @@ function JobDetail({ job, printer, progress, onChange }: { job: PrintJob; printe
         <ol className="prt-steps" aria-label="Étapes">{STEPS.map((s, i) => <li key={s} aria-current={i === step ? 'step' : undefined} data-done={i < step}>{s}</li>)}</ol>
         <p className="hint mono" style={{ margin: 0 }}>{job.id} · {printer?.name ?? job.printer_id} · plaque {job.plate ?? 1}{job.artifact_sha256 && ` · sha256 ${job.artifact_sha256.slice(0, 12)}…`}</p>
         {job.last_error && <Notice tone="err" title="Dernière erreur">{job.last_error}</Notice>}
+        {job.artifact_sha256 && !['DRAFT', 'PREPARED', 'SLICING', 'FAILED', 'CANCELLED'].includes(job.state) && <GcodePanel printJobId={job.id} plate={job.plate} />}
 
         {(job.state === 'SLICING' || job.state === 'PREPARED') && <div role="status"><ProgressBar large label="Avancement de la découpe" source={printSource(job, progress)}><p className="hint">Bambu Studio découpe le modèle (rien n'est envoyé à l'imprimante).</p></ProgressBar></div>}
 

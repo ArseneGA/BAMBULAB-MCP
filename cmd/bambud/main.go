@@ -93,7 +93,7 @@ func main() {
 	oauthRedirects := fs.String("oauth-redirects", os.Getenv("BAMBU_OAUTH_REDIRECTS"), "URI de redirection OAuth exactes supplémentaires, séparées par des virgules (en plus des callbacks de Claude et de la boucle locale ; env BAMBU_OAUTH_REDIRECTS)")
 	publicListen := fs.String("public-listen", os.Getenv("BAMBU_PUBLIC_LISTEN"), "second écouteur : surface publique restreinte (/mcp, OAuth, pages /about /privacy ; tout le reste 404) à publier sur Internet, ex. 127.0.0.1:7879 ; vide = aucun (env BAMBU_PUBLIC_LISTEN)")
 	publicListenURL := fs.String("public-listen-url", os.Getenv("BAMBU_PUBLIC_LISTEN_URL"), "URL https de la surface publique vue d'Internet (ex. https://atelier.exemple.ts.net) : émetteur OAuth et ressource /mcp de cet écouteur ; --public-url reste l'adresse privée des liens /confirm et /stop (env BAMBU_PUBLIC_LISTEN_URL)")
-	publicRate := fs.String("public-rate-limit", os.Getenv("BAMBU_PUBLIC_RATE_LIMIT"), "limites par adresse de la surface publique, ex. register=10,token=60,mcp=60 (register par heure ; token et mcp par minute ; /mcp sans jeton valide) (env BAMBU_PUBLIC_RATE_LIMIT)")
+	publicRate := fs.String("public-rate-limit", os.Getenv("BAMBU_PUBLIC_RATE_LIMIT"), "limites par adresse de la surface publique, ex. register=10,token=60,mcp=60,upload=30 (register par heure ; token, mcp et upload par minute ; /mcp sans jeton valide) (env BAMBU_PUBLIC_RATE_LIMIT)")
 	version := fs.Bool("version", false, "affiche la version")
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -279,6 +279,13 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 		log.Info("surface publique restreinte active", "addr", sc.publicLn.Addr().String(), "public_url", sc.HTTP.PublicListenURL)
 	}
 	c.Catalog.SetBaseURL(publicBase(sc.HTTP.PublicURL, ln.Addr().String())) // jamais « http://[::]:port »
+	// Liens d'envoi à usage unique (create_upload_link) : l'adresse de l'écouteur PUBLIC quand il existe (joignable depuis
+	// l'environnement de code de Claude), sinon l'adresse privée (le modèle en est prévenu).
+	if sc.HTTP.PublicListenURL != "" {
+		c.Catalog.SetUploadLinkBase(sc.HTTP.PublicListenURL, true)
+	} else {
+		c.Catalog.SetUploadLinkBase(c.Catalog.BaseURL(), false)
+	}
 	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version, "timezone", localtime.Name())
 	if w := localtime.Warning(); w != "" {
 		log.Warn("fuseau horaire", "detail", w)

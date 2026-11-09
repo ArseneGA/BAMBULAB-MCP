@@ -33,8 +33,8 @@ export function Card({ title, icon, meta, footer, tone, className, children, ...
 }
 
 /* ---------- Badge d'état : couleur ET forme (point), jamais la couleur seule ---------- */
-export function Badge({ tone = 'neutral', dot = true, children, className }: { tone?: Tone; dot?: boolean; children: ReactNode; className?: string }) {
-  return <span className={cx('badge', `badge-${tone}`, className)}>{dot && <i aria-hidden />}{children}</span>;
+export function Badge({ tone = 'neutral', dot = true, children, className, title }: { tone?: Tone; dot?: boolean; children: ReactNode; className?: string; title?: string }) {
+  return <span className={cx('badge', `badge-${tone}`, className)} title={title}>{dot && <i aria-hidden />}{children}</span>;
 }
 
 /* ---------- Champ numérique avec unité ---------- */

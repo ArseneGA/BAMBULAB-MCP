@@ -139,6 +139,20 @@ func TestLiveTrackingEndToEnd(t *testing.T) {
 		t.Fatalf("get_live_state : %v", ls)
 	}
 
+	// ---- « ça en est où ? » via get_printer_status : la carte de suivi s'affiche aussi (lien dans le résultat) et retrouve
+	// l'impression active à partir de l'imprimante seule ----
+	ps, err := r.cs.CallTool(ctx, &mcp.CallToolParams{Name: "get_printer_status", Arguments: map[string]any{"printer_id": r.printerID}})
+	if err != nil || ps.IsError {
+		t.Fatalf("get_printer_status : %v %+v", err, ps)
+	}
+	if ui, _ := ps.Meta["ui"].(map[string]any); ui["resourceUri"] != mcpserver.LiveViewURI || ps.Meta["ui/resourceUri"] != mcpserver.LiveViewURI {
+		t.Fatalf("lien de vue absent du résultat de get_printer_status pendant une impression : %v", ps.Meta)
+	}
+	byPrinter := r.call("get_live_state", map[string]any{"printer_id": r.printerID})
+	if str(byPrinter, "status", "job", "id") != jobID || byPrinter["no_active_print"] == true || byPrinter["terminal"] != false {
+		t.Fatalf("get_live_state(printer_id) doit retrouver l'impression active %s : %v", jobID, byPrinter)
+	}
+
 	// ---- fin : résumé final avec photo ----
 	r.waitState(jobID, 40*time.Second, "COMPLETED")
 	fin := r.call("get_live_state", map[string]any{"print_job_id": jobID, "with_final_photo": true})
@@ -157,5 +171,11 @@ func TestLiveTrackingEndToEnd(t *testing.T) {
 	}
 	if _, err := jpeg.Decode(bytes.NewReader(pj)); err != nil {
 		t.Fatal(err)
+	}
+
+	// ---- plus d'impression active : la carte affiche l'état de l'imprimante sans impression ----
+	idle := r.call("get_live_state", map[string]any{"printer_id": r.printerID})
+	if idle["no_active_print"] != true || idle["terminal"] != false || str(idle, "status", "printer", "printer_id") != r.printerID {
+		t.Fatalf("get_live_state(printer_id) sans impression active : %v", idle)
 	}
 }

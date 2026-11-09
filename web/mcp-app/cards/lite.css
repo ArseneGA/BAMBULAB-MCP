@@ -1,0 +1,95 @@
+/*
+ * Styles « Lite » des cartes MCP App (voir lite.tsx : point de fusion avec le socle partagé).
+ * Jetons : vert #16a06b / #3ee39c / #095a40, fond #f4f7f5 (clair) ou #0f1714 (sombre), DM Sans avec repli système.
+ * Thème : document.documentElement.dataset.theme (posé depuis l'hôte) ; à défaut, prefers-color-scheme.
+ */
+.lc, .lc * { box-sizing: border-box; }
+.lc {
+  /* Les variables --c-* des cartes sont des alias des jetons du socle (web/shared/tokens.css) : clair/sombre suivent l'hôte. */
+  --c-primary: var(--p-strong); --c-light: var(--p-light); --c-deep: var(--p-deep); --c-card: var(--solid); --c-track: var(--well-strong);
+  --c-ink: var(--text-1); --c-ink2: var(--text-2); --c-ink3: var(--text-3); --c-line: var(--hairline); --c-well: var(--well); --c-head: var(--text-accent);
+  --c-ok: var(--ok-text); --c-ok-bg: color-mix(in srgb, var(--st-ok) 16%, transparent); --c-warn: var(--wait-text); --c-warn-bg: color-mix(in srgb, var(--st-wait) 18%, transparent);
+  --c-fail: var(--fail-text); --c-fail-bg: color-mix(in srgb, var(--st-fail) 14%, transparent); --c-off: var(--text-3); --c-off-bg: var(--well);
+  --c-run: var(--text-accent); --c-run-bg: var(--primary-subtle); --c-btn: var(--primary); --c-btn-ink: var(--primary-text);
+  max-width: 720px;
+}
+.lc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.lc-titles { min-width: 0; }
+.lc-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--c-head); overflow-wrap: anywhere; }
+.lc-sub { margin: 2px 0 0; font-size: 12.5px; color: var(--c-ink3); }
+.lc-aside { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lc-note { margin: 0; font-size: 12px; color: var(--c-ink3); overflow-wrap: anywhere; }
+.lc-dim { color: var(--c-ink3); }
+.lc-h2 { margin: 0; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--c-ink3); }
+
+
+
+.lc-gauge { position: relative; height: 8px; border-radius: 999px; background: var(--c-track); overflow: hidden; }
+.lc-gauge > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--c-primary), var(--c-light)); transition: width 500ms ease; }
+.lc-gauge.lc-t-warn > span { background: #f5a524; }
+.lc-gauge.lc-t-fail > span { background: #e5484d; }
+.lc-gauge.lc-t-ok > span { background: var(--c-primary); }
+
+.lc-stats { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.lc-stat { display: grid; gap: 2px; padding: 10px 12px; background: var(--c-card); border: 1px solid var(--c-line); border-radius: 12px; min-width: 0; }
+.lc-stat dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--c-ink3); }
+.lc-stat dd { margin: 0; font-size: 20px; font-weight: 600; color: var(--c-head); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.lc-stat small { font-size: 11.5px; color: var(--c-ink3); }
+.lc-stat.lc-t-fail dd { color: var(--c-fail); }
+.lc-stat.lc-t-warn dd { color: var(--c-warn); }
+
+.lc-table tr.lc-hl td { background: var(--c-run-bg); }
+.lc-table tr.lc-hl td:first-child { box-shadow: inset 3px 0 0 var(--c-primary); }
+.lc-table .lc-num { text-align: right; white-space: nowrap; }
+
+.lc-state { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px dashed var(--c-line); border-radius: 12px; color: var(--c-ink2); font-size: 13px; }
+.lc-state-error { color: var(--c-fail); border-style: solid; background: var(--c-fail-bg); border-color: transparent; }
+.lc-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--c-track); border-top-color: var(--c-primary); animation: lc-rot .8s linear infinite; }
+@keyframes lc-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .lc-spin { animation: none; } .lc-gauge > span { transition: none; } }
+
+.lc-swatch { display: inline-block; flex: none; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--c-ink) 22%, transparent); box-shadow: inset 0 1px 2px rgba(255,255,255,.35); }
+.lc-swatch-none { background: repeating-linear-gradient(45deg, var(--c-track), var(--c-track) 3px, transparent 3px, transparent 6px); }
+.lc-box { flex: none; }
+.lc-box-t, .lc-box-l, .lc-box-r { stroke: hsl(var(--h) 40% 38%); stroke-width: .6; stroke-linejoin: round; }
+.lc-box-t { fill: hsl(var(--h) 52% 74%); }
+.lc-box-l { fill: hsl(var(--h) 46% 58%); }
+.lc-box-r { fill: hsl(var(--h) 44% 46%); }
+
+.lc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lc-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; background: var(--c-card); border: 1px solid var(--c-line); border-radius: 12px; color: inherit; font: inherit; }
+button.lc-row { cursor: pointer; }
+button.lc-row:hover:not(:disabled) { border-color: var(--c-primary); }
+button.lc-row:disabled { cursor: progress; opacity: .7; }
+.lc-row-main { min-width: 0; display: grid; gap: 2px; }
+.lc-row-name { font-weight: 600; overflow-wrap: anywhere; }
+.lc-row-meta { font-size: 12px; color: var(--c-ink3); overflow-wrap: anywhere; }
+.lc-row-end { display: grid; gap: 4px; justify-items: end; text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.lc-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.lc-tile { display: grid; align-content: start; gap: 6px; justify-items: start; width: 100%; height: 100%; text-align: left; padding: 10px; background: var(--c-card); border: 1px solid var(--c-line); border-radius: 12px; color: inherit; font: inherit; cursor: pointer; }
+.lc-tile:hover:not(:disabled) { border-color: var(--c-primary); }
+.lc-tile:disabled { cursor: progress; opacity: .7; }
+.lc-tile-art { width: 100%; display: flex; justify-content: center; padding: 6px 0; background: var(--c-well); border-radius: 8px; }
+.lc-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.lc-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.lc-warns { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.lc-warns li { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; color: var(--c-warn); }
+.lc-bars { width: 100%; max-width: 460px; margin: 0 auto; height: auto; display: block; }
+.lc-bars text { fill: var(--c-ink3); font-size: 9px; font-family: inherit; }
+.lc-bars .lc-bar { fill: var(--c-primary); }
+.lc-bars .lc-bar-top { fill: var(--c-light); }
+.lc-bars .lc-axis { stroke: var(--c-line); stroke-width: 1; }
+.lc-split { display: grid; gap: 8px; }
+.lc-split-line { display: grid; grid-template-columns: 90px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }
+.lc-split-line b { font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 440px) {
+  .lc { padding: 12px; border-radius: 14px; }
+  .lc-row { grid-template-columns: auto minmax(0, 1fr); }
+  .lc-row-end { grid-column: 1 / -1; grid-auto-flow: column; justify-content: space-between; justify-items: start; text-align: left; }
+  .lc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-split-line { grid-template-columns: 74px minmax(0, 1fr) auto; }
+}
+
+/* Hôte des cartes : pas de double cadre (la carte porte déjà fond, bordure et marges). */
+.mcp.mcp-card { padding: 4px; max-width: 720px; }
+.mcp-card .back { margin-bottom: 6px; }
