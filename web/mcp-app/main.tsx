@@ -14,6 +14,8 @@ import { LaunchConfirm, StopConfirm } from './launch';
 import { ProgressCard, normalizeProgress, type Prog } from './progress';
 import { LayerViewer, isLayersInfo, type LayersInfo } from './layers';
 import { LiveCard, normalizeLive, type Live } from './live';
+import { GcodePreviewCard, isGcodePreview, type GcodePreviewInfo } from './gcode';
+import { FileDropCard, isFileDrop, type DropInfo } from './drop';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
@@ -25,7 +27,7 @@ import { LiveCard, normalizeLive, type Live } from './live';
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'gcode'; data: GcodePreviewInfo } | { kind: 'drop'; data: DropInfo } | { kind: 'imported'; modelId: string } | { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
 interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string }>; isError?: boolean }
 
@@ -34,6 +36,11 @@ const textOf = (r: ToolResultLike) => (r.content ?? []).filter((c) => c.type ===
 function classify(r: ToolResultLike): View {
   if (r.isError) return { kind: 'error', text: textOf(r) || "L'outil a renvoyé une erreur." };
   const s = r.structuredContent as Record<string, unknown> | undefined;
+  if (isGcodePreview(s)) return { kind: 'gcode', data: s }; // show_gcode_preview : visionneuse 3D couche par couche
+  if (isFileDrop(s)) return { kind: 'drop', data: s }; // show_file_drop : carte de dépôt
+  // envoi / import terminé (upload_file, get_upload_status d'un lien, import_model) : la carte de la pièce, pas un rendu fabriqué
+  const imported = (s?.file as { model_id?: unknown } | undefined)?.model_id;
+  if (typeof imported === 'string' && imported && (s?.status === 'complete' || s?.done === true)) return { kind: 'imported', modelId: imported };
   if (isLayersInfo(s) && Array.isArray((s as { sheet_layers?: unknown }).sheet_layers)) return { kind: 'layers', data: s };
   const live = normalizeLive(s); // suivi d'impression (get_print_status, wait_for_print_change) : avant la progression d'un travail
   if (live) return { kind: 'live', data: live };
@@ -102,6 +109,9 @@ function Root() {
   if (!app) return null;
   if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
   if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
+  if (view.kind === 'gcode') return <Box><GcodePreviewCard app={app} info={view.data} /></Box>;
+  if (view.kind === 'drop') return <Box><FileDropCard app={app} info={view.data} renderPreview={(id) => <ModelById app={app} id={id} />} /></Box>;
+  if (view.kind === 'imported') return <Box><ModelById app={app} id={view.modelId} /></Box>;
   if (view.kind === 'live') return <Box><LiveCard app={app} first={view.data} /></Box>;
   if (view.kind === 'progress') return <Box><ProgressCard app={app} first={view.data} /></Box>;
   if (view.kind === 'layers') return <Box><LayerViewer app={app} info={view.data} /></Box>;
@@ -112,6 +122,30 @@ function Root() {
 }
 
 const Box = ({ children }: { children: React.ReactNode }) => <main className="mcp">{children}</main>;
+
+/** Carte de la pièce après un import ou un envoi : fiche + viewer 3D existants ; l'aperçu en cours de calcul est réinterrogé. */
+function ModelById({ app, id, retryMs = 3000, maxTries = 12 }: { app: App; id: string; retryMs?: number; maxTries?: number }) {
+  const [data, setData] = useState<ModelDetails>();
+  const [err, setErr] = useState<string>();
+  useEffect(() => {
+    let alive = true, timer = 0, tries = 0;
+    const load = async () => {
+      try {
+        const r = await app.callServerTool({ name: 'get_model_details', arguments: { model_id: id } }) as ToolResultLike;
+        const v = classify(r);
+        if (!alive) return;
+        if (v.kind !== 'model') { setErr(v.kind === 'error' || v.kind === 'text' ? v.text : 'Réponse inattendue'); return; }
+        setData(v.data);
+        if (v.data.preview.state === 'pending' && ++tries < maxTries) timer = window.setTimeout(load, retryMs);
+      } catch (e) { if (alive) setErr((e as Error).message); }
+    };
+    void load();
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [app, id, retryMs, maxTries]);
+  if (err) return <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {err}</p>;
+  if (!data) return <p className="msg" role="status"><span className="spinner" aria-hidden /> Ouverture de la fiche de la pièce…</p>;
+  return <Model app={app} data={data} />;
+}
 
 function Search({ app, data, onOpen }: { app: App; data: SearchResult; onOpen: (d: ModelDetails) => void }) {
   const [busy, setBusy] = useState<string | null>(null);

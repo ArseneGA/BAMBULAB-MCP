@@ -259,7 +259,11 @@ func (h *catalogHandlers) importModel(ctx context.Context, _ *mcp.CallToolReques
 	if err != nil {
 		return nil, catalog.ImportModelOutput{}, err
 	}
-	return textResult(fmt.Sprintf("Travail %s : %s. %s", r.JobID, r.State, r.Note)), *r, nil
+	id := ""
+	if r.File != nil {
+		id = r.File.ModelID
+	}
+	return withModelCard(textResult(fmt.Sprintf("Travail %s : %s. %s", r.JobID, r.State, r.Note)), id), *r, nil
 }
 
 func (h *catalogHandlers) analyzeGeometry(ctx context.Context, _ *mcp.CallToolRequest, in catalog.AnalyzeInput) (*mcp.CallToolResult, catalog.AnalyzeOutput, error) {

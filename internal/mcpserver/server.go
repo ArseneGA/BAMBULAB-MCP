@@ -39,7 +39,10 @@ func New(c *core.Core) *mcp.Server {
 			Instructions: "Atelier 3D pour imprimantes Bambu Lab. Les travaux longs renvoient un job_id : " +
 				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
 				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
-				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation.",
+				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation. " +
+				GcodeSuggestion + " " +
+				"Pour montrer une pièce importée ou envoyée : get_model_details (viewer 3D) ; ne fabrique pas tes propres rendus. " +
+				"Pour envoyer un fichier créé dans ton espace de code : create_upload_link (une commande curl à exécuter) de préférence, sinon upload_file par morceaux de 75000 octets ; l'utilisateur peut aussi le déposer lui-même avec show_file_drop.",
 		})
 	if mw := mcpLogMiddleware(c.Log); mw != nil {
 		s.AddReceivingMiddleware(mw) // journal INFO des requêtes MCP (mcplog.go) ; BAMBU_LOG_MCP=off pour le couper
@@ -100,6 +103,7 @@ func New(c *core.Core) *mcp.Server {
 		AddPrintTools(s, c.Printing, c.Camera) // chaîne d'impression (print_tools.go)
 		AddPlateTools(s, c.Printing)           // plateau multi-pièces (plate_tools.go)
 		AddLayerTools(s, c.Printing)           // visionneuse de trajectoires : show_layers, get_layer_paths (layer_tools.go)
+		AddGcodeTools(s, c.Printing)           // visionneuse 3D couche par couche : show_gcode_preview, get_gcode_layers, get_gcode_slice (gcode_tools.go)
 		AddLaunchTools(s, c)                   // approbation par code de lancement depuis la vue (launch_tools.go)
 		AddLiveTools(s, c)                     // carte de suivi en direct : image caméra partagée, état (live_tools.go)
 		AddRecoveryTools(s, c.Printing)        // relance, reprise, chargement, fichiers de la carte, diagnostic (recovery_tools.go)

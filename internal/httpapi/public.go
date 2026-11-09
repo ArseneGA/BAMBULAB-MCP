@@ -42,6 +42,11 @@ func publicAllowed(r *http.Request) bool {
 	if id, ok := strings.CutPrefix(p, "/oauth/consent/"); ok && validConsentID(id) {
 		return get || m == http.MethodPost
 	}
+	// Envoi d'un fichier par lien à usage unique (create_upload_link) : le SEUL chemin d'envoi de la surface publique,
+	// PUT ou POST, jeton de la forme exacte attendue (le service refuse inconnu, expiré, déjà utilisé).
+	if isUploadLinkRequest(r) {
+		return true
+	}
 	return false
 }
 
@@ -88,6 +93,7 @@ func buildPublic(c *core.Core, opts Options, human *humanauth.Service, svc *oaut
 	registerOAuthRoutes(mux, svc, human, &popts, true) // renseigne popts.extraBearer / popts.challenge
 	mux.Handle("/mcp", mcpHandler(c, server))
 	registerPublicPages(mux, popts)
+	registerUploadLink(mux, c) // PUT|POST /upload/{jeton} : envoi à usage unique, seule exception d'écriture de la liste blanche
 	mux.HandleFunc("/", publicNotFound)
 
 	lim := newPublicLimiter(popts)

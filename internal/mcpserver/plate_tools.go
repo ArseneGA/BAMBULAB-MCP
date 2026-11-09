@@ -83,7 +83,7 @@ func AddPlateTools(s *mcp.Server, p *printing.Service) {
 			"L'archive de chaque impression ne contient que sa plaque ; son numéro et son empreinte sont ce que la confirmation humaine lie, comme pour toute impression. " +
 			"La plaque est refusée si l'archive ne porte pas exactement les pièces du plan. Le résumé donne la matière et les couches de chaque pièce lues dans le G-code. " +
 			"RETOUR IMMÉDIAT : chaque plaque est découpée en arrière-plan (une à la fois) ; ne pas considérer l'appel comme échoué, suivre avec get_job_status(slice_job_id de chaque impression) ou get_print_status. " +
-			"Ensuite : validate_print_artifact, upload_print_artifact et la confirmation humaine, plaque par plaque.",
+			"Ensuite : show_gcode_preview(print_job_id) pour montrer la découpe, validate_print_artifact, upload_print_artifact et la confirmation humaine, plaque par plaque.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.PlateSliceInput) (*mcp.CallToolResult, printing.PlateSliceOutput, error) {
 		o, err := p.ExecutePlateSlice(ctx, in)
@@ -94,6 +94,6 @@ func AddPlateTools(s *mcp.Server, p *printing.Service) {
 		for _, j := range o.Jobs {
 			ids = append(ids, fmt.Sprintf("plaque %d = %s", j.Plate, j.ID))
 		}
-		return textResult(fmt.Sprintf("Plan %s : %d impression(s) en file (%s).", o.Plan.ID, len(o.Jobs), strings.Join(ids, ", "))), *o, nil
+		return textResult(fmt.Sprintf("Plan %s : %d impression(s) en file (%s). Une fois découpées : %s", o.Plan.ID, len(o.Jobs), strings.Join(ids, ", "), GcodeSuggestion)), *o, nil
 	})
 }

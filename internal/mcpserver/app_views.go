@@ -39,6 +39,11 @@ const (
 	// LayersViewURI : visionneuse de trajectoires du G-code avec curseur de couche (liée à show_layers) ; les segments
 	// viennent de l'outil réservé get_layer_paths.
 	LayersViewURI = "ui://bambu/layers.html"
+	// GcodeViewURI : visionneuse 3D couche par couche du G-code (liée à show_gcode_preview) ; trajectoires par tranches
+	// via les outils réservés get_gcode_layers et get_gcode_slice.
+	GcodeViewURI = "ui://bambu/gcode.html"
+	// DropViewURI : carte « Déposer un fichier » (liée à show_file_drop) ; envoi par morceaux via l'outil réservé drop_file_chunk.
+	DropViewURI = "ui://bambu/drop.html"
 )
 
 // MeshChunkBytes : octets bruts par tranche. En base64, 72 000 octets donnent
@@ -61,6 +66,8 @@ var toolViewMeta = map[string]mcp.Meta{
 	"get_upload_status":          AppToolMeta(ProgressViewURI),
 	"wait_for_job":               AppToolMeta(ProgressViewURI),
 	"show_layers":                AppToolMeta(LayersViewURI),
+	"show_gcode_preview":         AppToolMeta(GcodeViewURI),
+	"show_file_drop":             AppToolMeta(DropViewURI),
 }
 
 const fallbackViewHTML = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Atelier</title>
@@ -116,6 +123,11 @@ func registerAppViews(s *mcp.Server, svc *catalog.Service) {
 		"Barre de progression d'un travail ou d'un envoi (get_job_status, get_upload_status) : pourcentage, phase, octets, durée restante ; se rafraîchit seule.", html)
 	addViewResource(s, LayersViewURI, "layers_view", "Trajectoires par couche",
 		"Visionneuse des trajectoires d'extrusion du G-code avec curseur de couche (show_layers).", html)
+
+	addViewResource(s, GcodeViewURI, "gcode_view", "Aperçu 3D de la découpe",
+		"Visionneuse 3D couche par couche du G-code (show_gcode_preview) : types de trajectoires, curseurs de couches, lecture, vues, temps et filament par couche.", html)
+	addViewResource(s, DropViewURI, "drop_view", "Déposer un fichier",
+		"Carte de dépôt d'un fichier 3D (show_file_drop) : glisser-déposer, envoi par morceaux avec barre de progression, puis aperçu de la pièce.", html)
 
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 	addTool(s, &mcp.Tool{

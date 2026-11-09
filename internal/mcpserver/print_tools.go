@@ -211,7 +211,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			"Modèle, imprimante, révision de profil (ou variante appliquée). Filaments : preset exact OU nom libre (« PETG transparent », « PLA mat »), voir list_filaments. " +
 			"RETOUR IMMÉDIAT avec un job_id : la découpe dure de quelques secondes à plusieurs minutes et continue en arrière-plan (une seule à la fois, les suivantes sont « en file, position n »). " +
 			"Ne JAMAIS considérer l'appel comme échoué parce que la découpe n'est pas finie : suivre avec get_job_status(job_id) (pourcentage estimé, phase, durée restante) ou get_print_status jusqu'à VALIDATED. " +
-			"Refuse tout de suite une pièce qui ne tient pas sur la machine (message avec dimensions et zone utile). L'artefact est conservé par empreinte. Aucun envoi à l'imprimante.",
+			"Refuse tout de suite une pièce qui ne tient pas sur la machine (message avec dimensions et zone utile). L'artefact est conservé par empreinte. Aucun envoi à l'imprimante. " +
+			"Une fois découpée (VALIDATED), appeler show_gcode_preview(print_job_id) : visionneuse 3D couche par couche de la découpe réelle.",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.SliceInput) (*mcp.CallToolResult, SliceOut, error) {
 		j, err := p.ExecuteHeadlessSlice(ctx, in)
@@ -219,7 +220,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			return nil, SliceOut{}, err
 		}
 		pr := p.ProgressFor(ctx, *j)
-		txt := fmt.Sprintf("Impression %s : %s. Découpe mise en file (job_id %s) : elle continue en arrière-plan, suivre avec get_job_status.", j.ID, j.State, j.SliceJobID)
+		txt := fmt.Sprintf("Impression %s : %s. Découpe mise en file (job_id %s) : elle continue en arrière-plan, suivre avec get_job_status. %s", j.ID, j.State, j.SliceJobID, GcodeSuggestion)
 		if pr != nil && pr.QueuePosition != nil {
 			txt += fmt.Sprintf(" Position %d dans la file.", *pr.QueuePosition)
 		}
@@ -227,7 +228,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur) : " + j.Adhesion.Summary()
 		}
 		return textResult(txt),
-			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis validate_print_artifact avec l'imprimante réelle."}, nil
+			SliceOut{Job: *j, JobID: j.SliceJobID, Progress: pr, Note: "L'appel n'a pas échoué : la découpe est en cours. Suivre avec get_job_status(job_id) ou get_print_status(print_job_id) jusqu'à VALIDATED, puis show_gcode_preview(print_job_id) pour montrer la découpe, puis validate_print_artifact avec l'imprimante réelle."}, nil
 	})
 
 	addTool(s, &mcp.Tool{

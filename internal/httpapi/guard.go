@@ -280,7 +280,7 @@ func guard(opts Options, isSession func(*http.Request) bool, next http.Handler) 
 		if opts.APIToken != "" {
 			p := r.URL.Path
 			open := ((r.Method == http.MethodGet || r.Method == http.MethodHead) && p == "/health") ||
-				isHumanPath(p) || isPublicStatic(r) || isOAuthOpen(r) || isSignedAsset(r)
+				isHumanPath(p) || isPublicStatic(r) || isOAuthOpen(r) || isSignedAsset(r) || isUploadLinkRequest(r)
 			// /mcp accepte aussi un jeton d'accès OAuth émis par bambud (mêmes droits que le Bearer statique).
 			if !open && !bearerOK(r) && !(p == "/mcp" && opts.extraBearer != nil && opts.extraBearer(r)) {
 				// Session d'un navigateur enregistré : valable pour /api/* seulement (jamais /mcp).
