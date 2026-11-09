@@ -165,3 +165,22 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 |---|---|---|
 | W1 | **Sauver une impression ratée à 80 %** | 1) Hauteur saine : dernière couche réussie transmise par l'imprimante + **mesure au pied à coulisse demandée à l'humain** (fait foi). 2) L'humain arase le haut abîmé et donne la nouvelle hauteur ; Printalk **coupe le modèle à cette cote** et garde la partie haute. 3) Alignement au choix : **collier** (la partie haute descend de quelques mm et s'emboîte autour de la base), **gabarit de perçage** imprimé qui épouse la section + goupilles intégrées dans la partie haute, ou **collage à plat** si la surface est grande. 4) Découpe de la partie haute (souvent tête en bas pour une face de collage plane), confirmation humaine habituelle. 5) Conseil de colle selon la matière (CA, époxy pour PETG) et temps de séchage. Pure géométrie (lien S1 couper, N5 logements). |
 | W2 | **L'optimiseur de nuit (sans IA)** | Tâche planifiée la nuit sur le serveur : pour chaque pièce de la semaine, essai systématique de dizaines d'orientations et de réglages, notés par des mesures (surplombs et volume de supports, surface de contact, **temps et grammes réels via Bambu Studio**, résistance via le calcul par éléments finis). Garde les meilleures, écrit un résumé chiffré (« orientation 30° : −40 % de temps, même résistance, supports −60 % »), présenté par Claude à l'ouverture de la conversation et visible dans une carte. Bornes de CPU, n'interfère jamais avec une impression ou une découpe en cours. |
+
+## Suivi de projet (demande du 2026-11-09)
+
+Spec complète : [docs/specs/G9-suivi-de-projet.md](specs/G9-suivi-de-projet.md). Du catalogue + journal au **suivi de projet** (macro : atelier et projet ; méso : pièce et profil ; micro : impression). Calcul déterministe seulement (aucune IA dans Printalk) ; **aucune carte ne lance, n'arrête ni ne reprend une impression** (le lancement reste le geste humain existant) ; migrations additives. Existe déjà en partie : G5 (trace par commande), N19 (journal photo), N13 (mode projet, se branche sur PJ2), S7 (« Refais la même », absorbé par PJ6), journal `print_logs`, `compare_variants`.
+
+| Code | Nom | Contenu court | Vague |
+|---|---|---|---|
+| PJ1 (M1) | Tableau de bord atelier | projets par statut, chiffres du mois (impressions, taux de réussite, heures machine, grammes, €), « ce qui attend un geste » | 3 |
+| PJ2 (M2) | Projet de premier rang | nouvelle table `projects` + `project_parts` (pas d'extension de `collections`), statut idée → conception → en impression → fini → en usage / abandonné, avancement « 4/6 pièces », coût et temps totaux ; socle de N13 | 1 |
+| PJ3 (M3) | Fil chronologique | ligne de temps filtrable par projet, pièce, bobine (vue calculée, sans table) | 3 |
+| PJ4 (M4) | Recherche filtrable | filtres typés (« PETG imprimées > 2 fois », « ratées ce mois ») ; Claude traduit la phrase | 4 |
+| PJ5 (P1) | Fiche pièce | aperçu 3D, versions, profils, impressions (date, profil, résultat, raison, photo), « imprimée 5 fois, 4 réussies », coût cumulé, lien test de résistance | 1 |
+| PJ6 (P2) | Rechoisir un profil et relancer | **prépare** découpe + demande de confirmation (« comme la dernière réussie ») ; jamais de lancement | 2 |
+| PJ7 (P3) | Comparateur de profils | « ton meilleur » d'après les résultats réels, avec effectif (n ≥ 3) | 2 |
+| PJ8 (P4) | Arbre version → profils → impressions | histoire d'une pièce | 4 |
+| PJ9 (P5) | Différence entre deux impressions | profil, bobine, version, durée… (pur calcul) | 4 |
+| PJ10 (I1) | Fiche d'impression | profil figé, bobine et grammes réels, durée prévue vs réelle, photos, alertes caméra, verdict | 1 |
+| PJ11 (I2) | Verdict en un geste | réussi / raté + raison / à refaire en fin d'impression : clé de toutes les stats | 1 |
+| PJ12 (I3 + I4) | Notes, étiquettes ; impression hors Printalk | notes libres sur pièce et impression ; rattacher après coup une impression faite ailleurs (niveau « déclaré ») | 4 |

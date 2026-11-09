@@ -1,4 +1,4 @@
-# Spécifications des 8 chantiers « game changers » (lot G1 à G8)
+# Spécifications des chantiers « game changers » (lot G1 à G8) et du suivi de projet (G9)
 
 Date de rédaction : 2026-11-08. Source : section « game changers » de `docs/BACKLOG.md`, `docs/strategie/ETUDE-MARCHE.md`, `docs/strategie/PLAN-SAAS.md`, et lecture du code (paquets `internal/*`, `cmd/*`, `web/src`).
 
@@ -22,6 +22,7 @@ Ces specs ont été écrites en lisant le dépôt le 2026-11-08 ; **pendant cett
 | G6 | [G6-mode-classe-fablab.md](G6-mode-classe-fablab.md) | Mode classe et fablab | Écoles, fablabs | L | — |
 | G7 | [G7-survivre-verrouillage-bambu.md](G7-survivre-verrouillage-bambu.md) | Survivre au verrouillage Bambu | Tous | M | — |
 | G8 | [G8-tout-client-mcp.md](G8-tout-client-mcp.md) | Compatible tout client MCP + interface web autonome | Tous | M | G1 (URL publique) pour les essais distants ; idéalement après G6 |
+| G9 | [G9-suivi-de-projet.md](G9-suivi-de-projet.md) | Suivi de projet : projets, fiche pièce, fiche impression, verdict en un geste (codes PJ1 à PJ12, demande du 2026-11-09) | Makers, vendeurs, fermes | L (4 vagues) | — (s'appuie sur le journal existant ; N13 et S7 s'y branchent) |
 
 Tailles : S ≈ 1 à 2 jours d'agent, M ≈ 3 à 5 jours, L ≈ 6 à 12 jours (ordre de grandeur, tests et doc compris).
 
