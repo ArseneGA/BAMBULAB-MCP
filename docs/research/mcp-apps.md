@@ -112,3 +112,25 @@ Réponse à « ça en est où ? » : une carte (caméra, progression, températu
 - **Arrêter / Reprendre** : « Arrêter » (visible seulement pendant `PRINTING`) appelle `cancel_print`, qui ne fait que CRÉER la demande ; la carte affiche alors `StopConfirm` (code de lancement saisi dans le champ ou lien du navigateur). « Reprendre » (impression en pause) appelle `resume_print` et affiche la demande (code via `validate_action_with_code`, ou lien). **Pas de bouton « Pause »** : aucune demande d'action de pause n'existe côté serveur (`actions.go` : reprise, chargement, nettoyage) ; en ajouter une est un effet physique nouveau, hors de ce chantier.
 - **Repli sans vue** : `get_print_status` (`with_photo`, défaut vrai si l'impression est `PRINTING`, `false` pour du texte seul) garde son texte en premier bloc, inchangé, puis un bloc texte de légende et un contenu image MCP (même image partagée, 640 px, ≤ 64 Ko) ; panne de caméra = une ligne « Photo de la caméra indisponible : … », jamais une erreur.
 - **Non vérifié ici** : l'affichage réel dans Claude Desktop (§ 7-8), le rendu visuel sur un vrai écran (clair/sombre, mobile) : les tests couvrent le composant avec un hôte simulé.
+
+## 11. Journal des requêtes MCP : le client lit-il la vue ? (2026-11-09)
+
+Symptôme : le client annonce `ui_extension=true` (ligne « client MCP initialisé ») mais aucune vue ne s'affiche. Il faut savoir si l'hôte fait un `resources/read` de la vue après un `tools/call`. Le serveur journalise désormais, au niveau INFO, chaque requête MCP significative (middleware de réception du SDK, `internal/mcpserver/mcplog.go`) : `tools/call`, `resources/read`, `resources/list`, `resources/templates/list`, `prompts/list`, `prompts/get`.
+
+Lire les lignes : `journalctl -u atelier | grep -E "MCP (tools/call|resources/read)"`
+
+Exemple d'une session saine (l'hôte appelle l'outil, puis lit la vue) :
+
+```
+level=INFO msg="MCP tools/call" tool=search_models session=3f9a1c2b duration_ms=4 ok=true meta_ui=true bytes=50 blocks=1 block_types=text
+level=INFO msg="MCP resources/read" uri=ui://bambu/search.html session=3f9a1c2b duration_ms=0 ok=true mime="text/html;profile=mcp-app" bytes=442 contents=1
+```
+
+Interpréter :
+
+- `tools/call` avec `meta_ui=true` **sans** `resources/read` de `ui://…` juste après : le serveur a bien lié l'outil à la vue, mais l'hôte (ou le relais `mcp-remote`) ne la demande pas : problème côté hôte, relais, ou vue désactivée dans l'hôte. `meta_ui=false` : le résultat ne porte pas le lien (outil non lié, ou en erreur) ; le lien de la définition (`tools/list`) reste ce que lisent la plupart des hôtes.
+- `resources/read` avec `ok=true`, `mime="text/html;profile=mcp-app"` et `bytes` non nul : la vue a été servie ; si rien ne s'affiche, l'échec est dans le rendu (CSP, iframe) côté hôte. `bytes` d'environ 1 à 3 ko = page de repli « Vue non construite » (binaire compilé sans la vue).
+- `resources/list` / `resources/templates/list` : `count` = nombre d'éléments ; absence totale de `resources/*` pendant toute une session = l'hôte ne s'intéresse pas aux vues.
+- `session` : 8 premiers caractères de l'identifiant de session (`-` en stdio ou sans session) ; sert à relier les lignes d'une même conversation.
+
+Garanties : jamais d'argument d'outil, de contenu de résultat, de jeton, de code de lancement ni d'en-tête dans ces lignes ; les messages d'erreur ne sont pas repris (`error_type` seulement). Les outils réservés aux vues appelés en boucle (`get_live_frame`, `get_live_state`, `get_launch_view_state`, `get_print_confirmation_view`, `get_mesh_chunk`, `get_layer_paths`) sont au niveau DEBUG à chaque appel (`BAMBU_LOG_LEVEL=debug`) et, au niveau INFO, une seule ligne agrégée par minute et par outil : `msg="MCP tools/call (outil de vue, agrégé)" tool=get_live_frame calls=24 …`. Couper le tout : `BAMBU_LOG_MCP=off` (défaut : actif).

@@ -144,6 +144,7 @@ Les flags de `bambud` acceptent `-flag` ou `--flag`, avec `--flag=valeur`. **Pri
 | Variable | Lue où | Effet |
 |---|---|---|
 | *(corrigé `a5e60cb`)* `BAMBU_STUDIO_BIN`, `BAMBU_UV_PATH`, `BAMBU_GEOMETRY_DIR` | `internal/core/core.go` (`Environment`) | l'outil MCP `inspect_environment` rapporte désormais l'installation de Studio **réellement retenue** (chemin + version) et l'`uv`/projet **réellement résolus** ; les anciens noms `BAMBU_STUDIO_PATH`/`BAMBU_PYTHON` ne sont plus lus |
+| `BAMBU_LOG_MCP` | `internal/mcpserver/mcplog.go` | défaut : actif. `off` (aussi `0`, `false`, `no`) coupe le journal INFO des requêtes MCP (`tools/call`, `resources/read`, `resources/list`, `resources/templates/list`, `prompts/*` : nom, durée, succès, taille, présence de `_meta.ui` ; jamais d'arguments ni de contenu). Lecture : `journalctl -u atelier \| grep -E "MCP (tools/call\|resources/read)"` ; voir `docs/research/mcp-apps.md` § 11 |
 | `BAMBU_KEEP_WORK` | `internal/goals/slicejob.go:173` | non vide → conserve les dossiers de travail de découpe (débogage) |
 | `UV_PROJECT_ENVIRONMENT`, `PYTHONDONTWRITEBYTECODE` | `internal/catalog/worker.go` (`workerEnv`) | transmises au worker ; `UV_PROJECT_ENVIRONMENT` fournie est respectée telle quelle ; absente et pas de `.venv` dans le projet → `<data-dir>/venvs/geometry` ; `PYTHONDONTWRITEBYTECODE=1` par défaut |
 | `XDG_DATA_HOME` | `internal/core/datadir.go:25` | défaut de `--data-dir` du seul `bambu-mcp --embedded` |
