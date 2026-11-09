@@ -90,6 +90,7 @@ func New(c *core.Core) *mcp.Server {
 	registerUploadTools(s, c)
 	registerLibraryTools(s, c)
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
+	registerCardViews(s)           // cartes bibliothèque, comparaison, coûts, bobines, impressions, imprimantes (card_views.go)
 	registerAgentTools(s, c)
 	if c.Goals != nil {
 		AddGoalTools(s, c.Goals)
