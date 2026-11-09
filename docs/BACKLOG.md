@@ -89,15 +89,47 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 | S9 | **Parité des réglages** | Toutes les clés courantes des profils process/filament/machine exposées et expliquées (ponts, surplombs, rétraction, coasting, vitesses par type, accélérations, refroidissement, brim ears, radeau, mode vase, séquence objet par objet, arrangement auto, mise à l'échelle / miroir / rotation / pose à plat par face) | Onglets Qualité, Résistance, Vitesse, Support, Autres |
 | S10 | **Calibrations natives** | Débit, avance de pression, température (tour), rétraction, vitesse volumétrique, déjà en séries de pièces : ajouter la lecture guidée des résultats par photo | Menu Calibration |
 
-### Nouvelles idées (à arbitrer)
+### Nouvelles idées — N1 à N8 (N2 à N7 retenues le 2026-11-09)
 
 | # | Idée | Pourquoi |
 |---|---|---|
 | N1 | **Diagnostic d'échec** : « pourquoi ça a raté ? » à partir de la photo, des codes HMS, des étapes et des réglages ; propose la correction et la redécoupe | Les deux échecs du porte-guitare auraient été expliqués en une réponse |
-| N2 | **Rendu réaliste avant impression** dans la vraie matière et couleur (translucide, soie, mat) | Choisir une variante sur l'aspect, pas seulement sur les chiffres |
-| N3 | **Pièces de rechange / impression en série** : « imprime 12 fois ce clip » → remplissage optimal des plaques, répartition par lots, suivi du compte | Gain de temps énorme, déjà presque possible avec plan_plate |
-| N4 | **Pilotage des accessoires de l'imprimante** : éclairage de la chambre, ventilateurs, vitesse d'impression en cours (silencieux / normal / sport), sans jamais lancer ni arrêter | Commandes Bambu classiques, sans risque |
-| N5 | **Insertion d'éléments** : logements prêts pour inserts filetés, aimants, écrous captifs, avec la pause automatique au bon moment (lien S4) | Pièces fonctionnelles sans post-traitement |
-| N6 | **Assistant d'assemblage** : génère la notice d'assemblage (ordre, vis, photos annotées) d'un projet multi-pièces | Projets comme le porte-guitare découpé (S1) |
-| N7 | **Bobine bientôt vide** : coupe l'impression en deux avec pause de changement de bobine au bon moment si le poids restant ne suffit pas | Évite une impression ratée à 90 % |
+| N2 ✅ retenue | **Rendu réaliste avant impression** dans la vraie matière et couleur (translucide, soie, mat) | Choisir une variante sur l'aspect, pas seulement sur les chiffres |
+| N3 ✅ retenue | **Pièces de rechange / impression en série** : « imprime 12 fois ce clip » → remplissage optimal des plaques, répartition par lots, suivi du compte | Gain de temps énorme, déjà presque possible avec plan_plate |
+| N4 ✅ retenue | **Pilotage des accessoires de l'imprimante** : éclairage de la chambre, ventilateurs, vitesse d'impression en cours (silencieux / normal / sport), sans jamais lancer ni arrêter | Commandes Bambu classiques, sans risque |
+| N5 ✅ retenue | **Insertion d'éléments** : logements prêts pour inserts filetés, aimants, écrous captifs, avec la pause automatique au bon moment (lien S4) | Pièces fonctionnelles sans post-traitement |
+| N6 ✅ retenue | **Assistant d'assemblage** : génère la notice d'assemblage (ordre, vis, photos annotées) d'un projet multi-pièces | Projets comme le porte-guitare découpé (S1) |
+| N7 ✅ retenue | **Bobine bientôt vide** : coupe l'impression en deux avec pause de changement de bobine au bon moment si le poids restant ne suffit pas | Évite une impression ratée à 90 % |
 | N8 | **Conversion d'un STL en pièce paramétrique simple** (boîte, équerre, plaque) pour pouvoir ensuite modifier les cotes en parlant | Rendre modifiable ce qui ne l'était pas |
+
+### Idées plus larges — N9 à N22 (à arbitrer)
+
+**L'atelier autour de l'imprimante**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N9 | **Domotique (Home Assistant)** : prise connectée qui coupe l'imprimante une fois refroidie, purificateur d'air allumé pour ABS/ASA, lumière de la pièce, alerte détecteur de fumée → pause demandée à l'humain | L'atelier devient sûr et autonome la nuit |
+| N10 | **Séchage et humidité des bobines** : sécheur connecté ou capteur, rappel « ce PETG a pris l'humidité, sèche-le 4 h à 65 °C » avant une impression longue | Cause n°1 des fils et bulles |
+| N11 | **Stock et réapprovisionnement** : alerte quand une matière passe sous un seuil, liste de courses (bobines, inserts, vis, aimants) avec liens d'achat | Ne jamais manquer en plein projet |
+| N12 | **Planning de la machine sur la semaine** : file, réservations, heures creuses d'électricité, impressions longues placées la nuit | Rentabiliser la P1S |
+
+**Du projet à l'objet fini**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N13 | **Mode projet complet** : « je veux un support mural pour 3 guitares » → découpage en pièces, nomenclature (pièces imprimées + vis/chevilles/inserts), planning d'impression, notice | Passer de l'idée à l'objet sans rien oublier |
+| N14 | **Préparation au post-traitement** : surépaisseur pour ponçage, préparation à la galvanoplastie (surface conductrice, accroches, trous d'évacuation), peinture, lissage vapeur | Ton porte-guitare Liquid Chrome |
+| N15 | **Moules et coulée** : générer un moule en 2 parties à partir d'une pièce (silicone, résine, béton, chocolat) avec évents et clés d'alignement | Étend l'atelier au-delà du plastique imprimé |
+| N16 | **Aller-retour avec Blender** : envoyer une sculpture de Blender vers Printalk (réparée, orientée, chiffrée) et renvoyer le résultat de résistance en couleurs dans Blender | Ton flux réel Blender + Printalk |
+
+**Comprendre et progresser**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N17 | **Explique-moi ce réglage** : Claude explique chaque option en contexte, avec l'effet visuel dans la visionneuse (avant/après) | Apprendre en imprimant |
+| N18 | **Profil maître par matière** qui apprend de chaque impression réussie ou ratée (journal + photos) et propose ses propres réglages | Le mémoire d'impression devient un vrai réglage |
+| N19 | **Journal photo automatique** : photo à 0 %, 25 %, 50 %, 100 %, rangées avec l'impression, en galerie | Garder la trace, documenter un projet |
+
+**Au-delà de la P1S**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N20 | **Autres imprimantes** : Prusa, Klipper/Creality via Moonraker, avec les mêmes garde-fous | Ne plus dépendre d'une seule marque |
+| N21 | **Commande vocale depuis le téléphone** : « Printalk, où en est l'impression ? » | Suivre l'atelier les mains prises |
+| N22 | **Galerie / portfolio** des objets réalisés (photos finales, réglages, coût), exportable en page web ou PDF | Montrer ce qu'on fabrique |
