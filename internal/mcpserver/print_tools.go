@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/camera"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
@@ -82,7 +83,12 @@ type SliceOut struct {
 func appOnlyMeta() mcp.Meta { return mcp.Meta{"ui": map[string]any{"visibility": []string{"app"}}} }
 
 // AddPrintTools enregistre les outils d'impression. Fonction séparée : une seule ligne dans New().
-func AddPrintTools(s *mcp.Server, p *printing.Service) {
+// cam (facultative) sert l'instantané joint à get_print_status (repli quand la vue de suivi ne s'affiche pas).
+func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
+	var live *liveCam
+	if len(cam) > 0 {
+		live = newLiveCam(cam[0])
+	}
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 	f, t := false, true
 	write := &mcp.ToolAnnotations{DestructiveHint: &f}
@@ -315,6 +321,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		Description: "État de l'impression (machine d'états), historique, progression observée sur l'imprimante (couche, %, temps restant) et état de l'imprimante. Passe à COMPLETED/FAILED selon l'imprimante. " +
 			"stage_report : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression d'après son étape courante (mise à niveau du plateau, chauffe, nettoyage de la buse, calibrations) avec l'heure de chaque étape ; " +
 			"printer.error_details : print_error et HMS décodés. wait_seconds (1 à 60) : attend qu'un état ou une étape change avant de répondre. " +
+			"with_photo (défaut vrai pendant l'impression) joint un instantané de la caméra comme IMAGE : regarde-la et dis ce que tu y vois (pièce, buse, spaghetti, décollement) ; with_photo=false pour du texte seul. " +
+			"Dans Claude Desktop une carte de suivi en direct (caméra, progression, températures, boutons Arrêter/Reprendre validés par l'humain) s'affiche ; sinon ce texte et cette image suffisent. " +
 			"Effet de bord local : relit l'imprimante et met à jour l'impression (pas en lecture seule au sens strict).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in PrintStatusInput) (*mcp.CallToolResult, printing.PrintStatus, error) {
@@ -328,7 +336,11 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		if err != nil {
 			return nil, printing.PrintStatus{}, err
 		}
-		return textResult(printStatusText(st)), *st, nil
+		res := textResult(printStatusText(st))
+		if live != nil && wantStatusPhoto(in.WithPhoto, st) {
+			res.Content = append(res.Content, live.photoContent(ctx, st.Job.PrinterID)...)
+		}
+		return res, *st, nil
 	})
 
 	addTool(s, &mcp.Tool{
@@ -455,6 +467,14 @@ func AddPrintTools(s *mcp.Server, p *printing.Service) {
 		}
 		return textResult("Confirmation " + v.ConfirmationID), *v, nil
 	})
+}
+
+// wantStatusPhoto : with_photo explicite, sinon vrai tant que l'impression est en cours.
+func wantStatusPhoto(opt *bool, st *printing.PrintStatus) bool {
+	if opt != nil {
+		return *opt
+	}
+	return st.Job.State == contracts.PrintPrinting
 }
 
 func firstNonEmptyStr(a, b string) string {

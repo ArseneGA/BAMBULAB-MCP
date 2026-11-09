@@ -247,6 +247,7 @@ type Service struct {
 	final     map[string]*sync.Mutex
 	nonce     map[string]nonceEntry
 	lastFrame map[string]Frame
+	live      map[string]liveEntry // capture partagée du suivi en direct (live.go)
 	rate      map[string]*bucket
 	wg        sync.WaitGroup
 

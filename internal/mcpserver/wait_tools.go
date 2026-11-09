@@ -121,6 +121,7 @@ func (h *handlers) waitForJob(ctx context.Context, req *mcp.CallToolRequest, in 
 type PrintStatusInput struct {
 	PrintJobID  string `json:"print_job_id"`
 	WaitSeconds int    `json:"wait_seconds,omitempty" jsonschema:"si > 0 (max 60) : attend jusqu'à ce que l'état de l'impression, de l'imprimante ou l'étape change, puis rend l'état avec la progression"`
+	WithPhoto   *bool  `json:"with_photo,omitempty" jsonschema:"joindre un instantané de la caméra (image) au résultat texte ; défaut : vrai si l'impression est en cours, faux sinon. Faux pour un suivi texte seul"`
 }
 
 // WaitPrintInput : entrée de wait_for_print_change.
