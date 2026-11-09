@@ -26,6 +26,9 @@ func TestBusyPendingHumanRequests(t *testing.T) {
 	future, past := s.now().Add(10*time.Minute), s.now().Add(-time.Minute)
 
 	s.mu.Lock()
+	if s.actions == nil { // initialisée à la première demande d'action (actions.go) : absente d'un service neuf
+		s.actions = map[string]*actionReq{}
+	}
 	s.approv["c1"] = &approval{jobID: "pj", expires: future}
 	s.stops["s1"] = stopReq{jobID: "pj", expires: future}
 	s.actions["a1"] = &actionReq{kind: ActionResume, expires: future}
