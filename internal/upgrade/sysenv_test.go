@@ -239,6 +239,9 @@ func TestFetchResolveAndAncestryWithRealGit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git absent")
 	}
+	// Le test clone en file:// : si l'environnement (construction de l'outil : GIT_ALLOW_PROTOCOL=https) restreint les protocoles,
+	// l'autoriser ici, quel que soit l'environnement hérité.
+	t.Setenv("GIT_ALLOW_PROTOCOL", "file:https")
 	origin := filepath.Join(t.TempDir(), "origin")
 	if err := os.MkdirAll(origin, 0o755); err != nil {
 		t.Fatal(err)

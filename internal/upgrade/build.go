@@ -112,8 +112,13 @@ func (e *SysEnv) Build(ctx context.Context, sha string) (Release, error) {
 	tmp := strings.TrimSpace(tmpOut)
 	// Environnement vidé : ni BAMBU_STUDIO_BIN (les tests visent Studio 02.08 ; la version installée peut différer), ni BAMBU_*.
 	testEnv := e.buildEnv("TMPDIR="+tmp, "CGO_ENABLED=0")
-	if _, err := e.asBuilder(ctx, src, 50*time.Minute, testEnv, "go", "test", "-short", "./...", "-count=1", "-timeout", "30m"); err != nil {
-		return fail("go test", err)
+	if testOut, err := e.asBuilder(ctx, src, 50*time.Minute, testEnv, "go", "test", "-short", "./...", "-count=1", "-timeout", "30m"); err != nil {
+		// Les tests en échec (« --- FAIL: ») et les paquets (« FAIL ») sont extraits de la sortie complète et placés en tête :
+		// la fin de la sortie, seule conservée par les journaux, ne les contient pas toujours.
+		if d := FailureDigest(testOut); d != "" {
+			e.Logf("tests en échec : %s", d)
+		}
+		return fail("go test", withDigest(err, testOut))
 	}
 
 	step("validateur MCP (scripts/mcp-sdk-validate)")

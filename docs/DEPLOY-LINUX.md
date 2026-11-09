@@ -526,6 +526,10 @@ cd <dépôt cloné sur le serveur>            # ou n'importe où si --from est d
 sudo bash deploy/linux/enable-auto-update.sh
 ```
 
+**Prérequis de droits** : le compte de construction `atelier-update` doit pouvoir **traverser** `/opt/atelier` (créer le dossier partiel de la construction sous `releases/`). Or `/opt/atelier` est souvent en `0750 root:atelier` : sans correctif, la construction échoue sur `mkdir: cannot create directory '/opt/atelier': Permission denied`. `enable-auto-update.sh` le vérifie et, au besoin, pose l'ACL `sudo setfacl -m u:atelier-update:--x /opt/atelier` (paquet `acl`) ; sans ACL possible, il **s'arrête avant d'activer le timer** avec la marche à suivre (installer `acl`, ou ajouter `atelier-update` au groupe propriétaire de `/opt/atelier`, ce qui lui donne aussi la lecture des fichiers de ce groupe). Idempotent. L'outil (`bambud upgrade`) revérifie ce prérequis à chaque démarrage : s'il manque, il s'arrête avec le **code de sortie 3** et le correctif, avant toute construction (1 = échec de mise à jour, 2 = usage ou configuration). Contrôle manuel : `sudo runuser -u atelier-update -- test -x /opt/atelier/releases && echo OK`.
+
+L'outil installé annonce la même version que `bambud` (hash court du commit) : `/opt/atelier/updater/bambud --version`. Le script le montre à l'installation et avertit s'il lit « bambud dev ».
+
 Options utiles : `--window 07:00-23:00` (jamais la nuit), `--smoke required|advisory|off`, `--keep-releases N`, `--from <livraison>` (binaire déjà construit au lieu de compiler l'outil), `--assume-sha <sha>` (commit de la version installée), `--no-start`. Idempotent : relancer ne change rien (vérifié par le harnais). Avec `install.sh` : `sudo ./install.sh --from … --auto-update [--update-window 07:00-23:00]`.
 
 Ce que fait la commande, **sans arrêter ni redémarrer le service** :
@@ -608,7 +612,8 @@ Retour arrière **manuel** vers la version précédente (schéma inchangé) : `s
 4. Un commit qui échoue **chaque fois** : il est déjà mis de côté. Corriger sur `main` (nouveau commit = nouvel essai), ou geler : `sudo atelier-update --pin current`.
 5. Tout arrêter : `sudo touch /etc/atelier/auto-update.disabled`.
 6. Construction qui échoue sur le serveur seulement (outil introuvable pour `atelier-update`) : `sudo runuser -u atelier-update -- env -i PATH="$(grep ^ATELIER_UPDATE_PATH /etc/atelier/auto-update.env | cut -d'"' -f2):/usr/bin" go version`.
-7. Désinstaller le mécanisme : `deploy/linux/uninstall.sh` retire aussi `releases/`, `updater/` et les unités ; les données ne sont jamais supprimées.
+7. **Lire un échec de tests** : quand `go test` échoue pendant la construction, le journal (`journalctl -u atelier-update`), la notification « construction échouée » et l'état (`atelier-update --status`) commencent par un résumé entre crochets, extrait de la sortie **complète** : `[--- FAIL: TestX, TestY ; FAIL github.com/…/internal/paquet]` (au plus 12 tests et 6 paquets, le reste est compté « +N autres »). Le détail (assertion, ligne) est dans les dernières lignes du journal ; pour le rejouer sur le serveur, reproduire l'environnement de la construction : `sudo runuser -u atelier-update -- env -i HOME=/var/lib/atelier-update PATH=<ATELIER_UPDATE_PATH>:/usr/bin CI=1 CGO_ENABLED=0 go test -short ./internal/<paquet>/` dans un clone de travail. Les tests de la construction ne reçoivent **pas** `GIT_ALLOW_PROTOCOL` (seules les commandes git de l'outil l'ont, limitées à https) ; un test qui clone en `file://` doit l'autoriser lui-même (`t.Setenv("GIT_ALLOW_PROTOCOL", "file:https")`).
+8. Désinstaller le mécanisme : `deploy/linux/uninstall.sh` retire aussi `releases/`, `updater/` et les unités ; les données ne sont jamais supprimées.
 
 ### 11.9 Ce qui est prouvé par les tests, et ce qui ne l'est que sur le vrai serveur
 

@@ -69,6 +69,12 @@ func upgradeMain(args []string, out, errw io.Writer) int {
 		fmt.Fprintln(errw, "erreur : à lancer en root (sudo atelier-update) : la mise à jour redémarre le service et change de version")
 		return 1
 	}
+	// Prérequis de droits : le compte de construction doit traverser /opt/atelier (0750 root:atelier sans ACL : « mkdir ...
+	// Permission denied » en pleine construction). Code de sortie dédié, avant toute action.
+	if perr := upgrade.CheckBuilderAccess(ctx, env.Run, cfg); perr != nil {
+		fmt.Fprintln(errw, "erreur de prérequis :", perr)
+		return upgrade.ExitPrereq
+	}
 	release, err := core.LockPath(cfg.LockFile)
 	if err != nil {
 		if errors.Is(err, core.ErrLocked) {

@@ -488,8 +488,8 @@ func oneLine(err error) string {
 		return ""
 	}
 	s := strings.Join(strings.Fields(err.Error()), " ")
-	if len(s) > 400 {
-		s = s[:400] + "..."
+	if len(s) > 900 {
+		s = s[:900] + "..."
 	}
 	return s
 }
