@@ -285,3 +285,14 @@ Mécanisme et exploitation : `docs/DEPLOY-LINUX.md` § 11. **Désactivé par dé
 - **Pas de vérification de signature** des commits ni d'attestation de build.
 - **Fenêtre de redémarrage** : une impression lancée entre la dernière vérification d'occupation et le redémarrage n'est pas retenue ; `START_UNKNOWN` bloque l'installation tant que l'humain n'a pas tranché (voir DEPLOY-LINUX § 11.10).
 - **Dépôt public** : la CI est lisible par tous ; l'API GitHub non authentifiée est limitée en débit (le mécanisme attend alors, il n'installe jamais « par défaut »).
+
+## 17. Surface publique restreinte (`--public-listen`) — 2026-11-09
+
+Détail et procédure : `docs/OAUTH.md` § 3 bis. Spécification : `docs/specs/G1-connecteur-distant.md` F1, F2.
+
+- **Second écouteur, liste blanche exacte** : `/mcp`, métadonnées OAuth, `/oauth/register|authorize|token|consent/{id}`, `/health` réduit, `/about`, `/privacy`, `/icon.svg`, `/robots.txt`. Tout le reste (`/confirm`, `/stop`, `/action`, `/setup/*`, `/enroll`, `/agents`, `/api/*`, `/agent/v1|v2`, SPA) répond **404**, avec ou sans Bearer ; le filtre précède le garde. Le Funnel ou le reverse proxy ne doit pointer que sur cet écouteur. L'écouteur principal est inchangé ; sans `--public-listen`, rien ne change.
+- **Jeton obligatoire** dès que `--public-listen` est défini (`ValidateServe`). Mêmes gardes que l'écouteur principal (Host, Origin, jeton, `TrustedProxies`). Le jeton OAuth reste limité à `/mcp` ; un jeton émis pour l'adresse publique ne vaut pas sur l'adresse privée (liaison à la ressource, RFC 8707).
+- **Consentement** : le cookie du navigateur enregistré (hôte, pas de port) posé via l'écouteur principal est accepté par l'écouteur public ; un navigateur non enregistré reçoit une page d'explication (403), pas de redirection vers `/enroll`. Les liens remis au modèle (`/confirm`, `/stop`, `/action`) restent sur l'adresse privée.
+- **Limites de débit** par adresse sur l'écouteur public : enregistrement (heure), jeton (minute), `/mcp` sans jeton valide (minute) ; 429 + `Retry-After` ; en plus des limites existantes de `internal/oauth`. Si le proxy ne transmet pas l'adresse réelle du client, les plafonds sont partagés (déni de service possible des échanges de jetons : relever les limites).
+- **Diagnostic** : `bambud doctor connector` (jamais le jeton en sortie ; pas de suivi des redirections ; http refusé hors boucle locale).
+- Tests : `internal/httpapi/public_test.go`, `cmd/bambud/doctor_test.go`, `cmd/bambud/publiclisten_test.go`.

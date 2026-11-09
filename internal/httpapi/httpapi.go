@@ -12,6 +12,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/oauth"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/webui"
 )
 
@@ -24,6 +25,23 @@ func NewHandler(c *core.Core) http.Handler { return NewHandlerWithOptions(c, Opt
 
 // NewHandlerWithOptions est NewHandler avec des options de sécurité explicites.
 func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
+	main, _ := buildHandlers(c, opts, false)
+	return main
+}
+
+// Handlers : les deux routeurs du service. Main : l'écouteur principal (inchangé). Public : la surface publique
+// restreinte (--public-listen, public.go).
+type Handlers struct{ Main, Public http.Handler }
+
+// NewHandlers construit l'écouteur principal et la surface publique restreinte (l'appelant ne branche cette
+// dernière que si --public-listen est fourni). Les deux partagent le même service d'autorisation OAuth et les
+// mêmes navigateurs enregistrés.
+func NewHandlers(c *core.Core, opts Options) Handlers {
+	m, p := buildHandlers(c, opts, true)
+	return Handlers{Main: m, Public: p}
+}
+
+func buildHandlers(c *core.Core, opts Options, withPublic bool) (mainH, publicH http.Handler) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		v, err := c.Store.SchemaVersion(r.Context())
@@ -99,18 +117,29 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
 	registerExport(mux, c)          // export de projet : archive zip partageable (export.go)
 
-	registerOAuth(mux, c, human, &opts) // jetons OAuth sur /mcp, métadonnées et pages (oauth.go) ; renseigne opts pour la garde
+	oauthSvc := oauth.New(c.Store, oauth.Options{ExtraRedirects: opts.OAuthRedirects, Log: c.Log})
+	registerOAuthRoutes(mux, oauthSvc, human, &opts, false) // jetons OAuth sur /mcp, métadonnées et pages (oauth.go) ; renseigne opts pour la garde
 
 	server := mcpserver.New(c)
-	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
+	mux.Handle("/mcp", mcpHandler(c, server))
+	// Interface web embarquée (repli SPA), derrière le garde de sécurité : en dernier, ne masque ni /api ni /mcp.
+	mux.Handle("/", webui.Handler())
+	isSession := func(r *http.Request) bool { _, err := human.SessionFromRequest(r); return err == nil }
+	mainH = guard(opts, isSession, mux) // point de branchement du middleware de sécurité de l'écouteur principal
+	if withPublic {
+		publicH = buildPublic(c, opts, human, oauthSvc, server, isSession)
+	}
+	return mainH, publicH
+}
+
+// mcpHandler : le point d'entrée MCP Streamable HTTP, commun aux deux écouteurs.
+func mcpHandler(c *core.Core, server *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{
 		Logger: c.Log,
 		// Le SDK refuse tout Host non loopback quand la connexion arrive sur le loopback (proxy local :
 		// Funnel, tailscale serve, nginx). Notre garde contrôle déjà Host (loopback ou liste blanche) en amont.
 		DisableLocalhostProtection: true,
-	}))
-	// Interface web embarquée (repli SPA), derrière le garde de sécurité : en dernier, ne masque ni /api ni /mcp.
-	mux.Handle("/", webui.Handler())
-	return guard(opts, func(r *http.Request) bool { _, err := human.SessionFromRequest(r); return err == nil }, mux) // unique point de branchement du middleware de sécurité
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -39,6 +39,14 @@ type Options struct {
 	// OAuthRedirects : URI de redirection exactes acceptées par le serveur OAuth intégré en plus des callbacks de
 	// Claude et de la boucle locale (voir internal/oauth).
 	OAuthRedirects []string
+	// PublicListenURL : URL https sous laquelle la surface publique restreinte (--public-listen) est joignable depuis
+	// Internet (ex. Funnel : https://atelier.exemple.ts.net). Elle fixe l'émetteur OAuth et la ressource /mcp de CET
+	// écouteur ; PublicURL, elle, reste l'adresse privée des liens /confirm, /stop, /action. Vide : déduite de la requête.
+	PublicListenURL string
+	// ContactEmail : adresse de contact affichée par /privacy (BAMBU_CONTACT_EMAIL) ; jamais de valeur par défaut.
+	ContactEmail string
+	// PublicRate : limites de débit par adresse de la surface publique (zéro : valeurs par défaut).
+	PublicRate PublicRateLimits
 
 	// Renseignés par NewHandlerWithOptions (serveur OAuth intégré) : jeton d'accès OAuth valide sur /mcp, et
 	// valeur de WWW-Authenticate du 401 de /mcp (pointeur resource_metadata, RFC 9728).
@@ -126,11 +134,16 @@ type Exposure struct {
 	AllowedHosts []string // --allowed-hosts
 	// RequireToken force le jeton même sur loopback (--require-token) : à utiliser derrière un proxy.
 	RequireToken bool
+	// PublicListen : adresse de la surface publique restreinte (--public-listen) ; non vide = jeton obligatoire.
+	PublicListen string
 }
 
 // TokenRequiredReason dit pourquoi un jeton d'API est obligatoire ("" si ce n'est pas le cas) : écoute hors
 // loopback, --require-token, URL publique non loopback, ou nom d'hôte autorisé non loopback (proxy local).
 func TokenRequiredReason(addr string, ex Exposure) string {
+	if ex.PublicListen != "" {
+		return "--public-listen / BAMBU_PUBLIC_LISTEN (surface exposée à Internet : toujours un jeton)"
+	}
 	if !IsLoopbackAddr(addr) {
 		return "écoute hors loopback (" + addr + ")"
 	}
@@ -155,6 +168,14 @@ func TokenRequiredReason(addr string, ex Exposure) string {
 func ValidateServe(addr, token string, ex Exposure) error {
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		return fmt.Errorf("adresse d'écoute invalide %q : %w", addr, err)
+	}
+	if ex.PublicListen != "" {
+		if _, _, err := net.SplitHostPort(ex.PublicListen); err != nil {
+			return fmt.Errorf("--public-listen %q invalide : %w", ex.PublicListen, err)
+		}
+		if ex.PublicListen == addr {
+			return errors.New("--public-listen doit différer de --addr (deux écouteurs distincts)")
+		}
 	}
 	if token != "" && len(token) < MinTokenLen {
 		return fmt.Errorf("le jeton d'API doit faire au moins %d caractères", MinTokenLen)
