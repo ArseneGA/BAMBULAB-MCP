@@ -16,6 +16,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/strength"
 )
 
 //go:embed ui/atelier.html
@@ -39,11 +40,13 @@ func New(c *core.Core) *mcp.Server {
 			Instructions: "Atelier 3D pour imprimantes Bambu Lab. Les travaux longs renvoient un job_id : " +
 				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
 				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
-				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation.",
+				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation. " +
+				strength.InstructionText,
 		})
 	if mw := mcpLogMiddleware(c.Log); mw != nil {
 		s.AddReceivingMiddleware(mw) // journal INFO des requêtes MCP (mcplog.go) ; BAMBU_LOG_MCP=off pour le couper
 	}
+	s.AddReceivingMiddleware(strengthHintMiddleware(c)) // propose un test de résistance quand la pièce semble porteuse (strength_tools.go)
 	h := &handlers{c: c}
 	roAnn := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 
@@ -103,6 +106,7 @@ func New(c *core.Core) *mcp.Server {
 		AddLaunchTools(s, c)                   // approbation par code de lancement depuis la vue (launch_tools.go)
 		AddLiveTools(s, c)                     // carte de suivi en direct : image caméra partagée, état (live_tools.go)
 		AddRecoveryTools(s, c.Printing)        // relance, reprise, chargement, fichiers de la carte, diagnostic (recovery_tools.go)
+		AddStrengthTools(s, c)                 // test de résistance : plan_strength_test, assess_strength, get_strength_report (strength_tools.go)
 	}
 	if c.Camera != nil && c.Notify != nil {
 		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)

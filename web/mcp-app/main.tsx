@@ -14,6 +14,7 @@ import { LaunchConfirm, StopConfirm } from './launch';
 import { ProgressCard, normalizeProgress, type Prog } from './progress';
 import { LayerViewer, isLayersInfo, type LayersInfo } from './layers';
 import { LiveCard, normalizeLive, type Live } from './live';
+import { StrengthCard, extractStrength, type StrengthView } from './strength';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
@@ -25,15 +26,20 @@ import { LiveCard, normalizeLive, type Live } from './live';
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'strength'; data: StrengthView } | { kind: 'live'; data: Live } |{ kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
-interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string }>; isError?: boolean }
+interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; isError?: boolean }
 
 const textOf = (r: ToolResultLike) => (r.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n').trim();
 
 function classify(r: ToolResultLike): View {
   if (r.isError) return { kind: 'error', text: textOf(r) || "L'outil a renvoyé une erreur." };
   const s = r.structuredContent as Record<string, unknown> | undefined;
+  const strength = extractStrength(s); // test de résistance (assess_strength, get_strength_report) : l'image PNG est dans le contenu du résultat
+  if (strength) {
+    const detail = (s as { detail?: { test_id?: string }; test_id?: string } | undefined);
+    return { kind: 'strength', data: { result: strength, testId: detail?.detail?.test_id ?? detail?.test_id, images: (r.content ?? []).filter((c) => c.type === 'image' && typeof c.data === 'string').map((c) => ({ data: c.data as string, mime: c.mimeType ?? 'image/png' })) } };
+  }
   if (isLayersInfo(s) && Array.isArray((s as { sheet_layers?: unknown }).sheet_layers)) return { kind: 'layers', data: s };
   const live = normalizeLive(s); // suivi d'impression (get_print_status, wait_for_print_change) : avant la progression d'un travail
   if (live) return { kind: 'live', data: live };
@@ -102,6 +108,7 @@ function Root() {
   if (!app) return null;
   if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
   if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
+  if (view.kind === 'strength') return <Box><StrengthCard view={view.data} /></Box>;
   if (view.kind === 'live') return <Box><LiveCard app={app} first={view.data} /></Box>;
   if (view.kind === 'progress') return <Box><ProgressCard app={app} first={view.data} /></Box>;
   if (view.kind === 'layers') return <Box><LayerViewer app={app} info={view.data} /></Box>;
