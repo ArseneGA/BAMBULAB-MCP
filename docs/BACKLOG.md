@@ -115,21 +115,43 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 **Du projet à l'objet fini**
 | # | Idée | Pourquoi |
 |---|---|---|
-| N13 | **Mode projet complet** : « je veux un support mural pour 3 guitares » → découpage en pièces, nomenclature (pièces imprimées + vis/chevilles/inserts), planning d'impression, notice | Passer de l'idée à l'objet sans rien oublier |
+| N13 ✅ retenue | **Mode projet complet** : « je veux un support mural pour 3 guitares » → découpage en pièces, nomenclature (pièces imprimées + vis/chevilles/inserts), planning d'impression, notice | Passer de l'idée à l'objet sans rien oublier |
 | N14 | **Préparation au post-traitement** : surépaisseur pour ponçage, préparation à la galvanoplastie (surface conductrice, accroches, trous d'évacuation), peinture, lissage vapeur | Ton porte-guitare Liquid Chrome |
-| N15 | **Moules et coulée** : générer un moule en 2 parties à partir d'une pièce (silicone, résine, béton, chocolat) avec évents et clés d'alignement | Étend l'atelier au-delà du plastique imprimé |
-| N16 | **Aller-retour avec Blender** : envoyer une sculpture de Blender vers Printalk (réparée, orientée, chiffrée) et renvoyer le résultat de résistance en couleurs dans Blender | Ton flux réel Blender + Printalk |
+| N15 ✅ retenue | **Moules et coulée** : générer un moule en 2 parties à partir d'une pièce (silicone, résine, béton, chocolat) avec évents et clés d'alignement | Étend l'atelier au-delà du plastique imprimé |
+| N16 ✅ retenue | **Aller-retour avec Blender** : envoyer une sculpture de Blender vers Printalk (réparée, orientée, chiffrée) et renvoyer le résultat de résistance en couleurs dans Blender | Ton flux réel Blender + Printalk |
 
 **Comprendre et progresser**
 | # | Idée | Pourquoi |
 |---|---|---|
 | N17 | **Explique-moi ce réglage** : Claude explique chaque option en contexte, avec l'effet visuel dans la visionneuse (avant/après) | Apprendre en imprimant |
-| N18 | **Profil maître par matière** qui apprend de chaque impression réussie ou ratée (journal + photos) et propose ses propres réglages | Le mémoire d'impression devient un vrai réglage |
-| N19 | **Journal photo automatique** : photo à 0 %, 25 %, 50 %, 100 %, rangées avec l'impression, en galerie | Garder la trace, documenter un projet |
+| N18 ✅ retenue | **Profil maître par matière** qui apprend de chaque impression réussie ou ratée (journal + photos) et propose ses propres réglages | Le mémoire d'impression devient un vrai réglage |
+| N19 ✅ retenue | **Journal photo automatique** : photo à 0 %, 25 %, 50 %, 100 %, rangées avec l'impression, en galerie | Garder la trace, documenter un projet |
 
 **Au-delà de la P1S**
 | # | Idée | Pourquoi |
 |---|---|---|
 | N20 | **Autres imprimantes** : Prusa, Klipper/Creality via Moonraker, avec les mêmes garde-fous | Ne plus dépendre d'une seule marque |
 | N21 | **Commande vocale depuis le téléphone** : « Printalk, où en est l'impression ? » | Suivre l'atelier les mains prises |
-| N22 | **Galerie / portfolio** des objets réalisés (photos finales, réglages, coût), exportable en page web ou PDF | Montrer ce qu'on fabrique |
+| N22 ✅ retenue | **Galerie / portfolio** des objets réalisés (photos finales, réglages, coût) + modèles 3D interactifs, versions et journal photo (N19), exportable en page web ou PDF | Montrer ce qu'on fabrique |
+
+### Blender dans Printalk (réponse à N16, 2026-11-09)
+Deux niveaux possibles :
+1. **Blender sans écran sur le serveur** (`blender -b` + scripts Python versionnés dans le dépôt) : remaillage propre, booléens, lissage, décimation, rendus réalistes (N2 : vraie matière, translucidité, chrome), animations type reel. Printalk l'appelle comme il appelle Bambu Studio. Faisable dans notre code, sans dépendre du PC.
+2. **Le Blender interactif du PC** reste piloté par le MCP Blender existant ; Claude enchaîne les deux. Option : l'agent Windows (bambu-agent) relaie les fichiers entre Blender et Printalk (dossier d'échange surveillé), pour l'aller-retour sculpture → réparation/chiffrage → carte de résistance réimportée en couleurs.
+Recommandation : faire (1) dans Printalk, garder (2) comme pont.
+
+### Idées dans l'univers Bambu Lab — B1 à B12 (à arbitrer)
+| # | Idée | Pourquoi |
+|---|---|---|
+| B1 | **MakerWorld complet** : chercher, importer un modèle avec ses profils d'impression, comparer avec nos réglages, suivre les remixes | La bibliothèque Bambu à portée de phrase |
+| B2 | **Lecture des puces RFID des bobines Bambu** (via AMS) : inventaire automatique (matière, couleur exacte, lot, poids restant) | Plus aucune saisie de bobine |
+| B3 | **Catalogue officiel des filaments Bambu** (couleurs hex, finitions, températures) pour l'aperçu réaliste et le choix de couleur | Couleurs justes partout |
+| B4 | **Plan d'entretien** : graissage des tiges, nettoyage carbone, buse à changer, courroies, selon les heures réelles d'impression ; rappels et guides pas à pas | Une P1S qui dure |
+| B5 | **Buses et plaques** : détection/déclaration de la buse (0,2/0,4/0,6/0,8, acier trempé), refus des matières abrasives sur buse laiton, plaque conseillée par matière | Éviter les erreurs coûteuses |
+| B6 | **Résultats des inspections natives** (lidar X1, première couche, caméra) remontés dans le journal et le diagnostic d'échec | Exploiter tous les capteurs Bambu |
+| B7 | **Modules H2D** : buse double, laser et découpe (gravure, découpe de carton/bois) avec les mêmes garde-fous humains | Toute la gamme Bambu |
+| B8 | **AMS 2 Pro / AMS HT** : séchage des bobines piloté, réglage d'humidité par matière | Lien avec N10 |
+| B9 | **Firmware** : suivi des versions, notes de version, alerte si une mise à jour touche le mode LAN/développeur (risque Authorization Control) | Ne pas se faire surprendre |
+| B10 | **Projets MakerWorld multi-plaques** (3MF avec plaques et couleurs) importés tels quels, découpés et lancés plaque par plaque | Les projets populaires en un geste |
+| B11 | **Publication MakerWorld assistée** : fiche, photos de la galerie (N22), profils testés, sans publication automatique (geste humain) | Partager ses créations proprement |
+| B12 | **Calibrations natives Bambu** déclenchées et relues (débit dynamique, vibrations) avec historique par buse et par matière | Lien avec S10 |
