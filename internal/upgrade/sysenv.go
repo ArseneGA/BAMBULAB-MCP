@@ -65,16 +65,23 @@ func (e *SysEnv) buildPath() string {
 	return defaultPath
 }
 
-// buildEnv : environnement vidé de l'utilisateur de construction. Pas de BAMBU_*, pas de jeton.
+// buildEnv : environnement vidé de l'utilisateur de construction (npm, go, tests, validateur). Pas de BAMBU_*, pas de jeton.
+// Il ne porte volontairement PAS GIT_ALLOW_PROTOCOL : les tests de l'outil clonent des dépôts locaux en file:// et
+// échoueraient (« git clone ... exit status 128 ») ; cette restriction ne concerne que les commandes git de l'outil (gitEnv).
 func (e *SysEnv) buildEnv(extra ...string) []string {
 	env := []string{"HOME=" + e.Cfg.CacheDir, "PATH=" + e.buildPath(), "LANG=C.UTF-8", "GIT_TERMINAL_PROMPT=0", "CI=1",
 		"npm_config_update_notifier=false", "npm_config_fund=false"}
-	if strings.HasPrefix(e.Cfg.Repo, "file://") {
-		env = append(env, "GIT_ALLOW_PROTOCOL=file:https")
-	} else {
-		env = append(env, "GIT_ALLOW_PROTOCOL=https")
-	}
 	return append(env, extra...)
+}
+
+// gitEnv : buildEnv + restriction des protocoles git (https seul, file:// seulement si le dépôt suivi est local). Réservé aux
+// commandes git lancées par l'outil lui-même.
+func (e *SysEnv) gitEnv(extra ...string) []string {
+	proto := "GIT_ALLOW_PROTOCOL=https"
+	if strings.HasPrefix(e.Cfg.Repo, "file://") {
+		proto = "GIT_ALLOW_PROTOCOL=file:https"
+	}
+	return e.buildEnv(append([]string{proto}, extra...)...)
 }
 
 func (e *SysEnv) appEnv(extra ...string) []string {
@@ -102,7 +109,7 @@ func (e *SysEnv) asRoot(ctx context.Context, timeout time.Duration, name string,
 
 func (e *SysEnv) git(ctx context.Context, args ...string) (string, error) {
 	all := append([]string{"-C", e.Cfg.RepoDir()}, args...)
-	return e.asBuilder(ctx, e.Cfg.CacheDir, 10*time.Minute, e.buildEnv(), "git", all...)
+	return e.asBuilder(ctx, e.Cfg.CacheDir, 10*time.Minute, e.gitEnv(), "git", all...)
 }
 
 // Fetch met à jour le clone local et renvoie le commit de tête de origin/<branche>.
@@ -110,7 +117,7 @@ func (e *SysEnv) Fetch(ctx context.Context) (string, error) {
 	repo := e.Cfg.RepoDir()
 	if _, err := os.Stat(filepath.Join(repo, ".git")); err != nil {
 		if _, err := os.Stat(filepath.Join(repo, "HEAD")); err != nil { // clone absent
-			if _, err := e.asBuilder(ctx, e.Cfg.CacheDir, 15*time.Minute, e.buildEnv(), "git", "clone", "--quiet", "--no-checkout", e.Cfg.Repo, repo); err != nil {
+			if _, err := e.asBuilder(ctx, e.Cfg.CacheDir, 15*time.Minute, e.gitEnv(), "git", "clone", "--quiet", "--no-checkout", e.Cfg.Repo, repo); err != nil {
 				return "", fmt.Errorf("clone de %s : %w", e.Cfg.Repo, err)
 			}
 		}

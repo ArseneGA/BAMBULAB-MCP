@@ -80,6 +80,7 @@ REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 # pour les comptes de service) ferait échouer go (« cannot determine current directory »).
 as_app() { if [ "$TEST_MODE" = 1 ]; then "$@"; else ( cd / && runuser -u "$APP_USER" -- "$@" ); fi; }
 do_chown() { [ "$TEST_MODE" = 1 ] || chown "$@"; }
+repo_git() { git -c safe.directory="$REPO_ROOT" -C "$REPO_ROOT" "$@"; }
 write_if_changed() { # write_if_changed DEST MODE  (contenu sur stdin) ; code 0 = écrit, 1 = inchangé
   local tmp
   tmp="$(mktemp)"
@@ -108,7 +109,7 @@ env_set() { # env_set FICHIER CLE VALEUR : remplace sur place ou ajoute (valeur 
 if [ "$ACTION" = disable ]; then
   install -d -m 0750 "$CONF_DIR"; : > "$DISABLED_FILE"; chmod 0644 "$DISABLED_FILE"
   "$SYSTEMCTL" disable --now atelier-update.timer >/dev/null 2>&1 || true
-  echo "Mises à jour automatiques DÉSACTIVÉES ($DISABLED_FILE créé, timer arrêté). Réactiver : sudo bash $0 --enable"
+  echo "Mises à jour automatiques DÉSACTIVÉES ($DISABLED_FILE créé, timer arrêté). Réactiver : sudo rm $DISABLED_FILE && sudo systemctl enable --now atelier-update.timer"
   exit 0
 fi
 if [ "$ACTION" = reenable ]; then
@@ -159,7 +160,14 @@ if [ -z "$UPDATER_SRC" ]; then
   [ -f "$REPO_ROOT/go.mod" ] || die "pas de dépôt autour de ce script : fournir --from DIR ou --updater-bin FILE"
   command -v go >/dev/null 2>&1 || die "go est requis pour compiler l'outil de mise à jour (ou fournir --from / --updater-bin)"
   say "Compilation de l'outil de mise à jour depuis $REPO_ROOT"
-  VER="$(git -C "$REPO_ROOT" describe --always --tags 2>/dev/null || echo dev)"
+  # Même version injectée que la construction normale (hash court du commit). safe.directory : le script tourne en root sur un
+  # dépôt qui appartient à un autre compte ; sans cela git refuse (« dubious ownership ») et la version retombait sur « dev ».
+  VER="$(repo_git describe --always --tags 2>/dev/null || true)"
+  [ -n "$VER" ] || VER="$(repo_git rev-parse --short=7 HEAD 2>/dev/null || true)"
+  if [ -z "$VER" ]; then
+    VER="0.0.0-inconnue"
+    warn "version du dépôt illisible (pas de .git ?) : l'outil sera annoncé « $VER »"
+  fi
   ( cd "$REPO_ROOT" && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/ArseneGA/BAMBULAB-MCP/internal/core.Version=$VER" -o "$TMPD/bambud" ./cmd/bambud ) \
     || die "compilation de bambud échouée"
   UPDATER_SRC="$TMPD/bambud"
@@ -180,6 +188,26 @@ if [ "$TEST_MODE" != 1 ]; then
 fi
 install -d -m 0755 "$OPT/releases" "$OPT/updater"
 install -d -m 0750 "$CACHE_DIR"; do_chown "$BUILD_USER:$BUILD_USER" "$CACHE_DIR"
+
+# Le compte de construction doit TRAVERSER $OPT (créer le dossier partiel de la construction dans $OPT/releases) : un $OPT en
+# 0750 root:atelier l'en empêche (« mkdir: cannot create directory '/opt/atelier': Permission denied »). Idempotent ; en cas
+# d'impossibilité, arrêt ICI, avant l'activation du timer.
+builder_can() { ( cd / && runuser -u "$BUILD_USER" -- test -x "$1" ) >/dev/null 2>&1; }
+builder_access_ok() { builder_can "$OPT" && builder_can "$OPT/releases"; }
+if [ "$TEST_MODE" != 1 ]; then
+  if builder_access_ok; then
+    echo "accès de $BUILD_USER à $OPT : OK"
+  else
+    if command -v setfacl >/dev/null 2>&1; then
+      setfacl -m "u:$BUILD_USER:--x" "$OPT" 2>/dev/null || warn "setfacl sur $OPT échoué (système de fichiers sans ACL ?)"
+    fi
+    if builder_access_ok; then
+      echo "ACL posée : $BUILD_USER peut traverser $OPT (setfacl -m u:$BUILD_USER:--x $OPT)"
+    else
+      die "le compte $BUILD_USER ne peut pas traverser $OPT ($(stat -c '%a %U:%G' "$OPT" 2>/dev/null)) ni écrire dans $OPT/releases : la construction échouerait (« mkdir ... Permission denied »). Le timer n'a PAS été activé. Correctif : installer les ACL (sudo apt install acl) puis relancer ce script ; ou, à la main : sudo setfacl -m u:$BUILD_USER:--x $OPT ; ou, sans ACL, ajouter $BUILD_USER au groupe propriétaire de $OPT (sudo usermod -aG $(stat -c %G "$OPT" 2>/dev/null || echo atelier) $BUILD_USER), en sachant que cela donne aussi la lecture des fichiers de ce groupe"
+    fi
+  fi
+fi
 install -d -m 0750 "$CONF_DIR" 2>/dev/null || true
 if [ "$TEST_MODE" != 1 ]; then
   # Le compte de construction doit pouvoir lancer go et node (installés pour tous les utilisateurs, pas dans un $HOME).
@@ -218,8 +246,8 @@ else
   done
   LVER="$("$LEGACY/bin/bambud" --version 2>/dev/null | awk '{print $2; exit}')"; LVER="${LVER:-inconnue}"
   LSHA="$ASSUME_SHA"
-  if [ -z "$LSHA" ] && [ -d "$REPO_ROOT/.git" ] && [ "$(git -C "$REPO_ROOT" describe --always --tags 2>/dev/null)" = "$LVER" ]; then
-    LSHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  if [ -z "$LSHA" ] && [ -d "$REPO_ROOT/.git" ] && [ "$(repo_git describe --always --tags 2>/dev/null)" = "$LVER" ]; then
+    LSHA="$(repo_git rev-parse HEAD)"
   fi
   LSCHEMA="$(as_app "$UPDATER" upgrade-probe --data-dir "$DATA_DIR" 2>/dev/null | grep -o '"schema_version":[0-9]*' | head -n1 | cut -d: -f2 || true)"
   printf '{\n  "sha": "%s",\n  "version": "%s",\n  "schema": %s,\n  "built_at": "%s",\n  "legacy": true\n}\n' "$LSHA" "$LVER" "${LSCHEMA:-0}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LEGACY/REVISION"
@@ -239,7 +267,9 @@ done
 
 # --- Outil de mise à jour, commande atelier-update ---------------------------------------------------------------------------
 say "Outil de mise à jour"
-echo "outil installé : $UPDATER"
+TOOL_VER="$("$UPDATER" --version 2>/dev/null | head -n1 || true)"
+echo "outil installé : $UPDATER (${TOOL_VER:-version illisible})"
+case "$TOOL_VER" in "bambud dev"|"") warn "l'outil annonce « ${TOOL_VER:-?} » : binaire construit sans la version injectée (-ldflags -X ...core.Version) ; recompiler via ce script depuis le dépôt git (sans --updater-bin)" ;; esac
 install -d -m 0755 "$SBIN_DIR"
 write_if_changed "$SBIN_DIR/atelier-update" 0755 <<'EOS' || true
 #!/usr/bin/env bash
@@ -356,7 +386,7 @@ if [ "$START" = 1 ] && [ ! -f "$DISABLED_FILE" ]; then
   "$SYSTEMCTL" enable --now atelier-update.timer >/dev/null
   echo "timer actif : systemctl list-timers atelier-update.timer"
 elif [ -f "$DISABLED_FILE" ]; then
-  warn "$DISABLED_FILE existe : l'automatique reste désactivé (sudo bash $0 --enable pour le réactiver)"
+  warn "$DISABLED_FILE existe : l'automatique reste désactivé (pour le réactiver : sudo rm $DISABLED_FILE && sudo systemctl enable --now atelier-update.timer)"
 else
   echo "timer non activé (--no-start) : sudo systemctl enable --now atelier-update.timer"
 fi
@@ -374,7 +404,7 @@ cat <<EOF
   Journal         : journalctl -u atelier-update -f          (un passage toutes les 5 minutes ; silencieux s'il n'y a rien de nouveau)
   À blanc         : sudo atelier-update --check
   Maintenant      : sudo atelier-update --now                (CI verte et service libre restent exigés)
-  Désactiver      : sudo bash $0 --disable                   (ou : sudo touch $DISABLED_FILE)
+  Désactiver      : sudo touch $DISABLED_FILE         (réactiver : sudo rm $DISABLED_FILE)
   Épingler        : sudo atelier-update --pin current        (retirer : sudo atelier-update --unpin)
   Notifications   : abonner un canal à l'évènement « system_update » (page /setup/notifications)
   Recommandé      : protéger la branche main sur GitHub (Settings > Branches : exiger la CI verte, interdire le force-push) — docs/SECURITY.md
