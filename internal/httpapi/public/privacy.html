@@ -1,0 +1,21 @@
+{{define "privacy.html"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Confidentialité - Atelier Bambu Lab</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>:root{--p-strong:#16a06b;--bg:#f4f7f5;--fg:#17211c}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1713;--fg:#e4ede8;--p-strong:#3ec48f}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:42rem;margin:0 auto;padding:2rem 1rem}h1{color:var(--p-strong);margin-top:0}a{color:var(--p-strong)}</style></head><body><main>
+<h1>Confidentialité</h1>
+<p><em>Projet de texte, à faire relire par le propriétaire de l'instance : il ne vaut pas avis juridique.</em></p>
+<h2>Données traitées</h2>
+<p>Le serveur traite les fichiers 3D de son propriétaire, ses réglages, le journal de ses impressions et, si elle est activée, les photos de la caméra de son imprimante.</p>
+<h2>Où</h2>
+<p>Ces données restent sur l'ordinateur ou le serveur du propriétaire. Rien n'est envoyé à l'éditeur du logiciel. Elles ne sont transmises qu'à l'application Claude du propriétaire, quand elle appelle les outils.</p>
+<h2>Suppression et révocation</h2>
+<p>Le propriétaire peut révoquer l'accès de Claude à tout moment (<code>bambud oauth --revoke</code>) et supprimer ses données depuis son serveur.</p>
+<h2>Pistage</h2>
+<p>Aucun traceur, aucun cookie publicitaire, aucune ressource externe sur ces pages.</p>
+<h2>Contact</h2>
+{{if .Contact}}<p><a href="mailto:{{.Contact}}">{{.Contact}}</a></p>{{else}}<p>Contact non configuré sur cette instance.</p>{{end}}
+</main></body></html>{{end}}

@@ -91,6 +91,21 @@ func oauthErr(w http.ResponseWriter, e *oauth.Error) {
 // registerOAuth monte le serveur d'autorisation et branche la vérification des jetons sur la garde de /mcp.
 func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, opts *Options) *oauth.Service {
 	svc := oauth.New(c.Store, oauth.Options{ExtraRedirects: opts.OAuthRedirects, Log: c.Log})
+	registerOAuthRoutes(mux, svc, human, opts, false)
+	return svc
+}
+
+// registerOAuthRoutes monte les routes OAuth d'un service déjà créé (l'écouteur principal et l'écouteur public
+// partagent le même service : mêmes clients, mêmes autorisations, même état en attente). public : écouteur de la
+// surface publique, où /enroll n'existe pas ; le consentement d'un navigateur non enregistré y reçoit une page
+// d'explication au lieu d'une redirection vers /enroll (404 sur cet écouteur).
+func registerOAuthRoutes(mux *http.ServeMux, svc *oauth.Service, human *humanauth.Service, opts *Options, public bool) {
+	gate := func(h http.Handler) http.Handler {
+		if !public {
+			return h
+		}
+		return publicConsentGate(human, h)
+	}
 	resourceOf := func(r *http.Request) string { return opts.baseURL(r) + "/mcp" }
 
 	opts.extraBearer = func(r *http.Request) bool {
@@ -171,7 +186,7 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 		}
 	})
 
-	mux.Handle("GET /oauth/consent/{id}", human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("GET /oauth/consent/{id}", gate(human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, ok := svc.PendingByID(r.PathValue("id"))
 		if !ok {
 			oauthPage(w, http.StatusNotFound, "msg", map[string]any{"Title": "Demande expirée", "Msg": "Cette demande a expiré ou a déjà été traitée. Relance la connexion depuis Claude."})
@@ -192,8 +207,8 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 		}
 		oauthPage(w, http.StatusOK, "consent", map[string]any{"Title": "Autoriser cette application ?", "Client": name, "Host": host, "Local": local,
 			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce, "IP": p.RemoteIP, "At": localtime.Page(p.RequestedAt)})
-	})))
-	mux.Handle("POST /oauth/consent/{id}", human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}))))
+	mux.Handle("POST /oauth/consent/{id}", gate(human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 4096)
 		if err := r.ParseForm(); err != nil {
 			oauthPage(w, http.StatusBadRequest, "msg", map[string]any{"Title": "Requête invalide", "Msg": "Formulaire illisible."})
@@ -219,7 +234,7 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+u.Scheme+"://"+u.Host+"; frame-ancestors 'none'; base-uri 'none'")
 		}
 		http.Redirect(w, r, redir, http.StatusSeeOther)
-	})))
+	}))))
 
 	mux.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
@@ -238,5 +253,4 @@ func registerOAuth(mux *http.ServeMux, c *core.Core, human *humanauth.Service, o
 		}
 		oauthJSON(w, http.StatusOK, out)
 	})
-	return svc
 }

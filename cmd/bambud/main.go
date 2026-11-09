@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -90,6 +91,9 @@ func main() {
 	studioBin := fs.String("studio-bin", "", "exécutable ou AppImage de Bambu Studio (défaut : env BAMBU_STUDIO_BIN, puis détection) ; un chemin donné mais introuvable est une erreur de démarrage")
 	studioWrap := fs.String("studio-wrapper", os.Getenv("BAMBU_STUDIO_WRAPPER"), "commande préfixe du slicer, ex. \"xvfb-run -a\" (jamais activée implicitement) ; \"none\" ou vide : aucune (env BAMBU_STUDIO_WRAPPER)")
 	oauthRedirects := fs.String("oauth-redirects", os.Getenv("BAMBU_OAUTH_REDIRECTS"), "URI de redirection OAuth exactes supplémentaires, séparées par des virgules (en plus des callbacks de Claude et de la boucle locale ; env BAMBU_OAUTH_REDIRECTS)")
+	publicListen := fs.String("public-listen", os.Getenv("BAMBU_PUBLIC_LISTEN"), "second écouteur : surface publique restreinte (/mcp, OAuth, pages /about /privacy ; tout le reste 404) à publier sur Internet, ex. 127.0.0.1:7879 ; vide = aucun (env BAMBU_PUBLIC_LISTEN)")
+	publicListenURL := fs.String("public-listen-url", os.Getenv("BAMBU_PUBLIC_LISTEN_URL"), "URL https de la surface publique vue d'Internet (ex. https://atelier.exemple.ts.net) : émetteur OAuth et ressource /mcp de cet écouteur ; --public-url reste l'adresse privée des liens /confirm et /stop (env BAMBU_PUBLIC_LISTEN_URL)")
+	publicRate := fs.String("public-rate-limit", os.Getenv("BAMBU_PUBLIC_RATE_LIMIT"), "limites par adresse de la surface publique, ex. register=10,token=60,mcp=60 (register par heure ; token et mcp par minute ; /mcp sans jeton valide) (env BAMBU_PUBLIC_RATE_LIMIT)")
 	version := fs.Bool("version", false, "affiche la version")
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -119,6 +123,8 @@ func main() {
 			os.Exit(schemaVersionMain(os.Stdout))
 		case "agent":
 			os.Exit(agentMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "doctor":
+			os.Exit(doctorMain(os.Args[2:], os.Stdout, os.Stderr))
 		}
 	}
 	_ = fs.Parse(os.Args[1:])
@@ -160,8 +166,24 @@ func main() {
 	if len(urls) > 0 {
 		first = urls[0]
 	}
-	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: first, PublicURLs: urls, TrustedProxies: proxies, OAuthRedirects: splitPublicURLs(*oauthRedirects)},
-		RequireToken: *requireToken, DrainTimeout: *drain}
+	rate, err := httpapi.ParsePublicRateLimits(*publicRate)
+	if err != nil {
+		log.Error("configuration invalide", "err", fmt.Errorf("--public-rate-limit : %w", err))
+		os.Exit(2)
+	}
+	listenURL, err := validatePublicListenURL(*publicListenURL, *publicListen)
+	if err != nil {
+		log.Error("configuration invalide", "err", err)
+		os.Exit(2)
+	}
+	sc := serveConfig{HTTP: httpapi.Options{APIToken: *apiToken, AllowedHosts: hosts, PublicURL: first, PublicURLs: urls, TrustedProxies: proxies, OAuthRedirects: splitPublicURLs(*oauthRedirects),
+		PublicListenURL: listenURL, ContactEmail: strings.TrimSpace(os.Getenv("BAMBU_CONTACT_EMAIL")), PublicRate: rate},
+		RequireToken: *requireToken, DrainTimeout: *drain, PublicListen: strings.TrimSpace(*publicListen)}
+	if sc.PublicListen != "" {
+		for _, w := range publicListenWarnings(sc.PublicListen, listenURL, first) {
+			log.Warn("surface publique", "detail", w)
+		}
+	}
 	if err := run(ctx, log, *addr, core.Config{DataDir: *dataDir, HeavyWorkers: *heavy, LightWorkers: *light, Logger: log,
 		Catalog: catalogConfig(*roots, *uvPath, *geomDir), AllowAnyPrinterHost: *anyHost,
 		StudioPath: studioPath, StudioWrapper: parseWrapper(*studioWrap)}, sc, nil); err != nil {
@@ -179,13 +201,15 @@ type serveConfig struct {
 	HTTP         httpapi.Options
 	DrainTimeout time.Duration // attente max. des travaux après l'arrêt (défaut 30 s)
 	RequireToken bool          // --require-token : jeton obligatoire même en écoute loopback
+	PublicListen string        // --public-listen : adresse du second écouteur (surface publique restreinte) ; vide = aucun
+	publicLn     net.Listener  // écouteur public déjà ouvert (run) ; sinon serve ouvre PublicListen
 }
 
 // run démarre le service et bloque jusqu'à l'annulation de ctx. Si ready n'est
 // pas nil, l'adresse réelle d'écoute y est envoyée (utile aux tests, port 0).
 func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, sc serveConfig, ready chan<- string) error {
 	if err := httpapi.ValidateServe(addr, sc.HTTP.APIToken, httpapi.Exposure{
-		PublicURLs: sc.HTTP.PublicURLs, AllowedHosts: sc.HTTP.AllowedHosts, RequireToken: sc.RequireToken}); err != nil {
+		PublicURLs: sc.HTTP.PublicURLs, AllowedHosts: sc.HTTP.AllowedHosts, RequireToken: sc.RequireToken, PublicListen: sc.PublicListen}); err != nil {
 		return err
 	}
 	c, err := core.Open(ctx, cfg)
@@ -196,6 +220,15 @@ func run(ctx context.Context, log *slog.Logger, addr string, cfg core.Config, sc
 	if err != nil {
 		c.Close() // aucun worker démarré : fermeture sûre
 		return fmt.Errorf("écoute sur %s : %w", addr, err)
+	}
+	if sc.PublicListen != "" {
+		pln, perr := net.Listen("tcp", sc.PublicListen)
+		if perr != nil {
+			ln.Close()
+			c.Close() // aucun worker démarré : fermeture sûre
+			return fmt.Errorf("écoute publique sur %s : %w", sc.PublicListen, perr)
+		}
+		sc.publicLn = pln
 	}
 	err = serve(ctx, log, c, ln, sc, ready)
 	if errors.Is(err, errDrainTimeout) {
@@ -216,10 +249,22 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 	if sc.DrainTimeout <= 0 {
 		sc.DrainTimeout = 30 * time.Second
 	}
+	handlers := httpapi.NewHandlers(c, sc.HTTP)
 	srv := &http.Server{
-		Handler:           httpapi.NewHandlerWithOptions(c, sc.HTTP),
+		Handler:           handlers.Main,
 		ReadHeaderTimeout: 10 * time.Second,
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+	}
+	var pubSrv *http.Server
+	if sc.publicLn != nil {
+		// Surface exposée à Internet : en-têtes et inactivité bornés (le flux SSE de /mcp n'est pas coupé : pas de WriteTimeout).
+		pubSrv = &http.Server{
+			Handler:           handlers.Public,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       2 * time.Minute,
+			MaxHeaderBytes:    32 << 10,
+			ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
+		}
 	}
 
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
@@ -227,8 +272,12 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 	workerDone := make(chan struct{})
 	go func() { defer close(workerDone); _ = c.Run(workerCtx) }()
 
-	serveErr := make(chan error, 1)
+	serveErr := make(chan error, 2)
 	go func() { serveErr <- srv.Serve(ln) }()
+	if pubSrv != nil {
+		go func() { serveErr <- pubSrv.Serve(sc.publicLn) }()
+		log.Info("surface publique restreinte active", "addr", sc.publicLn.Addr().String(), "public_url", sc.HTTP.PublicListenURL)
+	}
 	c.Catalog.SetBaseURL(publicBase(sc.HTTP.PublicURL, ln.Addr().String())) // jamais « http://[::]:port »
 	log.Info("bambud démarré", "addr", ln.Addr().String(), "data_dir", c.Cfg.DataDir, "version", core.Version, "timezone", localtime.Name())
 	if w := localtime.Warning(); w != "" {
@@ -258,6 +307,12 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 		log.Warn("arrêt HTTP incomplet", "err", err)
 		srv.Close()
 	}
+	if pubSrv != nil {
+		if err := pubSrv.Shutdown(shutCtx); err != nil {
+			log.Warn("arrêt HTTP public incomplet", "err", err)
+			pubSrv.Close()
+		}
+	}
 	cancelWorkers()
 	select {
 	case <-workerDone:
@@ -266,4 +321,39 @@ func serve(ctx context.Context, log *slog.Logger, c *core.Core, ln net.Listener,
 	case <-time.After(sc.DrainTimeout):
 		return errors.Join(result, fmt.Errorf("%w (%s)", errDrainTimeout, sc.DrainTimeout))
 	}
+}
+
+// validatePublicListenURL valide --public-listen-url : https (ou http loopback), hôte, sans chemin ; exige
+// --public-listen. Renvoie l'URL sans « / » final.
+func validatePublicListenURL(raw, listen string) (string, error) {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
+		return "", nil
+	}
+	if strings.TrimSpace(listen) == "" {
+		return "", errors.New("--public-listen-url exige --public-listen")
+	}
+	if err := validateOnePublicURL(raw); err != nil {
+		return "", fmt.Errorf("--public-listen-url : %w", err)
+	}
+	u, _ := url.Parse(raw)
+	if u.Scheme != "https" && !httpapi.IsLoopbackAddr(net.JoinHostPort(u.Hostname(), "0")) {
+		return "", fmt.Errorf("--public-listen-url %q : une adresse publique doit être en https", raw)
+	}
+	return raw, nil
+}
+
+// publicListenWarnings : réglages qui marchent mais trompent.
+func publicListenWarnings(listen, listenURL, privateURL string) []string {
+	var w []string
+	if !httpapi.IsLoopbackAddr(listen) {
+		w = append(w, "--public-listen n'est pas en loopback : l'écouteur est joignable sans TLS depuis le réseau ; préférer 127.0.0.1 derrière Funnel ou un reverse proxy")
+	}
+	if listenURL == "" {
+		w = append(w, "--public-listen-url absent : l'émetteur OAuth est déduit de chaque requête ; le renseigner (https://nom-public)")
+	}
+	if listenURL != "" && strings.EqualFold(listenURL, privateURL) {
+		w = append(w, "--public-url (liens /confirm, /stop) est identique à --public-listen-url : ces liens pointeraient vers la surface publique, qui répond 404 ; donner à --public-url l'adresse privée (ex. https://nom:8443)")
+	}
+	return w
 }
