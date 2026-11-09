@@ -132,3 +132,49 @@ func TestClientsWithoutGrantExpireAfter15MinutesAndAreCappedPerIP(t *testing.T) 
 	// et l'adresse peut de nouveau en enregistrer
 	register(t, s, "192.0.2.9")
 }
+
+// Un rejeu du consentement est idempotent pendant DecisionMemory, sans second code, puis la demande est expirée.
+func TestDecisionIsIdempotentForTwoMinutes(t *testing.T) {
+	s, ck := newSvc(t, Options{})
+	ctx := context.Background()
+	cid := register(t, s, "203.0.113.5")
+	res := s.Authorize(ctx, authQuery(cid), "https://h/mcp", "203.0.113.5")
+	p := res.Pending
+	d1, err := s.Decision(ctx, p.ID, p.Nonce, "https://h", "hs_1", res.Bind, true)
+	if err != nil || d1.Outcome != OutcomeApproved {
+		t.Fatalf("première décision : %+v %v", d1, err)
+	}
+	d2, err := s.Decision(ctx, p.ID, p.Nonce, "https://h", "hs_1", res.Bind, true)
+	if err != nil || d2.Outcome != OutcomeAlready || d2.Redirect != d1.Redirect {
+		t.Fatalf("rejeu : %+v %v", d2, err)
+	}
+	if len(s.cod) != 1 {
+		t.Fatalf("%d codes émis, un seul attendu", len(s.cod))
+	}
+	if _, err := s.Decision(ctx, p.ID, p.Nonce, "https://h", "hs_1", "autre", true); err == nil {
+		t.Fatal("rejeu depuis un autre navigateur accepté")
+	}
+	ck.add(CodeTTL + time.Second) // code expiré : plus de lien à réafficher
+	if d, err := s.Decision(ctx, p.ID, p.Nonce, "https://h", "hs_1", res.Bind, true); err != nil || d.Outcome != OutcomeAlready || d.Redirect != "" {
+		t.Fatalf("rejeu après expiration du code : %+v %v", d, err)
+	}
+	ck.add(DecisionMemory)
+	if _, err := s.Decision(ctx, p.ID, p.Nonce, "https://h", "hs_1", res.Bind, true); err == nil {
+		t.Fatal("rejeu après DecisionMemory accepté")
+	}
+}
+
+func TestOrigin(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://claude.ai/api/mcp/auth_callback?x=1": "https://claude.ai",
+		"http://127.0.0.1:53682/callback":             "http://127.0.0.1:53682",
+		"http://[::1]:9/cb":                           "http://[::1]:9",
+		"javascript:alert(1)":                         "",
+		"https://a.b;c/x":                             "",
+		"https://u:p@a.b/x":                           "",
+	} {
+		if got := Origin(in); got != want {
+			t.Errorf("Origin(%q) = %q, attendu %q", in, got, want)
+		}
+	}
+}

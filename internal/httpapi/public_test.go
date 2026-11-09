@@ -311,12 +311,13 @@ func TestPublicFullOAuthFlowAndMCP(t *testing.T) {
 		t.Fatalf("consentement sur l'écouteur public avec le cookie du principal : %d %s", r3.StatusCode, b3)
 	}
 	r4, b4 := e.human.post(e.pub.URL+"/oauth/consent/"+cm[1], url.Values{"nonce": {n[1]}, "decision": {"allow"}}, nil)
-	if r4.StatusCode != 303 {
+	if r4.StatusCode != 200 {
 		t.Fatalf("décision : %d %s", r4.StatusCode, b4)
 	}
-	code, state, iss := codeOf(t, r4.Header.Get("Location"))
+	back := backLink(t, b4)
+	code, state, iss := codeOf(t, back)
 	if state != "st123" || iss != e.pub.URL {
-		t.Fatalf("retour : %s", r4.Header.Get("Location"))
+		t.Fatalf("retour : %s", back)
 	}
 	st, tok := oe.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {cid}, "code": {code}, "redirect_uri": {claudeCallback},
 		"code_verifier": {verifier}, "resource": {e.pub.URL + "/mcp"}})

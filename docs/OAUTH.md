@@ -35,7 +35,10 @@ Claude ── POST /mcp ─────────────▶ 401 + WWW-Aut
        ── POST /oauth/register (JSON, client public) ─▶ client_id
        ── navigateur : GET /oauth/authorize?…&code_challenge=…&resource=… ─▶ page « Continuer »
                   └▶ GET /oauth/consent/{id}  (cookie du navigateur ENREGISTRÉ, sinon /enroll)
-                  └▶ POST « Autoriser » ─▶ 303 https://claude.ai/api/mcp/auth_callback?code=…&state=…&iss=…
+                  │   (CSP de cette page : form-action 'self' + origine exacte de la redirect_uri de la demande ;
+                  │    Chrome applique le form-action du document qui soumet aux redirections du POST)
+                  └▶ POST « Autoriser » ─▶ 200 page « Retour à Claude… » (lien + meta refresh, sans script) vers
+                     https://claude.ai/api/mcp/auth_callback?code=…&state=…&iss=…  (rejeu < 2 min : « déjà donnée »)
        ── POST /oauth/token (code + code_verifier) ─▶ access_token (1 h) + refresh_token (30 j, rotatif)
        ── POST /mcp  Authorization: Bearer bat_… ─▶ MCP
 ```
