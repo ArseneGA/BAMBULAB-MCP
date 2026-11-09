@@ -37,12 +37,26 @@ func PageHeadersWith(w http.ResponseWriter, images, script bool) {
 	pageHeaders(w, extra)
 }
 
-func pageHeaders(w http.ResponseWriter, extra string) {
+// PageHeadersFormAction est PageHeaders pour une page dont le formulaire aboutit, par redirection, vers une origine
+// externe précise (consentement OAuth : retour vers la redirect_uri validée). Chrome applique le `form-action` du
+// DOCUMENT QUI SOUMET aux redirections de la soumission : sans cette origine, le 303 vers le client est bloqué.
+// origin = schéma://hôte[:port] exact (jamais de joker) ; vide ou douteux : `'self'` seul.
+func PageHeadersFormAction(w http.ResponseWriter, origin string) {
+	pageHeadersFA(w, "", origin)
+}
+
+func pageHeaders(w http.ResponseWriter, extra string) { pageHeadersFA(w, extra, "") }
+
+func pageHeadersFA(w http.ResponseWriter, extra, origin string) {
+	fa := "'self'"
+	if origin != "" && !strings.ContainsAny(origin, " ;,'\"*\\\r\n\t") {
+		fa += " " + origin
+	}
 	h := w.Header()
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-store")
 	h.Set("X-Frame-Options", "DENY")
-	h.Set("Content-Security-Policy", "default-src 'none'; "+extra+"style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	h.Set("Content-Security-Policy", "default-src 'none'; "+extra+"style-src 'unsafe-inline'; form-action "+fa+"; frame-ancestors 'none'; base-uri 'none'")
 	h.Set("Referrer-Policy", "no-referrer")
 	h.Set("X-Content-Type-Options", "nosniff")
 }

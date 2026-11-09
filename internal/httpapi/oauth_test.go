@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -109,14 +110,32 @@ func (e *oauthEnv) authorize(cid, redirect string, extra url.Values, decision st
 	if r3.StatusCode != 200 || n == nil || !strings.Contains(b3, "jamais") {
 		e.t.Fatalf("consentement : %d %s", r3.StatusCode, b3)
 	}
+	// La CSP de la page qui soumet doit autoriser l'origine de retour (Chrome l'applique à la redirection).
+	if csp := r3.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'self' "+oauth.Origin(redirect)+";") {
+		e.t.Errorf("CSP de la page de consentement : %q", csp)
+	}
 	r4, b4 := e.human.post(e.srv+"/oauth/consent/"+m[1], url.Values{"nonce": {n[1]}, "decision": {decision}}, nil)
-	if r4.StatusCode != 303 {
+	if r4.StatusCode != 200 {
 		e.t.Fatalf("décision : %d %s", r4.StatusCode, b4)
 	}
-	if csp := r4.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'self' ") {
-		e.t.Errorf("CSP de retour : %q", csp)
+	return backLink(e.t, b4)
+}
+
+var backRe = regexp.MustCompile(`<a href="([^"]+)">retourner dans Claude</a>`)
+var refreshRe = regexp.MustCompile(`<meta http-equiv="refresh" content="0;url=([^"]+)">`)
+
+// backLink extrait le lien de la page « Retour à Claude… » et vérifie que le meta refresh pointe au même endroit.
+func backLink(t *testing.T, body string) string {
+	t.Helper()
+	m := backRe.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("lien de retour absent : %s", body)
 	}
-	return r4.Header.Get("Location")
+	link := html.UnescapeString(m[1])
+	if r := refreshRe.FindStringSubmatch(body); r == nil || html.UnescapeString(r[1]) != link {
+		t.Errorf("meta refresh absent ou différent du lien : %s", body)
+	}
+	return link
 }
 
 func (e *oauthEnv) token(f url.Values) (int, map[string]any) {
@@ -402,11 +421,28 @@ func TestOAuthAuthorizeValidation(t *testing.T) {
 	if r, _ := e.do("POST", "/oauth/consent/"+m[1], map[string]string{"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate", "Content-Type": "application/x-www-form-urlencoded"}, url.Values{"nonce": {n}, "decision": {"allow"}}.Encode()); r.StatusCode != 403 {
 		t.Errorf("POST sans cookie : %d", r.StatusCode)
 	}
-	if r, _ := e.human.post(e.srv+"/oauth/consent/"+m[1], url.Values{"nonce": {n}, "decision": {"allow"}}, nil); r.StatusCode != 303 {
-		t.Errorf("POST valide : %d", r.StatusCode)
+	r1, b1 := e.human.post(e.srv+"/oauth/consent/"+m[1], url.Values{"nonce": {n}, "decision": {"allow"}}, nil)
+	if r1.StatusCode != 200 {
+		t.Errorf("POST valide : %d", r1.StatusCode)
 	}
-	if r, _ := e.human.post(e.srv+"/oauth/consent/"+m[1], url.Values{"nonce": {n}, "decision": {"allow"}}, nil); r.StatusCode != 400 {
-		t.Errorf("rejeu du consentement : %d", r.StatusCode)
+	first := backLink(t, b1)
+	// Rejeu (double clic, rechargement) : page claire « déjà donnée », même lien (même code, aucun second code).
+	r2, b2 := e.human.post(e.srv+"/oauth/consent/"+m[1], url.Values{"nonce": {n}, "decision": {"allow"}}, nil)
+	if r2.StatusCode != 200 || !strings.Contains(b2, "Autorisation déjà donnée") || strings.Contains(b2, "expirée") {
+		t.Errorf("rejeu du consentement : %d %s", r2.StatusCode, b2)
+	}
+	if am := regexp.MustCompile(`<a href="([^"]+)">Retourner dans Claude</a>`).FindStringSubmatch(b2); am == nil || html.UnescapeString(am[1]) != first {
+		t.Errorf("le rejeu doit proposer le même lien : %s", b2)
+	}
+	// Le code est à usage unique : une fois échangé, le rejeu n'affiche plus de lien.
+	code, _, _ := codeOf(t, first)
+	if st, _ := e.token(url.Values{"grant_type": {"authorization_code"}, "client_id": {cid}, "code": {code}, "redirect_uri": {claudeCallback},
+		"code_verifier": {verifier}, "resource": {e.srv + "/mcp"}}); st != 200 {
+		t.Fatalf("échange : %d", st)
+	}
+	_, b3x := e.human.post(e.srv+"/oauth/consent/"+m[1], url.Values{"nonce": {n}, "decision": {"allow"}}, nil)
+	if !strings.Contains(b3x, "Autorisation déjà donnée") || strings.Contains(b3x, "<a href") {
+		t.Errorf("rejeu après échange : %s", b3x)
 	}
 }
 

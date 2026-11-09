@@ -50,6 +50,9 @@ const (
 	maxNameLen     = 100
 	maxURILen      = 512
 	usedCodeMemory = 10 * time.Minute
+
+	// DecisionMemory : durée pendant laquelle une décision déjà prise est rejouable (page « déjà donnée »).
+	DecisionMemory = 2 * time.Minute
 )
 
 // DefaultRedirects : callbacks des applications hébergées de Claude (claude.ai web, Desktop, mobile, Cowork).
@@ -98,6 +101,7 @@ type Service struct {
 	pen  map[string]*Pending
 	cod  map[string]*authCode
 	use  map[string]usedCode
+	dec  map[string]*decided // décisions récentes par identifiant de demande (idempotence du consentement)
 	lim  map[string]*bucket
 	regs map[string][]time.Time // enregistrements récents par adresse
 	log  *slog.Logger
@@ -174,7 +178,7 @@ func New(st *store.Store, o Options) *Service {
 	if o.MaxClientsPerIP <= 0 {
 		o.MaxClientsPerIP = 30
 	}
-	return &Service{st: st, o: o, log: o.Log, pen: map[string]*Pending{}, cod: map[string]*authCode{}, use: map[string]usedCode{},
+	return &Service{st: st, o: o, log: o.Log, pen: map[string]*Pending{}, cod: map[string]*authCode{}, use: map[string]usedCode{}, dec: map[string]*decided{},
 		lim: map[string]*bucket{}, regs: map[string][]time.Time{}}
 }
 
@@ -201,6 +205,15 @@ type Pending struct {
 type authCode struct {
 	clientID, redirectURI, challenge, resource, scope, humanSession string
 	expires                                                         time.Time
+}
+
+// decided garde la décision prise sur une demande, pour qu'un second POST (double clic, rechargement, retour
+// arrière) trouve une réponse claire au lieu de « expirée ». Jamais de second code : on ne garde que l'empreinte du
+// code émis et l'URL de retour pour la réafficher tant que le code n'a pas été échangé.
+type decided struct {
+	nonce, bindHash, clientID, redirect, codeHash string
+	approved                                      bool
+	expires                                       time.Time
 }
 
 type usedCode struct {
@@ -289,6 +302,20 @@ func cleanName(n string) string {
 
 // Register traite un enregistrement dynamique (RFC 7591) et renvoie la réponse JSON.
 func (s *Service) Register(ctx context.Context, body []byte, ip string) (map[string]any, *Error) {
+	out, e := s.register(ctx, body, ip)
+	var meta struct {
+		RedirectURIs []string `json:"redirect_uris"`
+	}
+	_ = json.Unmarshal(body, &meta)
+	if e != nil {
+		s.log.Info("OAuth register", "ok", false, "error", e.Code, "redirect_uris", len(meta.RedirectURIs))
+	} else {
+		s.log.Info("OAuth register", "client_id", out["client_id"], "client_name", out["client_name"], "redirect_uris", len(meta.RedirectURIs), "ok", true)
+	}
+	return out, e
+}
+
+func (s *Service) register(ctx context.Context, body []byte, ip string) (map[string]any, *Error) {
 	if !s.allow("register", ip, s.o.RegisterBurst, s.o.RegisterEvery) {
 		return nil, oerr(429, "temporarily_unavailable", "trop d'enregistrements depuis cette adresse : réessaie dans un instant")
 	}
@@ -402,6 +429,22 @@ type AuthzResult struct {
 // Authorize valide une demande d'autorisation (paramètres de la requête GET). resource est l'identifiant canonique
 // de /mcp pour l'hôte atteint (« https://hôte/mcp »).
 func (s *Service) Authorize(ctx context.Context, q url.Values, resource, ip string) AuthzResult {
+	res := s.authorize(ctx, q, resource, ip)
+	result := "pending"
+	switch {
+	case res.Limited:
+		result = "limited"
+	case res.Fatal != "":
+		result = "invalid"
+	case res.RedirectError != nil:
+		result = "error:" + res.RedirectError.Code
+	}
+	// Origine seulement (jamais l'URI complète, le state ni le challenge).
+	s.log.Info("OAuth authorize", "client_id", safeID(q.Get("client_id")), "redirect_origin", Origin(q.Get("redirect_uri")), "result", result)
+	return res
+}
+
+func (s *Service) authorize(ctx context.Context, q url.Values, resource, ip string) AuthzResult {
 	if !s.allow("authorize", ip, s.o.AuthorizeBurst, s.o.AuthorizeEvery) {
 		return AuthzResult{Limited: true, Fatal: "Trop de demandes depuis cette adresse : réessaie dans un instant."}
 	}
@@ -472,6 +515,11 @@ func (s *Service) pruneLocked(now time.Time) {
 			delete(s.use, k)
 		}
 	}
+	for k, d := range s.dec {
+		if !now.Before(d.expires) {
+			delete(s.dec, k)
+		}
+	}
 }
 
 // PendingByID renvoie la demande en attente (non expirée).
@@ -510,46 +558,132 @@ func ErrorRedirect(redirectURI, state, issuer string, e *Error) string {
 	return addQuery(redirectURI, map[string]string{"error": e.Code, "error_description": e.Desc, "state": state, "iss": issuer})
 }
 
-// Decide traite la décision de l'humain sur une demande en attente : à usage unique (la demande est retirée).
-// nonce = celui du formulaire ; humanSession = identifiant du navigateur enregistré qui a consenti.
+// Résultats de Decision.
+const (
+	OutcomeApproved = "approved"
+	OutcomeDenied   = "denied"
+	OutcomeAlready  = "already" // décision déjà prise sur cette demande (rejeu dans DecisionMemory)
+)
+
+// Decision est le résultat du consentement : Redirect est l'URL de retour vers le client (vide si Already et que le
+// code a déjà été échangé : rien à réafficher).
+type Decision struct {
+	Redirect string
+	Outcome  string
+	ClientID string
+}
+
+func (s *Service) logConsent(clientID, decision string) {
+	s.log.Info("OAuth consent", "client_id", clientID, "decision", decision)
+}
+
+// Decide : voir Decision ; ne renvoie que l'URL de retour.
 func (s *Service) Decide(ctx context.Context, id, nonce, issuer, humanSession, bind string, approve bool) (redirectURL string, err error) {
+	d, err := s.Decision(ctx, id, nonce, issuer, humanSession, bind, approve)
+	return d.Redirect, err
+}
+
+// Decision traite la décision de l'humain sur une demande en attente : à usage unique (la demande est retirée et un
+// seul code est émis). Un rejeu (même nonce, même navigateur) dans DecisionMemory répond Outcome=already, avec la même
+// URL tant que le code n'a pas été échangé, sans jamais émettre de second code.
+// nonce = celui du formulaire ; humanSession = identifiant du navigateur enregistré qui a consenti.
+func (s *Service) Decision(ctx context.Context, id, nonce, issuer, humanSession, bind string, approve bool) (Decision, error) {
 	s.mu.Lock()
 	p, ok := s.pen[id]
 	if !ok || !s.now().Before(p.Expires) {
+		if d, seen := s.dec[id]; seen && s.now().Before(d.expires) &&
+			subtle.ConstantTimeCompare([]byte(nonce), []byte(d.nonce)) == 1 &&
+			bind != "" && subtle.ConstantTimeCompare([]byte(hashOf(bind)), []byte(d.bindHash)) == 1 {
+			out := Decision{Outcome: OutcomeAlready, ClientID: d.clientID}
+			if !d.approved {
+				out.Redirect = d.redirect
+			} else if c, live := s.cod[d.codeHash]; live && s.now().Before(c.expires) {
+				out.Redirect = d.redirect // code pas encore échangé : même lien, même code
+			}
+			s.mu.Unlock()
+			s.logConsent(d.clientID, "already")
+			return out, nil
+		}
 		s.mu.Unlock()
-		return "", errors.New("demande expirée ou déjà traitée : relancer la connexion dans Claude")
+		s.logConsent("", "expired")
+		return Decision{}, errors.New("demande expirée ou déjà traitée : relancer la connexion dans Claude")
 	}
 	if subtle.ConstantTimeCompare([]byte(nonce), []byte(p.Nonce)) != 1 {
 		s.mu.Unlock()
-		return "", errors.New("formulaire invalide")
+		return Decision{}, errors.New("formulaire invalide")
 	}
 	if !p.Bound(bind) {
 		s.mu.Unlock()
-		return "", errors.New("cette demande a été ouverte dans un autre navigateur : relance la connexion depuis Claude, dans le navigateur où tu l'as lancée")
+		return Decision{}, errors.New("cette demande a été ouverte dans un autre navigateur : relance la connexion depuis Claude, dans le navigateur où tu l'as lancée")
 	}
 	delete(s.pen, id)
 	if !approve {
+		redir := ErrorRedirect(p.RedirectURI, p.State, issuer, oerr(302, "access_denied", "refusé par l'utilisateur"))
+		s.dec[id] = &decided{nonce: p.Nonce, bindHash: p.bindHash, clientID: p.ClientID, redirect: redir, expires: s.now().Add(DecisionMemory)}
 		s.mu.Unlock()
 		s.audit(ctx, "human:web", "oauth.denied", "oauth_client", p.ClientID, nil)
-		return ErrorRedirect(p.RedirectURI, p.State, issuer, oerr(302, "access_denied", "refusé par l'utilisateur")), nil
+		s.logConsent(p.ClientID, "denied")
+		return Decision{Redirect: redir, Outcome: OutcomeDenied, ClientID: p.ClientID}, nil
 	}
 	code := randToken("", 32)
 	s.cod[hashOf(code)] = &authCode{clientID: p.ClientID, redirectURI: p.RedirectURI, challenge: p.Challenge, resource: p.Resource,
 		scope: p.Scope, humanSession: humanSession, expires: s.now().Add(CodeTTL)}
+	redir := addQuery(p.RedirectURI, map[string]string{"code": code, "state": p.State, "iss": issuer})
+	s.dec[id] = &decided{nonce: p.Nonce, bindHash: p.bindHash, clientID: p.ClientID, redirect: redir, codeHash: hashOf(code),
+		approved: true, expires: s.now().Add(DecisionMemory)}
 	s.mu.Unlock()
 	s.audit(ctx, "human:web", "oauth.approved", "oauth_client", p.ClientID, map[string]any{"client_name": p.ClientName})
-	return addQuery(p.RedirectURI, map[string]string{"code": code, "state": p.State, "iss": issuer}), nil
+	s.logConsent(p.ClientID, "approved")
+	return Decision{Redirect: redir, Outcome: OutcomeApproved, ClientID: p.ClientID}, nil
+}
+
+// Origin renvoie l'origine exacte (schéma://hôte[:port]) d'une URI de redirection, ou "" si elle n'est pas
+// http(s) ou contient un caractère qui n'a rien à faire dans une source CSP. Jamais de joker.
+func Origin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+		return ""
+	}
+	o := u.Scheme + "://" + u.Host
+	for _, r := range o {
+		if r <= ' ' || r == ';' || r == ',' || r == '\'' || r == '"' || r == '*' || r == '\\' || r > 126 {
+			return ""
+		}
+	}
+	return o
 }
 
 // Token traite POST /oauth/token (formulaire x-www-form-urlencoded).
 func (s *Service) Token(ctx context.Context, f url.Values) (map[string]any, *Error) {
+	var out map[string]any
+	var e *Error
 	switch f.Get("grant_type") {
 	case "authorization_code":
-		return s.exchangeCode(ctx, f)
+		out, e = s.exchangeCode(ctx, f)
 	case "refresh_token":
-		return s.refresh(ctx, f)
+		out, e = s.refresh(ctx, f)
+	default:
+		e = oerr(400, "unsupported_grant_type", "authorization_code ou refresh_token")
 	}
-	return nil, oerr(400, "unsupported_grant_type", "authorization_code ou refresh_token")
+	// Journal : identifiants publics et code d'erreur seulement ; jamais code, verifier, jeton ni en-tête.
+	gt := f.Get("grant_type")
+	if gt != "authorization_code" && gt != "refresh_token" {
+		gt = "autre"
+	}
+	if e != nil {
+		s.log.Info("OAuth token", "client_id", safeID(f.Get("client_id")), "grant_type", gt, "ok", false, "error", e.Code)
+	} else {
+		s.log.Info("OAuth token", "client_id", safeID(f.Get("client_id")), "grant_type", gt, "ok", true)
+	}
+	return out, e
+}
+
+// safeID borne un identifiant fourni par le client avant de le journaliser.
+func safeID(v string) string {
+	if len(v) > 64 {
+		v = v[:64]
+	}
+	return v
 }
 
 func pkceOK(verifier, challenge string) bool {

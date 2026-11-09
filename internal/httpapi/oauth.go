@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -56,7 +57,7 @@ func bearerOf(r *http.Request) string {
 }
 
 var oauthTpl = template.Must(template.New("oauth").Parse(`{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>{{.Title}}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">{{if .Refresh}}{{.Refresh}}{{end}}<title>{{.Title}}</title>
 <style>` + humanauth.Style + `</style></head><body><main><h1>{{.Title}}</h1>{{end}}
 {{define "foot"}}</main></body></html>{{end}}
 {{define "gate"}}{{template "head" .}}
@@ -71,10 +72,22 @@ var oauthTpl = template.Must(template.New("oauth").Parse(`{{define "head"}}<!doc
 <p class="ok">Cette autorisation ne permet <strong>jamais</strong> de lancer ou d'arrêter une impression : ces gestes restent sur les pages /confirm et /stop, dans un navigateur enregistré. Tu peux la révoquer à tout moment : <code>bambud oauth --revoke</code>.</p>
 <form method="post" action="/oauth/consent/{{.ID}}"><input type="hidden" name="nonce" value="{{.Nonce}}">
 <p><button type="submit" name="decision" value="allow">Autoriser</button> <button type="submit" name="decision" value="deny" style="background:transparent;color:inherit">Refuser</button></p></form>{{template "foot"}}{{end}}
+{{define "back"}}{{template "head" .}}
+<p class="ok">{{.Msg}}</p>
+<p>Si Claude ne s'ouvre pas tout seul dans quelques secondes, utilise ce lien : <a href="{{.URL}}">retourner dans Claude</a>.</p>{{template "foot"}}{{end}}
+{{define "already"}}{{template "head" .}}
+<p class="ok">Autorisation déjà donnée : retourne dans Claude. Aucune nouvelle autorisation n'a été créée.</p>
+{{if .URL}}<p>Claude n'a pas encore terminé la connexion ? <a href="{{.URL}}">Retourner dans Claude</a>.</p>{{end}}{{template "foot"}}{{end}}
 {{define "msg"}}{{template "head" .}}<p class="warn">{{.Msg}}</p>{{template "foot"}}{{end}}`))
 
 func oauthPage(w http.ResponseWriter, status int, name string, data map[string]any) {
-	humanauth.PageHeaders(w)
+	oauthPageFA(w, status, name, data, "")
+}
+
+// oauthPageFA : comme oauthPage, avec l'origine de retour autorisée dans form-action (page qui soumet un formulaire
+// suivi d'une redirection vers le client).
+func oauthPageFA(w http.ResponseWriter, status int, name string, data map[string]any, origin string) {
+	humanauth.PageHeadersFormAction(w, origin)
 	w.WriteHeader(status)
 	_ = oauthTpl.ExecuteTemplate(w, name, data)
 }
@@ -205,8 +218,10 @@ func registerOAuthRoutes(mux *http.ServeMux, svc *oauth.Service, human *humanaut
 			host = u.Host
 			local = u.Scheme == "http"
 		}
-		oauthPage(w, http.StatusOK, "consent", map[string]any{"Title": "Autoriser cette application ?", "Client": name, "Host": host, "Local": local,
-			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce, "IP": p.RemoteIP, "At": localtime.Page(p.RequestedAt)})
+		// form-action de CETTE page = 'self' + l'origine exacte de la redirect_uri de cette demande (déjà validée par la
+		// liste blanche) : Chrome applique form-action du document qui soumet à la redirection qui suit le POST.
+		oauthPageFA(w, http.StatusOK, "consent", map[string]any{"Title": "Autoriser cette application ?", "Client": name, "Host": host, "Local": local,
+			"Resource": p.Resource, "ID": p.ID, "Nonce": p.Nonce, "IP": p.RemoteIP, "At": localtime.Page(p.RequestedAt)}, oauth.Origin(p.RedirectURI))
 	}))))
 	mux.Handle("POST /oauth/consent/{id}", gate(human.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 4096)
@@ -223,17 +238,26 @@ func registerOAuthRoutes(mux *http.ServeMux, svc *oauth.Service, human *humanaut
 		if ck, e := r.Cookie("obind"); e == nil {
 			bind = ck.Value
 		}
-		redir, err := svc.Decide(r.Context(), r.PathValue("id"), r.PostFormValue("nonce"), opts.baseURL(r), sess.ID, bind, r.PostFormValue("decision") == "allow")
+		d, err := svc.Decision(r.Context(), r.PathValue("id"), r.PostFormValue("nonce"), opts.baseURL(r), sess.ID, bind, r.PostFormValue("decision") == "allow")
 		if err != nil {
 			oauthPage(w, http.StatusBadRequest, "msg", map[string]any{"Title": "Demande refusée", "Msg": err.Error()})
 			return
 		}
-		// Chrome applique form-action aux redirections : on autorise l'origine de retour (et elle seule).
-		if u, e := url.Parse(redir); e == nil {
-			humanauth.PageHeaders(w)
-			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+u.Scheme+"://"+u.Host+"; frame-ancestors 'none'; base-uri 'none'")
+		// Pas de 303 vers le client : une redirection issue d'un POST est soumise au form-action du document qui a
+		// soumis (Chrome), et son comportement diffère selon les navigateurs. On répond une petite page 200 dont le
+		// lien et le meta refresh sont de simples navigations (hors form-action, hors CSP : navigate-to n'existe plus).
+		switch d.Outcome {
+		case oauth.OutcomeAlready:
+			oauthPage(w, http.StatusOK, "already", map[string]any{"Title": "Autorisation déjà donnée", "URL": d.Redirect, "Refresh": ""})
+		default:
+			msg := "Autorisation donnée. Retour à Claude…"
+			title := "Retour à Claude…"
+			if d.Outcome == oauth.OutcomeDenied {
+				msg = "Refus enregistré. Retour à Claude…"
+			}
+			oauthPage(w, http.StatusOK, "back", map[string]any{"Title": title, "Msg": msg, "URL": d.Redirect,
+				"Refresh": template.HTML(`<meta http-equiv="refresh" content="0;url=` + html.EscapeString(d.Redirect) + `">`)})
 		}
-		http.Redirect(w, r, redir, http.StatusSeeOther)
 	}))))
 
 	mux.HandleFunc("POST /oauth/token", func(w http.ResponseWriter, r *http.Request) {
