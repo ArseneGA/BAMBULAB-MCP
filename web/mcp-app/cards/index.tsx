@@ -1,0 +1,45 @@
+import type { CardApp, CardProps } from './call';
+import { CompareCard, normalizeCompare } from './compare';
+import { CostsCard, normalizeCosts, type CostsData } from './costs';
+import { LibraryCard, normalizeLibrary, type LibraryData } from './library';
+import { PrintersCard, normalizePrinters, type PrintersData } from './printers';
+import { PrintsCard, normalizePrints, type PrintsData } from './prints';
+import { SpoolsCard, normalizeSpools, type SpoolsData } from './spools';
+import type { CompareOutput } from '../../src/api/goalTypes';
+
+/**
+ * Cartes MCP App « même rendu que le site, en plus compact » (docs/research/mcp-cards.md).
+ * classifyCard reconnaît la FORME du structuredContent (aucun nom d'outil n'arrive à la vue) ; main.tsx l'appelle avant les autres
+ * vues. Les formes sont disjointes de celles des vues existantes (suivi, progression, confirmation, fiche modèle, trajectoires).
+ */
+export type CardData =
+  | { card: 'library'; data: LibraryData }
+  | { card: 'compare'; data: CompareOutput }
+  | { card: 'costs'; data: CostsData }
+  | { card: 'spools'; data: SpoolsData }
+  | { card: 'prints'; data: PrintsData }
+  | { card: 'printers'; data: PrintersData };
+
+export function classifyCard(s: unknown): CardData | undefined {
+  let d: unknown;
+  if ((d = normalizeCompare(s))) return { card: 'compare', data: d as CompareOutput };
+  if ((d = normalizeLibrary(s))) return { card: 'library', data: d as LibraryData };
+  if ((d = normalizeCosts(s))) return { card: 'costs', data: d as CostsData };
+  if ((d = normalizeSpools(s))) return { card: 'spools', data: d as SpoolsData };
+  if ((d = normalizePrints(s))) return { card: 'prints', data: d as PrintsData };
+  if ((d = normalizePrinters(s))) return { card: 'printers', data: d as PrintersData };
+  return undefined;
+}
+
+export function CardView({ app, card, onOpen }: { app: CardApp; card: CardData; onOpen: CardProps<unknown>['onOpen'] }) {
+  switch (card.card) {
+    case 'library': return <LibraryCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'compare': return <CompareCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'costs': return <CostsCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'spools': return <SpoolsCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'prints': return <PrintsCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'printers': return <PrintersCard app={app} data={card.data} onOpen={onOpen} />;
+  }
+}
+
+export type { CardApp };
