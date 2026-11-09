@@ -135,8 +135,9 @@ func TestAMSSuggestionAndRFID(t *testing.T) {
 func TestSpoolCRUDAndGuards(t *testing.T) {
 	r := newRig(t)
 	r.setup(0)
-	if r.callErr("update_spool", map[string]any{"brand": "X"}) == "" {
-		t.Fatal("création sans matière")
+	// Création sans matière : plus une erreur, la carte-formulaire (pré-remplie) est affichée et rien n'est créé.
+	if v := r.call("update_spool", map[string]any{"brand": "X"}); v["form"] == nil || v["spool"] != nil {
+		t.Fatalf("création sans matière : carte attendue, rien de créé : %v", v)
 	}
 	if r.callErr("update_spool", map[string]any{"material": "PLA", "color_hex": "rouge"}) == "" {
 		t.Fatal("couleur invalide")

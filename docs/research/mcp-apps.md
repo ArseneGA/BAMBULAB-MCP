@@ -134,3 +134,23 @@ Interpréter :
 - `session` : 8 premiers caractères de l'identifiant de session (`-` en stdio ou sans session) ; sert à relier les lignes d'une même conversation.
 
 Garanties : jamais d'argument d'outil, de contenu de résultat, de jeton, de code de lancement ni d'en-tête dans ces lignes ; les messages d'erreur ne sont pas repris (`error_type` seulement). Les outils réservés aux vues appelés en boucle (`get_live_frame`, `get_live_state`, `get_launch_view_state`, `get_print_confirmation_view`, `get_mesh_chunk`, `get_layer_paths`) sont au niveau DEBUG à chaque appel (`BAMBU_LOG_LEVEL=debug`) et, au niveau INFO, une seule ligne agrégée par minute et par outil : `msg="MCP tools/call (outil de vue, agrégé)" tool=get_live_frame calls=24 …`. Couper le tout : `BAMBU_LOG_MCP=off` (défaut : actif).
+
+
+## 12. Socle de design commun et cartes-formulaires (2026-11-09)
+
+Légende : [V] vérifié dans le code / par les tests · [H] hypothèse non vérifiée dans un hôte réel.
+
+**Socle** (`web/shared`, voir son README) : jetons vert Printalk clair/sombre, DM Sans embarquée (37 Kio, la CSP interdit les polices distantes), composants (`Card`, `Badge`, `Button` 34 px, champs avec unité, `Segmented`, `Table`, `ProgressBar`, `Notice`, `Toast`, icônes au trait) utilisés par le site ET les cartes, sans duplication. [V] Thème : `applyHostContext` lit `theme` de l'hôte (sinon la luminance de `--color-background-primary`), `followSystemTheme` retombe sur `prefers-color-scheme` ; les variables de l'hôte sont recopiées sous `--host-*` (elles n'écrasent pas la charte). Taille du bundle des cartes : 1 100 502 → 1 191 787 octets (+ 91 Ko : police 49 Ko en base64 + formulaires).
+
+**Carte-formulaire** `ui://bambu/form.html` (même bundle, même mécanisme que les autres vues). [V] Principe : un outil visible du modèle appelé SANS ses champs obligatoires renvoie, au lieu d'une erreur, `structuredContent.form` (spécification : champs, types, unités, bornes, valeurs initiales, `missing`, liens, rappel de sécurité) et un texte de repli COMPLET (champs, valeurs, consigne de rappel de l'outil). La carte pré-remplit, valide côté client (obligatoire, motif, bornes, entier, couleur), puis appelle l'outil réservé `submit_*` (`visibility:["app"]`) qui exécute la MÊME fonction que l'outil normal (même validation serveur), affiche `structuredContent.form_result` (résumé, détails, notes, liens, image) et informe le modèle par `ui/update-model-context` (`App.updateModelContext`, sans déclencher de tour : `sendMessage` aurait relancé le modèle) avec la phrase « l'utilisateur a validé … » SANS les valeurs saisies. Appelé avec tous ses champs, l'outil agit comme avant et ajoute seulement `form_result`.
+
+| Outil visible | Déclenche la carte quand… | Outil de soumission | Notes |
+|---|---|---|---|
+| `add_printer` | `name`, `model_id`, `host` ou `serial` manque | `submit_add_printer` | champs de la modale du site ; lien vers `/setup/printer/{id}` à la validation ; le code d'accès n'est jamais un champ |
+| `set_cost_settings` | aucun champ | `submit_cost_settings` | kWh, prix du kilo par matière, usure, marge d'alerte de bobine ; n'envoie que les valeurs modifiées |
+| `configure_notifications` | aucun champ | `submit_notifications` | canaux EXISTANTS (actif, évènements) ; lien vers `/setup/notifications` pour destinations et secrets |
+| `update_spool` | ni `material` ni `spool_id`, ou `spool_id` seul | `submit_spool` | matière, couleur (pastille + usuelles), poids, prix |
+| `set_manufacturing_goals` | pas de `criteria` | `submit_goals` | segmentés solide / surface propre / rapide / translucide / économe (priorité), matière |
+| `create_from_template` | ni `params`, ni `name`, ni `model_id` (et pas `no_form`) | `submit_part_template` + `preview_part_template` | champs générés depuis `describe_part_template` (unité, bornes, défauts) ; aperçu SVG du gabarit mis à jour pendant la saisie et vignette de la pièce créée dans le résultat |
+
+[H] Non vérifié dans Claude Desktop (affichage réel des cartes, § 7-8). [D] L'aperçu est une vignette SVG (le moteur de gabarits ne produit que du SVG), pas un PNG. Ajouter un formulaire = décrire ses champs côté Go (`forms.go`, `form_tools.go`) : le rendu front est générique.

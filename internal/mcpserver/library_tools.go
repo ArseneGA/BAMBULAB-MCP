@@ -91,15 +91,11 @@ func registerLibraryTools(s *mcp.Server, c *core.Core) {
 		Description: "Génère la pièce (STEP + STL) depuis un gabarit ou une variante avec les paramètres donnés, l'enregistre au catalogue (nouveau modèle, ou NOUVELLE version d'un modèle existant avec model_id + base_version_id) " +
 			"et renvoie : paramètres finalement utilisés, paramètres calculés par l'ingénierie (jeux, compensation de trous, trous d'insert), calculs détaillés (SnapFit pour les clips...), hypothèses, " +
 			"avertissements, cotes calculées et provenance de la calibration (« calibré le ... » ou valeurs génériques). Donner material, nozzle_diameter, et printer/filament pour utiliser la calibration de l'utilisateur. " +
-			"Chaque pièce est vérifiée étanche. Pour un gabarit non listé, create_parametric_model reste disponible.",
+			"Chaque pièce est vérifiée étanche. Pour un gabarit non listé, create_parametric_model reste disponible. " +
+			"Sans params (ni name, ni model_id), affiche à l'utilisateur une carte-formulaire des paramètres du gabarit pré-remplie ; no_form=true crée tout de suite avec les valeurs par défaut.",
 		Annotations: write,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in library.CreateInput) (*mcp.CallToolResult, library.CreateOutput, error) {
-		o, err := lib.Create(ctx, in)
-		if err != nil {
-			return nil, library.CreateOutput{}, err
-		}
-		return textResult(fmt.Sprintf("Modèle %s créé (version %s, gabarit %s v%s) ; %d paramètre(s) calculé(s), %d calcul(s), %d avertissement(s). %s",
-			o.ModelID, o.VersionID, o.Template, o.TemplateVersion, len(o.Auto), len(o.Calcs), len(o.Warnings), o.Calibration.Provenance)), *o, nil
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in CreateFromTemplateInput) (*mcp.CallToolResult, CreateFromTemplateOut, error) {
+		return handleTemplate(ctx, lib, in) // sans params : carte-formulaire des paramètres du gabarit (form_tools.go)
 	})
 
 	addTool(s, &mcp.Tool{

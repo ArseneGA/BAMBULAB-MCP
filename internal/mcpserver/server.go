@@ -94,7 +94,7 @@ func New(c *core.Core) *mcp.Server {
 		AddGoalTools(s, c.Goals)
 	}
 	if c.Insights != nil {
-		AddInsightTools(s, c.Insights) // coût, journal, tableau de bord, post-traitement (insight_tools.go)
+		AddInsightTools(s, c.Insights, c.Filament) // coût, journal, tableau de bord, post-traitement (insight_tools.go)
 	}
 	if c.Printing != nil {
 		AddPrintTools(s, c.Printing, c.Camera) // chaîne d'impression (print_tools.go)
@@ -110,6 +110,7 @@ func New(c *core.Core) *mcp.Server {
 	if c.Filament != nil {
 		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
 	}
+	AddFormTools(s, c) // cartes-formulaires : vue ui://bambu/form.html et outils de soumission réservés à l'application (form_tools.go)
 	if c.Export != nil {
 		AddExportTools(s, c) // export de projet : archive zip partageable (export_tools.go)
 	}

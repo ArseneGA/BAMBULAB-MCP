@@ -6,6 +6,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/filament"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
 )
 
@@ -34,7 +35,11 @@ type ProjectCostsOutput struct {
 // estimate_cost, get_cost_settings, set_cost_settings, list_print_log, get_print_log, update_print_log,
 // suggest_print_adjustments, get_usage_dashboard, get_project_costs, post_processing_advice.
 // Aucun de ces outils ne lance ni n'arrête d'impression.
-func AddInsightTools(s *mcp.Server, svc *insights.Service) {
+func AddInsightTools(s *mcp.Server, svc *insights.Service, fs ...*filament.Service) {
+	var fsv *filament.Service // marge d'alerte de bobine, présentée dans la carte des prix (facultatif)
+	if len(fs) > 0 {
+		fsv = fs[0]
+	}
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 	f := false
 	write := &mcp.ToolAnnotations{DestructiveHint: &f}
@@ -74,14 +79,11 @@ func AddInsightTools(s *mcp.Server, svc *insights.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "set_cost_settings", Title: "Modifier les réglages de prix",
 		Description: "Modifie une partie des réglages de coût (fusion). Dans les dictionnaires, la valeur 0 supprime l'entrée (retour à la valeur par défaut). " +
-			"apply_to_history=true recalcule le coût réel de toutes les fiches du journal avec ces prix. Aucun secret ici : des prix, des watts, une devise.",
+			"apply_to_history=true recalcule le coût réel de toutes les fiches du journal avec ces prix. Aucun secret ici : des prix, des watts, une devise. " +
+			"Appelé SANS aucun champ, affiche à l'utilisateur une carte-formulaire pré-remplie avec les prix actuels (kWh, prix du kilo par matière, usure, marge d'alerte de bobine).",
 		Annotations: idem,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in insights.SettingsPatch) (*mcp.CallToolResult, insights.Settings, error) {
-		st, err := svc.SetSettings(ctx, in)
-		if err != nil {
-			return nil, st, err
-		}
-		return textResult(fmt.Sprintf("Réglages enregistrés : devise %s, kWh à %.4g, usure machine %.2f/h, buse %.2f/h.", st.Currency, st.ElectricityPerKWh, st.MachineWearPerHr, st.NozzleWearPerHr)), st, nil
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in insights.SettingsPatch) (*mcp.CallToolResult, CostSettingsOut, error) {
+		return handleCostSettings(ctx, svc, fsv, in) // sans aucun champ : carte-formulaire des prix actuels (form_tools.go)
 	})
 
 	addTool(s, &mcp.Tool{

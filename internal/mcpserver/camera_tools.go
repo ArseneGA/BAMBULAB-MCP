@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -60,6 +59,7 @@ type NotifyOut struct {
 	EnvHint   string               `json:"env_hint"`
 	Note      string               `json:"note"`
 	RecentLog []notify.LogEntry    `json:"recent_log,omitempty"`
+	FormOut
 }
 
 // ConfigureNotificationsInput : canaux existants à activer, désactiver ou dont choisir les évènements. Ni création, ni
@@ -171,33 +171,10 @@ func AddCameraTools(s *mcp.Server, c *core.Core) {
 	addTool(s, &mcp.Tool{
 		Name: "configure_notifications", Title: "Configurer les notifications",
 		Description: "Liste les canaux de notification (ntfy, webhook signé HMAC, e-mail SMTP en TLS) et permet d'ACTIVER ou DÉSACTIVER un canal existant et de choisir ses évènements (print_completed, print_failed, detection_alert, start_unknown, printer_offline, queue_event). " +
-			"Ne crée, ne supprime et ne redirige aucun canal : l'hôte, le port, l'utilisateur SMTP, les destinataires, les URL et les secrets se saisissent sur setup_url (/setup/notifications), page réservée à l'HUMAIN. Sans argument : liste les canaux (sans secret).",
+			"Ne crée, ne supprime et ne redirige aucun canal : l'hôte, le port, l'utilisateur SMTP, les destinataires, les URL et les secrets se saisissent sur setup_url (/setup/notifications), page réservée à l'HUMAIN. Sans argument : liste les canaux (sans secret) et affiche à l'utilisateur une carte-formulaire (canaux existants, évènements ; jamais de secret).",
 		Annotations: idem,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ConfigureNotificationsInput) (*mcp.CallToolResult, NotifyOut, error) {
-		out := NotifyOut{SetupURL: c.Notify.SetupURL(), Events: notify.AllEvents,
-			EnvHint: "Un secret peut aussi venir de la variable BAMBU_NOTIFY_<CANAL>_<CHAMP> (ou …_FILE vers un fichier), ex. " + notify.EnvName("mon canal", "url") + "."}
-		for _, ch := range in.Channels {
-			if _, err := c.Notify.PatchChannel(ctx, ch); err != nil {
-				return nil, NotifyOut{}, err
-			}
-		}
-		chs, err := c.Notify.ListChannels(ctx)
-		if err != nil {
-			return nil, NotifyOut{}, err
-		}
-		out.Channels = chs
-		out.RecentLog, _ = c.Notify.Log(ctx, 10)
-		var todo []string
-		for _, ch := range chs {
-			if !ch.Ready {
-				todo = append(todo, ch.Name)
-			}
-		}
-		out.Note = "Canaux : " + fmt.Sprint(len(chs)) + "."
-		if len(todo) > 0 {
-			out.Note += " À créer ou compléter par l'utilisateur sur " + out.SetupURL + " : " + strings.Join(todo, ", ") + " (secrets manquants). Ensuite lance test_notification."
-		}
-		return textResult(out.Note), out, nil
+		return applyNotifications(ctx, c.Notify, in, false) // sans argument : liste + carte-formulaire (form_tools.go)
 	})
 
 	addTool(s, &mcp.Tool{

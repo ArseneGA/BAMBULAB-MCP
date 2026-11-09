@@ -36,8 +36,9 @@ type ListSpoolsOut struct {
 
 // SpoolOut est une bobine.
 type SpoolOut struct {
-	Spool filament.Spool `json:"spool"`
-	Note  string         `json:"note"`
+	Spool *filament.Spool `json:"spool,omitempty"`
+	Note  string          `json:"note,omitempty"`
+	FormOut
 }
 
 // QueueListOut est la file d'attente.
@@ -125,18 +126,11 @@ func registerAMSTools(s *mcp.Server, fs *filament.Service) {
 		Name: "update_spool", Title: "Créer ou modifier une bobine",
 		Description: "Sans spool_id : crée une bobine (material obligatoire). Avec spool_id : modifie les champs fournis (poids restant mesuré, prix/kg, couleur, dates d'ouverture/séchage, notes). " +
 			"printer_id + slot (ams1:1..ams4:4, ext) charge la bobine dans un emplacement ; unassign la range ; archived l'archive. " +
-			"Tout champ fourni est une saisie de l'utilisateur : la lecture de l'AMS ne l'écrase jamais.",
+			"Tout champ fourni est une saisie de l'utilisateur : la lecture de l'AMS ne l'écrase jamais. " +
+			"Appelé SANS matière ni spool_id (ou avec seulement spool_id), affiche à l'utilisateur une carte-formulaire pré-remplie (matière, couleur avec pastille, poids restant, prix).",
 		Annotations: idem,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in filament.UpdateInput) (*mcp.CallToolResult, SpoolOut, error) {
-		sp, err := fs.UpdateSpool(ctx, in)
-		if err != nil {
-			return nil, SpoolOut{}, err
-		}
-		note := fmt.Sprintf("Bobine %s (%s) : %s restant", sp.ID, sp.Label(), fmt.Sprintf("%.0f g", sp.RemainingG))
-		if sp.Slot != "" {
-			note += ", chargée en " + sp.Slot
-		}
-		return textResult(note + "."), SpoolOut{Spool: *sp, Note: note + "."}, nil
+		return handleSpool(ctx, fs, in) // sans matière ni bobine : carte-formulaire (form_tools.go)
 	})
 
 	addTool(s, &mcp.Tool{

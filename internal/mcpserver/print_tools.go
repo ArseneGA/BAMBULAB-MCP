@@ -32,9 +32,10 @@ type PrinterModelsOut struct {
 
 // AddPrinterOut : imprimante ajoutée et lien de saisie du code.
 type AddPrinterOut struct {
-	Printer  printing.PrinterView `json:"printer"`
-	SetupURL string               `json:"setup_url" jsonschema:"à donner à l'utilisateur : il y saisit le code d'accès LAN lui-même"`
-	Note     string               `json:"note"`
+	Printer  *printing.PrinterView `json:"printer,omitempty"`
+	SetupURL string                `json:"setup_url,omitempty" jsonschema:"à donner à l'utilisateur : il y saisit le code d'accès LAN lui-même"`
+	Note     string                `json:"note,omitempty"`
+	FormOut
 }
 
 // PrinterIDInput identifie une imprimante.
@@ -176,16 +177,11 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 		Name: "add_printer", Title: "Ajouter une imprimante",
 		Description: "Enregistre une imprimante Bambu (modèle de list_printer_models, hôte du réseau LOCAL — adresse privée, lien local ou nom .local —, numéro de série, buse, AMS). " +
 			"Ni le code d'accès, ni l'empreinte du certificat, ni aucune option de contournement TLS ne sont des paramètres : l'outil renvoie l'URL d'une page locale (/setup/printer/{id}) que " +
-			"l'utilisateur ouvre dans son navigateur enregistré ; le serveur y affiche l'empreinte du certificat de l'imprimante avec le numéro de série attendu, et l'utilisateur la valide en saisissant le code d'accès (stocké chiffré hors base, jamais renvoyé ni journalisé).",
+			"l'utilisateur ouvre dans son navigateur enregistré ; le serveur y affiche l'empreinte du certificat de l'imprimante avec le numéro de série attendu, et l'utilisateur la valide en saisissant le code d'accès (stocké chiffré hors base, jamais renvoyé ni journalisé). " +
+			"Appelé sans ses champs obligatoires (name, model_id, host, serial), l'outil n'échoue pas : il affiche à l'utilisateur une carte-formulaire pré-remplie (sans le code d'accès, qui ne se saisit jamais dans une carte).",
 		Annotations: write,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.AddPrinterInput) (*mcp.CallToolResult, AddPrinterOut, error) {
-		v, err := p.AddPrinter(ctx, in)
-		if err != nil {
-			return nil, AddPrinterOut{}, err
-		}
-		out := AddPrinterOut{Printer: *v, SetupURL: v.SetupURL,
-			Note: "Demande à l'utilisateur d'ouvrir setup_url pour comparer l'empreinte du certificat et saisir le code d'accès affiché sur l'écran de l'imprimante. Ne lui demande jamais ce code dans la conversation. Tant que ce n'est pas fait, aucune connexion à l'imprimante n'est tentée."}
-		return textResult(fmt.Sprintf("Imprimante %s (%s) enregistrée sous %s. Page de saisie du code d'accès : %s", v.Name, v.ModelName, v.ID, v.SetupURL)), out, nil
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in AddPrinterToolIn) (*mcp.CallToolResult, AddPrinterOut, error) {
+		return handleAddPrinter(ctx, p, in) // carte-formulaire si des champs manquent (form_tools.go), sinon l'ajout
 	})
 
 	addTool(s, &mcp.Tool{

@@ -64,15 +64,11 @@ func AddGoalTools(s *mcp.Server, svc *goals.Service) {
 		Name: "set_manufacturing_goals", Title: "Enregistrer les objectifs de fabrication",
 		Description: "Enregistre un objectif structuré. Le modèle (Claude) extrait lui-même les critères du texte libre (voir list_goal_criteria) ; " +
 			"le service valide, garde le texte original, renvoie les ambiguïtés qui changent le choix (ex. direction d'effort inconnue, priorités égales sur des critères opposés), " +
-			"les conflits avec compromis proposés et les critères non évaluables (à vérifier par essai). Un critère inconnu est accepté comme custom, non évaluable.",
+			"les conflits avec compromis proposés et les critères non évaluables (à vérifier par essai). Un critère inconnu est accepté comme custom, non évaluable. " +
+			"Sans criteria, affiche à l'utilisateur une carte-formulaire (besoin en texte, matière, priorités solide / surface propre / rapide / translucide / économe) pré-remplie avec ce que tu sais.",
 		Annotations: write,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in goals.GoalInput) (*mcp.CallToolResult, goals.Goal, error) {
-		g, err := svc.SetGoals(ctx, in)
-		if err != nil {
-			return nil, goals.Goal{}, err
-		}
-		return textResult(fmt.Sprintf("Objectif %s : %d critère(s), %d ambiguïté(s), %d conflit(s), %d non évaluable(s).",
-			g.ID, len(g.Criteria), len(g.Ambiguities), len(g.Conflicts), len(g.NonEvaluable))), *g, nil
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in GoalToolInput) (*mcp.CallToolResult, GoalOut, error) {
+		return handleGoals(ctx, svc, in) // sans critères : carte-formulaire des objectifs (form_tools.go)
 	})
 
 	addTool(s, &mcp.Tool{

@@ -296,3 +296,13 @@ Détail et procédure : `docs/OAUTH.md` § 3 bis. Spécification : `docs/specs/G
 - **Limites de débit** par adresse sur l'écouteur public : enregistrement (heure), jeton (minute), `/mcp` sans jeton valide (minute) ; 429 + `Retry-After` ; en plus des limites existantes de `internal/oauth`. Si le proxy ne transmet pas l'adresse réelle du client, les plafonds sont partagés (déni de service possible des échanges de jetons : relever les limites).
 - **Diagnostic** : `bambud doctor connector` (jamais le jeton en sortie ; pas de suivi des redirections ; http refusé hors boucle locale).
 - Tests : `internal/httpapi/public_test.go`, `cmd/bambud/doctor_test.go`, `cmd/bambud/publiclisten_test.go`.
+
+
+## 18. Cartes-formulaires dans la conversation — 2026-11-09
+
+Un outil appelé sans ses champs affiche une carte pré-remplie (voir `docs/research/mcp-apps.md` § 12). Règles :
+
+- **Aucun secret dans une carte** : code d'accès LAN, mot de passe, jeton, clé d'API, code de lancement, URL de webhook/ntfy ne sont JAMAIS des champs. `FormSpec.Validate` refuse tout nom de champ ou de valeur qui y ressemble (`IsSecretFieldName`) ; les schémas d'entrée des outils `submit_*` n'en contiennent aucun (un champ forgé est refusé par le schéma). Le code d'accès se saisit sur `/setup/printer/{id}` (§ 5), les secrets de notification sur `/setup/notifications` (§ 9, caméra et notifications), le code de lancement dans la carte de confirmation (§ 12) seulement.
+- **Rien de physique** : les outils `submit_add_printer`, `submit_cost_settings`, `submit_notifications`, `submit_spool`, `submit_goals`, `submit_part_template`, `preview_part_template` n'appellent que des services d'enregistrement (imprimante déclarée sans connexion, prix, canaux existants, bobine d'inventaire, objectif, pièce paramétrique). Ni lancement, arrêt, reprise, approbation, dépôt de fichier, chargement de filament, ni coffre. Tests : `TestFormSubmitToolsDoNothingPhysical` (code source), `TestSubmitToolsAreAppOnlyAndSecretFree` (tools/list : visibilité app, aucun champ d'impression ou de secret, secret forgé refusé), `TestSubmitUsesTheSameServerValidation`.
+- **On suppose qu'un modèle PEUT appeler un outil app-only** (§ 12) : ces outils ne donnent donc aucun pouvoir que le modèle n'ait déjà (`add_printer`, `set_cost_settings`… sont visibles et font la même chose, avec la même validation). `submit_notifications` ne crée aucun canal (un canal inexistant est refusé).
+- La carte n'envoie que les champs qu'elle affiche ; la phrase donnée au modèle après validation ne reprend pas les valeurs saisies.
