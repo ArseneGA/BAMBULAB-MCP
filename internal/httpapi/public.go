@@ -24,7 +24,10 @@ import (
 //go:embed public/icon.svg public/about.html public/privacy.html
 var publicFS embed.FS
 
-var publicTpl = template.Must(template.ParseFS(publicFS, "public/about.html", "public/privacy.html"))
+// Gabarit commun des pages humaines (humanauth.Layout) ; /about et /privacy sont indexables nulle part (noindex) et
+// gardent l'icône /icon.svg (img-src 'self').
+var publicTpl = template.Must(template.Must(template.New("public").Parse(humanauth.Layout("", `<meta name="robots" content="noindex"><link rel="icon" href="/icon.svg" type="image/svg+xml">`, ""))).
+	ParseFS(publicFS, "public/about.html", "public/privacy.html"))
 
 // publicAllowed : la liste blanche exacte (chemin ET méthode).
 func publicAllowed(r *http.Request) bool {
@@ -122,16 +125,16 @@ func publicHeaders(w http.ResponseWriter, ctype string) {
 }
 
 func registerPublicPages(mux *http.ServeMux, opts Options) {
-	page := func(name string) http.HandlerFunc {
+	page := func(name, title string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			publicHeaders(w, "text/html; charset=utf-8")
 			w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 			w.Header().Set("Referrer-Policy", "no-referrer")
-			_ = publicTpl.ExecuteTemplate(w, name, map[string]any{"Contact": strings.TrimSpace(opts.ContactEmail)})
+			_ = publicTpl.ExecuteTemplate(w, name, map[string]any{"Title": title, "Contact": strings.TrimSpace(opts.ContactEmail)})
 		}
 	}
-	mux.HandleFunc("GET /about", page("about.html"))
-	mux.HandleFunc("GET /privacy", page("privacy.html"))
+	mux.HandleFunc("GET /about", page("about.html", "À propos"))
+	mux.HandleFunc("GET /privacy", page("privacy.html", "Confidentialité"))
 	mux.HandleFunc("GET /icon.svg", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := publicFS.ReadFile("public/icon.svg")
 		publicHeaders(w, "image/svg+xml")

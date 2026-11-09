@@ -56,11 +56,7 @@ func bearerOf(r *http.Request) string {
 	return ""
 }
 
-var oauthTpl = template.Must(template.New("oauth").Parse(`{{define "head"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">{{if .Refresh}}{{.Refresh}}{{end}}<title>{{.Title}}</title>
-<style>` + humanauth.Style + `</style></head><body><main><h1>{{.Title}}</h1>{{end}}
-{{define "foot"}}</main></body></html>{{end}}
-{{define "gate"}}{{template "head" .}}
+var oauthTpl = template.Must(template.New("oauth").Parse(humanauth.Layout("", `{{if .Refresh}}{{.Refresh}}{{end}}`, `<h1>{{.Title}}</h1>`) + `{{define "gate"}}{{template "head" .}}
 <p>Une application se présentant sous le nom « <strong>{{.Client}}</strong> » (nom déclaré par le client, non vérifié) demande l'accès à ton atelier Bambu Lab (outils MCP de bambud).</p>
 <p>Demande reçue à {{.At}} depuis l'adresse <code>{{.IP}}</code>, retour vers <code>{{.Host}}</code>. Si tu n'as rien lancé à l'instant, ferme cette page.</p>
 <p>Pour des raisons de sécurité, l'autorisation se donne depuis un <strong>navigateur enregistré</strong> (<code>bambud enroll</code>).</p>
@@ -71,7 +67,7 @@ var oauthTpl = template.Must(template.New("oauth").Parse(`{{define "head"}}<!doc
 {{if .Local}}<p class="warn">Cette application revient sur ton propre ordinateur (boucle locale) : tout programme local pourrait se faire passer pour elle. N'autorise que si tu viens de la lancer.</p>{{end}}
 <p class="ok">Cette autorisation ne permet <strong>jamais</strong> de lancer ou d'arrêter une impression : ces gestes restent sur les pages /confirm et /stop, dans un navigateur enregistré. Tu peux la révoquer à tout moment : <code>bambud oauth --revoke</code>.</p>
 <form method="post" action="/oauth/consent/{{.ID}}"><input type="hidden" name="nonce" value="{{.Nonce}}">
-<p><button type="submit" name="decision" value="allow">Autoriser</button> <button type="submit" name="decision" value="deny" style="background:transparent;color:inherit">Refuser</button></p></form>{{template "foot"}}{{end}}
+<p><button type="submit" name="decision" value="allow">Autoriser</button> <button type="submit" name="decision" value="deny" class="danger">Refuser</button></p></form>{{template "foot"}}{{end}}
 {{define "back"}}{{template "head" .}}
 <p class="ok">{{.Msg}}</p>
 <p>Si Claude ne s'ouvre pas tout seul dans quelques secondes, utilise ce lien : <a href="{{.URL}}">retourner dans Claude</a>.</p>{{template "foot"}}{{end}}
