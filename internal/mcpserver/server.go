@@ -41,6 +41,9 @@ func New(c *core.Core) *mcp.Server {
 				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
 				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation.",
 		})
+	if mw := mcpLogMiddleware(c.Log); mw != nil {
+		s.AddReceivingMiddleware(mw) // journal INFO des requêtes MCP (mcplog.go) ; BAMBU_LOG_MCP=off pour le couper
+	}
 	h := &handlers{c: c}
 	roAnn := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 
