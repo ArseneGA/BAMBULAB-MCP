@@ -71,3 +71,33 @@ Ce qui change la position du produit sur le marché, par ordre d'impact. Règle 
 | G8 | **Compatible tout client MCP** (ChatGPT, Gemini, clients open source) et interface web autonome | Réduit la dépendance à Claude (risque n°4) et élargit le marché | Tous |
 
 À valider avant de coder G2–G6 : entretiens clients (questions en § 10.1 de l'étude) et page d'attente (§ 10.2).
+
+## Lot « parité Bambu Studio + atelier » (demande du 2026-11-09)
+
+Principe : **toutes les options classiques de Bambu Studio doivent être pilotables en une phrase depuis Claude**, avec un aperçu (visionneuse couche par couche) et une carte quand c'est utile. Aucune option ne contourne les règles de sécurité (liste blanche des réglages, scan thermique, lancement humain).
+
+| # | Fonction | Ce que ça fait | Équivalent Bambu Studio |
+|---|---|---|---|
+| S1 | **Couper une grande pièce** | Découpe en 2-3 parties avec tenons/mortaises ou trous de goupille (jeu d'assemblage selon la matière), réparties sur une ou plusieurs plaques | Outil Couper + connecteurs |
+| S2 | **Hauteur de couche variable** | Couches fines sur les courbes, épaisses sur les parties droites ; aperçu du gain de temps | Hauteur de couche adaptative / variable |
+| S3 | **Finitions de surface** | Lissage au fer (ironing), peau texturée (fuzzy skin), position de couture (arrière, alignée, peinte), en une phrase avec aperçu | Ironing, Fuzzy skin, Seam |
+| S4 | **Pause programmée / changement de couleur** | « Pause à 12 mm pour insérer un aimant », « change de couleur à la couche 80 » sans AMS ; notification, geste humain, reprise validée par l'humain | Pause / Changement de filament à la couche |
+| S5 | **Heure de fin choisie / départ différé** | « Finie à 18 h » → l'atelier dit quand lancer ; départ différé validé comme un lancement normal (l'accord humain reste lié et daté) | — (Farm Manager : départs décalés) |
+| S6 | **Timelapse automatique** | Récupéré à la fin depuis l'imprimante et rangé avec l'impression (vidéo dans le journal) | Timelapse |
+| S7 | **« Refais la même »** | Relance une pièce réussie avec exactement les mêmes réglages et la même découpe (ou redécoupe si la bobine a changé), en une phrase | Réimprimer depuis l'historique |
+| S8 | **Supports et zones à la main, en parlant** | « Supports seulement sous le goujon », « 6 parois ici », « bordure seulement autour des pieds » : peinture de supports, bloqueurs/forceurs, modificateurs par volume | Peinture de supports, modificateurs |
+| S9 | **Parité des réglages** | Toutes les clés courantes des profils process/filament/machine exposées et expliquées (ponts, surplombs, rétraction, coasting, vitesses par type, accélérations, refroidissement, brim ears, radeau, mode vase, séquence objet par objet, arrangement auto, mise à l'échelle / miroir / rotation / pose à plat par face) | Onglets Qualité, Résistance, Vitesse, Support, Autres |
+| S10 | **Calibrations natives** | Débit, avance de pression, température (tour), rétraction, vitesse volumétrique, déjà en séries de pièces : ajouter la lecture guidée des résultats par photo | Menu Calibration |
+
+### Nouvelles idées (à arbitrer)
+
+| # | Idée | Pourquoi |
+|---|---|---|
+| N1 | **Diagnostic d'échec** : « pourquoi ça a raté ? » à partir de la photo, des codes HMS, des étapes et des réglages ; propose la correction et la redécoupe | Les deux échecs du porte-guitare auraient été expliqués en une réponse |
+| N2 | **Rendu réaliste avant impression** dans la vraie matière et couleur (translucide, soie, mat) | Choisir une variante sur l'aspect, pas seulement sur les chiffres |
+| N3 | **Pièces de rechange / impression en série** : « imprime 12 fois ce clip » → remplissage optimal des plaques, répartition par lots, suivi du compte | Gain de temps énorme, déjà presque possible avec plan_plate |
+| N4 | **Pilotage des accessoires de l'imprimante** : éclairage de la chambre, ventilateurs, vitesse d'impression en cours (silencieux / normal / sport), sans jamais lancer ni arrêter | Commandes Bambu classiques, sans risque |
+| N5 | **Insertion d'éléments** : logements prêts pour inserts filetés, aimants, écrous captifs, avec la pause automatique au bon moment (lien S4) | Pièces fonctionnelles sans post-traitement |
+| N6 | **Assistant d'assemblage** : génère la notice d'assemblage (ordre, vis, photos annotées) d'un projet multi-pièces | Projets comme le porte-guitare découpé (S1) |
+| N7 | **Bobine bientôt vide** : coupe l'impression en deux avec pause de changement de bobine au bon moment si le poids restant ne suffit pas | Évite une impression ratée à 90 % |
+| N8 | **Conversion d'un STL en pièce paramétrique simple** (boîte, équerre, plaque) pour pouvoir ensuite modifier les cotes en parlant | Rendre modifiable ce qui ne l'était pas |
