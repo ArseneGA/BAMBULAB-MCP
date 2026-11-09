@@ -74,11 +74,15 @@ function Summary({ c }: { c: ConfirmationView }) {
         <div><dt>Matières</dt><dd>{b.materials.map((m) => `f${m.filament_slot} → ${m.tray} : ${m.material_id}`).join(' ; ') || '—'}</dd></div>
         {b.estimated_minutes ? <div><dt>Durée estimée</dt><dd>{Math.round(b.estimated_minutes)} min{b.estimated_grams ? ` · ${b.estimated_grams.toFixed(1)} g` : ''}</dd></div> : null}
         <div><dt>Mise à niveau du plateau</dt><dd>{b.bed_leveling === false ? <strong>non (désactivée pour cette impression)</strong> : 'oui (automatique au démarrage)'}</dd></div>
+        {b.flow_cali !== undefined && <div><dt>Calibration du débit</dt><dd>{b.flow_cali ? 'oui' : <strong>non (désactivée pour cette impression)</strong>}</dd></div>}
+        {b.vibration_cali !== undefined && <div><dt>Calibration des vibrations</dt><dd>{b.vibration_cali ? 'oui' : <strong>non (désactivée pour cette impression)</strong>}</dd></div>}
+        {b.timelapse !== undefined && <div><dt>Timelapse</dt><dd>{b.timelapse ? <strong>oui (enregistré pendant l'impression)</strong> : 'non'}</dd></div>}
         <div><dt>Valable jusqu'à</dt><dd>{c.expires_at_local || new Date(c.expires_at).toLocaleTimeString('fr-FR')}</dd></div>
       </dl>
       {c.safety && <Temps s={c.safety} />}
       {(b.alerts ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> Alerte matière : {a}</p>)}
       {(b.adhesion_warnings ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> <strong>Risque de décollement.</strong> {a}</p>)}
+      {(b.overhang_warnings ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> <strong>Surplombs sans supports.</strong> {a}</p>)}
     </>
   );
 }

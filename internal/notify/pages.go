@@ -16,9 +16,7 @@ import (
 // SMTP). Navigateur enregistré + nonce à usage unique, comme /setup/printer/{id}. Les valeurs saisies vont au coffre
 // chiffré et ne sont jamais réaffichées ni renvoyées à Claude.
 
-var pageTpl = template.Must(template.New("n").Parse(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>Notifications : secrets</title><style>` + humanauth.Style + `</style></head><body><main>
+var pageTpl = template.Must(template.New("n").Parse(humanauth.Layout("Notifications : secrets", "", "") + `{{template "head" .}}
 <h1>Notifications : secrets des canaux</h1>
 {{if .Msg}}<p class="ok">{{.Msg}}</p>{{end}}{{if .Err}}<p class="warn">{{.Err}}</p>{{end}}
 <p>La <strong>destination</strong> d'un canal (hôte, port et utilisateur SMTP, destinataires, URL) et ses <strong>secrets</strong> se saisissent ici seulement : Claude
@@ -50,7 +48,7 @@ Une variable d'environnement <code>BAMBU_NOTIFY_&lt;CANAL&gt;_&lt;CHAMP&gt;</cod
 <p><label>Expéditeur<br><input name="from" maxlength="200"></label></p>
 <p><label>Destinataires (séparés par une virgule)<br><input name="to" maxlength="1000"></label></p>
 <p><button type="submit">Enregistrer le canal</button></p></form>
-</main></body></html>`))
+{{template "foot"}}`))
 
 func (s *Service) newNonce() string {
 	b := make([]byte, 24)

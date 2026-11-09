@@ -16,6 +16,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/strength"
 )
 
 //go:embed ui/atelier.html
@@ -42,11 +43,14 @@ func New(c *core.Core) *mcp.Server {
 				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation. " +
 				GcodeSuggestion + " " +
 				"Pour montrer une pièce importée ou envoyée : get_model_details (viewer 3D) ; ne fabrique pas tes propres rendus. " +
-				"Pour envoyer un fichier créé dans ton espace de code : create_upload_link (une commande curl à exécuter) de préférence, sinon upload_file par morceaux de 75000 octets ; l'utilisateur peut aussi le déposer lui-même avec show_file_drop.",
+				"Pour envoyer un fichier créé dans ton espace de code : create_upload_link (une commande curl à exécuter) de préférence, sinon upload_file par morceaux de 75000 octets ; l'utilisateur peut aussi le déposer lui-même avec show_file_drop. " +
+				"Pour toute question d'avancement (où en est l'impression, combien de temps, progression), appeler get_print_status ou get_printer_status : la carte de suivi s'affiche. " +
+				strength.InstructionText,
 		})
 	if mw := mcpLogMiddleware(c.Log); mw != nil {
 		s.AddReceivingMiddleware(mw) // journal INFO des requêtes MCP (mcplog.go) ; BAMBU_LOG_MCP=off pour le couper
 	}
+	s.AddReceivingMiddleware(strengthHintMiddleware(c)) // propose un test de résistance quand la pièce semble porteuse (strength_tools.go)
 	h := &handlers{c: c}
 	roAnn := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
 
@@ -92,6 +96,7 @@ func New(c *core.Core) *mcp.Server {
 	registerUploadTools(s, c)
 	registerLibraryTools(s, c)
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
+	registerCardViews(s)           // cartes bibliothèque, comparaison, coûts, bobines, impressions, imprimantes (card_views.go)
 	registerAgentTools(s, c)
 	if c.Goals != nil {
 		AddGoalTools(s, c.Goals)
@@ -107,6 +112,7 @@ func New(c *core.Core) *mcp.Server {
 		AddLaunchTools(s, c)                   // approbation par code de lancement depuis la vue (launch_tools.go)
 		AddLiveTools(s, c)                     // carte de suivi en direct : image caméra partagée, état (live_tools.go)
 		AddRecoveryTools(s, c.Printing)        // relance, reprise, chargement, fichiers de la carte, diagnostic (recovery_tools.go)
+		AddStrengthTools(s, c)                 // test de résistance : plan_strength_test, assess_strength, get_strength_report (strength_tools.go)
 	}
 	if c.Camera != nil && c.Notify != nil {
 		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)

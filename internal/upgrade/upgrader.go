@@ -287,7 +287,11 @@ func (u *Upgrader) install(ctx context.Context, st *State, cur Release, target s
 
 	// c. Nouvelle vérification de l'occupation juste avant de toucher au service : une impression a pu démarrer
 	// pendant la construction (plusieurs minutes). La version construite est conservée pour le prochain passage.
-	if b := env.Busy(ctx); b.Busy || b.Unknown {
+	b := env.Busy(ctx)
+	if len(b.Tolerated) > 0 && !b.Busy && !b.Unknown {
+		env.Logf("impression en cours : la mise à jour continue (ATELIER_UPDATE_ALLOW_DURING_PRINT) ; l'impression n'est pas interrompue, le suivi reprend après le redémarrage (%s)", strings.Join(b.Tolerated, " ; "))
+	}
+	if b.Busy || b.Unknown {
 		msg := "service occupé après la construction : " + strings.Join(b.Reasons, " ; ")
 		env.Logf("%s", msg)
 		if st.Once(target, "deferred", env.Now()) {

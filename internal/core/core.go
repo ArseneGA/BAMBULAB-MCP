@@ -32,6 +32,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/profiles"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/store"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/strength"
 )
 
 // Version du service (surchargeable : -ldflags "-X .../internal/core.Version=1.2.3").
@@ -97,6 +98,8 @@ type Core struct {
 	Filament *filament.Service
 	// Export : archives zip partageables d'un projet (internal/export, export.go).
 	Export *export.Service
+	// Strength : test de résistance (zones, questionnaire, calcul par éléments finis, historique ; internal/strength).
+	Strength *strength.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
@@ -233,6 +236,11 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		st.Close()
 		lock.release()
 		return nil, fmt.Errorf("bobines et file d'attente : %w", err)
+	}
+	if c.Strength, err = strength.New(strength.Deps{Store: st, Blobs: blobs, Queue: q, Registry: reg, Meshes: pr, Log: cfg.Logger}); err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("test de résistance : %w", err)
 	}
 	c.Insights.SetSpools(c.Filament)                            // prix/kg réel des bobines inventoriées et consommation décomptée
 	c.Filament.SetCostFunc(c.Insights.MaterialCost)             // le coût de purge (plan_colors) suit les réglages de prix

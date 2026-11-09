@@ -75,6 +75,22 @@ describe('LaunchConfirm', () => {
     expect(calls.some((c) => c.name === 'get_launch_view_state' && c.arguments.fresh_photo === true && c.arguments.with_photo === true)).toBe(true);
   });
 
+  it('affiche les surplombs sans supports et les options de démarrage de la liaison', async () => {
+    const conf: ConfirmationView = { ...CONF, binding: { ...CONF.binding, bed_leveling: true, flow_cali: false, vibration_cali: true, timelapse: true,
+      adhesion_warnings: ['Risque de décollement modéré'], overhang_warnings: ['Surplombs de 320 mm² sans supports : risque de spaghetti'] } };
+    const { app } = mkApp({ get_launch_view_state: () => sc(STATE) });
+    await render(<LaunchConfirm app={app} first={conf} pollMs={60_000} />);
+    const t = host.textContent ?? '';
+    expect(t).toContain('Surplombs sans supports.'); expect(t).toContain('320 mm²');
+    expect(t).toContain('Risque de décollement.'); // même rendu que adhesion_warnings
+    const alerts = [...host.querySelectorAll('[role=alert]')].map((x) => x.textContent ?? '');
+    expect(alerts.some((x) => x.includes('Surplombs sans supports.'))).toBe(true);
+    expect(t).toContain('Mise à niveau du plateau'); expect(t).toContain('oui (automatique au démarrage)');
+    expect(t).toContain('Calibration du débit'); expect(t).toContain('Calibration des vibrations'); expect(t).toContain('Timelapse');
+    const dd = (label: string) => [...host.querySelectorAll('dt')].find((d) => d.textContent === label)?.nextElementSibling?.textContent;
+    expect(dd('Calibration du débit')).toContain('non'); expect(dd('Calibration des vibrations')).toBe('oui'); expect(dd('Timelapse')).toContain('oui');
+  });
+
   it('montre en rouge un profil non officiel', async () => {
     const bad = { ...CONF, safety: { ...CONF.safety!, gcode_official: false, gcode_profile_line: 'G-code de démarrage : DIFFÉRENT du profil officiel ✗ (machine_start_gcode)', anomalies: ['G-code de démarrage : DIFFÉRENT du profil officiel ✗ (machine_start_gcode)'] } };
     const { app } = mkApp({ get_launch_view_state: () => sc(STATE) });

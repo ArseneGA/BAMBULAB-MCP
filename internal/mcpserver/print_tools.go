@@ -191,7 +191,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "get_printer_status", Title: "État de l'imprimante",
 		Description: "État normalisé lu via l'adaptateur (idle, preparing, printing...), progression, températures, erreurs, FRAÎCHEUR (âge de la dernière information, stale). " +
-			"Un état idle ne prouve pas que le plateau est vide.",
+			"Un état idle ne prouve pas que le plateau est vide. " +
+			"Pour toute question d'avancement (où en est l'impression, combien de temps, progression) : appeler get_print_status ou get_printer_status, la carte de suivi en direct s'affiche (pendant une impression : caméra, progression, couche, temps restant, boutons Arrêter/Reprendre validés par l'humain).",
 		Annotations: ro,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in PrinterIDInput) (*mcp.CallToolResult, printing.PrinterStatus, error) {
 		st, err := p.GetPrinterStatus(ctx, in.PrinterID)
@@ -323,7 +324,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			"stage_report : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression d'après son étape courante (mise à niveau du plateau, chauffe, nettoyage de la buse, calibrations) avec l'heure de chaque étape ; " +
 			"printer.error_details : print_error et HMS décodés. wait_seconds (1 à 60) : attend qu'un état ou une étape change avant de répondre. " +
 			"with_photo (défaut vrai pendant l'impression) joint un instantané de la caméra comme IMAGE : regarde-la et dis ce que tu y vois (pièce, buse, spaghetti, décollement) ; with_photo=false pour du texte seul. " +
-			"Dans Claude Desktop une carte de suivi en direct (caméra, progression, températures, boutons Arrêter/Reprendre validés par l'humain) s'affiche ; sinon ce texte et cette image suffisent. " +
+			"À appeler pour toute question d'avancement (où en est, combien de temps, progression). Dans Claude Desktop une carte de suivi en direct (caméra, progression, températures, boutons Arrêter/Reprendre validés par l'humain) s'affiche ; sinon ce texte et cette image suffisent. " +
 			"Effet de bord local : relit l'imprimante et met à jour l'impression (pas en lecture seule au sens strict).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in PrintStatusInput) (*mcp.CallToolResult, printing.PrintStatus, error) {

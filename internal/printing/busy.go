@@ -13,8 +13,9 @@ import (
 // Raisons pour lesquelles un redémarrage du service est déconseillé (mise à jour automatique : internal/upgrade).
 // Codes stables : ils sont journalisés et notifiés.
 const (
-	BusyPrintActive     = "print_active"         // une impression est en cours (ou son lancement, ou son état est incertain)
-	BusyPrinterActive   = "printer_active"       // l'imprimante déclare travailler, même si ce service ne l'a pas lancée
+	BusyPrintRunning    = "print_running"        // une impression est en cours (PRINTING) : le fichier est sur l'imprimante, redémarrer le service ne l'interrompt pas
+	BusyPrintActive     = "print_active"         // un lancement est en cours d'accusé (START_REQUESTED) ou d'issue incertaine (START_UNKNOWN)
+	BusyPrinterActive   = "printer_active"       // l'imprimante déclare travailler (Studio, téléphone, écran), même si ce service ne l'a pas lancée : elle n'a pas besoin de lui
 	BusyConfirmPending  = "confirmation_pending" // une confirmation de lancement attend l'humain (jeton encore valable)
 	BusyStopPending     = "stop_pending"         // une demande d'arrêt attend l'humain, ou un arrêt est en cours d'application
 	BusyActionPending   = "action_pending"       // reprise / chargement / nettoyage en attente de validation humaine
@@ -27,10 +28,12 @@ type BusyReason struct {
 	Detail string `json:"detail,omitempty"`
 }
 
-// activeJobStates : états d'un PrintJob qui interdisent un redémarrage.
-// START_UNKNOWN y figure : on ne sait pas si l'imprimante imprime ; c'est à l'humain de trancher (reconcile_print).
+// activeJobStates : états d'un PrintJob qui rendent un redémarrage « occupé ».
+// PRINTING (code print_running) est le seul que la mise à jour automatique tolère par défaut (ATELIER_UPDATE_ALLOW_DURING_PRINT) :
+// le fichier est sur la carte SD de l'imprimante, le suivi reprend à la reconnexion MQTT (Recover). START_REQUESTED (accusé en
+// cours) et START_UNKNOWN (on ne sait pas si l'imprimante imprime ; c'est à l'humain de trancher : reconcile_print) bloquent toujours.
 var activeJobStates = map[contracts.PrintState]string{
-	contracts.PrintPrinting:       BusyPrintActive,
+	contracts.PrintPrinting:       BusyPrintRunning,
 	contracts.PrintStartRequested: BusyPrintActive,
 	contracts.PrintStartUnknown:   BusyPrintActive,
 	contracts.PrintUploading:      BusyDepositProgress,
@@ -66,7 +69,7 @@ func (s *Service) BusyReasons(ctx context.Context) []BusyReason {
 				}
 			}
 		}
-		for _, code := range []string{BusyPrintActive, BusyDepositProgress} {
+		for _, code := range []string{BusyPrintRunning, BusyPrintActive, BusyDepositProgress} {
 			if counts[code] > 0 {
 				out = append(out, BusyReason{Code: code, Detail: fmt.Sprintf("%d impression(s), dont %s", counts[code], first[code])})
 			}

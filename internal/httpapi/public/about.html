@@ -1,13 +1,5 @@
-{{define "about.html"}}<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>Atelier Bambu Lab (bambud)</title>
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
-<style>:root{--p-strong:#16a06b;--p-deep:#095a40;--bg:#f4f7f5;--fg:#17211c}
-@media (prefers-color-scheme:dark){:root{--bg:#0f1713;--fg:#e4ede8;--p-strong:#3ec48f}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:42rem;margin:0 auto;padding:2rem 1rem}h1{color:var(--p-strong);margin-top:0}
-a{color:var(--p-strong)}</style></head><body><main>
-<h1>Atelier Bambu Lab (bambud)</h1>
+{{define "about.html"}}{{template "head" .}}
+<h1>Printalk (bambud)</h1>
 <p>Ce service est l'atelier 3D personnel d'une personne : un serveur MCP qui permet à Claude de préparer, découper et suivre des impressions sur des imprimantes Bambu Lab.</p>
 <h2>Ce que fait le connecteur</h2>
 <p>Il donne à Claude des outils pour retrouver des modèles 3D, les analyser, les préparer, estimer un coût, suivre l'état des imprimantes et d'une impression.</p>
@@ -17,4 +9,4 @@ a{color:var(--p-strong)}</style></head><body><main>
 <p>Une seule portée : <code>mcp</code> (utiliser les outils de l'atelier). L'accès se donne depuis un navigateur enregistré du propriétaire et se révoque à tout moment.</p>
 <p>Cette adresse est celle d'une instance privée : sans autorisation de son propriétaire, rien n'y est accessible. <a href="/privacy">Confidentialité</a>.</p>
 <p><small>Compatible avec les imprimantes Bambu Lab. Bambu Lab est une marque appartenant à ses titulaires ; ce logiciel n'est pas affilié à Bambu Lab. Logiciel libre sous licence AGPL-3.0.</small></p>
-</main></body></html>{{end}}
+{{template "foot"}}{{end}}

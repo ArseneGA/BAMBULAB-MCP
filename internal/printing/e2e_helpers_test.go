@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/httpapi"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/humanauth/pagetest"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printer/sim"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/slicer"
@@ -44,6 +46,8 @@ type rig struct {
 	printerID string
 	// human : client HTTP d'un navigateur ENREGISTRÉ (cookie obtenu par le flux enroll, comme le ferait l'humain).
 	human *http.Client
+	// stop arrête ce service (idempotent) : sert à simuler un redémarrage de bambud sur le même dossier de données.
+	stop func()
 }
 
 func quiet() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }
@@ -84,7 +88,12 @@ func fakeWorker(_ context.Context, cmd string, req map[string]any) (json.RawMess
 
 func newRig(t *testing.T, studio string) *rig {
 	t.Helper()
-	dir := t.TempDir()
+	return openRig(t, studio, t.TempDir(), true)
+}
+
+// openRig ouvre un service sur le dossier dir (neuf, ou celui d'un service arrêté : redémarrage).
+func openRig(t *testing.T, studio, dir string, enroll bool) *rig {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	c, err := core.Open(ctx, core.Config{DataDir: dir, Logger: captureLogger(), StudioPath: studio, Catalog: catalog.Config{Worker: fakeWorker},
 		PollInterval: 20 * time.Millisecond, HeartbeatInterval: 100 * time.Millisecond, AllowAnyPrinterHost: true /* simulateur en loopback */})
@@ -104,16 +113,22 @@ func newRig(t *testing.T, studio string) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cs.Close()
-		ss.Close()
-		web.Close()
-		cancel()
-		<-done
-		c.Close()
-	})
-	r := &rig{t: t, c: c, web: web, cs: cs, dataDir: dir}
-	r.human = r.enrollBrowser()
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			cs.Close()
+			ss.Close()
+			web.Close()
+			cancel()
+			<-done
+			c.Close()
+		})
+	}
+	t.Cleanup(stop)
+	r := &rig{t: t, c: c, web: web, cs: cs, dataDir: dir, stop: stop}
+	if enroll {
+		r.human = r.enrollBrowser()
+	}
 	c.Printing.SetReconcileSettle(200 * time.Millisecond)
 	return r
 }
@@ -265,12 +280,39 @@ func (r *rig) humanGet(pageURL string) (status int, body, nonce string) {
 	if m := nonceRe.FindSubmatch(b); m != nil {
 		nonce = string(m[1])
 	}
+	r.checkHumanPage(pageURL, res.Header, string(b))
 	return res.StatusCode, string(b), nonce
 }
 
 func (r *rig) humanPost(pageURL string, form url.Values) (int, string) {
 	r.t.Helper()
-	return browserPost(r.t, r.human, pageURL, form)
+	st, body := browserPost(r.t, r.human, pageURL, form)
+	r.checkHumanPage(pageURL+" (POST)", nil, body)
+	return st, body
+}
+
+// Les CSP des pages humaines d'AVANT l'habillage Printalk (jamais élargies).
+var humanCSPs = map[string]bool{
+	"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'":                                    true,
+	"default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'":                    true,
+	"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'":                 true,
+	"default-src 'none'; img-src 'self'; script-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'": true,
+}
+
+// checkHumanPage : toute page HTML humaine vue par un test e2e (setup, confirm, stop, action, erreurs…) utilise le
+// gabarit commun, sans JS en ligne ni ressource externe, avec une CSP identique à celle d'avant l'habillage.
+func (r *rig) checkHumanPage(name string, h http.Header, body string) {
+	r.t.Helper()
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(body)), "<!doctype html") {
+		return
+	}
+	pagetest.Check(r.t, name, body)
+	if h != nil && !humanCSPs[h.Get("Content-Security-Policy")] {
+		r.t.Errorf("CSP de %s inattendue : %q", name, h.Get("Content-Security-Policy"))
+	}
+	if u, err := url.Parse(name); err == nil && u.Path != "" {
+		pagetest.DumpBody(r.t, "printing"+strings.NewReplacer("/", "-", " (POST)", "-post").Replace(u.Path), body)
+	}
 }
 
 // humanConfirm : l'humain ouvre la page, coche (ou non) « plateau vide » et clique Lancer.
