@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 )
@@ -14,6 +15,10 @@ func TestDepositNameIsMeaningfulAndStable(t *testing.T) {
 	s, done := newBareService(t)
 	defer done()
 	ctx := context.Background()
+	// horloge simulée qui avance à chaque lecture : le numéro de version dépend de l'ordre de création, que l'horloge
+	// réelle (résolution ~1 à 15 ms sous Windows) ne garantit pas pour des dépôts créés à la suite.
+	clock := time.Now()
+	s.d.Now = func() time.Time { clock = clock.Add(time.Second); return clock }
 	m, err := s.d.Store.CreateModel(ctx, "test", contracts.Model{Name: "Porte guitare (Éric)"})
 	if err != nil {
 		t.Fatal(err)

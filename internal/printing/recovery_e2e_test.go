@@ -50,9 +50,14 @@ func recRig(t *testing.T, key string, prepare time.Duration) (*rig, string) {
 	return r, job
 }
 
-// launch : confirmation, accord humain, l'impression est suivie (PRINTING).
+// launch : confirmation, accord humain, l'impression est suivie (PRINTING). On attend d'abord le premier relevé de
+// l'imprimante (état « unknown » tant que la liaison MQTT n'a rien rapporté, long sous charge CPU) : sans lui,
+// request_print_confirmation refuse « imprimante non lançable ».
 func (r *rig) launch(job string) {
 	r.t.Helper()
+	waitFor(r.t, 30*time.Second, "premier relevé de l'imprimante (lançable)", func() bool {
+		return r.call("get_printer_status", map[string]any{"printer_id": r.printerID})["launchable"] == true
+	})
 	cf := r.call("request_print_confirmation", map[string]any{"print_job_id": job})
 	if st, b := r.humanConfirm(str(cf, "confirm_url"), true); st != 200 {
 		r.t.Fatalf("approbation : %d %s", st, b)
