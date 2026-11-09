@@ -18,6 +18,7 @@ type Cmd struct {
 	Env     []string      // environnement COMPLET (KEY=VALUE) ; vide : environnement du processus
 	User    string        // si non vide, la commande s'exécute sous cet utilisateur (runuser), avec exactement Env
 	Timeout time.Duration // 0 : pas de délai propre (celui du contexte s'applique)
+	Stdin   string        // entrée standard (vide : aucune)
 }
 
 // String : forme lisible pour les journaux (jamais l'environnement : il peut porter des jetons).
@@ -70,7 +71,10 @@ func (r ExecRunner) Run(ctx context.Context, c Cmd) (string, error) {
 		name, args = "runuser", wrapped
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = c.Dir
+	cmd.Dir = effectiveDir(c, r.SwitchUser)
+	if c.Stdin != "" {
+		cmd.Stdin = strings.NewReader(c.Stdin)
+	}
 	if len(c.Env) > 0 && !(r.SwitchUser && c.User != "") {
 		cmd.Env = c.Env
 	}
@@ -86,6 +90,16 @@ func (r ExecRunner) Run(ctx context.Context, c Cmd) (string, error) {
 		return text, fmt.Errorf("%s : %w%s", c, err, tailHint(text))
 	}
 	return text, nil
+}
+
+// effectiveDir : dossier de départ de la commande. Sous un autre utilisateur (runuser), sans dossier explicite, la commande
+// hériterait du dossier courant de root (souvent /home/<admin>, illisible pour le compte de service : « go: cannot determine
+// current directory ») : elle part de « / ».
+func effectiveDir(c Cmd, switchUser bool) string {
+	if c.Dir == "" && switchUser && c.User != "" {
+		return "/"
+	}
+	return c.Dir
 }
 
 // tailHint : les dernières lignes de sortie, pour comprendre un échec dans le journal.

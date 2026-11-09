@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Active les mises à jour AUTOMATIQUES de l'Atelier Bambu sur un serveur déjà installé par install.sh.
 # Le serveur TIRE les mises à jour (git fetch d'origin/main, rien d'entrant) : un timer systemd lance toutes les 5 minutes
-# `bambud upgrade --auto`, qui n'installe qu'un commit dont la CI GitHub est verte, jamais pendant une impression,
+# `bambud upgrade --auto`, qui n'installe qu'un commit dont la CI GitHub est verte, sans interrompre une impression en cours (ni pendant un dépôt ou une confirmation),
 # après sauvegarde vérifiée, avec bascule atomique et retour arrière automatique (docs/DEPLOY-LINUX.md, « Mises à jour automatiques »).
 #
 # Usage (en root) :   sudo bash deploy/linux/enable-auto-update.sh [options]
@@ -76,7 +76,9 @@ case "$REPO" in ''|https://*|file://*) ;; *) die "--repo : une URL https://" ;; 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 
-as_app() { if [ "$TEST_MODE" = 1 ]; then "$@"; else runuser -u "$APP_USER" -- "$@"; fi; }
+# Toute commande lancée sous un autre utilisateur part de « / » : le dossier courant de root (souvent /home/<admin>, illisible
+# pour les comptes de service) ferait échouer go (« cannot determine current directory »).
+as_app() { if [ "$TEST_MODE" = 1 ]; then "$@"; else ( cd / && runuser -u "$APP_USER" -- "$@" ); fi; }
 do_chown() { [ "$TEST_MODE" = 1 ] || chown "$@"; }
 write_if_changed() { # write_if_changed DEST MODE  (contenu sur stdin) ; code 0 = écrit, 1 = inchangé
   local tmp
@@ -187,7 +189,9 @@ if [ "$TEST_MODE" != 1 ]; then
     case ":$BPATH:" in *":$d:"*) ;; *) BPATH="${BPATH:+$BPATH:}$d" ;; esac
   done
   for t in go node npm git; do
-    runuser -u "$BUILD_USER" -- env -i HOME="$CACHE_DIR" PATH="$BPATH:/usr/local/bin:/usr/bin:/bin" "$t" --version >/dev/null 2>&1 \
+    # go n'a pas d'option de version : sous-commande « go version ».
+    case "$t" in go) vflag=version ;; *) vflag=--version ;; esac
+    ( cd / && runuser -u "$BUILD_USER" -- env -i HOME="$CACHE_DIR" PATH="$BPATH:/usr/local/bin:/usr/bin:/bin" "$t" "$vflag" >/dev/null 2>&1 ) \
       || die "l'utilisateur $BUILD_USER ne peut pas lancer « $t » (PATH $BPATH) : l'installer pour tous les utilisateurs (pas dans un dossier personnel)"
   done
 else
@@ -260,6 +264,10 @@ ATELIER_UPDATE_BRANCH="${BRANCH:-main}"
 ATELIER_UPDATE_WINDOW="${WINDOW}"
 ATELIER_UPDATE_KEEP_RELEASES="${KEEP:-3}"
 ATELIER_UPDATE_KEEP_BACKUPS="5"
+# 1 (défaut) : une impression en cours n'empêche pas la mise à jour (le fichier est sur la carte SD de l'imprimante, le suivi reprend
+# après le redémarrage). 0 : attendre la fin de l'impression. Un dépôt FTPS, une confirmation en attente, un lancement en cours
+# d'accusé ou un travail lourd retardent toujours la mise à jour.
+ATELIER_UPDATE_ALLOW_DURING_PRINT="1"
 # required : un test de fumée en échec après bascule déclenche le retour arrière ; advisory : alerte seulement ; off.
 ATELIER_UPDATE_SMOKE="${SMOKE:-required}"
 # PATH de l'utilisateur de construction (go, node, npm).
@@ -302,7 +310,7 @@ changed=0
 write_if_changed "$UNIT_DIR/atelier-update.service" 0644 <<EOF && changed=1 || true
 $MARK
 [Unit]
-Description=Mise à jour automatique de l'Atelier Bambu (CI verte, jamais pendant une impression)
+Description=Mise à jour automatique de l'Atelier Bambu (CI verte, impression en cours tolérée)
 Documentation=file://$OPT/README.md
 After=network-online.target
 Wants=network-online.target

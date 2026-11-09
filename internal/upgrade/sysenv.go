@@ -31,6 +31,7 @@ type SysEnv struct {
 	Sleep       func(ctx context.Context, d time.Duration) error // injectable (tests) ; défaut : attente réelle
 	geomChanged bool
 	geomOldTree string
+	geomSynced  bool // uv sync du worker réussi dans cette mise à jour (à refaire au retour arrière)
 }
 
 // NewSysEnv construit l'environnement réel.
@@ -213,6 +214,10 @@ func (e *SysEnv) CI(ctx context.Context, sha string) CIResult {
 // version trop ancienne pour connaître la route), repli sur la lecture de la base ; si elle échoue aussi : inconnu,
 // traité comme occupé.
 func (e *SysEnv) Busy(ctx context.Context) BusyState {
+	return ApplyBusyPolicy(e.rawBusy(ctx), e.Cfg.AllowDuringPrint)
+}
+
+func (e *SysEnv) rawBusy(ctx context.Context) BusyState {
 	st, err := e.busyHTTP(ctx)
 	if err == nil {
 		return st
@@ -399,9 +404,10 @@ func (e *SysEnv) SyncGeometry(ctx context.Context, to Release) error {
 		e.Logf("chown du worker géométrie : %v", err)
 	}
 	if uv := e.Cfg.AppEnv["BAMBU_UV_PATH"]; uv != "" {
-		env := e.appEnv("UV_CACHE_DIR="+e.Cfg.AppEnv["UV_CACHE_DIR"], "UV_PYTHON_INSTALL_DIR="+e.Cfg.AppEnv["UV_PYTHON_INSTALL_DIR"])
-		if _, err := e.Run.Run(ctx, Cmd{Name: uv, Args: []string{"sync", "--frozen", "--extra", "cad"}, Dir: cad, Env: env, User: e.Cfg.AppUser, Timeout: 30 * time.Minute}); err != nil {
+		if err := e.syncWorker(ctx, uv, cad); err != nil {
 			e.Logf("uv sync du worker géométrie a échoué (non bloquant ici, le test de fumée tranchera) : %v", err)
+		} else {
+			e.geomSynced = true
 		}
 	}
 	return nil
@@ -431,6 +437,14 @@ func (e *SysEnv) RevertGeometry(ctx context.Context) error {
 	_ = os.RemoveAll(failed)
 	_ = os.WriteFile(e.geomMarker(), []byte(e.geomOldTree+"\n"), 0o644)
 	e.geomChanged = false
+	if uv := e.Cfg.AppEnv["BAMBU_UV_PATH"]; uv != "" && e.geomSynced {
+		// Le paquet bambu-geometry est installé NON éditable dans un environnement hors du dossier du worker : il faut le
+		// réinstaller depuis l'ancien code, sinon l'ancienne version tournerait avec le nouveau paquet.
+		if err := e.syncWorker(ctx, uv, cad); err != nil {
+			e.Logf("réinstallation de l'ancien worker géométrie : %v (le prochain démarrage de uv resynchronisera)", err)
+		}
+		e.geomSynced = false
+	}
 	return nil
 }
 
@@ -547,8 +561,13 @@ func (e *SysEnv) Smoke(ctx context.Context) (err error) {
 	if !e.Cfg.UsesCAD {
 		args = append(args, "--no-cad")
 	}
-	_, err = e.asApp(ctx, 8*time.Minute, "bash", args...)
-	return err
+	if _, err = e.asApp(ctx, 8*time.Minute, "bash", args...); err != nil {
+		return err
+	}
+	if e.Cfg.UsesCAD {
+		return e.checkWorkerVersion(ctx)
+	}
+	return nil
 }
 
 // ---- Notification ------------------------------------------------------------------------------------------------

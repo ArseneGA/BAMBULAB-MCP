@@ -28,6 +28,17 @@ type Probe struct {
 // printing.activeJobStates (vérifié par un test).
 var ProbeBusyPrintStates = []string{"PRINTING", "START_REQUESTED", "START_UNKNOWN", "UPLOADING", "SLICING"}
 
+// probeCode : code de la raison d'occupation, le même que celui du service (printing.Busy*).
+func probeCode(state string) string {
+	switch state {
+	case "PRINTING":
+		return "print_running"
+	case "UPLOADING", "SLICING":
+		return "deposit_in_progress"
+	}
+	return "print_active" // START_REQUESTED, START_UNKNOWN
+}
+
 // ProbeDB lit la base en lecture seule. Le fichier -wal/-shm existants sont honorés (service en marche).
 func ProbeDB(ctx context.Context, dataDir string) (Probe, error) {
 	var p Probe
@@ -65,7 +76,7 @@ func ProbeDB(ctx context.Context, dataDir string) (Probe, error) {
 			rows.Close()
 			return p, err
 		}
-		p.Reasons = append(p.Reasons, fmt.Sprintf("print_active: %d impression(s) %s", n, state))
+		p.Reasons = append(p.Reasons, fmt.Sprintf("%s: %d impression(s) %s", probeCode(state), n, state))
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()

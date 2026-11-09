@@ -24,7 +24,10 @@ const (
 type BusyState struct {
 	Busy    bool
 	Unknown bool     // impossible de le savoir : traité comme occupé (sécurité d'abord)
-	Reasons []string // codes et détails lisibles
+	Reasons []string // codes et détails lisibles (celles qui bloquent)
+	// Tolerated : raisons d'occupation que la politique laisse passer (impression en cours, ATELIER_UPDATE_ALLOW_DURING_PRINT) ;
+	// journalisées, jamais bloquantes.
+	Tolerated []string
 }
 
 // Inputs rassemble tout ce dont dépend la décision. Aucun accès réseau ni disque : fonction pure, testée en table.

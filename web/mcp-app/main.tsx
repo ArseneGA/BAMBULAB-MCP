@@ -8,25 +8,27 @@ import '../src/viewer/viewer.css';
 import './mcp-app.css';
 import { GlbView } from '../src/viewer/GlbView';
 import type { LoadedModel } from '../src/viewer/glbEngine';
-import type { ModelDetails, SearchResult } from '../src/api/types';
+import type { ModelDetails } from '../src/api/types';
 import type { ConfirmationView } from '../src/api/printTypes';
 import { LaunchConfirm, StopConfirm } from './launch';
 import { ProgressCard, normalizeProgress, type Prog } from './progress';
 import { LayerViewer, isLayersInfo, type LayersInfo } from './layers';
 import { LiveCard, normalizeLive, type Live } from './live';
+import { CardView, classifyCard, type CardData } from './cards';
 import { StrengthCard, extractStrength, type StrengthView } from './strength';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
  * Aucune I/O réseau : tout passe par app.callServerTool (l'iframe ne peut pas joindre localhost de façon fiable).
- *  - résultat de search_models      -> liste de modèles ;
+ *  - résultats de search_models, list_collection, compare_variants, estimate_cost, get_project_costs, get_usage_dashboard, list_spools,
+ *    get_ams_state, list_print_history, list_print_queue, get_print_log, list_printers -> cartes (cards/, docs/research/mcp-cards.md) ;
  *  - résultat de get_print_status / wait_for_print_change -> carte de suivi en direct (live.tsx) ;
  *  - résultat de request_print_confirmation / cancel_print -> confirmation de lancement / d'arrêt par code de lancement (launch.tsx) ;
  *  - résultat de get_model_details  -> fiche compacte + viewer 3D (maillage chargé par tranches via get_mesh_chunk) ;
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'strength'; data: StrengthView } | { kind: 'live'; data: Live } |{ kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'strength'; data: StrengthView } | { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'card'; card: CardData } | { kind: 'model'; data: ModelDetails } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
 interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; isError?: boolean }
 
@@ -40,6 +42,8 @@ function classify(r: ToolResultLike): View {
     const detail = (s as { detail?: { test_id?: string }; test_id?: string } | undefined);
     return { kind: 'strength', data: { result: strength, testId: detail?.detail?.test_id ?? detail?.test_id, images: (r.content ?? []).filter((c) => c.type === 'image' && typeof c.data === 'string').map((c) => ({ data: c.data as string, mime: c.mimeType ?? 'image/png' })) } };
   }
+  const card = classifyCard(s); // cartes bibliothèque, comparaison, coûts, bobines, impressions, imprimantes (formes disjointes des autres vues)
+  if (card) return { kind: 'card', card };
   if (isLayersInfo(s) && Array.isArray((s as { sheet_layers?: unknown }).sheet_layers)) return { kind: 'layers', data: s };
   const live = normalizeLive(s); // suivi d'impression (get_print_status, wait_for_print_change) : avant la progression d'un travail
   if (live) return { kind: 'live', data: live };
@@ -47,7 +51,6 @@ function classify(r: ToolResultLike): View {
   if (prog && !(s && (typeof s.confirmation_id === 'string' || Array.isArray(s.models)))) return { kind: 'progress', data: prog };
   if (s && typeof s.confirmation_id === 'string' && typeof s.binding === 'object') return { kind: 'confirm', data: s as unknown as ConfirmationView };
   if (s && s.outcome === 'stop_requested' && typeof s.stop_url === 'string') return { kind: 'stop', stopUrl: s.stop_url, question: typeof s.question === 'string' ? s.question : undefined };
-  if (s && Array.isArray(s.models) && typeof s.total === 'number') return { kind: 'search', data: s as unknown as SearchResult };
   if (s && typeof s.model === 'object' && Array.isArray(s.files)) return { kind: 'model', data: s as unknown as ModelDetails };
   return { kind: 'text', text: textOf(r) || 'Aucun contenu à afficher.' };
 }
@@ -89,12 +92,13 @@ async function fetchGlb(app: App, modelId: string, signal: AbortSignal, progress
 function Root() {
   const [app, setApp] = useState<App | null>(null);
   const [view, setView] = useState<View | null>(null);
+  const [trail, setTrail] = useState<View[]>([]); // pile de retour : une carte qui ouvre un autre résultat (fiche, suivi, état) y empile la vue courante
   const [status, setStatus] = useState<'connecting' | 'ready' | 'standalone'>('connecting');
 
   useEffect(() => {
     const a = new App({ name: 'Atelier Bambu Lab', version: '0.3.0' });
     const theme = (t?: string) => { if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; };
-    a.ontoolresult = (r) => setView(classify(r as ToolResultLike));
+    a.ontoolresult = (r) => { setTrail([]); setView(classify(r as ToolResultLike)); };
     a.onhostcontextchanged = (ctx) => theme(ctx.theme);
     let alive = true;
     // connect() DOIT être appelé après la pose des gestionnaires, sinon la vue reste invisible.
@@ -106,53 +110,24 @@ function Root() {
   if (status === 'standalone') return <Box><p className="msg">Cette vue s'affiche dans un hôte MCP Apps (Claude Desktop, par exemple). Hors d'un hôte, aucune donnée n'est disponible.</p></Box>;
   if (!view) return <Box><p className="msg" role="status"><span className="spinner" aria-hidden /> {status === 'connecting' ? 'Connexion à la conversation…' : 'En attente du résultat…'}</p></Box>;
   if (!app) return null;
-  if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
-  if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
-  if (view.kind === 'strength') return <Box><StrengthCard view={view.data} /></Box>;
-  if (view.kind === 'live') return <Box><LiveCard app={app} first={view.data} /></Box>;
-  if (view.kind === 'progress') return <Box><ProgressCard app={app} first={view.data} /></Box>;
-  if (view.kind === 'layers') return <Box><LayerViewer app={app} info={view.data} /></Box>;
-  if (view.kind === 'confirm') return <Box><LaunchConfirm app={app} first={view.data} /></Box>;
-  if (view.kind === 'stop') return <Box><StopConfirm app={app} stopUrl={view.stopUrl} question={view.question} /></Box>;
-  if (view.kind === 'search') return <Box><Search app={app} data={view.data} onOpen={(d) => setView({ kind: 'model', data: d, from: view.data })} /></Box>;
-  return <Box><Model app={app} data={view.data} onBack={view.from ? () => setView({ kind: 'search', data: view.from! }) : undefined} /></Box>;
+  const navigate = (r: unknown) => { setTrail((t) => [...t, view]); setView(classify(r as ToolResultLike)); };
+  const back = trail.length > 0 ? () => { setView(trail[trail.length - 1]); setTrail(trail.slice(0, -1)); } : undefined;
+  const wrapBox = (node: React.ReactNode) => <Box card={view.kind === 'card'}>{back && <button type="button" className="back" onClick={back} aria-label="Retour"><ArrowLeft size={14} aria-hidden /> Retour</button>}{node}</Box>;
+  if (view.kind === 'error') return wrapBox(<p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p>);
+  if (view.kind === 'text') return wrapBox(<pre className="msg-pre">{view.text}</pre>);
+  if (view.kind === 'strength') return wrapBox(<StrengthCard view={view.data} />);
+  if (view.kind === 'live') return wrapBox(<LiveCard app={app} first={view.data} />);
+  if (view.kind === 'progress') return wrapBox(<ProgressCard app={app} first={view.data} />);
+  if (view.kind === 'layers') return wrapBox(<LayerViewer app={app} info={view.data} />);
+  if (view.kind === 'confirm') return wrapBox(<LaunchConfirm app={app} first={view.data} />);
+  if (view.kind === 'stop') return wrapBox(<StopConfirm app={app} stopUrl={view.stopUrl} question={view.question} />);
+  if (view.kind === 'card') return wrapBox(<CardView app={app} card={view.card} onOpen={navigate} />);
+  return wrapBox(<Model app={app} data={view.data} />);
 }
 
-const Box = ({ children }: { children: React.ReactNode }) => <main className="mcp">{children}</main>;
+const Box = ({ children, card }: { children: React.ReactNode; card?: boolean }) => <main className={card ? 'mcp mcp-card' : 'mcp'}>{children}</main>;
 
-function Search({ app, data, onOpen }: { app: App; data: SearchResult; onOpen: (d: ModelDetails) => void }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [err, setErr] = useState<string>();
-  const open = async (id: string) => {
-    setBusy(id); setErr(undefined);
-    try {
-      const r = await app.callServerTool({ name: 'get_model_details', arguments: { model_id: id } }) as ToolResultLike;
-      const v = classify(r);
-      if (v.kind === 'model') onOpen(v.data); else setErr(v.kind === 'error' || v.kind === 'text' ? v.text : 'Réponse inattendue');
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
-  };
-  if (data.models.length === 0) return <p className="msg">Aucun modèle ne correspond à la recherche.</p>;
-  return (
-    <>
-      <header className="head"><h1>Résultats</h1><span className="mono dim">{data.models.length} sur {data.total}{data.has_more ? ' · d\'autres résultats existent' : ''}</span></header>
-      <ul className="results" aria-label="Résultats de recherche">
-        {data.models.map((m) => (
-          <li key={m.id}>
-            <button type="button" className="result" disabled={busy !== null} aria-busy={busy === m.id} onClick={() => open(m.id)}>
-              <span className="r-name">{m.name}</span>
-              <span className="r-meta mono">{m.formats.map((f) => f.toUpperCase()).join('/')} · {fmtDims(m.dimensions)}{m.versions > 1 ? ` · ${m.versions} versions` : ''}</span>
-              <span className="r-tags">{m.availability === 'windows_only' ? <span className="tag tag-warn">Windows seul</span> : <span className="tag">{m.collection_path ?? 'sans collection'}</span>}{m.preview.state !== 'ready' && <span className="tag">aperçu : {m.preview.state}</span>}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {err && <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {err}</p>}
-      <p className="foot">Choisir un modèle ouvre sa fiche avec le viewer 3D.</p>
-    </>
-  );
-}
-
-function Model({ app, data, onBack }: { app: App; data: ModelDetails; onBack?: () => void }) {
+function Model({ app, data }: { app: App; data: ModelDetails }) {
   const [part, setPart] = useState<string | null>(null);
   const [loaded, setLoaded] = useState<LoadedModel | null>(null);
   const m = data.model;
@@ -186,7 +161,6 @@ function Model({ app, data, onBack }: { app: App; data: ModelDetails; onBack?: (
   return (
     <>
       <header className="head">
-        {onBack && <button type="button" className="back" onClick={onBack} aria-label="Retour aux résultats"><ArrowLeft size={14} aria-hidden /> Résultats</button>}
         <h1>{label}</h1>
       </header>
       <div className="sheet">

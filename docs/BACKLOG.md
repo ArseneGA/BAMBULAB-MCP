@@ -71,3 +71,97 @@ Ce qui change la position du produit sur le marché, par ordre d'impact. Règle 
 | G8 | **Compatible tout client MCP** (ChatGPT, Gemini, clients open source) et interface web autonome | Réduit la dépendance à Claude (risque n°4) et élargit le marché | Tous |
 
 À valider avant de coder G2–G6 : entretiens clients (questions en § 10.1 de l'étude) et page d'attente (§ 10.2).
+
+## Lot « parité Bambu Studio + atelier » (demande du 2026-11-09)
+
+Principe : **toutes les options classiques de Bambu Studio doivent être pilotables en une phrase depuis Claude**, avec un aperçu (visionneuse couche par couche) et une carte quand c'est utile. Aucune option ne contourne les règles de sécurité (liste blanche des réglages, scan thermique, lancement humain).
+
+| # | Fonction | Ce que ça fait | Équivalent Bambu Studio |
+|---|---|---|---|
+| S1 | **Couper une grande pièce** | Découpe en 2-3 parties avec tenons/mortaises ou trous de goupille (jeu d'assemblage selon la matière), réparties sur une ou plusieurs plaques | Outil Couper + connecteurs |
+| S2 | **Hauteur de couche variable** | Couches fines sur les courbes, épaisses sur les parties droites ; aperçu du gain de temps | Hauteur de couche adaptative / variable |
+| S3 | **Finitions de surface** | Lissage au fer (ironing), peau texturée (fuzzy skin), position de couture (arrière, alignée, peinte), en une phrase avec aperçu | Ironing, Fuzzy skin, Seam |
+| S4 | **Pause programmée / changement de couleur** | « Pause à 12 mm pour insérer un aimant », « change de couleur à la couche 80 » sans AMS ; notification, geste humain, reprise validée par l'humain | Pause / Changement de filament à la couche |
+| S5 | **Heure de fin choisie / départ différé** | « Finie à 18 h » → l'atelier dit quand lancer ; départ différé validé comme un lancement normal (l'accord humain reste lié et daté) | — (Farm Manager : départs décalés) |
+| S6 | **Timelapse automatique** | Récupéré à la fin depuis l'imprimante et rangé avec l'impression (vidéo dans le journal) | Timelapse |
+| S7 | **« Refais la même »** | Relance une pièce réussie avec exactement les mêmes réglages et la même découpe (ou redécoupe si la bobine a changé), en une phrase | Réimprimer depuis l'historique |
+| S8 | **Supports et zones à la main, en parlant** | « Supports seulement sous le goujon », « 6 parois ici », « bordure seulement autour des pieds » : peinture de supports, bloqueurs/forceurs, modificateurs par volume | Peinture de supports, modificateurs |
+| S9 | **Parité des réglages** | Toutes les clés courantes des profils process/filament/machine exposées et expliquées (ponts, surplombs, rétraction, coasting, vitesses par type, accélérations, refroidissement, brim ears, radeau, mode vase, séquence objet par objet, arrangement auto, mise à l'échelle / miroir / rotation / pose à plat par face) | Onglets Qualité, Résistance, Vitesse, Support, Autres |
+| S10 | **Calibrations natives** | Débit, avance de pression, température (tour), rétraction, vitesse volumétrique, déjà en séries de pièces : ajouter la lecture guidée des résultats par photo | Menu Calibration |
+
+### Nouvelles idées — N1 à N8 (N2 à N7 retenues le 2026-11-09)
+
+| # | Idée | Pourquoi |
+|---|---|---|
+| N1 | **Diagnostic d'échec** : « pourquoi ça a raté ? » à partir de la photo, des codes HMS, des étapes et des réglages ; propose la correction et la redécoupe | Les deux échecs du porte-guitare auraient été expliqués en une réponse |
+| N2 ✅ retenue | **Rendu réaliste avant impression** dans la vraie matière et couleur (translucide, soie, mat) | Choisir une variante sur l'aspect, pas seulement sur les chiffres |
+| N3 ✅ retenue | **Pièces de rechange / impression en série** : « imprime 12 fois ce clip » → remplissage optimal des plaques, répartition par lots, suivi du compte | Gain de temps énorme, déjà presque possible avec plan_plate |
+| N4 ✅ retenue | **Pilotage des accessoires de l'imprimante** : éclairage de la chambre, ventilateurs, vitesse d'impression en cours (silencieux / normal / sport), sans jamais lancer ni arrêter | Commandes Bambu classiques, sans risque |
+| N5 ✅ retenue | **Insertion d'éléments** : logements prêts pour inserts filetés, aimants, écrous captifs, avec la pause automatique au bon moment (lien S4) | Pièces fonctionnelles sans post-traitement |
+| N6 ✅ retenue | **Assistant d'assemblage** : génère la notice d'assemblage (ordre, vis, photos annotées) d'un projet multi-pièces | Projets comme le porte-guitare découpé (S1) |
+| N7 ✅ retenue | **Bobine bientôt vide** : coupe l'impression en deux avec pause de changement de bobine au bon moment si le poids restant ne suffit pas | Évite une impression ratée à 90 % |
+| N8 | **Conversion d'un STL en pièce paramétrique simple** (boîte, équerre, plaque) pour pouvoir ensuite modifier les cotes en parlant | Rendre modifiable ce qui ne l'était pas |
+
+### Idées plus larges — N9 à N22 (à arbitrer)
+
+**L'atelier autour de l'imprimante**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N9 | **Domotique (Home Assistant)** : prise connectée qui coupe l'imprimante une fois refroidie, purificateur d'air allumé pour ABS/ASA, lumière de la pièce, alerte détecteur de fumée → pause demandée à l'humain | L'atelier devient sûr et autonome la nuit |
+| N10 | **Séchage et humidité des bobines** : sécheur connecté ou capteur, rappel « ce PETG a pris l'humidité, sèche-le 4 h à 65 °C » avant une impression longue | Cause n°1 des fils et bulles |
+| N11 | **Stock et réapprovisionnement** : alerte quand une matière passe sous un seuil, liste de courses (bobines, inserts, vis, aimants) avec liens d'achat | Ne jamais manquer en plein projet |
+| N12 | **Planning de la machine sur la semaine** : file, réservations, heures creuses d'électricité, impressions longues placées la nuit | Rentabiliser la P1S |
+
+**Du projet à l'objet fini**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N13 ✅ retenue | **Mode projet complet** : « je veux un support mural pour 3 guitares » → découpage en pièces, nomenclature (pièces imprimées + vis/chevilles/inserts), planning d'impression, notice | Passer de l'idée à l'objet sans rien oublier |
+| N14 | **Préparation au post-traitement** : surépaisseur pour ponçage, préparation à la galvanoplastie (surface conductrice, accroches, trous d'évacuation), peinture, lissage vapeur | Ton porte-guitare Liquid Chrome |
+| N15 ✅ retenue | **Moules et coulée** : générer un moule en 2 parties à partir d'une pièce (silicone, résine, béton, chocolat) avec évents et clés d'alignement | Étend l'atelier au-delà du plastique imprimé |
+| N16 ✅ retenue | **Aller-retour avec Blender** : envoyer une sculpture de Blender vers Printalk (réparée, orientée, chiffrée) et renvoyer le résultat de résistance en couleurs dans Blender | Ton flux réel Blender + Printalk |
+
+**Comprendre et progresser**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N17 | **Explique-moi ce réglage** : Claude explique chaque option en contexte, avec l'effet visuel dans la visionneuse (avant/après) | Apprendre en imprimant |
+| N18 ✅ retenue | **Profil maître par matière** qui apprend de chaque impression réussie ou ratée (journal + photos) et propose ses propres réglages | Le mémoire d'impression devient un vrai réglage |
+| N19 ✅ retenue | **Journal photo automatique** : photo à 0 %, 25 %, 50 %, 100 %, rangées avec l'impression, en galerie | Garder la trace, documenter un projet |
+
+**Au-delà de la P1S**
+| # | Idée | Pourquoi |
+|---|---|---|
+| N20 | **Autres imprimantes** : Prusa, Klipper/Creality via Moonraker, avec les mêmes garde-fous | Ne plus dépendre d'une seule marque |
+| N21 | **Commande vocale depuis le téléphone** : « Printalk, où en est l'impression ? » | Suivre l'atelier les mains prises |
+| N22 ✅ retenue | **Galerie / portfolio** des objets réalisés (photos finales, réglages, coût) + modèles 3D interactifs, versions et journal photo (N19), exportable en page web ou PDF | Montrer ce qu'on fabrique |
+
+### Blender dans Printalk (décision du 2026-11-09)
+**Uniquement le Blender de l'ordinateur de l'utilisateur**, pas de Blender sur le serveur.
+- Printalk fournit son **propre module complémentaire Blender** (un fichier .zip téléchargeable depuis l'interface et depuis Claude) qui se connecte à Printalk et expose ses fonctions dans Blender (envoyer la sculpture vers Printalk, recevoir la pièce réparée/orientée, la carte de résistance en couleurs, les rendus) et aux outils MCP.
+- Si Printalk détecte qu'aucun Blender n'est relié, il le dit et recommande : « c'est mieux d'avoir Blender sur ton ordinateur : installe Blender, puis ce module (.zip) : Édition > Préférences > Modules complémentaires > Installer depuis le disque ». Sans Blender, tout le reste de Printalk fonctionne.
+- Les rendus réalistes (N2) passent par ce Blender quand il est relié ; sinon, rendu simplifié côté serveur.
+
+### Idées dans l'univers Bambu Lab — B1 à B12 (à arbitrer)
+| # | Idée | Pourquoi |
+|---|---|---|
+| B1 ✅ retenue | **MakerWorld complet** : chercher, importer un modèle avec ses profils d'impression, comparer avec nos réglages, suivre les remixes | La bibliothèque Bambu à portée de phrase |
+| B2 ✅ retenue | **Lecture des puces RFID des bobines Bambu** (via AMS) : inventaire automatique (matière, couleur exacte, lot, poids restant) | Plus aucune saisie de bobine |
+| B3 ✅ retenue | **Catalogue officiel des filaments Bambu** (couleurs hex, finitions, températures) pour l'aperçu réaliste et le choix de couleur | Couleurs justes partout |
+| B4 | **Plan d'entretien** : graissage des tiges, nettoyage carbone, buse à changer, courroies, selon les heures réelles d'impression ; rappels et guides pas à pas | Une P1S qui dure |
+| B5 | **Buses et plaques** : détection/déclaration de la buse (0,2/0,4/0,6/0,8, acier trempé), refus des matières abrasives sur buse laiton, plaque conseillée par matière | Éviter les erreurs coûteuses |
+| B6 | **Résultats des inspections natives** (lidar X1, première couche, caméra) remontés dans le journal et le diagnostic d'échec | Exploiter tous les capteurs Bambu |
+| B7 | **Modules H2D** : buse double, laser et découpe (gravure, découpe de carton/bois) avec les mêmes garde-fous humains | Toute la gamme Bambu |
+| B8 | **AMS 2 Pro / AMS HT** : séchage des bobines piloté, réglage d'humidité par matière | Lien avec N10 |
+| B9 ✅ retenue | **Firmware** : suivi des versions, notes de version, alerte si une mise à jour touche le mode LAN/développeur (risque Authorization Control) | Ne pas se faire surprendre |
+| B10 ✅ retenue | **Projets MakerWorld multi-plaques** (3MF avec plaques et couleurs) importés tels quels, découpés et lancés plaque par plaque | Les projets populaires en un geste |
+| B11 ✅ retenue | **Publication MakerWorld assistée** : fiche, photos de la galerie (N22), profils testés, sans publication automatique : tout ce qui peut être fait et simplifié passe par le MCP, l'humain ne fait que le geste final minimal | Partager ses créations proprement |
+| B12 ✅ retenue | **Calibrations natives Bambu** déclenchées et relues (débit dynamique, vibrations) avec historique par buse et par matière | Lien avec S10 |
+
+## Règle d'architecture (2026-11-09)
+**Aucune API d'IA dans Printalk.** Tout ce que fait le serveur est du calcul déterministe (géométrie, découpe Bambu Studio, éléments finis, statistiques). L'intelligence conversationnelle vient uniquement du Claude (ou autre client MCP) de l'utilisateur, avec son propre abonnement. Les résumés produits par le serveur sont des textes construits à partir de chiffres, que Claude présente.
+
+## Idées « effet waouh » retenues (2026-11-09)
+
+| # | Fonction | Comment |
+|---|---|---|
+| W1 | **Sauver une impression ratée à 80 %** | 1) Hauteur saine : dernière couche réussie transmise par l'imprimante + **mesure au pied à coulisse demandée à l'humain** (fait foi). 2) L'humain arase le haut abîmé et donne la nouvelle hauteur ; Printalk **coupe le modèle à cette cote** et garde la partie haute. 3) Alignement au choix : **collier** (la partie haute descend de quelques mm et s'emboîte autour de la base), **gabarit de perçage** imprimé qui épouse la section + goupilles intégrées dans la partie haute, ou **collage à plat** si la surface est grande. 4) Découpe de la partie haute (souvent tête en bas pour une face de collage plane), confirmation humaine habituelle. 5) Conseil de colle selon la matière (CA, époxy pour PETG) et temps de séchage. Pure géométrie (lien S1 couper, N5 logements). |
+| W2 | **L'optimiseur de nuit (sans IA)** | Tâche planifiée la nuit sur le serveur : pour chaque pièce de la semaine, essai systématique de dizaines d'orientations et de réglages, notés par des mesures (surplombs et volume de supports, surface de contact, **temps et grammes réels via Bambu Studio**, résistance via le calcul par éléments finis). Garde les meilleures, écrit un résumé chiffré (« orientation 30° : −40 % de temps, même résistance, supports −60 % »), présenté par Claude à l'ouverture de la conversation et visible dans une carte. Bornes de CPU, n'interfère jamais avec une impression ou une découpe en cours. |

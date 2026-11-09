@@ -281,4 +281,38 @@ describe('LiveCard', () => {
     await tick(10);
     expect(txt()).toContain('41 %'); expect(txt()).toContain('dernier état affiché');
   });
+  // ---- carte ouverte par printer_id seul (get_printer_status) ----
+  const PRINTER = (over: Record<string, unknown> = {}) => ({ printer_id: 'pr_1', reachable: true, stale: false, state: 'idle', progress_percent: 0, layer: 0, total_layers: 0, remaining_minutes: 0, temps: { nozzle: 25, bed: 24 }, ...over });
+
+  it('reconnaît un résultat de get_printer_status : imprimante sans impression suivie', () => {
+    const l = normalizeLive(PRINTER())!;
+    expect(l).toMatchObject({ jobId: '', printerId: 'pr_1', noJob: true, state: 'NO_JOB', printerState: 'idle', terminal: false, percent: null });
+    const p = normalizeLive(PRINTER({ state: 'printing', progress_percent: 33, layer: 10, total_layers: 40, remaining_minutes: 55 }))!;
+    expect(p).toMatchObject({ noJob: true, percent: 33, layer: 10, totalLayers: 40, remainingMin: 55 });
+    expect(normalizeLive({ no_active_print: true, status: { job: { id: '', state: '', printer_id: 'pr_1' }, printer: PRINTER() }, terminal: false })).toMatchObject({ noJob: true, printerId: 'pr_1' });
+    expect(normalizeLive({ printer_id: 'pr_1', name: 'x' })).toBeUndefined(); // pas un état d'imprimante
+  });
+
+  it('retrouve l\'impression active à partir du seul printer_id, puis suit le travail', async () => {
+    const app = mk({ get_live_state: (a) => ({ structuredContent: a.printer_id ? LIVE() : LIVE(STATUS({}, {}, { progress_percent: 60 })) }) });
+    await render(<LiveCard app={app} first={normalizeLive(PRINTER({ state: 'printing', progress_percent: 41 }))!} />);
+    await tick(10);
+    expect(app.callServerTool).toHaveBeenCalledWith({ name: 'get_live_state', arguments: { printer_id: 'pr_1' } });
+    expect(app.callServerTool).toHaveBeenCalledWith({ name: 'get_live_frame', arguments: { printer_id: 'pr_1' } }); // caméra dès que l'imprimante imprime
+    expect(txt()).toContain('boite.gcode.3mf'); expect(txt()).toContain('couche 52 / 124'); expect(txt()).toContain('Arrêter');
+    await tick(5000);
+    expect(app.callServerTool).toHaveBeenCalledWith({ name: 'get_live_state', arguments: { print_job_id: 'pj_1' } }); // le travail est connu : suivi par print_job_id
+    expect(txt()).toContain('60 %');
+  });
+
+  it('sans impression active : affiche l\'état de l\'imprimante, sans caméra ni bouton Arrêter', async () => {
+    const idle = { status: { job: { id: '', state: '', printer_id: 'pr_1' }, printer: PRINTER({ display: 'Joignable · au repos' }) }, no_active_print: true, terminal: false, camera_available: true };
+    const app = mk({ get_live_state: () => ({ structuredContent: idle }) });
+    await render(<LiveCard app={app} first={normalizeLive(PRINTER({ display: 'Joignable · au repos' }))!} />);
+    await tick(10);
+    expect(txt()).toContain('Imprimante pr_1'); expect(txt()).toContain('Joignable · au repos'); expect(txt()).toContain('Aucune impression en cours');
+    expect(txt()).not.toContain('Arrêter'); expect(txt()).not.toContain('NaN'); expect(txt()).not.toContain('undefined');
+    expect(count(app, 'get_live_frame')).toBe(0);
+    expect(host.querySelector('[role=progressbar]')).toBeNull();
+  });
 });

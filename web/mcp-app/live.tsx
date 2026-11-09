@@ -39,6 +39,8 @@ export interface Live {
   cameraAvailable?: boolean;
   final?: LiveFinal;
   next?: string; lastError?: string;
+  /** Carte ouverte par imprimante (get_printer_status) sans impression suivie : seul l'état de l'imprimante s'affiche. */
+  noJob?: boolean;
 }
 
 const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -57,8 +59,42 @@ const STATE_LABEL: Record<string, string> = {
 /** Reconnaît le suivi d'une impression : résultat de get_print_status / wait_for_print_change (PrintStatus) ou de get_live_state (enveloppe). */
 export function isLiveResult(raw: unknown): boolean { return normalizeLive(raw) !== undefined; }
 
+/** État d'imprimante seul (résultat de get_printer_status, ou get_live_state(printer_id) sans impression active) : pas d'impression suivie. */
+function printerOnly(raw: Rec): Live | undefined {
+  const wrapped = raw.no_active_print === true && isRec(raw.status) && isRec(raw.status.printer);
+  const pr = wrapped ? ((raw.status as Rec).printer as Rec) : (typeof raw.printer_id === 'string' && typeof raw.state === 'string' && typeof raw.reachable === 'boolean' && !isRec(raw.job) && !isRec(raw.status) ? raw : undefined);
+  if (!pr || typeof pr.printer_id !== 'string') return undefined;
+  const pstate = str(pr.state);
+  const working = pstate === 'printing' || pstate === 'preparing' || pstate === 'paused';
+  const alerts: LiveAlert[] = [];
+  const seen = new Set<string>();
+  for (const e of Array.isArray(pr.error_details) ? (pr.error_details as unknown[]) : []) {
+    if (!isRec(e) || e.benign === true) continue;
+    const text = str(e.text, e.short);
+    const key = str(e.code, e.short, e.text) ?? '';
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    alerts.push({ kind: 'error', text: `${str(e.short) ? `${e.short} : ` : ''}${text}`, action: str(e.action) });
+  }
+  const temps = isRec(pr.temps) ? pr.temps : undefined;
+  const total = num(pr.total_layers);
+  const pct = num(pr.progress_percent);
+  return {
+    jobId: '', printerId: pr.printer_id, name: undefined,
+    state: 'NO_JOB', printerState: pstate, display: str(pr.display),
+    percent: working && pct !== undefined ? Math.max(0, Math.min(100, Math.round(pct))) : null,
+    layer: working && total ? num(pr.layer) : undefined, totalLayers: working && total ? total : undefined,
+    remainingMin: working ? num(pr.remaining_minutes) : undefined,
+    temps: temps ? { nozzle: num(temps.nozzle), nozzleTarget: num(temps.nozzle_target), bed: num(temps.bed), bedTarget: num(temps.bed_target), chamber: num(temps.chamber) } : undefined,
+    stages: [], alerts, paused: pstate === 'paused', terminal: false, failed: false,
+    stale: pr.stale === true || pr.reachable === false, noJob: true,
+  };
+}
+
 export function normalizeLive(raw: unknown): Live | undefined {
   if (!isRec(raw)) return undefined;
+  const po = printerOnly(raw);
+  if (po) return po;
   const wrapped = isRec(raw.status) && isRec(raw.status.job);
   const st = wrapped ? (raw.status as Rec) : raw;
   const extras: Rec = wrapped ? raw : {};
@@ -150,6 +186,7 @@ interface StopAsk { url: string; question?: string }
 interface ActionAsk { id: string; url: string; question?: string; details: string[] }
 type Note = { ok: boolean; text: string };
 
+const PRINTER_LABEL: Record<string, string> = { idle: 'Au repos', printing: 'Impression en cours', preparing: 'Préparation', paused: 'En pause', finish: 'Terminée', failed: 'Arrêtée' };
 const OUTCOME: Record<string, string> = { completed: 'Impression terminée', failed: 'Impression échouée', cancelled: 'Impression annulée' };
 
 export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs = 10_000, idleMs = 5 * 60_000 }: {
@@ -188,7 +225,7 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
   const watching = visible && inView && !idle;
 
   const printerId = live.printerId;
-  const camOn = watching && !live.terminal && !!printerId && live.cameraAvailable !== false && (live.state === 'PRINTING' || live.state === 'START_REQUESTED');
+  const camOn = watching && !live.terminal && !!printerId && live.cameraAvailable !== false && (live.state === 'PRINTING' || live.state === 'START_REQUESTED' || (!!live.noJob && live.printerState === 'printing'));
 
   // ---- boucle de l'image ----
   useEffect(() => {
@@ -222,10 +259,11 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
     const run = async () => {
       let cur = liveRef.current;
       if (cur.terminal && finalTried.current) return;
+      if (!cur.jobId && !cur.printerId) return; // rien à relire
       const wantFinal = cur.terminal;
       if (wantFinal) finalTried.current = true;
       try {
-        const r = await app.callServerTool({ name: 'get_live_state', arguments: { print_job_id: cur.jobId, ...(wantFinal ? { with_final_photo: true } : {}) } });
+        const r = await app.callServerTool({ name: 'get_live_state', arguments: { ...(cur.jobId ? { print_job_id: cur.jobId } : { printer_id: cur.printerId }), ...(wantFinal ? { with_final_photo: true } : {}) } });
         if (!alive) return;
         if ((r as ToolResultLike | undefined)?.isError) throw new Error('refus');
         const n = normalizeLive(sc(r));
@@ -238,7 +276,7 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
     };
     void run();
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [watching, app, pollMs, live.jobId]);
+  }, [watching, app, pollMs, live.jobId, live.printerId]);
 
   // ---- Arrêter : crée seulement la demande d'arrêt ----
   const [stopAsk, setStopAsk] = useState<StopAsk | null>(null);
@@ -272,11 +310,12 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
   };
 
   const L = live;
-  const label = L.paused && !L.terminal ? 'En pause' : L.display && L.state === 'PRINTING' ? L.display : STATE_LABEL[L.state] ?? L.state;
+  const label = L.noJob ? (L.display ?? PRINTER_LABEL[L.printerState ?? ''] ?? 'Imprimante') : L.paused && !L.terminal ? 'En pause' : L.display && L.state === 'PRINTING' ? L.display : STATE_LABEL[L.state] ?? L.state;
   const pct = L.percent;
   const ends = L.endsAtLocal ?? endFallback(L.remainingMin);
   const remaining = fmtMin(L.remainingMin);
-  const showCam = !L.terminal && (L.state === 'PRINTING' || L.state === 'START_REQUESTED' || frame !== null);
+  const idleNoJob = !!L.noJob && L.printerState !== 'printing' && L.printerState !== 'preparing' && L.printerState !== 'paused';
+  const showCam = !L.terminal && (L.state === 'PRINTING' || L.state === 'START_REQUESTED' || (!!L.noJob && L.printerState === 'printing') || frame !== null);
   const pausedUi = !L.terminal && (idle);
   const cls = `live${L.failed ? ' live-failed' : ''}${L.terminal && !L.failed ? ' live-done' : ''}${pct === null && !L.terminal ? ' live-indet' : ''}`;
 
@@ -284,7 +323,7 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
     <section ref={rootRef} className={cls} aria-label="Suivi de l'impression"
       onPointerDown={touch} onPointerMove={touch} onKeyDown={touch} onTouchStart={touch} onWheel={touch}>
       <header className="live-head">
-        <h1>{L.name ?? 'Impression'}</h1>
+        <h1>{L.name ?? (L.noJob ? `Imprimante${L.printerId ? ' ' + L.printerId : ''}` : 'Impression')}</h1>
         <span className="live-state" role="status">
           {L.terminal && !L.failed && <Check size={14} aria-hidden />}{L.failed && <AlertTriangle size={14} aria-hidden />}{L.paused && !L.terminal && <Pause size={14} aria-hidden />}
           {label}
@@ -313,14 +352,15 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
         </figure>
       )}
 
-      <div className="live-bar" role="progressbar" aria-label="Progression" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? undefined} aria-valuetext={pct === null ? 'progression inconnue' : `${pct} %`}>
+      {idleNoJob && <p className="live-time" role="status">Aucune impression en cours sur cette imprimante.</p>}
+      {!idleNoJob && <div className="live-bar" role="progressbar" aria-label="Progression" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? undefined} aria-valuetext={pct === null ? 'progression inconnue' : `${pct} %`}>
         <div className="live-fill" style={pct === null ? undefined : { width: `${pct}%` }} />
-      </div>
-      <div className="live-line">
+      </div>}
+      {!idleNoJob && <div className="live-line">
         <span className="live-pct">{pct === null ? '…' : `${pct} %`}</span>
         {L.totalLayers ? <span className="live-meta">couche {L.layer ?? '—'} / {L.totalLayers}</span> : null}
         {L.heightMm !== undefined && L.heightTotalMm !== undefined ? <span className="live-meta">{fmtNum(L.heightMm)} / {fmtNum(L.heightTotalMm)} mm</span> : null}
-      </div>
+      </div>}
       {(remaining || ends) && (
         <p className="live-time">
           {remaining ? <>Reste <strong>{remaining}</strong></> : null}{remaining && ends ? ' · ' : ''}{ends ? <>fin à <strong>{ends}</strong></> : null}

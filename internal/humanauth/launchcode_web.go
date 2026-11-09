@@ -11,9 +11,7 @@ import (
 // Elle est derrière Require (navigateur enregistré + Sec-Fetch + nonce à usage unique). Le code saisi n'est jamais
 // renvoyé dans la page, jamais journalisé, jamais placé dans une URL (POST uniquement).
 
-var launchTpl = template.Must(template.New("l").Parse(`<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">
-<title>Code de lancement</title><style>` + Style + `</style></head><body><main>
+var launchTpl = template.Must(template.New("l").Parse(Layout("Code de lancement", "", "") + `{{template "head" .}}
 <h1>Code de lancement personnel</h1>
 {{if .Msg}}<p class="ok" role="status">{{.Msg}}</p>{{end}}{{if .Err}}<p class="warn" role="alert">{{.Err}}</p>{{end}}
 <p>Ce code (6 à 8 chiffres) te permet de lancer ou d'arrêter une impression directement dans la vue de Claude, sans ouvrir le navigateur. Le lien de confirmation du navigateur reste toujours disponible.</p>
@@ -28,9 +26,9 @@ var launchTpl = template.Must(template.New("l").Parse(`<!doctype html><html lang
 <p><label>Confirmer le code<br><input type="password" name="code2" required minlength="6" maxlength="8" pattern="[0-9]{6,8}" inputmode="numeric" autocomplete="off" spellcheck="false"></label></p>
 <p><button type="submit">Enregistrer le code</button></p></form>
 {{if .Set}}<h2>Révoquer</h2><form method="post"><input type="hidden" name="nonce" value="{{.Nonce}}"><input type="hidden" name="action" value="revoke">
-<p>Sans code, la vue de Claude n'affiche que le lien du navigateur.</p><p><button type="submit">Révoquer le code</button></p></form>{{end}}
+<p>Sans code, la vue de Claude n'affiche que le lien du navigateur.</p><p><button type="submit" class="danger">Révoquer le code</button></p></form>{{end}}
 <p class="dim">En cas d'oubli : <code>bambud launch-code --reset</code> sur le poste du service.</p>
-</main></body></html>`))
+{{template "foot"}}`))
 
 // RegisterLaunchCodePages monte GET/POST /setup/launch-code derrière Require.
 func (s *Service) RegisterLaunchCodePages(mux *http.ServeMux) {

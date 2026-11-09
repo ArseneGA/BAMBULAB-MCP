@@ -484,10 +484,10 @@ Le serveur **tire** les mises à jour : il interroge GitHub (`git fetch` + API p
 | Garantie | Mécanisme |
 |---|---|
 | Seul un commit de `main` dont **toute la CI est verte** est installé | API GitHub `check-runs` + statut combiné du commit ; rouge, annulé, en cours, inconnu (réseau, limite de débit) : on attend, on réessaie au passage suivant (`internal/upgrade/ci.go`) |
-| Jamais de redémarrage pendant une impression | `GET /api/system/busy` du service (§ 11.4) ; occupé ou **indéterminé** : reporté |
+| Redémarrage sans interrompre l'impression | `GET /api/system/busy` du service (§ 11.4) : une impression **en cours** n'empêche plus la mise à jour (le fichier est sur la carte SD de l'imprimante ; `ATELIER_UPDATE_ALLOW_DURING_PRINT=1` par défaut, `0` pour attendre). Restent bloquants : dépôt FTPS / découpe, confirmation, arrêt ou action en attente, lancement en cours d'accusé, travail lourd ; état **indéterminé** : reporté |
 | Rien n'est touché avant d'avoir un binaire testé | construction dans `releases/<sha>`, tests `go test -short`, validateur MCP ; un échec laisse le service intact |
 | Retour possible | sauvegarde `bambud backup` + `bambud verify` (avec `.sha256`) juste avant la bascule ; bascule par lien symbolique atomique ; versions précédentes conservées |
-| Retour arrière automatique | `/health` (version + `schema_version` attendus, stabilité 20 s), puis `scripts/smoke-linux.sh` : un échec ramène l'ancienne version, **avec restauration de la sauvegarde si le schéma de la base a changé** (§ 11.7) |
+| Retour arrière automatique | `/health` (version + `schema_version` attendus, stabilité 20 s), puis `scripts/smoke-linux.sh`, puis, si le worker CAO est configuré, **vérification de sa version** (§ 11.11) : un échec ramène l'ancienne version, **avec restauration de la sauvegarde si le schéma de la base a changé** (§ 11.7) |
 | Une seule mise à jour à la fois | verrou `flock` `/run/lock/atelier-update.lock` (pris aussi par `install.sh`) |
 | Pas de boucle de redémarrages | un commit qui échoue ici est mémorisé et **n'est plus retenté** tant qu'un nouveau commit n'arrive pas (ou `--retry`) |
 | Historique de `main` non réécrit | le nouveau commit doit prolonger l'installé (`merge-base --is-ancestor`) ; sinon refusé et notifié |
@@ -538,21 +538,24 @@ Ce que fait la commande, **sans arrêter ni redémarrer le service** :
 6. joue `scripts/smoke-linux.sh` sur la version en service : s'il échoue **déjà** aujourd'hui, le mode passe à `advisory` (alerte sans retour arrière) pour ne pas annuler chaque mise à jour, et le script le dit ;
 7. active le timer et fait un contrôle à blanc (`atelier-update --check`).
 
-Le service ne sera redémarré qu'à la **première** mise à jour réellement installée, jamais pendant une impression.
+Le service ne sera redémarré qu'à la **première** mise à jour réellement installée ; une impression en cours n'est pas interrompue (§ 11.4).
 
 ### 11.4 Quand une mise à jour est-elle reportée ? Définition de « occupé »
 
-`GET /api/system/busy` (lecture seule ; connexion TCP loopback **sans** en-tête de proxy, plus le jeton d'API ; absent de `/health`, public) renvoie `{"busy": bool, "reasons": [{"code","detail"}]}`. Codes (`internal/printing/busy.go`, `internal/core/busy.go`) :
+`GET /api/system/busy` (lecture seule ; connexion TCP loopback **sans** en-tête de proxy, plus le jeton d'API ; absent de `/health`, public) renvoie `{"busy": bool, "reasons": [{"code","detail"}]}` : c'est la liste **brute** des raisons ; l'outil de mise à jour (`internal/upgrade/busy.go`, `ApplyBusyPolicy`) en retire celles que la politique tolère. Codes (`internal/printing/busy.go`, `internal/core/busy.go`) :
 
-| Code | Signifie |
-|---|---|
-| `print_active` | un PrintJob en `PRINTING`, `START_REQUESTED` ou `START_UNKNOWN` (lancement incertain : à trancher par l'humain, `reconcile_print`) |
-| `printer_active` | un adaptateur ouvert voit l'imprimante en préparation / impression / pause (même lancée depuis Bambu Studio ou l'écran) |
-| `confirmation_pending` | une confirmation de lancement attend l'humain (jeton encore valable) |
-| `stop_pending` | une demande d'arrêt attend l'humain, ou un arrêt est en cours d'application |
-| `action_pending` | reprise / chargement / nettoyage de carte SD en attente de validation |
-| `deposit_in_progress` | découpe ou dépôt du fichier sur l'imprimante en cours |
-| `job_running` | un travail de la file (découpe, analyse, CAO, import) s'exécute |
+| Code | Signifie | Bloque la mise à jour ? |
+|---|---|---|
+| `print_running` | un PrintJob en `PRINTING` : le fichier est sur la carte SD, le suivi reprend après redémarrage | **non** par défaut (`ATELIER_UPDATE_ALLOW_DURING_PRINT=1`), oui si `0` |
+| `printer_active` | un adaptateur ouvert voit l'imprimante en préparation / impression / pause (même lancée depuis Bambu Studio ou l'écran) | **non** par défaut, oui si `0` |
+| `print_active` | un PrintJob en `START_REQUESTED` (accusé du lancement en cours) ou `START_UNKNOWN` (lancement incertain : à trancher par l'humain, `reconcile_print`) | oui, toujours |
+| `confirmation_pending` | une confirmation de lancement émise et non consommée (valable 10 min au plus) | oui |
+| `stop_pending` | une demande d'arrêt attend l'humain (10 min au plus), ou un arrêt est en cours d'application | oui |
+| `action_pending` | reprise / chargement / nettoyage de carte SD en attente de validation | oui |
+| `deposit_in_progress` | découpe ou dépôt FTPS du fichier sur l'imprimante en cours (`UPLOADING`, `SLICING`) | oui |
+| `job_running` | un travail de la file (découpe, analyse, CAO, import) s'exécute | oui |
+
+**Pourquoi l'impression peut continuer.** Redémarrer `bambud` ne coupe pas l'imprimante : le G-code est sur sa carte SD et c'est elle qui exécute. Au démarrage, `Recover` remet chaque impression `PRINTING` sous suivi (reconnexion MQTT, rapport complet, réconciliation) et ne renvoie **aucune commande** (ni lancement, ni arrêt, ni pause, ni reprise) ; l'objectif est que le suivi (carte « ça en est où ? ») revienne tout seul après quelques secondes. Un lancement en cours d'accusé (`START_REQUESTED`) devient `START_UNKNOWN` s'il est interrompu : c'est pourquoi il bloque. Après un redémarrage, le journal de la mise à jour dit « impression en cours : la mise à jour continue » ; une notification `installed` reste envoyée comme d'habitude. Pendant l'impression, les vérifications de santé et de fumée (`/health`, `scripts/smoke-linux.sh`) ne pilotent pas l'imprimante.
 
 Si le service ne répond pas (arrêté) ou est trop ancien pour connaître la route, repli sur la **lecture seule de la base** (`bambud upgrade-probe` : impressions actives et travaux en cours, sans les demandes humaines en mémoire). Si tout est illisible : **traité comme occupé**. La vérification est faite avant la construction **et** de nouveau juste avant la sauvegarde : une impression démarrée pendant la construction (plusieurs minutes) reporte l'installation, la version construite est conservée pour le passage suivant. Un report est notifié **une fois** par commit.
 
@@ -567,6 +570,7 @@ Fichier `/etc/atelier/auto-update.env` (aucun secret ; relu à chaque passage) :
 | `ATELIER_UPDATE_REPO` / `_BRANCH` | dépôt public / `main` | ce qui est suivi |
 | `ATELIER_UPDATE_WINDOW` | vide | plage horaire d'installation `HH:MM-HH:MM` |
 | `ATELIER_UPDATE_REQUIRED_CHECKS` | vide (tous) | noms exacts des jobs de CI exigés, séparés par `;` |
+| `ATELIER_UPDATE_ALLOW_DURING_PRINT` | `1` | `1` : une impression en cours (`print_running`, `printer_active`) ne retarde pas la mise à jour ; `0` : attendre sa fin (§ 11.4) |
 | `ATELIER_UPDATE_KEEP_RELEASES` / `_KEEP_BACKUPS` | 3 / 5 | versions et sauvegardes `preupdate-*` conservées (la sauvegarde quotidienne a sa propre rotation) |
 | `ATELIER_UPDATE_SMOKE` | `required` | `advisory` : alerte sans retour arrière ; `off` |
 | `ATELIER_UPDATE_HEALTH_WAIT` | 180s | attente max. de `/health` après redémarrage |
@@ -610,15 +614,28 @@ Retour arrière **manuel** vers la version précédente (schéma inchangé) : `s
 
 **Prouvé (CI et `go test`)** : décision (CI verte / rouge / en cours / inconnue, occupé, indéterminé, désactivé, épinglé, rien de neuf, fenêtre horaire, échec connu, `--now`, `--retry`) ; occupation (`internal/core/busy_test.go`, `internal/printing/busy_test.go`, `internal/httpapi/busy_test.go` : loopback seul, proxy refusé, jeton) ; lecture de la CI contre un faux GitHub (pagination, limite de débit, jeton jamais divulgué) ; ordre exact et hygiène des commandes de construction, échec à chaque étape sans rien publier ; **retour arrière simulé** : `/health` en échec (schéma inchangé), migration puis échec (restauration avant relance de l'ancienne version), restauration en échec (critique, une seule alerte), reprise après coupure ; moteur complet avec de vrais liens symboliques (`e2e_test.go`, Linux) ; git réel (fetch, ancêtre, historique réécrit) ; commandes réelles `backup`/`verify`/`restore` sur le scénario « base migrée refusée par l'ancien binaire » (`cmd/bambud/upgrade_cli_test.go`) ; migration d'une installation sans interruption, idempotence, interrupteurs, installation neuve inchangée (`scripts/test-enable-auto-update.sh`, `scripts/test-install-linux-container.sh`, joués dans un conteneur Linux et dans la CI).
 
-**À valider sur le vrai serveur Zorin / Ubuntu 22.04** : `useradd` et `runuser` réels, droits 0750 empêchant `atelier-update` de lire les données ; durée et mémoire réelles de `npm ci` + `go test` sur 2 cœurs (priorité minimale) ; durcissement `ProtectSystem=strict` de l'unité avec `systemctl` ; accès réel à l'API GitHub depuis Tailscale ; `Restart=on-failure` de `atelier.service` pendant un retour arrière ; la première mise à jour réelle (à lancer d'abord avec `atelier-update --check`, puis `--now`, imprimante au repos) ; la valeur réelle de `/api/system/busy` avec la P1S en pleine impression (`printer_active`).
+Pendant une impression : `TestApplyBusyPolicy` (chaque raison, bloquante ou tolérée), `TestSysEnvBusyAllowsPrintButNotDeposit`, `TestLoadConfigAllowDuringPrint`, et de bout en bout avec le simulateur `TestRestartDuringPrintKeepsTrackingWithoutCommands` (`internal/printing`) : impression en cours, arrêt puis réouverture du service sur le même dossier de données, l'impression reste `PRINTING`, son suivi reprend et le simulateur n'a reçu **aucune** commande. Worker CAO (§ 11.11) : `internal/upgrade/duringprint_worker_test.go`. Scripts : `scripts/test-enable-auto-update.sh` (**à jouer sur Linux**, il saute sous Windows).
+
+**À valider sur le vrai serveur Zorin / Ubuntu 22.04** : `useradd` et `runuser` réels, droits 0750 empêchant `atelier-update` de lire les données ; durée et mémoire réelles de `npm ci` + `go test` sur 2 cœurs (priorité minimale) ; durcissement `ProtectSystem=strict` de l'unité avec `systemctl` ; accès réel à l'API GitHub depuis Tailscale ; `Restart=on-failure` de `atelier.service` pendant un retour arrière ; la première mise à jour réelle (à lancer d'abord avec `atelier-update --check`, puis `--now`, imprimante au repos) ; la valeur réelle de `/api/system/busy` avec la P1S en pleine impression (`print_running`, `printer_active`) ; **une vraie mise à jour installée pendant une impression** (la P1S continue, la carte de suivi revient seule, aucune commande envoyée) ; `sudo bash deploy/linux/enable-auto-update.sh` (contrôles `go version` et `runuser` depuis `/` sous un `$HOME` illisible) ; `systemctl show atelier -p Environment -p EnvironmentFiles` avec le drop-in réel (`UV_PROJECT_ENVIRONMENT`, `UV_FROZEN`) et la réinstallation non éditable de `bambu-geometry`.
 
 ### 11.10 Limites assumées
 
-- Une impression lancée par l'humain **entre** la dernière vérification d'occupation et le redémarrage (quelques secondes, la sauvegarde comprise) n'est pas retenue ; le redémarrage n'interrompt pas l'impression sur l'imprimante, mais le suivi est repris au démarrage (§ 10.3).
+- Une impression lancée par l'humain **entre** la dernière vérification d'occupation et le redémarrage (quelques secondes, la sauvegarde comprise) n'est pas retenue ; le redémarrage n'interrompt pas l'impression sur l'imprimante, mais le suivi est repris au démarrage (§ 10.3). Comme une impression en cours est désormais tolérée, c'est le cas général : seules les demandes humaines en attente et les lancements en cours d'accusé retardent l'installation.
+- Pendant le redémarrage (quelques secondes), la carte de suivi, la caméra du service et les notifications de fin ne sont pas servies ; une impression qui se termine exactement à ce moment est constatée à la reconnexion.
 - `START_UNKNOWN` bloque les mises à jour tant que l'humain n'a pas tranché : c'est voulu (on ignore si l'imprimante imprime).
 - Les commits ne sont pas vérifiés par signature GPG : la confiance repose sur la branche `main` et sa CI (docs/SECURITY.md § 16, protection de branche recommandée).
-- Le worker géométrie (`workers/geometry`) n'est resynchronisé que si son arbre git a changé ; `uv sync` y est non bloquant (le test de fumée tranche).
+- Le worker géométrie (`workers/geometry`) n'est resynchronisé que si son arbre git a changé ; `uv sync` y est non bloquant (le test de fumée tranche, § 11.11).
 - Un serveur hors ligne ne se met pas à jour (le passage journalise « réseau indisponible » et sort sans erreur).
+
+### 11.11 Worker CAO : environnement du service et vérification de la version
+
+En production l'environnement Python du worker est **hors** de son dossier (`UV_PROJECT_ENVIRONMENT=/var/lib/atelier/venvs/geometry`, `UV_FROZEN=1`, posés par un drop-in systemd du service) et le paquet `bambu-geometry` y est installé **non éditable** : copier le nouveau code dans `/opt/atelier/cad/geometry` ne suffit pas, le worker continuerait d'exécuter l'ancien paquet. Quand `workers/geometry` change, l'outil de mise à jour :
+
+1. lit l'environnement **du service** (`systemctl show atelier -p Environment -p EnvironmentFiles`, drop-ins compris, puis les fichiers d'environnement déclarés ; `Environment=` l'emporte) et en reprend toutes les variables `UV_*` ; sans `UV_PROJECT_ENVIRONMENT` ni `.venv` dans le dossier, il applique la même règle que le service (`<données>/venvs/geometry`) ;
+2. lance, sous l'utilisateur du service, `uv sync --frozen --no-dev --extra cad --reinstall-package bambu-geometry` ;
+3. après redémarrage, le test de fumée lance `uv run … python -m bambu_geometry ping` **avec ce même environnement** et compare l'**empreinte du code** que le worker rapporte (`worker.code_sha256`, SHA-256 des fichiers `.py` du paquet réellement importé : `workers/geometry/src/bambu_geometry/fingerprint.py`) à celle du code de la version installée (`internal/upgrade/worker.go`, `WorkerFingerprint`). Un paquet resté sur l'ancien code, ou un worker sans empreinte, fait **échouer** le test de fumée : retour arrière, avec réinstallation du paquet depuis l'ancien code.
+
+Autres corrections de `enable-auto-update.sh` et de l'outil : le contrôle du compte de construction appelle `go version` (go n'accepte pas `--version`), et toute commande lancée sous un autre utilisateur (`runuser`, `sudo -u`) part de `/` au lieu du dossier courant de root (souvent `/home/<admin>`, illisible : « go: cannot determine current directory »).
 
 ---
 

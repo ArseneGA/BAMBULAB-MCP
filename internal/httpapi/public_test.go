@@ -121,7 +121,7 @@ func TestPublicHealthIsReducedAndPagesAreSelfContained(t *testing.T) {
 	}
 	for _, p := range []string{"/about", "/privacy"} {
 		res, body := e.do(e.pub.URL, "GET", p, nil, "")
-		if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/html; charset=utf-8" || !strings.Contains(body, "Atelier Bambu Lab") {
+		if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/html; charset=utf-8" || !strings.Contains(body, "Printalk") || !strings.Contains(body, "Bambu Lab") {
 			t.Fatalf("%s : %d %s", p, res.StatusCode, res.Header.Get("Content-Type"))
 		}
 		low := strings.ToLower(body)

@@ -41,6 +41,7 @@ func New(c *core.Core) *mcp.Server {
 				"suivre avec get_job_status. Aucune impression ne démarre sans confirmation explicite. " +
 				"La confirmation de lancement (request_print_confirmation) et la validation d'arrêt (cancel_print) s'affichent dans la conversation, sous forme de carte : ne renvoie pas l'utilisateur vers un lien tant qu'il ne dit pas ne voir aucune carte. " +
 				"Ne demande JAMAIS à l'utilisateur son code de lancement personnel dans la conversation : il le saisit seulement dans la vue de confirmation. " +
+				"Pour toute question d'avancement (où en est l'impression, combien de temps, progression), appeler get_print_status ou get_printer_status : la carte de suivi s'affiche. " +
 				strength.InstructionText,
 		})
 	if mw := mcpLogMiddleware(c.Log); mw != nil {
@@ -92,6 +93,7 @@ func New(c *core.Core) *mcp.Server {
 	registerUploadTools(s, c)
 	registerLibraryTools(s, c)
 	registerAppViews(s, c.Catalog) // jalon 3 : vues ui://bambu/*, get_mesh_chunk (app_views.go)
+	registerCardViews(s)           // cartes bibliothèque, comparaison, coûts, bobines, impressions, imprimantes (card_views.go)
 	registerAgentTools(s, c)
 	if c.Goals != nil {
 		AddGoalTools(s, c.Goals)

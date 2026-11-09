@@ -384,8 +384,8 @@ func init() {
 {{range .V.Lines}}<p class="warn">{{.}}</p>{{end}}
 {{if .V.Files}}<p>Fichiers concernés :</p><ul>{{range .V.Files}}<li><code>{{.}}</code></li>{{end}}</ul>{{end}}
 <form method="post"{{if .PasskeyOptions}} data-pk-mode="get" data-pk-options="{{.PasskeyOptions}}"{{end}}><input type="hidden" name="nonce" value="{{.Nonce}}">
-{{if not .PasskeyRequired}}<button type="submit">{{.V.Button}}</button>{{end}}
-{{if .PasskeyOptions}}<button type="button" data-pk-go hidden>Valider avec ma passkey</button>{{end}}
+{{if not .PasskeyRequired}}<button type="submit"{{if eq .V.Kind "cleanup_files"}} class="danger"{{end}}>{{.V.Button}}</button>{{end}}
+{{if .PasskeyOptions}}<button type="button"{{if eq .V.Kind "cleanup_files"}} class="danger"{{end}} data-pk-go hidden>Valider avec ma passkey</button>{{end}}
 {{if .PasskeyRequired}}<p class="warn">Une passkey est exigée (réglage de <code>/setup/passkeys</code>) : le bouton simple et le code de lancement sont indisponibles.{{if not .PasskeyOptions}} {{if .PasskeyErr}}Passkey indisponible ici : {{.PasskeyErr}}{{else}}Aucune passkey n'est disponible : enregistre-en une sur <code>/setup/passkeys</code> ou lance <code>bambud passkey --require=off</code>.{{end}}{{end}}</p>{{end}}
 {{if and .PasskeyErr (not .PasskeyRequired)}}<p class="dim"><small>Passkey indisponible ici : {{.PasskeyErr}}</small></p>{{end}}
 <p id="pk-msg" role="status" hidden></p></form>{{if .PasskeyOptions}}<script src="/setup/passkeys/passkey.js" defer></script>{{end}}{{end}}{{template "foot"}}{{end}}`))
