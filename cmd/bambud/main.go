@@ -109,6 +109,14 @@ func main() {
 			os.Exit(restoreMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "verify":
 			os.Exit(verifyMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "upgrade":
+			os.Exit(upgradeMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "upgrade-probe":
+			os.Exit(upgradeProbeMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "upgrade-notify":
+			os.Exit(upgradeNotifyMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "schema-version":
+			os.Exit(schemaVersionMain(os.Stdout))
 		case "agent":
 			os.Exit(agentMain(os.Args[2:], os.Stdout, os.Stderr))
 		}

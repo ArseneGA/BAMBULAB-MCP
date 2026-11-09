@@ -44,6 +44,29 @@ func LockDataDir(dir string) (release func() error, err error) {
 	return l.release, nil
 }
 
+// ErrLocked : le verrou demandé est déjà tenu par un autre processus.
+var ErrLocked = errors.New("verrou déjà tenu par un autre processus")
+
+// LockPath prend un verrou OS exclusif non bloquant sur le fichier donné (créé au besoin), libéré par le système si le
+// processus meurt. Utilisé par la mise à jour automatique (une seule mise à jour à la fois ; flock(1) l'honore aussi).
+func LockPath(path string) (release func() error, err error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("fichier de verrou : %w", err)
+	}
+	ok, err := tryLock(f)
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("verrou %s : %w", path, err)
+	}
+	if !ok {
+		f.Close()
+		return nil, fmt.Errorf("%w (%s)", ErrLocked, path)
+	}
+	l := &instanceLock{f: f}
+	return l.release, nil
+}
+
 func (l *instanceLock) release() error {
 	if l == nil || l.f == nil {
 		return nil

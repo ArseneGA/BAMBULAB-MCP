@@ -123,3 +123,19 @@ jobs:
             WITH_STUDIO=0
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Les mises à jour automatiques du serveur (docs/DEPLOY-LINUX.md) n'installent qu'un commit dont TOUS les contrôles sont
+  # verts : ce job rend les scripts de déploiement vérifiés à chaque push, comme le reste.
+  deploy-scripts:
+    name: Scripts de déploiement (harnais Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntaxe des scripts
+        run: |
+          for f in deploy/linux/*.sh scripts/*.sh; do bash -n "$f" || exit 1; done
+      - name: Migration vers releases/current (arbre factice, sans root)
+        run: bash scripts/test-enable-auto-update.sh
+      - name: install.sh puis activation puis réinstallation (conteneur jetable)
+        run: docker run --rm -v "$PWD:/src:ro" -w /src golang:1.26 bash scripts/test-install-linux-container.sh

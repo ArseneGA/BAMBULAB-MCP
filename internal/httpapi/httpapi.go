@@ -33,6 +33,16 @@ func NewHandlerWithOptions(c *core.Core, opts Options) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "version": core.Version, "schema_version": v, "mcp_app_views": mcpserver.ViewsBuilt()})
 	})
+	// Occupation du service (mise à jour automatique : internal/upgrade). Lecture seule, réservée au serveur lui-même :
+	// connexion TCP loopback et aucun en-tête de proxy (un `tailscale serve` ou un reverse proxy local en ajoute),
+	// en plus du jeton d'API que le garde exige déjà. Ne fait jamais partie de /health (public).
+	mux.HandleFunc("GET /api/system/busy", func(w http.ResponseWriter, r *http.Request) {
+		if !localDirectRequest(r) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "réservé au serveur local (connexion directe en loopback)"})
+			return
+		}
+		writeJSON(w, http.StatusOK, c.Busy(r.Context()))
+	})
 	mux.HandleFunc("GET /api/capabilities", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, c.Capabilities())
 	})

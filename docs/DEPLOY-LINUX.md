@@ -468,6 +468,156 @@ Rôle : inventorier des dossiers Windows autorisés et transférer des fichiers 
 - **Aucune migration entre l'ancienne et la nouvelle version (cas actuel : schéma 130 des deux côtés)** : remettre l'ancien binaire et redémarrer suffit ; les données restent valides (fonctionnalités ajoutées = routes et sous-commandes, pas de colonne).
 - **Si la nouvelle version a migré la base** (`schema_version` de `/health` plus grand qu'avant) : l'ancien binaire **refuse de démarrer** (`store.go:156-158`) et, avec `Restart=on-failure` sans limite, tourne en boucle. La marche arrière exige de **restaurer la sauvegarde d'avant mise à jour** : arrêter le service, `bambud restore --from pre-<version>.tar.gz --data-dir /var/lib/atelier --force` avec l'**ancien** binaire, `bambud verify`, remettre l'ancien binaire, redémarrer. Les écritures faites depuis la mise à jour (jobs, imprimantes ajoutées, sessions) sont perdues : c'est pourquoi la sauvegarde est faite *avant* et vérifiée. Le retour automatique de `etape19-deploy.sh` (sur échec de `/health`) ne vaut donc que s'il remet aussi la base d'origine quand le schéma a changé.
 - Dans les deux cas, ne pas lancer `atelier-enroll` avec le binaire de la nouvelle version tant qu'on n'a pas décidé de la garder (§ 4.4).
+- **Avec les mises à jour automatiques (§ 11), ces deux cas sont traités par le programme**, y compris la restauration de la sauvegarde quand le schéma a changé.
+
+---
+
+## 11. Mises à jour automatiques
+
+> Statut : **désactivées par défaut**. Rien ne change sur un serveur tant que l'administrateur n'a pas lancé la commande du § 11.3. Les installations existantes (`install.sh` sans `--auto-update`) sont inchangées.
+
+### 11.1 Principe et garanties
+
+Le serveur **tire** les mises à jour : il interroge GitHub (`git fetch` + API publique). Rien n'est ouvert en entrée, aucune clé de déploiement ni webhook n'existe, ce qui convient à un serveur privé derrière Tailscale. Un timer systemd lance un passage toutes les 5 minutes ; un passage sans nouveauté ne fait qu'un `git fetch` et ne journalise rien.
+
+| Garantie | Mécanisme |
+|---|---|
+| Seul un commit de `main` dont **toute la CI est verte** est installé | API GitHub `check-runs` + statut combiné du commit ; rouge, annulé, en cours, inconnu (réseau, limite de débit) : on attend, on réessaie au passage suivant (`internal/upgrade/ci.go`) |
+| Jamais de redémarrage pendant une impression | `GET /api/system/busy` du service (§ 11.4) ; occupé ou **indéterminé** : reporté |
+| Rien n'est touché avant d'avoir un binaire testé | construction dans `releases/<sha>`, tests `go test -short`, validateur MCP ; un échec laisse le service intact |
+| Retour possible | sauvegarde `bambud backup` + `bambud verify` (avec `.sha256`) juste avant la bascule ; bascule par lien symbolique atomique ; versions précédentes conservées |
+| Retour arrière automatique | `/health` (version + `schema_version` attendus, stabilité 20 s), puis `scripts/smoke-linux.sh` : un échec ramène l'ancienne version, **avec restauration de la sauvegarde si le schéma de la base a changé** (§ 11.7) |
+| Une seule mise à jour à la fois | verrou `flock` `/run/lock/atelier-update.lock` (pris aussi par `install.sh`) |
+| Pas de boucle de redémarrages | un commit qui échoue ici est mémorisé et **n'est plus retenté** tant qu'un nouveau commit n'arrive pas (ou `--retry`) |
+| Historique de `main` non réécrit | le nouveau commit doit prolonger l'installé (`merge-base --is-ancestor`) ; sinon refusé et notifié |
+
+### 11.2 Architecture choisie et pourquoi
+
+Une **sous-commande Go** (`bambud upgrade --auto`, paquet `internal/upgrade`) plutôt qu'un script shell :
+
+- la logique de décision (CI, occupé, désactivé, épinglé, fenêtre, échec connu) et le scénario de **retour arrière avec restauration** sont des fonctions pures / pilotées par une interface `Env` : elles sont testées sur Windows, macOS et Linux, en CI, avec un environnement simulé et, pour les liens symboliques, sur Linux ;
+- le JSON de GitHub est lu par un vrai parseur (pas de `grep`) ; le jeton ne sort jamais dans un message d'erreur ;
+- les notifications réutilisent le système existant de `bambud` (`internal/notify`) ;
+- les effets de bord réels (git, npm, go, systemctl, runuser) sont isolés dans `internal/upgrade/sysenv.go` et `build.go` derrière des commandes enregistrables.
+
+Les parties qui sont naturellement du shell (migration d'une installation, unités systemd) sont dans `deploy/linux/enable-auto-update.sh`, testé par `scripts/test-enable-auto-update.sh`.
+
+```
+/opt/atelier/
+  bin/bambud, bambu-mcp, printer-sim   -> ../current/bin/...      (liens ; atelier.service ne change pas)
+  bin/atelier-admin, atelier-backup.sh                              (inchangés)
+  releases/<sha>/{bin,geometry,scripts,REVISION,.ready}             (construit, testé, root:root)
+  releases/legacy-<date>/                                           (copie de l'installation d'avant l'automatique)
+  current  -> releases/<sha>          previous -> version précédente
+  updater/bambud       (outil exécuté EN ROOT par le timer ; jamais remplacé par du code téléchargé : seul l'administrateur le met à jour)
+/var/lib/atelier-update/   repo (clone git), build/, state.json     (propriété de atelier-update)
+/etc/atelier/auto-update.env, auto-update.disabled, auto-update.pin, github-token (facultatifs)
+```
+
+Privilèges : l'orchestrateur tourne en root (bascule du lien, `systemctl`, ménage) mais **tout le code téléchargé** (`git`, `npm ci`, `npm run build`, `go build`, `go test`, validateur) s'exécute sous l'utilisateur `atelier-update`, avec un environnement vidé (aucun `BAMBU_*`, aucun jeton) et sans accès à `/var/lib/atelier` ni `/etc/atelier` (modes 0750). La sauvegarde, la restauration, les notifications **et le test de fumée** (un script du dépôt) s'exécutent sous `atelier`, jamais en root ; le jeton d'API est remis au test par un fichier 0600 temporaire, supprimé ensuite. L'outil de mise à jour lui-même, exécuté en root par le timer, **n'est pas remplacé automatiquement** par la version construite (sinon un commit malveillant obtiendrait root au passage suivant) : il est rafraîchi par `enable-auto-update.sh` ou `install.sh` (actions d'administrateur) ou, à vos risques, avec `ATELIER_UPDATE_REFRESH_UPDATER=1` ; il est donc **plus ancien que le service** après quelques mises à jour, ce qui est sans conséquence (il lit la base sans migration et ne dépend pas du schéma). Les processus de `atelier-update` sont tués avant la publication d'une version. L'unité est à priorité minimale (`Nice=19`, `IOSchedulingClass=idle`, `CPUWeight=20`) pour ne pas gêner le suivi de l'imprimante.
+
+### 11.3 Activation (une commande)
+
+Prérequis (tous installés pour **tous** les utilisateurs, pas dans un dossier personnel) : `git`, `curl`, `go` (version de `go.mod`), `node` ≥ 22.12, `npm`, `runuser`, `flock`. Le script le vérifie et s'arrête sans rien modifier s'il manque quelque chose.
+
+```bash
+cd <dépôt cloné sur le serveur>            # ou n'importe où si --from est donné
+sudo bash deploy/linux/enable-auto-update.sh
+```
+
+Options utiles : `--window 07:00-23:00` (jamais la nuit), `--smoke required|advisory|off`, `--keep-releases N`, `--from <livraison>` (binaire déjà construit au lieu de compiler l'outil), `--assume-sha <sha>` (commit de la version installée), `--no-start`. Idempotent : relancer ne change rien (vérifié par le harnais). Avec `install.sh` : `sudo ./install.sh --from … --auto-update [--update-window 07:00-23:00]`.
+
+Ce que fait la commande, **sans arrêter ni redémarrer le service** :
+
+1. contrôles préalables (rien n'est modifié s'ils échouent) ;
+2. crée l'utilisateur système `atelier-update` et `/var/lib/atelier-update` ;
+3. copie l'installation actuelle dans `releases/legacy-<date>` (version, commit si connu, schéma de la base dans `REVISION`) et crée `current` ;
+4. remplace `bin/bambud`, `bin/bambu-mcp`, `bin/printer-sim` par des **liens atomiques** vers `current/bin/*` : le processus en marche garde son ancien fichier ouvert, l'unité `atelier.service`, `atelier-admin` et la sauvegarde quotidienne suivent `current` ;
+5. installe l'outil (`/opt/atelier/updater/bambud`), la commande `atelier-update`, `auto-update.env`, `atelier-update.service` et `atelier-update.timer` ;
+6. joue `scripts/smoke-linux.sh` sur la version en service : s'il échoue **déjà** aujourd'hui, le mode passe à `advisory` (alerte sans retour arrière) pour ne pas annuler chaque mise à jour, et le script le dit ;
+7. active le timer et fait un contrôle à blanc (`atelier-update --check`).
+
+Le service ne sera redémarré qu'à la **première** mise à jour réellement installée, jamais pendant une impression.
+
+### 11.4 Quand une mise à jour est-elle reportée ? Définition de « occupé »
+
+`GET /api/system/busy` (lecture seule ; connexion TCP loopback **sans** en-tête de proxy, plus le jeton d'API ; absent de `/health`, public) renvoie `{"busy": bool, "reasons": [{"code","detail"}]}`. Codes (`internal/printing/busy.go`, `internal/core/busy.go`) :
+
+| Code | Signifie |
+|---|---|
+| `print_active` | un PrintJob en `PRINTING`, `START_REQUESTED` ou `START_UNKNOWN` (lancement incertain : à trancher par l'humain, `reconcile_print`) |
+| `printer_active` | un adaptateur ouvert voit l'imprimante en préparation / impression / pause (même lancée depuis Bambu Studio ou l'écran) |
+| `confirmation_pending` | une confirmation de lancement attend l'humain (jeton encore valable) |
+| `stop_pending` | une demande d'arrêt attend l'humain, ou un arrêt est en cours d'application |
+| `action_pending` | reprise / chargement / nettoyage de carte SD en attente de validation |
+| `deposit_in_progress` | découpe ou dépôt du fichier sur l'imprimante en cours |
+| `job_running` | un travail de la file (découpe, analyse, CAO, import) s'exécute |
+
+Si le service ne répond pas (arrêté) ou est trop ancien pour connaître la route, repli sur la **lecture seule de la base** (`bambud upgrade-probe` : impressions actives et travaux en cours, sans les demandes humaines en mémoire). Si tout est illisible : **traité comme occupé**. La vérification est faite avant la construction **et** de nouveau juste avant la sauvegarde : une impression démarrée pendant la construction (plusieurs minutes) reporte l'installation, la version construite est conservée pour le passage suivant. Un report est notifié **une fois** par commit.
+
+La fenêtre horaire (`ATELIER_UPDATE_WINDOW`) s'applique à l'**installation** (le redémarrage), heure locale du serveur ; elle peut passer minuit (`22:00-06:00`).
+
+### 11.5 Réglages, interrupteur, épingle
+
+Fichier `/etc/atelier/auto-update.env` (aucun secret ; relu à chaque passage) :
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `ATELIER_UPDATE_REPO` / `_BRANCH` | dépôt public / `main` | ce qui est suivi |
+| `ATELIER_UPDATE_WINDOW` | vide | plage horaire d'installation `HH:MM-HH:MM` |
+| `ATELIER_UPDATE_REQUIRED_CHECKS` | vide (tous) | noms exacts des jobs de CI exigés, séparés par `;` |
+| `ATELIER_UPDATE_KEEP_RELEASES` / `_KEEP_BACKUPS` | 3 / 5 | versions et sauvegardes `preupdate-*` conservées (la sauvegarde quotidienne a sa propre rotation) |
+| `ATELIER_UPDATE_SMOKE` | `required` | `advisory` : alerte sans retour arrière ; `off` |
+| `ATELIER_UPDATE_HEALTH_WAIT` | 180s | attente max. de `/health` après redémarrage |
+| `ATELIER_UPDATE_PATH` | écrit à l'activation | PATH de l'utilisateur de construction |
+| `ATELIER_UPDATE_REFRESH_UPDATER` | vide | `1` : remplace l'outil exécuté en root par celui de la version installée (**déconseillé**, § 11.2) |
+| `ATELIER_UPDATE_TOKEN_FILE` | `/etc/atelier/github-token` | jeton GitHub **facultatif**, lecture seule, droits **600** (refusé sinon) : relève la limite de débit (60 requêtes/heure sans jeton ; l'API n'est appelée que lorsqu'un nouveau commit existe) |
+
+- **Désactiver** : `sudo touch /etc/atelier/auto-update.disabled` (ou `sudo bash deploy/linux/enable-auto-update.sh --disable`) ; réactiver : `rm` du fichier (ou `--enable`). Désactivé, un passage ne fait **rien**, pas même un `git fetch`. Seule une mise à jour **déjà commencée** est toujours menée à son terme.
+- **Épingler une version** : `sudo atelier-update --pin current` (ou `--pin <sha>`) ; retirer : `--unpin`. Un commit épinglé doit appartenir à `origin/main` et avoir une CI verte ; le schéma ne peut pas descendre en dessous de celui de la base.
+- `sudo atelier-update --status` (installé, précédent, épingle, interrupteur, dernier passage, commits en échec), `--check` (explique ce qui serait fait, ne change rien), `--now` (ignore interrupteur et fenêtre ; CI verte et service libre restent exigés), `--retry` (retente un commit déjà échoué).
+
+### 11.6 Journaux et notifications
+
+- Journal : `journalctl -u atelier-update -f` (un passage sans nouveauté n'écrit rien ; un report, un refus, chaque étape d'une installation et chaque échec sont écrits en clair) ; `systemctl list-timers atelier-update.timer` ; état : `/var/lib/atelier-update/state.json`.
+- Les échecs (construction, retour arrière, critique) font échouer l'unité : `systemctl --failed`.
+- Notifications : évènement **`system_update`** sur les canaux ntfy / webhook / e-mail existants (page `/setup/notifications`). Pour les canaux à **liste d'évènements explicite**, ajouter `system_update` à l'abonnement. Genres : mise à jour installée, report « serveur occupé », CI rouge, construction échouée, retour arrière, retour arrière avec restauration, échec critique, refus, test de fumée en alerte. Aucun secret n'y figure. La commande `bambud upgrade-notify` ouvre la base **sans migration**.
+
+### 11.7 Retour arrière, y compris quand le schéma a changé
+
+Avant la bascule, la nouvelle version a été construite et testée mais n'a **pas encore touché la base**. Le service n'applique ses migrations qu'à son premier démarrage. Après la bascule :
+
+1. **Échec sans migration** (démarrage impossible, `/health` KO, mauvaise version, test de fumée) : arrêt, `current` remis sur l'ancienne version, redémarrage, `/health` attendu sur l'ancienne version ; **les données ne sont pas touchées**.
+2. **Échec après migration** : l'ancien binaire **refuse** une base plus récente que lui (`store.go`) : un simple retour du lien le ferait tourner en boucle. Le programme relit `schema_version` de la base (lecture seule) ; s'il dépasse celui d'avant la mise à jour, il **arrête le service, restaure la sauvegarde d'avant (`bambud restore --force` avec l'ANCIEN binaire), contrôle (`bambud verify --quick`), remet le lien, redémarre**. Les écritures faites par la version échouée (quelques secondes ou minutes) ne sont **pas détruites** : elles sont conservées à part dans `/var/lib/atelier/.pre-restore-<date>/` (base, blobs, secrets).
+3. **Retour arrière impossible** (restauration ou ancienne version qui ne répond pas) : l'état reste « en cours », une alerte **critique** est envoyée **une fois**, le passage suivant retente ; voir § 11.8.
+4. **Coupure pendant la bascule** (reboot, unité tuée) : un journal d'intention est écrit avant le lien. Au passage suivant, la nouvelle version est vérifiée (sinon retour arrière avec les mêmes informations), même si l'automatique a été désactivé entre-temps.
+5. Une base plus récente que le binaire visé (`schema` du binaire < `schema_version`) : mise à jour **refusée** (un retour en arrière de version est impossible sans restaurer une sauvegarde).
+
+Retour arrière **manuel** vers la version précédente (schéma inchangé) : `sudo ln -sfn "$(readlink /opt/atelier/previous)" /opt/atelier/current.new && sudo mv -T /opt/atelier/current.new /opt/atelier/current && sudo systemctl restart atelier`, puis `sudo atelier-update --pin current` pour que l'automatique ne la remplace pas. Si le schéma a changé, restaurer d'abord la sauvegarde `/var/backups/atelier/preupdate-*.tar.gz` avec l'ancien binaire (§ 10.5).
+
+### 11.8 Que faire si ça casse
+
+1. `sudo atelier-update --status` puis `journalctl -u atelier-update -n 200 --no-pager` : la cause est écrite (commande, dernières lignes de sortie).
+2. Service en marche mais dans la mauvaise version : `curl -s http://127.0.0.1:7878/health` (version, `schema_version`) ; `readlink /opt/atelier/current /opt/atelier/previous`.
+3. Service arrêté en boucle après une alerte critique : `systemctl stop atelier`, identifier la sauvegarde `ls -t /var/backups/atelier/preupdate-*`, `sudo -u atelier /opt/atelier/releases/<ancienne version>/bin/bambud restore --from <archive> --data-dir /var/lib/atelier --force`, `… verify --data-dir /var/lib/atelier`, remettre `current` (§ 11.7), `systemctl start atelier`. Les données de la version échouée sont dans `.pre-restore-*`.
+4. Un commit qui échoue **chaque fois** : il est déjà mis de côté. Corriger sur `main` (nouveau commit = nouvel essai), ou geler : `sudo atelier-update --pin current`.
+5. Tout arrêter : `sudo touch /etc/atelier/auto-update.disabled`.
+6. Construction qui échoue sur le serveur seulement (outil introuvable pour `atelier-update`) : `sudo runuser -u atelier-update -- env -i PATH="$(grep ^ATELIER_UPDATE_PATH /etc/atelier/auto-update.env | cut -d'"' -f2):/usr/bin" go version`.
+7. Désinstaller le mécanisme : `deploy/linux/uninstall.sh` retire aussi `releases/`, `updater/` et les unités ; les données ne sont jamais supprimées.
+
+### 11.9 Ce qui est prouvé par les tests, et ce qui ne l'est que sur le vrai serveur
+
+**Prouvé (CI et `go test`)** : décision (CI verte / rouge / en cours / inconnue, occupé, indéterminé, désactivé, épinglé, rien de neuf, fenêtre horaire, échec connu, `--now`, `--retry`) ; occupation (`internal/core/busy_test.go`, `internal/printing/busy_test.go`, `internal/httpapi/busy_test.go` : loopback seul, proxy refusé, jeton) ; lecture de la CI contre un faux GitHub (pagination, limite de débit, jeton jamais divulgué) ; ordre exact et hygiène des commandes de construction, échec à chaque étape sans rien publier ; **retour arrière simulé** : `/health` en échec (schéma inchangé), migration puis échec (restauration avant relance de l'ancienne version), restauration en échec (critique, une seule alerte), reprise après coupure ; moteur complet avec de vrais liens symboliques (`e2e_test.go`, Linux) ; git réel (fetch, ancêtre, historique réécrit) ; commandes réelles `backup`/`verify`/`restore` sur le scénario « base migrée refusée par l'ancien binaire » (`cmd/bambud/upgrade_cli_test.go`) ; migration d'une installation sans interruption, idempotence, interrupteurs, installation neuve inchangée (`scripts/test-enable-auto-update.sh`, `scripts/test-install-linux-container.sh`, joués dans un conteneur Linux et dans la CI).
+
+**À valider sur le vrai serveur Zorin / Ubuntu 22.04** : `useradd` et `runuser` réels, droits 0750 empêchant `atelier-update` de lire les données ; durée et mémoire réelles de `npm ci` + `go test` sur 2 cœurs (priorité minimale) ; durcissement `ProtectSystem=strict` de l'unité avec `systemctl` ; accès réel à l'API GitHub depuis Tailscale ; `Restart=on-failure` de `atelier.service` pendant un retour arrière ; la première mise à jour réelle (à lancer d'abord avec `atelier-update --check`, puis `--now`, imprimante au repos) ; la valeur réelle de `/api/system/busy` avec la P1S en pleine impression (`printer_active`).
+
+### 11.10 Limites assumées
+
+- Une impression lancée par l'humain **entre** la dernière vérification d'occupation et le redémarrage (quelques secondes, la sauvegarde comprise) n'est pas retenue ; le redémarrage n'interrompt pas l'impression sur l'imprimante, mais le suivi est repris au démarrage (§ 10.3).
+- `START_UNKNOWN` bloque les mises à jour tant que l'humain n'a pas tranché : c'est voulu (on ignore si l'imprimante imprime).
+- Les commits ne sont pas vérifiés par signature GPG : la confiance repose sur la branche `main` et sa CI (docs/SECURITY.md § 16, protection de branche recommandée).
+- Le worker géométrie (`workers/geometry`) n'est resynchronisé que si son arbre git a changé ; `uv sync` y est non bloquant (le test de fumée tranche).
+- Un serveur hors ligne ne se met pas à jour (le passage journalise « réseau indisponible » et sort sans erreur).
 
 ---
 

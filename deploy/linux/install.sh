@@ -20,8 +20,13 @@
 #   --no-backup-timer     n'installe pas la sauvegarde quotidienne
 #   --no-start            n'active ni ne démarre le service
 #   --no-restart          met à jour sans redémarrer un service déjà en marche (à relancer hors impression)
-#   --no-restart          met à jour sans redémarrer un service déjà en marche (à relancer hors impression)
+#   --auto-update         active ensuite les mises à jour automatiques (deploy/linux/enable-auto-update.sh) ; désactivé par défaut
+#   --update-window H-H   avec --auto-update : plage horaire d'installation (ex. 07:00-23:00)
 #   -h, --help            cette aide
+#
+# Sur un serveur dont les mises à jour automatiques sont activées (lien /opt/atelier/current), ce script installe les
+# binaires comme une NOUVELLE version dans /opt/atelier/releases/manual-* et bascule `current` : il n'écrase jamais
+# les liens de /opt/atelier/bin, et prend le même verrou que la mise à jour automatique.
 set -euo pipefail
 
 APP_USER=atelier
@@ -50,6 +55,8 @@ WITH_CAD=1
 WITH_TIMER=1
 START=1
 RESTART=1
+AUTO_UPDATE=0
+UPDATE_WINDOW=""
 
 say()  { printf '\n==> %s\n' "$*"; }
 warn() { printf 'ATTENTION : %s\n' "$*" >&2; }
@@ -70,7 +77,9 @@ while [ $# -gt 0 ]; do
     --no-backup-timer)  WITH_TIMER=0; shift ;;
     --no-start)         START=0; shift ;;
     --no-restart)       RESTART=0; shift ;;
-    -h|--help)          sed -n '2,27p' "$0"; exit 0 ;;
+    --auto-update)      AUTO_UPDATE=1; shift ;;
+    --update-window)    UPDATE_WINDOW="${2:?}"; shift 2 ;;
+    -h|--help)          sed -n '2,29p' "$0"; exit 0 ;;
     *) die "option inconnue : $1 (voir --help)" ;;
   esac
 done
@@ -137,10 +146,45 @@ install_bin() { # install_bin SRC DST
   install -m 0755 -o root -g root "$1" "$tmp"
   mv -f "$tmp" "$2"
 }
-install_bin "$BAMBUD_SRC" "$BIN_DIR/bambud"
-install_bin "$MCP_SRC" "$BIN_DIR/bambu-mcp"
 SIM_SRC="$(find_bin printer-sim || true)"
-[ -n "$SIM_SRC" ] && install_bin "$SIM_SRC" "$BIN_DIR/printer-sim"
+atomic_link() { # atomic_link CIBLE LIEN : remplacement atomique d'un lien (rename)
+  ln -s "$1" "$2.new.$$" && mv -T "$2.new.$$" "$2"
+}
+if [ -L "$OPT/current" ] || [ -L "$BIN_DIR/bambud" ]; then
+  # Mises à jour automatiques activées (enable-auto-update.sh) : /opt/atelier/bin/* sont des liens vers current/bin.
+  # Les remplacer par des fichiers (mv sur un lien) casserait le schéma releases/current : on installe une nouvelle
+  # version à côté et on bascule `current`, sous le même verrou que la mise à jour automatique.
+  echo "schéma releases/current détecté : installation comme nouvelle version"
+  mkdir -p /run/lock
+  exec 9>/run/lock/atelier-update.lock
+  flock -w 900 9 || die "une mise à jour automatique est en cours (verrou /run/lock/atelier-update.lock) : réessayer dans quelques minutes"
+  ver="$("$BAMBUD_SRC" --version 2>/dev/null | awk '{print $2; exit}')"; ver="${ver//[^A-Za-z0-9._-]/_}"; ver="${ver:-inconnue}"
+  rname="manual-$ver-$(date -u +%Y%m%dT%H%M%SZ)"
+  rdir="$OPT/releases/$rname"
+  install -d -m 0755 -o root -g root "$OPT/releases" "$rdir" "$rdir/bin"
+  install -m 0755 -o root -g root "$BAMBUD_SRC" "$rdir/bin/bambud"
+  install -m 0755 -o root -g root "$MCP_SRC" "$rdir/bin/bambu-mcp"
+  [ -n "$SIM_SRC" ] && install -m 0755 -o root -g root "$SIM_SRC" "$rdir/bin/printer-sim"
+  AGENT_SRC="$(find_bin bambu-agent || true)"
+  [ -n "$AGENT_SRC" ] && install -m 0755 -o root -g root "$AGENT_SRC" "$rdir/bin/bambu-agent"
+  schema=0
+  if grep -aq 'schema-version' "$BAMBUD_SRC"; then # jamais d'exécution d'un binaire ancien avec un argument inconnu : il démarrerait le service
+    schema="$("$BAMBUD_SRC" schema-version 2>/dev/null | head -n1)"; case "$schema" in ''|*[!0-9]*) schema=0 ;; esac
+  fi
+  printf '{\n  "sha": "",\n  "version": "%s",\n  "schema": %s,\n  "built_at": "%s",\n  "legacy": true\n}\n' "$ver" "$schema" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$rdir/REVISION"
+  oldcur="$(readlink "$OPT/current" || true)"
+  atomic_link "releases/$rname" "$OPT/current"
+  [ -z "$oldcur" ] || atomic_link "$oldcur" "$OPT/previous"
+  for n in bambud bambu-mcp printer-sim; do
+    [ -f "$rdir/bin/$n" ] && { [ -L "$BIN_DIR/$n" ] || [ ! -e "$BIN_DIR/$n" ]; } && atomic_link "../current/bin/$n" "$BIN_DIR/$n"
+  done
+  # L'outil de mise à jour suit le binaire livré s'il le connaît.
+  if [ -x "$OPT/updater/bambud" ] && grep -aq 'upgrade-probe' "$BAMBUD_SRC"; then install_bin "$BAMBUD_SRC" "$OPT/updater/bambud"; fi
+else
+  install_bin "$BAMBUD_SRC" "$BIN_DIR/bambud"
+  install_bin "$MCP_SRC" "$BIN_DIR/bambu-mcp"
+  [ -n "$SIM_SRC" ] && install_bin "$SIM_SRC" "$BIN_DIR/printer-sim"
+fi
 "$BIN_DIR/bambud" --version
 
 # --- Worker CAO ---------------------------------------------------------------------------------
@@ -413,6 +457,15 @@ if [ "$START" = 1 ]; then
   fi
 else
   echo "démarrage ignoré (--no-start) : sudo systemctl enable --now atelier.service"
+fi
+
+if [ "$AUTO_UPDATE" = 1 ]; then
+  say "Mises à jour automatiques"
+  # Migration sans interruption : le service qui vient de démarrer n'est pas touché (voir enable-auto-update.sh).
+  bash "$HERE/enable-auto-update.sh" --from "$FROM" ${UPDATE_WINDOW:+--window "$UPDATE_WINDOW"} \
+    || warn "l'activation des mises à jour automatiques a échoué (le service, lui, est installé) : relancer sudo bash $HERE/enable-auto-update.sh"
+else
+  echo "Mises à jour automatiques : non activées (sudo bash $HERE/enable-auto-update.sh pour les activer)"
 fi
 
 say "Terminé"
