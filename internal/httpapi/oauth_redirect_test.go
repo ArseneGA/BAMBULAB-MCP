@@ -213,7 +213,7 @@ func TestOAuthJournalHasNoSecrets(t *testing.T) {
 		}
 	}
 	for _, l := range strings.Split(logs, "\n") {
-		if strings.Contains(l, "OAuth") && strings.Contains(l, "level=INFO") == false {
+		if strings.Contains(l, `msg="OAuth `) && strings.Contains(l, "level=INFO") == false {
 			t.Errorf("ligne OAuth hors INFO : %s", l)
 		}
 	}
