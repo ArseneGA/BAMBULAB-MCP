@@ -1,9 +1,11 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from '@modelcontextprotocol/ext-apps';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
-import '../src/design/tokens.css';
-import '../src/design/base.css';
+import '@shared/tokens.css';
+import '@shared/fonts.css';
+import '@shared/base.css';
+import { AlertTriangle, ArrowLeft, Box as Box3, Search as SearchIcon } from '@shared/icons';
+import { Button, Card, EmptyState, Notice, Tag, applyHostContext, followSystemTheme } from '@shared';
 import '../src/viewer/viewer.css';
 import './mcp-app.css';
 import { GlbView } from '../src/viewer/GlbView';
@@ -14,6 +16,8 @@ import { LaunchConfirm, StopConfirm } from './launch';
 import { ProgressCard, normalizeProgress, type Prog } from './progress';
 import { LayerViewer, isLayersInfo, type LayersInfo } from './layers';
 import { LiveCard, normalizeLive, type Live } from './live';
+import { FormCard, ResultView } from './form';
+import { formOf, resultOf, type FormResult, type FormSpec } from './formLogic';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
@@ -25,7 +29,7 @@ import { LiveCard, normalizeLive, type Live } from './live';
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'form'; data: FormSpec } | { kind: 'done'; data: FormResult } | { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
 interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string }>; isError?: boolean }
 
@@ -34,6 +38,10 @@ const textOf = (r: ToolResultLike) => (r.content ?? []).filter((c) => c.type ===
 function classify(r: ToolResultLike): View {
   if (r.isError) return { kind: 'error', text: textOf(r) || "L'outil a renvoyé une erreur." };
   const s = r.structuredContent as Record<string, unknown> | undefined;
+  const form = formOf(s); // carte-formulaire (form.tsx) : outil appelé sans ses champs
+  if (form) return { kind: 'form', data: form };
+  const done = resultOf(s); // résumé d'une action de carte (outil appelé avec tous ses champs)
+  if (done) return { kind: 'done', data: done };
   if (isLayersInfo(s) && Array.isArray((s as { sheet_layers?: unknown }).sheet_layers)) return { kind: 'layers', data: s };
   const live = normalizeLive(s); // suivi d'impression (get_print_status, wait_for_print_change) : avant la progression d'un travail
   if (live) return { kind: 'live', data: live };
@@ -87,14 +95,17 @@ function Root() {
 
   useEffect(() => {
     const a = new App({ name: 'Atelier Bambu Lab', version: '0.3.0' });
-    const theme = (t?: string) => { if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; };
+    // Thème : celui de l'hôte (clair/sombre, variables ext-apps) ; sans information, prefers-color-scheme du navigateur.
+    let hostDriven = false;
+    const stopSystem = followSystemTheme(() => hostDriven);
+    const host = (ctx?: Parameters<typeof applyHostContext>[0]) => { if (applyHostContext(ctx)) hostDriven = true; };
     a.ontoolresult = (r) => setView(classify(r as ToolResultLike));
-    a.onhostcontextchanged = (ctx) => theme(ctx.theme);
+    a.onhostcontextchanged = (ctx) => host(ctx);
     let alive = true;
     // connect() DOIT être appelé après la pose des gestionnaires, sinon la vue reste invisible.
-    a.connect().then(() => { if (!alive) return; theme(a.getHostContext()?.theme); setApp(a); setStatus('ready'); }, () => { if (alive) setStatus('standalone'); });
+    a.connect().then(() => { if (!alive) return; host(a.getHostContext()); setApp(a); setStatus('ready'); }, () => { if (alive) setStatus('standalone'); });
     const t = window.setTimeout(() => { if (alive) setStatus((s) => (s === 'connecting' ? 'standalone' : s)); }, 4000);
-    return () => { alive = false; window.clearTimeout(t); };
+    return () => { alive = false; window.clearTimeout(t); stopSystem(); };
   }, []);
 
   if (status === 'standalone') return <Box><p className="msg">Cette vue s'affiche dans un hôte MCP Apps (Claude Desktop, par exemple). Hors d'un hôte, aucune donnée n'est disponible.</p></Box>;
@@ -102,6 +113,8 @@ function Root() {
   if (!app) return null;
   if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
   if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
+  if (view.kind === 'form') return <Box><FormCard app={app} spec={view.data} /></Box>;
+  if (view.kind === 'done') return <Box><ResultView app={app} result={view.data} /></Box>;
   if (view.kind === 'live') return <Box><LiveCard app={app} first={view.data} /></Box>;
   if (view.kind === 'progress') return <Box><ProgressCard app={app} first={view.data} /></Box>;
   if (view.kind === 'layers') return <Box><LayerViewer app={app} info={view.data} /></Box>;
@@ -124,24 +137,23 @@ function Search({ app, data, onOpen }: { app: App; data: SearchResult; onOpen: (
       if (v.kind === 'model') onOpen(v.data); else setErr(v.kind === 'error' || v.kind === 'text' ? v.text : 'Réponse inattendue');
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
-  if (data.models.length === 0) return <p className="msg">Aucun modèle ne correspond à la recherche.</p>;
+  if (data.models.length === 0) return <Card><EmptyState title="Aucun résultat" text="Aucun modèle ne correspond à la recherche." /></Card>;
   return (
-    <>
-      <header className="head"><h1>Résultats</h1><span className="mono dim">{data.models.length} sur {data.total}{data.has_more ? ' · d\'autres résultats existent' : ''}</span></header>
+    <Card title="Résultats" icon={<SearchIcon size={16} />} meta={<span className="mono">{data.models.length} sur {data.total}{data.has_more ? ' · d\'autres résultats existent' : ''}</span>}
+      footer={<span className="foot">Choisir un modèle ouvre sa fiche avec le viewer 3D.</span>}>
       <ul className="results" aria-label="Résultats de recherche">
         {data.models.map((m) => (
           <li key={m.id}>
             <button type="button" className="result" disabled={busy !== null} aria-busy={busy === m.id} onClick={() => open(m.id)}>
               <span className="r-name">{m.name}</span>
               <span className="r-meta mono">{m.formats.map((f) => f.toUpperCase()).join('/')} · {fmtDims(m.dimensions)}{m.versions > 1 ? ` · ${m.versions} versions` : ''}</span>
-              <span className="r-tags">{m.availability === 'windows_only' ? <span className="tag tag-warn">Windows seul</span> : <span className="tag">{m.collection_path ?? 'sans collection'}</span>}{m.preview.state !== 'ready' && <span className="tag">aperçu : {m.preview.state}</span>}</span>
+              <span className="r-tags">{m.availability === 'windows_only' ? <Tag tone="warn">Windows seul</Tag> : <Tag>{m.collection_path ?? 'sans collection'}</Tag>}{m.preview.state !== 'ready' && <Tag>aperçu : {m.preview.state}</Tag>}</span>
             </button>
           </li>
         ))}
       </ul>
-      {err && <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {err}</p>}
-      <p className="foot">Choisir un modèle ouvre sa fiche avec le viewer 3D.</p>
-    </>
+      {err && <Notice tone="err">{err}</Notice>}
+    </Card>
   );
 }
 
@@ -177,11 +189,7 @@ function Model({ app, data, onBack }: { app: App; data: ModelDetails; onBack?: (
   const parts = loaded?.parts ?? [];
 
   return (
-    <>
-      <header className="head">
-        {onBack && <button type="button" className="back" onClick={onBack} aria-label="Retour aux résultats"><ArrowLeft size={14} aria-hidden /> Résultats</button>}
-        <h1>{label}</h1>
-      </header>
+    <Card title={label} icon={<Box3 size={16} />} meta={onBack ? <Button size="sm" variant="ghost" icon={<ArrowLeft size={14} aria-hidden />} onClick={onBack} aria-label="Retour aux résultats">Résultats</Button> : undefined}>
       <div className="sheet">
         <div className="viewer">
           {ready
@@ -203,7 +211,7 @@ function Model({ app, data, onBack }: { app: App; data: ModelDetails; onBack?: (
       </div>
       <div className="context" role="status"><span className="dim">Sélection transmise au contexte :</span> <strong>{part ? `${label} · ${parts.find((p) => p.id === part)?.label ?? part}` : label}</strong></div>
       {data.analysis.warnings && data.analysis.warnings.length > 0 && <p className="small dim">{data.analysis.warnings[0]}</p>}
-    </>
+    </Card>
   );
 }
 

@@ -1,0 +1,56 @@
+/* Socle Printalk : cartes autonomes, badges, champs de formulaire, tableaux. Jetons de tokens.css uniquement. */
+
+/* Card */
+.card { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-4); background: var(--solid); border: 1px solid var(--hairline); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); color: var(--text-1); min-width: 0; }
+.card-head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); min-width: 0; }
+.card-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: var(--r-sm); background: var(--primary-subtle); color: var(--text-accent); }
+.card-title { flex: 1 1 9rem; font-size: var(--t-headline); font-weight: 600; letter-spacing: -0.01em; min-width: 0; overflow-wrap: anywhere; }
+.card-meta { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; color: var(--text-3); font-size: var(--t-meta); }
+.card-body { display: grid; gap: var(--sp-3); min-width: 0; }
+.card-foot { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--sp-2); padding-top: var(--sp-3); border-top: 1px solid var(--hairline); }
+.card-ok { border-color: color-mix(in srgb, var(--st-ok) 45%, var(--hairline)); }
+.card-warn { border-color: color-mix(in srgb, var(--st-wait) 50%, var(--hairline)); }
+.card-err { border-color: color-mix(in srgb, var(--st-fail) 50%, var(--hairline)); }
+
+/* Badge */
+.badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: var(--r-full); font: 500 var(--t-caption)/1 var(--sans); white-space: nowrap; background: var(--well); color: var(--text-2); }
+.badge i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.badge-run { background: var(--primary-subtle); color: var(--text-accent); }
+.badge-run i { animation: pulse-dot 1.6s infinite; }
+.badge-ok { background: color-mix(in srgb, var(--st-ok) 16%, transparent); color: var(--ok-text); }
+.badge-warn { background: color-mix(in srgb, var(--st-wait) 18%, transparent); color: var(--wait-text); }
+.badge-warn i { border-radius: 1px; transform: rotate(45deg); }
+.badge-err { background: color-mix(in srgb, var(--st-fail) 14%, transparent); color: var(--fail-text); }
+.badge-err i { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+
+/* Champs */
+.fld { display: grid; gap: var(--sp-1); min-width: 0; border: 0; padding: 0; margin: 0; }
+.fld-label { font-size: var(--t-meta); font-weight: 500; color: var(--text-2); padding: 0; }
+.fld-req { color: var(--fail-text); }
+.fld-msg { font-size: var(--t-caption); color: var(--text-3); }
+.fld-msg-err { color: var(--fail-text); }
+.fld-err .input, .fld-err .select { border-color: var(--err); }
+.num-wrap { position: relative; display: flex; align-items: center; }
+.num-wrap .num { padding-right: 52px; font-variant-numeric: tabular-nums; }
+.num-wrap .num::-webkit-inner-spin-button, .num-wrap .num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.num-unit { position: absolute; right: 12px; color: var(--text-3); font-size: var(--t-meta); pointer-events: none; }
+.color-wrap { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.color-wrap .input { max-width: 8.5rem; }
+.swatch-lg { width: var(--control-h); height: var(--control-h); border-radius: var(--r-sm); border: 1px solid var(--line-strong); flex: none; }
+.color-presets { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.swatch-btn { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); cursor: pointer; padding: 0; }
+.swatch-btn[aria-pressed='true'] { box-shadow: 0 0 0 2px var(--solid), 0 0 0 4px var(--primary); }
+.chk-list { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.chk { display: inline-flex; align-items: center; gap: var(--sp-2); font-size: var(--t-row); cursor: pointer; min-height: 24px; }
+.chk input { accent-color: var(--primary); width: 16px; height: 16px; margin: 0; }
+
+/* Tableau */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: var(--r-md); }
+.tbl { width: 100%; border-collapse: collapse; font-size: var(--t-row); }
+.tbl th, .tbl td { text-align: left; padding: 8px var(--sp-3); border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl th { font: 500 var(--t-overline)/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); background: var(--well); }
+.tbl .r { text-align: right; font-variant-numeric: tabular-nums; }
+.notice-ok { border-color: color-mix(in srgb, var(--st-ok) 40%, transparent); background: color-mix(in srgb, var(--st-ok) 11%, transparent); }
+.notice-ok > svg { color: var(--ok-text); }
+.fld .seg { justify-self: start; max-width: 100%; }

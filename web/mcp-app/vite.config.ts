@@ -10,6 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: here,
   plugins: [react(), viteSingleFile()],
+  resolve: { alias: { '@shared': resolve(here, '../shared') } },
   server: { port: 5175, strictPort: true, proxy: { '/mcp': { target, changeOrigin: true } } },
   build: {
     outDir: resolve(here, 'dist'), emptyOutDir: true, chunkSizeWarningLimit: 4000,

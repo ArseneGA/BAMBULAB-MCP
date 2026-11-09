@@ -5,18 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Atelier</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 16px; }
-  h1 { font-size: 16px; margin: 0 0 8px; }
-  .muted { opacity: .7; }
-  pre { margin: 8px 0 0; padding: 8px; border-radius: 6px; background: rgba(127,127,127,.15); overflow: auto; }
+  /* Même charte que le site et les cartes (web/shared/tokens.css), en version autonome : vert Printalk, clair/sombre. */
+  :root { color-scheme: light dark; --bg: #ffffff; --text: #14201b; --text-2: #4a5750; --line: rgba(9,90,64,.16); --well: rgba(9,90,64,.055); --accent: #0b6a46; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #16211c; --text: #eaf2ee; --text-2: #b2beb8; --line: rgba(255,255,255,.13); --well: rgba(255,255,255,.055); --accent: #5fe8b0; } }
+  :root[data-theme="dark"] { --bg: #16211c; --text: #eaf2ee; --text-2: #b2beb8; --line: rgba(255,255,255,.13); --well: rgba(255,255,255,.055); --accent: #5fe8b0; }
+  body { font: 14px/1.5 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; margin: 0; padding: 12px; background: transparent; color: var(--text); }
+  main { padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: 18px; }
+  h1 { font-size: 14.5px; font-weight: 600; margin: 0 0 8px; color: var(--accent); }
+  p { margin: 0 0 6px; color: var(--text-2); }
+  .muted { opacity: .8; }
+  pre { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--well); overflow: auto; }
 </style>
 </head>
 <body>
+<main>
 <h1>Atelier 3D</h1>
 <p>Page de démonstration du jalon 1 : aucune donnée réelle, aucun accès réseau.</p>
 <p class="muted" id="status">En attente de l'hôte…</p>
 <pre id="data" hidden></pre>
+</main>
 <script>
 // Protocole MCP Apps (postMessage JSON-RPC), implémenté directement, sans SDK.
 // NON VALIDÉ dans un hôte réel (voir docs/jalons/J1.md) : tout est gardé par try/catch
@@ -49,7 +56,7 @@
         status.textContent = 'Résultat reçu.';
       } else if (m.method === 'ui/notifications/host-context-changed') {
         var t = m.params && m.params.theme;
-        if (t) document.documentElement.style.colorScheme = t;
+        if (t) { document.documentElement.style.colorScheme = t; document.documentElement.setAttribute('data-theme', t); }
       }
     } catch (e) { status.textContent = 'Erreur : ' + e.message; }
   });

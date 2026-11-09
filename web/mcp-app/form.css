@@ -1,0 +1,18 @@
+/* Cartes-formulaires : mise en page uniquement ; champs, cartes et boutons viennent du socle (web/shared). */
+.form-card { max-width: 640px; }
+.form-intro, .form-summary { color: var(--text-2); font-size: var(--t-row); overflow-wrap: anywhere; }
+.form-summary { color: var(--text-1); font-weight: 500; }
+.form-missing, .form-info { margin: 0; font-size: var(--t-meta); color: var(--text-2); }
+.form-info { color: var(--wait-text); }
+.form-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+.form-group { display: grid; gap: var(--sp-3); border: 0; margin: 0; padding: 0; min-width: 0; }
+.form-legend { padding: 0; margin-bottom: var(--sp-2); font: 500 var(--t-overline)/1 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--sp-3) var(--sp-4); align-items: start; }
+.form-grid > div { min-width: 0; }
+.form-grid > .form-wide { grid-column: 1 / -1; }
+.fld-unit { color: var(--text-3); font-weight: 400; }
+.form-image { margin: 0; display: grid; justify-items: center; }
+.form-image img { max-width: 100%; max-height: 220px; border-radius: var(--r-md); border: 1px solid var(--hairline); background: var(--well); }
+.form-preview-empty { display: grid; place-items: center; width: 100%; height: 96px; border: 1px dashed var(--line-strong); border-radius: var(--r-md); color: var(--text-3); font-size: var(--t-meta); }
+.form-card .card-foot a.btn { text-decoration: none; }
+@media (max-width: 420px) { .form-grid { grid-template-columns: 1fr; } }

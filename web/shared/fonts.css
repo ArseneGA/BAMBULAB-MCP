@@ -1,0 +1,13 @@
+/*
+ * DM Sans embarquée (variable, graisses 100 à 1000, sous-ensemble latin : accents français, €, guillemets).
+ * Police sous licence SIL OFL 1.1 (fonts/DM-Sans-OFL.txt), ~37 Kio. La CSP des vues MCP App interdit les polices
+ * distantes : Vite incorpore ce fichier dans le bundle monofichier (data:), l'interface web le sert comme fichier.
+ * Repli propre si le fichier manque : var(--sans) enchaîne sur la police système.
+ */
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: swap;
+  src: url('./fonts/dm-sans-latin-wght.woff2') format('woff2');
+}

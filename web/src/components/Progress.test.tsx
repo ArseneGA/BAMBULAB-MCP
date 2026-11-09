@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ProgressBar } from './Progress';
-import { printSource } from '../api/progress';
+import { ProgressBar } from '@shared/components/ProgressBar';
+import { printSource } from '@shared/progress';
 import { LOGO_URL, PRODUCT_NAME, TAGLINE, pageTitle } from '../brand';
 import { mainNav, moreNav, workshopNav } from '../Shell';
 

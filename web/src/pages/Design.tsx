@@ -4,9 +4,9 @@ import {
   Button, EmptyState, ErrorState, Field, IconButton, Input, List, LoadingState, Panel, SearchInput, Segmented, Select, Slider,
   StatusDot, Tabs, Tag, Toggle, Tooltip, Tree, useToast,
 } from '../components';
-import { colorTokens, radii, spacingScale } from '../design/theme';
+import { colorTokens, radii, spacingScale } from '@shared/theme';
 import { Notice } from './common';
-import { useTheme } from '../design/theme';
+import { useTheme } from '@shared/theme';
 import './design.css';
 
 /** Exemples FICTIFS, propres à cette page de spécimen : ils n'existent dans aucun catalogue. */

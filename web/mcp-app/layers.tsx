@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { Card } from '@shared/components';
+import { Layers } from '@shared/icons';
 
 /**
  * Visionneuse de trajectoires (ui://bambu/layers.html, liée à show_layers) : curseur de couche, tracé 2D des filets
@@ -145,8 +147,7 @@ export function LayerViewer({ app, info, debounceMs = 120, playMs = 160 }: { app
 
   const used = new Set((data?.paths ?? []).map((p) => p.f));
   return (
-    <section className="layers" aria-label="Trajectoires par couche">
-      <header className="head"><h1>Trajectoires par couche</h1><span className="mono dim">plaque {info.plate} · {total} couches</span></header>
+    <Card className="layers" aria-label="Trajectoires par couche" title="Trajectoires par couche" icon={<Layers size={16} />} meta={<span className="mono">plaque {info.plate} · {total} couches</span>}>
       <canvas ref={canvas} className="layers-canvas" width={640} height={440} role="img"
         aria-label={`Couche ${layer} sur ${total}${data?.z_mm ? `, Z = ${data.z_mm.toFixed(2)} mm` : ''}`} />
       <div className="layers-ctl">
@@ -164,6 +165,6 @@ export function LayerViewer({ app, info, debounceMs = 120, playMs = 160 }: { app
       {data && data.tolerance_mm ? <p className="small dim">Couche très dense : tracé simplifié (tolérance {data.tolerance_mm} mm).</p> : null}
       {err && <p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {err}</p>}
       <p className="foot">Filets extrudés seulement (déplacements à vide et rétractions non tracés). Grille 10 mm.</p>
-    </section>
+    </Card>
   );
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { formatBytesProgress, formatEta, normalizeProgress } from '../api/progress';
-import type { Progress } from '../api/progress';
+import { formatBytesProgress, formatEta, normalizeProgress } from '../progress';
+import type { Progress } from '../progress';
 
 /**
  * Barre de progression d'un travail long : pourcentage, phase, temps restant (et octets si connus).

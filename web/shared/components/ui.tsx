@@ -16,8 +16,8 @@ export function IconButton({ label, pressed, children, className, type = 'button
 }
 
 /* ---------- Champs ---------- */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="field"><span>{label}</span>{children}</label>;
+export function Field({ label, children, hint, error }: { label: string; children: ReactNode; hint?: string; error?: string }) {
+  return <label className="field"><span>{label}</span>{children}{(error || hint) && <span className={error ? 'fld-msg fld-msg-err' : 'fld-msg'} role={error ? 'alert' : undefined}>{error ?? hint}</span>}</label>;
 }
 export function Input(p: InputHTMLAttributes<HTMLInputElement>) { return <input className="input" {...p} />; }
 export function SearchInput({ value, onChange, placeholder = 'Rechercher', ...p }: Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & { value: string; onChange: (v: string) => void }) {

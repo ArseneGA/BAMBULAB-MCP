@@ -4,7 +4,7 @@ import { House, Boxes, SlidersHorizontal, Printer, Wifi, Disc3, Coins, Shapes, L
 import type { LucideIcon } from 'lucide-react';
 import { StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
-import { useTheme } from './design/theme';
+import { useTheme } from '@shared/theme';
 import { ConnectionProvider, useConnection } from './api/hooks';
 import { api } from './api/client';
 import { EnrollGate, HttpsBanner, ServerBanner } from './pages/common';

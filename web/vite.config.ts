@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 import { PRODUCT_NAME, TAGLINE } from './src/brand';
 
 // Développement : l'interface (port 5174) relaie l'API et le MCP vers bambud (127.0.0.1:7878).
@@ -14,6 +15,7 @@ const brand = (): Plugin => ({
 
 export default defineConfig({
   plugins: [react(), brand()],
+  resolve: { alias: { '@shared': fileURLToPath(new URL('./shared', import.meta.url)) } },
   build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 900 },
   server: { port: 5174, strictPort: true, proxy: { '/api': target, '/health': target, '/mcp': target } },
 });

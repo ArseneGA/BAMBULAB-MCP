@@ -1,2 +1,1 @@
-export * from './ui';
-export * from './Progress';
+export * from '@shared/components';

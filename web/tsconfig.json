@@ -15,6 +15,8 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": { "@shared/*": ["shared/*"], "@shared": ["shared/index.ts"] },
     "noEmit": true,
     "types": [
       "vite/client"
@@ -22,6 +24,7 @@
   },
   "include": [
     "src",
+    "shared",
     "mcp-app"
   ],
   "exclude": [
