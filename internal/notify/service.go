@@ -52,11 +52,13 @@ const (
 	// EvPrintAttention : impression qui attend une action à l'écran, bloquée, injoignable, ou arrêt non appliqué (supervision).
 	EvPrintAttention = "print_attention"
 	EvQueue          = "queue_event" // file d'attente (chantier E) : prochaine impression à confirmer, file bloquée...
-	EvTest           = "test"
+	// EvSystemUpdate : mise à jour automatique du serveur (réussie, échouée, retour arrière, reportée) ; envoyé par `bambud upgrade`.
+	EvSystemUpdate = "system_update"
+	EvTest         = "test"
 )
 
 // AllEvents liste les évènements auxquels un canal peut s'abonner (EvTest est toujours livré par test_notification).
-var AllEvents = []string{EvPrintCompleted, EvPrintFailed, EvDetectionAlert, EvStartUnknown, EvPrinterOffline, EvQueue, EvPrintAttention}
+var AllEvents = []string{EvPrintCompleted, EvPrintFailed, EvDetectionAlert, EvStartUnknown, EvPrinterOffline, EvQueue, EvPrintAttention, EvSystemUpdate}
 
 // Noms de secrets par type de canal.
 var secretFields = map[string][]SecretField{

@@ -49,7 +49,8 @@ cat <<EOF
 Cette opération arrête l'Atelier Bambu et retire son logiciel :
   - services systemd atelier.service, atelier-backup.service/.timer
   - $OPT/bin (bambud, bambu-mcp, atelier-admin, atelier-backup.sh, uv) et $OPT/cad, $OPT/uv-python
-Conservés : $DATA_DIR (vos données), les sauvegardes, /etc/atelier, l'utilisateur $APP_USER, Bambu Studio.
+  - si les mises à jour automatiques sont activées : atelier-update.service/.timer, $OPT/releases, $OPT/updater, liens current/previous
+Conservés : $DATA_DIR (vos données), les sauvegardes, /etc/atelier, les utilisateurs système (atelier, atelier-update), Bambu Studio.
 EOF
 if [ "$ASSUME_YES" != 1 ]; then
   printf 'Continuer ? [o/N] '
@@ -57,19 +58,22 @@ if [ "$ASSUME_YES" != 1 ]; then
   case "$ans" in o|O|oui|OUI|y|Y) ;; *) echo "annulé"; exit 0 ;; esac
 fi
 
-for u in atelier-backup.timer atelier-backup.service atelier.service; do
+for u in atelier-update.timer atelier-update.service atelier-backup.timer atelier-backup.service atelier.service; do
   if systemctl list-unit-files "$u" >/dev/null 2>&1; then
     systemctl disable --now "$u" >/dev/null 2>&1 || true
   fi
 done
-for f in "$UNIT_DIR/atelier.service" "$UNIT_DIR/atelier-backup.service" "$UNIT_DIR/atelier-backup.timer"; do
+for f in "$UNIT_DIR/atelier.service" "$UNIT_DIR/atelier-backup.service" "$UNIT_DIR/atelier-backup.timer" "$UNIT_DIR/atelier-update.service" "$UNIT_DIR/atelier-update.timer"; do
   # Seulement les unités écrites par install.sh (une unité personnalisée à la main est laissée).
-  if [ -f "$f" ] && grep -q "Géré par deploy/linux/install.sh" "$f"; then safe_rm "$f"; elif [ -f "$f" ]; then echo "conservé (non géré par install.sh) : $f"; fi
+  if [ -f "$f" ] && grep -qE "Géré par deploy/linux/(install|enable-auto-update).sh" "$f"; then safe_rm "$f"; elif [ -f "$f" ]; then echo "conservé (non géré par install.sh) : $f"; fi
 done
 systemctl daemon-reload
 
 [ -L /usr/local/bin/atelier-admin ] && rm -f /usr/local/bin/atelier-admin
-safe_rm "$OPT/bin" "$OPT/cad" "$OPT/uv-python"
+# Mises à jour automatiques (si activées) : versions construites, liens current/previous, outil de mise à jour.
+[ -L /usr/local/sbin/atelier-update ] || [ -f /usr/local/sbin/atelier-update ] && rm -f /usr/local/sbin/atelier-update
+rm -f "$OPT/current" "$OPT/previous"
+safe_rm "$OPT/bin" "$OPT/cad" "$OPT/uv-python" "$OPT/releases" "$OPT/updater"
 
 echo
 echo "Logiciel retiré. Vos données sont intactes : $DATA_DIR"

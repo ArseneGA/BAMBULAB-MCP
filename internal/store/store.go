@@ -44,6 +44,9 @@ type Options struct {
 	BusyTimeout time.Duration
 	// Now injectable pour les tests.
 	Now func() time.Time
+	// NoMigrate ouvre la base SANS appliquer de migration (outils d'exploitation qui ne doivent jamais changer le
+	// schéma : `bambud upgrade-notify` s'exécute avec un binaire dont le schéma peut différer de celui de la base).
+	NoMigrate bool
 }
 
 // Open ouvre (et crée) la base au chemin donné puis applique les migrations.
@@ -78,6 +81,9 @@ func Open(path string, opts Options) (*Store, error) {
 		return nil, fmt.Errorf("ouverture de la base : %w", err)
 	}
 	s := &Store{db: db, now: opts.Now}
+	if opts.NoMigrate {
+		return s, nil
+	}
 	if err := s.migrate(context.Background()); err != nil {
 		db.Close()
 		return nil, err
