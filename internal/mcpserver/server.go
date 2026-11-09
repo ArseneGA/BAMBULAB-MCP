@@ -94,11 +94,12 @@ func New(c *core.Core) *mcp.Server {
 		AddInsightTools(s, c.Insights) // coût, journal, tableau de bord, post-traitement (insight_tools.go)
 	}
 	if c.Printing != nil {
-		AddPrintTools(s, c.Printing)    // chaîne d'impression (print_tools.go)
-		AddPlateTools(s, c.Printing)    // plateau multi-pièces (plate_tools.go)
-		AddLayerTools(s, c.Printing)    // visionneuse de trajectoires : show_layers, get_layer_paths (layer_tools.go)
-		AddLaunchTools(s, c)            // approbation par code de lancement depuis la vue (launch_tools.go)
-		AddRecoveryTools(s, c.Printing) // relance, reprise, chargement, fichiers de la carte, diagnostic (recovery_tools.go)
+		AddPrintTools(s, c.Printing, c.Camera) // chaîne d'impression (print_tools.go)
+		AddPlateTools(s, c.Printing)           // plateau multi-pièces (plate_tools.go)
+		AddLayerTools(s, c.Printing)           // visionneuse de trajectoires : show_layers, get_layer_paths (layer_tools.go)
+		AddLaunchTools(s, c)                   // approbation par code de lancement depuis la vue (launch_tools.go)
+		AddLiveTools(s, c)                     // carte de suivi en direct : image caméra partagée, état (live_tools.go)
+		AddRecoveryTools(s, c.Printing)        // relance, reprise, chargement, fichiers de la carte, diagnostic (recovery_tools.go)
 	}
 	if c.Camera != nil && c.Notify != nil {
 		AddCameraTools(s, c) // caméra, détection d'échec, notifications (camera_tools.go)

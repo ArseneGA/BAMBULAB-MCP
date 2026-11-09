@@ -45,7 +45,7 @@ const MSG: Record<string, string> = {
   not_set: "Aucun code de lancement n'est défini.", format: 'Le code comporte 6 à 8 chiffres.',
 };
 
-function Warning() {
+export function Warning() {
   return <p className="small code-warn" role="note"><AlertTriangle size={14} aria-hidden /> <strong>Ne tapez jamais ce code dans la conversation avec Claude</strong> : il ne se saisit qu'ici, dans ce champ.</p>;
 }
 
@@ -84,7 +84,7 @@ function Summary({ c }: { c: ConfirmationView }) {
 }
 
 /** Champ de code + bouton. onSubmit reçoit le code ; le champ est vidé AVANT l'appel. */
-function CodeForm({ label, button, needPlate, busy, onSubmit }: { label: string; button: string; needPlate: boolean; busy: boolean; onSubmit: (code: string, plate: boolean) => void }) {
+export function CodeForm({ label, button, needPlate, busy, onSubmit }: { label: string; button: string; needPlate: boolean; busy: boolean; onSubmit: (code: string, plate: boolean) => void }) {
   const [code, setCode] = useState('');
   const [plate, setPlate] = useState(false);
   const ok = CODE_RE.test(code) && (!needPlate || plate) && !busy;
@@ -101,14 +101,14 @@ function CodeForm({ label, button, needPlate, busy, onSubmit }: { label: string;
   );
 }
 
-function outcomeMessage(r: CodeApproval): string {
+export function outcomeMessage(r: CodeApproval): string {
   if (r.approved) return r.message;
   const base = MSG[r.problem ?? ''] ?? r.message;
   return r.problem === 'bad_code' && !r.locked ? `${base} Essais restants avant verrouillage : ${r.attempts_left}.` : base;
 }
 
 /** Lien de secours (toujours disponible) : ouvre la page du navigateur enregistré. */
-function BrowserLink({ app, url, text }: { app: AppLike; url: string; text: string }) {
+export function BrowserLink({ app, url, text }: { app: AppLike; url: string; text: string }) {
   const [err, setErr] = useState<string>();
   const open = async () => {
     setErr(undefined);

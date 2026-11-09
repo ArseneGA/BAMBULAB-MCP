@@ -235,6 +235,11 @@ func platePhotoForView(ctx context.Context, c *core.Core, confID string, fresh b
 // shrinkJPEG réduit un JPEG à maxW pixels de large au plus (moyenne par blocs) : une photo de caméra pleine taille
 // dépasserait la limite d'environ 150 000 caractères d'un résultat d'outil.
 func shrinkJPEG(raw []byte, maxW, quality int) ([]byte, error) {
+	return shrinkJPEGMax(raw, maxW, quality, 70_000)
+}
+
+// shrinkJPEGMax : comme shrinkJPEG, avec un plafond d'octets choisi (la qualité baisse par paliers jusqu'à le tenir, sans descendre sous 25).
+func shrinkJPEGMax(raw []byte, maxW, quality, maxBytes int) ([]byte, error) {
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
@@ -272,7 +277,7 @@ func shrinkJPEG(raw []byte, maxW, quality int) ([]byte, error) {
 		if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: q}); err != nil {
 			return nil, err
 		}
-		if out.Len() <= 70_000 || q <= 25 {
+		if out.Len() <= maxBytes || q <= 25 {
 			return out.Bytes(), nil
 		}
 	}

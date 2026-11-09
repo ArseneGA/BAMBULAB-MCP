@@ -13,17 +13,19 @@ import type { ConfirmationView } from '../src/api/printTypes';
 import { LaunchConfirm, StopConfirm } from './launch';
 import { ProgressCard, normalizeProgress, type Prog } from './progress';
 import { LayerViewer, isLayersInfo, type LayersInfo } from './layers';
+import { LiveCard, normalizeLive, type Live } from './live';
 
 /**
  * Vue MCP App de l'atelier (dossier §14.3). Servie sous ui://bambu/search.html et ui://bambu/model.html.
  * Aucune I/O réseau : tout passe par app.callServerTool (l'iframe ne peut pas joindre localhost de façon fiable).
  *  - résultat de search_models      -> liste de modèles ;
+ *  - résultat de get_print_status / wait_for_print_change -> carte de suivi en direct (live.tsx) ;
  *  - résultat de request_print_confirmation / cancel_print -> confirmation de lancement / d'arrêt par code de lancement (launch.tsx) ;
  *  - résultat de get_model_details  -> fiche compacte + viewer 3D (maillage chargé par tranches via get_mesh_chunk) ;
  *  - sélection d'une sous-partie    -> app.updateModelContext (le modèle de langage la voit au prochain tour).
  */
 
-type View = { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
+type View = { kind: 'live'; data: Live } | { kind: 'progress'; data: Prog } | { kind: 'layers'; data: LayersInfo } | { kind: 'confirm'; data: ConfirmationView } | { kind: 'stop'; stopUrl: string; question?: string } | { kind: 'search'; data: SearchResult } | { kind: 'model'; data: ModelDetails; from?: SearchResult } | { kind: 'text'; text: string } | { kind: 'error'; text: string };
 
 interface ToolResultLike { structuredContent?: unknown; content?: Array<{ type: string; text?: string }>; isError?: boolean }
 
@@ -33,6 +35,8 @@ function classify(r: ToolResultLike): View {
   if (r.isError) return { kind: 'error', text: textOf(r) || "L'outil a renvoyé une erreur." };
   const s = r.structuredContent as Record<string, unknown> | undefined;
   if (isLayersInfo(s) && Array.isArray((s as { sheet_layers?: unknown }).sheet_layers)) return { kind: 'layers', data: s };
+  const live = normalizeLive(s); // suivi d'impression (get_print_status, wait_for_print_change) : avant la progression d'un travail
+  if (live) return { kind: 'live', data: live };
   const prog = normalizeProgress(s);
   if (prog && !(s && (typeof s.confirmation_id === 'string' || Array.isArray(s.models)))) return { kind: 'progress', data: prog };
   if (s && typeof s.confirmation_id === 'string' && typeof s.binding === 'object') return { kind: 'confirm', data: s as unknown as ConfirmationView };
@@ -98,6 +102,7 @@ function Root() {
   if (!app) return null;
   if (view.kind === 'error') return <Box><p className="msg msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> {view.text}</p></Box>;
   if (view.kind === 'text') return <Box><pre className="msg-pre">{view.text}</pre></Box>;
+  if (view.kind === 'live') return <Box><LiveCard app={app} first={view.data} /></Box>;
   if (view.kind === 'progress') return <Box><ProgressCard app={app} first={view.data} /></Box>;
   if (view.kind === 'layers') return <Box><LayerViewer app={app} info={view.data} /></Box>;
   if (view.kind === 'confirm') return <Box><LaunchConfirm app={app} first={view.data} /></Box>;
