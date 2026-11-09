@@ -1,4 +1,4 @@
-# Spécifications des chantiers « game changers » (lot G1 à G8) et du suivi de projet (G9)
+# Spécifications des chantiers « game changers » (lot G1 à G8), du suivi de projet (G9) et de la refonte de la navigation (G10)
 
 Date de rédaction : 2026-11-08. Source : section « game changers » de `docs/BACKLOG.md`, `docs/strategie/ETUDE-MARCHE.md`, `docs/strategie/PLAN-SAAS.md`, et lecture du code (paquets `internal/*`, `cmd/*`, `web/src`).
 
@@ -23,6 +23,7 @@ Ces specs ont été écrites en lisant le dépôt le 2026-11-08 ; **pendant cett
 | G7 | [G7-survivre-verrouillage-bambu.md](G7-survivre-verrouillage-bambu.md) | Survivre au verrouillage Bambu | Tous | M | — |
 | G8 | [G8-tout-client-mcp.md](G8-tout-client-mcp.md) | Compatible tout client MCP + interface web autonome | Tous | M | G1 (URL publique) pour les essais distants ; idéalement après G6 |
 | G9 | [G9-suivi-de-projet.md](G9-suivi-de-projet.md) | Suivi de projet : projets, fiche pièce, fiche impression, verdict en un geste (codes PJ1 à PJ12, demande du 2026-11-09) | Makers, vendeurs, fermes | L (4 vagues) | — (s'appuie sur le journal existant ; N13 et S7 s'y branchent) |
+| G10 | [G10-refonte-navigation-tableau-de-bord.md](G10-refonte-navigation-tableau-de-bord.md) | Refonte de la navigation et vrai tableau de bord de l'interface web : 7 entrées, redirections, mobile, recherche globale, Accueil, pages serveur et cartes alignées (codes UX1 à UX12, demande du 2026-11-09) | Tous | L (4 vagues U1 à U4) | G9 (accueille projets, verdict, fiches ; U1 peut démarrer avant) |
 
 Tailles : S ≈ 1 à 2 jours d'agent, M ≈ 3 à 5 jours, L ≈ 6 à 12 jours (ordre de grandeur, tests et doc compris).
 

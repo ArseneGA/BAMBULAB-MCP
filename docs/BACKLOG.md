@@ -184,3 +184,30 @@ Spec complète : [docs/specs/G9-suivi-de-projet.md](specs/G9-suivi-de-projet.md)
 | PJ10 (I1) | Fiche d'impression | profil figé, bobine et grammes réels, durée prévue vs réelle, photos, alertes caméra, verdict | 1 |
 | PJ11 (I2) | Verdict en un geste | réussi / raté + raison / à refaire en fin d'impression : clé de toutes les stats | 1 |
 | PJ12 (I3 + I4) | Notes, étiquettes ; impression hors Printalk | notes libres sur pièce et impression ; rattacher après coup une impression faite ailleurs (niveau « déclaré ») | 4 |
+| PJ13 | Déclinaisons d'un assemblage par objectif | rapide / solide / équilibrée… : un profil par pièce selon l'objectif, totaux (temps, g, €, solidité) comparés côte à côte, « préparer tout l'assemblage » jusqu'à la confirmation humaine | 3 |
+
+## Refonte de la navigation (demande du 2026-11-09)
+
+Spec complète : [docs/specs/G10-refonte-navigation-tableau-de-bord.md](specs/G10-refonte-navigation-tableau-de-bord.md). De 11 entrées de menu et d'onglets fourre-tout à **7 entrées** (Accueil, Projets, Bibliothèque, Impressions, Imprimantes, Matières, Réglages) et un vrai tableau de bord ; accueille les écrans de G9 (PJ1 à PJ13). Rien n'est perdu : **toutes les anciennes URL redirigent** ; **aucun bouton ne lance, n'arrête ni ne reprend une impression** (« Vérifier et lancer » n'est qu'un lien vers la page de confirmation humaine existante) ; aucune API d'IA ; aucune migration par défaut.
+
+| Code | Nom | Contenu court | Vague |
+|---|---|---|---|
+| UX1 | Socle de navigation | table unique `web/src/nav.ts`, en-tête de page, fil d'Ariane, barre de chargement, page « Introuvable » | U1 |
+| UX2 | Nouvelle arborescence et redirections | 7 entrées, regroupement en onglets (≤ 4), table ancien → nouveau testée, URL serveur inchangées | U1 |
+| UX3 | Navigation mobile | barre basse 5 emplacements avec libellés, feuille « Plus », cibles ≥ 44 px | U1 |
+| UX4 | Vocabulaire sans jargon | glossaire appliqué, table de libellés unique `labels.ts` (site, pages serveur, cartes) | U1 (continu) |
+| UX5 | États vides, chargements, erreurs | squelettes, barre de progression, états vides en 3 éléments, erreurs en 3 parties | U1, U2 |
+| UX6 | Tableau de bord « Accueil » | À faire, imprimante en direct + caméra, projets en cours, dernières impressions + verdict en un geste, chiffres du mois, bobines basses | U2 (v1), U3 (complet, avec PJ1) |
+| UX7 | Impressions | vues À faire / En cours et en file / Terminées / Bilan, fiche impression adressable (PJ10) | U2 |
+| UX8 | Regroupements | Matières, Imprimantes (modèles connus, calibration), Bibliothèque (gabarits, corbeille), Réglages (tarifs, suivi, sécurité, agent Windows) | U2 |
+| UX9 | Recherche globale | `/` et Ctrl/Cmd+K, résultats groupés ; filtres typés avec PJ4 ; aucune interprétation de phrase côté serveur | U2 (v1), U4 |
+| UX10 | Pages serveur alignées | `/confirm`, `/stop`, `/enroll`, `/setup/*`, OAuth : mêmes jetons (test de parité), vocabulaire, lien de retour ; aucun élément de sécurité retiré | U3 |
+| UX11 | Cartes MCP ↔ pages web | composants partagés `@shared`, mêmes libellés, carte `workshop` = Accueil compact | U3 |
+| UX12 | Accessibilité et mode sombre | AA, clavier, focus, mouvement réduit, captures clair/sombre 375/768/1440, recette | transversal, U4 |
+
+## Idées du 2026-11-09 (soir)
+
+| Code | Idée | Contenu | Dépend de |
+|---|---|---|---|
+| R1 | **Résultat de RDM dans Blender** | Après un calcul de résistance, la pièce colorée par les contraintes (zones fragiles, déplacements, légende, étiquette « hypothèse » sur les charges supposées) s'ouvre dans le Blender du PC via l'extension Printalk pour Blender (jamais de Blender côté serveur). Le serveur prépare le maillage coloré ; l'extension l'importe. | Extension Blender, test de résistance |
+| R2 | **PDF d'un projet, granularité au choix, commenté par Claude** | « Le PDF du projet » avec niveau choisi : vue d'ensemble (chiffres, avancement), par pièce (versions, profils, impressions), par impression (photos tous les 10 %, réglages réels, verdict). Claude ajoute ses commentaires par section ou par photo : il les écrit dans la conversation et les passe à l'outil ; le serveur ne fait que la mise en page (aucune API d'IA). | G9 (PJ2, PJ5, PJ10), export de projet (22) |
