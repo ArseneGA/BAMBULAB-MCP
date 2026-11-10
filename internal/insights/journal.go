@@ -123,8 +123,8 @@ type LogEntry struct {
 	Origin        string    `json:"origin,omitempty" jsonschema:"printalk | external (déclarée hors Printalk)"`
 	PartCount     int       `json:"part_count,omitempty" jsonschema:"exemplaires de la pièce sur la plaque (défaut 1)"`
 	Reached100    bool      `json:"reached_100,omitempty" jsonschema:"l'impression est allée jusqu'à 100 % (la pièce compte imprimée, verdict ou pas)"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func outcomeOf(state string) string {
