@@ -80,6 +80,7 @@ func AddExportTools(s *mcp.Server, c *core.Core) {
 				return nil, ExportStartOut{}, err
 			}
 			fmt.Fprintf(&sb, "Archive prête (%s, %d entrées). Téléchargement (valable jusqu'à %s) : %s\n", humanSize(rec.SizeBytes), rec.Summary.Files, out.Link.ExpiresAt.Local().Format("15:04"), out.Link.URL)
+			sb.WriteString(linkNote(out.Link))
 		case export.StateFailed:
 			return nil, ExportStartOut{}, fmt.Errorf("l'export a échoué : %s", rec.Error)
 		default:
@@ -127,6 +128,7 @@ func AddExportTools(s *mcp.Server, c *core.Core) {
 			}
 			out.Next = export.PublishSteps
 			fmt.Fprintf(&sb, "Archive prête : %s (%s). Téléchargement (valable jusqu'à %s) : %s\n", rec.FileName, humanSize(rec.SizeBytes), out.Link.ExpiresAt.Local().Format("15:04"), out.Link.URL)
+			sb.WriteString(linkNote(out.Link))
 		case export.StateFailed:
 			fmt.Fprintf(&sb, "L'export a échoué : %s\n", rec.Error)
 		case export.StateExpired:
@@ -145,6 +147,18 @@ func writeWarnings(sb *strings.Builder, warns []string, skipped []export.Skip) {
 	for _, k := range skipped {
 		fmt.Fprintf(sb, "Laissé de côté : %s — %s\n", k.Name, k.Reason)
 	}
+}
+
+// linkNote : l'avertissement qui accompagne un lien. Adresse publique restreinte : joignable hors du réseau privé,
+// mais toujours signée et limitée dans le temps ; sinon le lien ne s'ouvre que depuis le réseau privé.
+func linkNote(l *export.Link) string {
+	if l == nil {
+		return ""
+	}
+	if l.Public {
+		return "Ce lien est signé et limité dans le temps ; il s'ouvre depuis Internet (adresse publique restreinte), sans autre accès à l'atelier. Ne le partage qu'à qui doit télécharger l'archive.\n"
+	}
+	return "Ce lien ne s'ouvre que depuis le réseau privé de l'atelier (aucune adresse publique configurée : --public-listen-url).\n"
 }
 
 func humanSize(n int64) string {

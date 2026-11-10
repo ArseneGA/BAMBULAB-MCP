@@ -50,6 +50,10 @@ func publicAllowed(r *http.Request) bool {
 	if isUploadLinkRequest(r) {
 		return true
 	}
+	// Téléchargement d'une archive d'export par URL signée (FB13) : GET|HEAD /api/exports/exp_<hex>.zip?exp&sig.
+	if isPublicExportDownload(r) {
+		return true
+	}
 	return false
 }
 
@@ -96,7 +100,8 @@ func buildPublic(c *core.Core, opts Options, human *humanauth.Service, svc *oaut
 	registerOAuthRoutes(mux, svc, human, &popts, true) // renseigne popts.extraBearer / popts.challenge
 	mux.Handle("/mcp", mcpHandler(c, server))
 	registerPublicPages(mux, popts)
-	registerUploadLink(mux, c) // PUT|POST /upload/{jeton} : envoi à usage unique, seule exception d'écriture de la liste blanche
+	registerUploadLink(mux, c)   // PUT|POST /upload/{jeton} : envoi à usage unique, seule exception d'écriture de la liste blanche
+	registerPublicExport(mux, c) // GET|HEAD /api/exports/{id}.zip?exp&sig : URL signée seulement (FB13)
 	mux.HandleFunc("/", publicNotFound)
 
 	lim := newPublicLimiter(popts)

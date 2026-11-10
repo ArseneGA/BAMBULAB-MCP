@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -65,6 +66,44 @@ func registerExport(mux *http.ServeMux, c *core.Core) {
 	mux.HandleFunc("POST /api/exports/{id}/link", func(w http.ResponseWriter, r *http.Request) {
 		l, err := svc.Link(r.Context(), r.PathValue("id"))
 		reply(c, w, l, err, http.StatusOK)
+	})
+}
+
+// exportIDRe : forme exacte d'un identifiant d'export (contracts.NewID("exp") : « exp_ » + 24 hexadécimaux).
+var exportIDRe = regexp.MustCompile(`^exp_[0-9a-f]{24}$`)
+
+// isPublicExportDownload : GET|HEAD /api/exports/exp_<24 hex>.zip?exp=…&sig=…, le SEUL chemin d'export ouvert sur
+// la surface publique restreinte (FB13). La signature (HMAC à portée « export », expiration) est vérifiée par
+// serveExport ; sans elle, ou avec une forme inattendue, la liste blanche répond 404.
+func isPublicExportDownload(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	p, ok := strings.CutPrefix(r.URL.Path, "/api/exports/")
+	if !ok {
+		return false
+	}
+	id, ok := strings.CutSuffix(p, ".zip")
+	if !ok || !exportIDRe.MatchString(id) {
+		return false
+	}
+	q := r.URL.Query()
+	return q.Get("exp") != "" && q.Get("sig") != ""
+}
+
+// registerPublicExport : téléchargement d'une archive par URL signée sur l'écouteur public. Aucune autre route
+// d'export (liste, état, création de lien) n'y existe.
+func registerPublicExport(mux *http.ServeMux, c *core.Core) {
+	if c.Export == nil {
+		return
+	}
+	mux.HandleFunc("GET /api/exports/{file}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := strings.CutSuffix(r.PathValue("file"), ".zip")
+		if !ok {
+			publicNotFound(w, r)
+			return
+		}
+		serveExport(c, w, r, id)
 	})
 }
 

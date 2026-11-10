@@ -36,6 +36,26 @@ type Deps struct {
 	Version string
 	// Retention : durée de conservation d'une archive prête (défaut DefaultRetention).
 	Retention time.Duration
+	// LinkTTL : durée de validité d'un lien de téléchargement signé (défaut DefaultLinkTTL ; bornée à
+	// [MinLinkTTL, MaxLinkTTL] par New).
+	LinkTTL time.Duration
+}
+
+// ParseLinkTTL lit une durée Go (« 90m », « 4h ») pour BAMBU_EXPORT_LINK_TTL. Vide : le défaut. Hors bornes : refusée
+// (jamais corrigée en silence).
+func ParseLinkTTL(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return DefaultLinkTTL, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("durée du lien d'export %q invalide : attendu une durée comme 90m ou 4h", s)
+	}
+	if d < MinLinkTTL || d > MaxLinkTTL {
+		return 0, fmt.Errorf("durée du lien d'export %s hors bornes : entre %s et %s", d, MinLinkTTL, MaxLinkTTL)
+	}
+	return d, nil
 }
 
 // Service produit et sert les archives d'export.
@@ -56,6 +76,10 @@ func New(d Deps) (*Service, error) {
 	if d.Retention <= 0 {
 		d.Retention = DefaultRetention
 	}
+	if d.LinkTTL <= 0 {
+		d.LinkTTL = DefaultLinkTTL
+	}
+	d.LinkTTL = min(max(d.LinkTTL, MinLinkTTL), MaxLinkTTL)
 	s := &Service{d: d, dir: filepath.Join(d.DataDir, "exports")}
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return nil, fmt.Errorf("dossier des exports : %w", err)
@@ -246,10 +270,14 @@ func (s *Service) path(id string) string { return filepath.Join(s.dir, id+".zip"
 
 // Link produit une URL de téléchargement signée (LinkTTL). Refuse un export non prêt ou expiré.
 func (s *Service) Link(ctx context.Context, id string) (*Link, error) {
-	return s.LinkTTL(ctx, id, LinkTTL)
+	return s.LinkTTL(ctx, id, s.d.LinkTTL)
 }
 
-// LinkTTL est Link avec une durée choisie (tests : durée négative = lien déjà expiré).
+// LinkTTL est Link avec une durée choisie (tests : durée négative = lien déjà expiré). Une durée positive est
+// plafonnée à MaxLinkTTL ET à la conservation de l'archive : un lien ne survit jamais au fichier qu'il ouvre.
+//
+// Adresse (FB13) : quand l'écouteur public restreint existe, l'URL principale est celle de cet écouteur (joignable
+// hors du réseau privé), avec la MÊME signature HMAC ; l'URL du réseau privé reste donnée dans PrivateURL.
 func (s *Service) LinkTTL(ctx context.Context, id string, ttl time.Duration) (*Link, error) {
 	rec, err := s.Get(ctx, id)
 	if err != nil {
@@ -258,8 +286,21 @@ func (s *Service) LinkTTL(ctx context.Context, id string, ttl time.Duration) (*L
 	if err := readyErr(rec); err != nil {
 		return nil, err
 	}
-	path, abs, exp := s.d.Catalog.SignedScopedURL(Scope, Segment, id, ".zip", ttl)
-	return &Link{URL: abs, Path: path, ExpiresAt: exp, FileName: rec.FileName, SizeBytes: rec.SizeBytes}, nil
+	if ttl > MaxLinkTTL {
+		ttl = MaxLinkTTL
+	}
+	if left := rec.ExpiresAt.Sub(s.now()); ttl > left {
+		if left <= 0 {
+			return nil, fmt.Errorf("%w : l'export %s a expiré ; relancer export_project", catalog.ErrNotFound, rec.ID)
+		}
+		ttl = left
+	}
+	path, priv, exp := s.d.Catalog.SignedScopedURL(Scope, Segment, id, ".zip", ttl)
+	l := &Link{URL: priv, Path: path, ExpiresAt: exp, FileName: rec.FileName, SizeBytes: rec.SizeBytes}
+	if base, public := s.d.Catalog.UploadLinkBase(); public {
+		l.URL, l.PrivateURL, l.Public = base+path, priv, true
+	}
+	return l, nil
 }
 
 func readyErr(rec Record) error {

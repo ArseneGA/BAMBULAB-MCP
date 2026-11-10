@@ -73,6 +73,85 @@ func countGcodeLayers(zf *zip.File) (int, error) {
 	return n, nil
 }
 
+// layerMeta : une couche brute du G-code (un marqueur CHANGE_LAYER).
+type layerMeta struct {
+	Z           float64
+	SupportOnly bool // tous les types (FEATURE) de la couche sont des supports : couche intercalaire, pas une couche de la pièce
+}
+
+func isSupportFeature(name string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(name)), "support")
+}
+
+// indexGcodeLayers lit le G-code et décrit chaque couche brute (hauteur Z, couche de supports seulement ou non).
+// Avec des supports en arbre, le trancheur intercale des couches à des hauteurs propres aux supports : elles
+// gonflent le nombre de marqueurs CHANGE_LAYER sans être des couches de la pièce. Une couche sans ligne FEATURE
+// hérite du type de la précédente.
+func indexGcodeLayers(zf *zip.File) ([]layerMeta, error) {
+	rc, err := zf.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	br := bufio.NewReaderSize(rc, 1<<20)
+	var out []layerMeta
+	var hasSupport, hasOther, inLayer, prevSupportOnly bool
+	flush := func() {
+		if !inLayer {
+			return
+		}
+		so := hasSupport && !hasOther
+		if !hasSupport && !hasOther {
+			so = prevSupportOnly
+		}
+		out[len(out)-1].SupportOnly = so
+		prevSupportOnly = so
+	}
+	for {
+		line, rerr := br.ReadString('\n')
+		if len(line) > 4096 {
+			line = line[:4096]
+		}
+		l := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(l, "; CHANGE_LAYER"):
+			flush()
+			out = append(out, layerMeta{})
+			inLayer, hasSupport, hasOther = true, false, false
+		case strings.HasPrefix(l, "; Z_HEIGHT:") && inLayer:
+			out[len(out)-1].Z, _ = strconv.ParseFloat(strings.TrimSpace(strings.TrimPrefix(l, "; Z_HEIGHT:")), 64)
+		case strings.HasPrefix(l, "; FEATURE:") && inLayer:
+			if isSupportFeature(strings.TrimPrefix(l, "; FEATURE:")) {
+				hasSupport = true
+			} else {
+				hasOther = true
+			}
+		}
+		if rerr != nil {
+			break
+		}
+	}
+	flush()
+	return out, nil
+}
+
+// partLayers rend les numéros bruts (à partir de 1) des couches de la pièce, dans l'ordre : les couches de
+// supports seuls en sont exclues. Si tout est support (cas dégénéré), toutes les couches sont gardées.
+func partLayers(metas []layerMeta) (raw []int, skipped int) {
+	for i, m := range metas {
+		if !m.SupportOnly {
+			raw = append(raw, i+1)
+		}
+	}
+	if len(raw) == 0 {
+		for i := range metas {
+			raw = append(raw, i+1)
+		}
+		return raw, 0
+	}
+	return raw, len(metas) - len(raw)
+}
+
 // scanGcode lit le G-code une fois et rend les segments extrudés des couches demandées (numérotées à partir de 1).
 // La lecture s'arrête après la plus haute couche demandée.
 func scanGcode(zf *zip.File, want map[int]bool) (*gcodeScan, error) {
@@ -494,18 +573,35 @@ func renderLayerSheet(archive, sha string, plate int, sp sheetParams, w, h int) 
 	if total == 0 {
 		return nil, invalidf("aucun marqueur CHANGE_LAYER dans le G-code de la plaque %d", plate)
 	}
+	// Couches de la PIÈCE : les couches intercalaires de supports (arbre) ne sont ni comptées ni choisies, pour que
+	// « L12/841 » corresponde à la pièce et que les vignettes soient réparties par hauteur sur la pièce.
+	metas, err := indexGcodeLayers(zf)
+	if err != nil {
+		return nil, err
+	}
+	rawOf, skipped := partLayers(metas)
+	rawTotal := total
+	total = len(rawOf)
 	sel, note, err := pickLayers(total, sp.Layers, sp.EveryN, sp.MaxTiles, sp.GIF)
 	if err != nil {
 		return nil, err
 	}
+	if skipped > 0 {
+		note = strings.TrimSpace(note + fmt.Sprintf(" %d couche(s) de supports seuls ignorée(s) (%d marqueurs CHANGE_LAYER, %d couches de la pièce) ; numéros = couches de la pièce", skipped, rawTotal, total))
+	}
 	want := map[int]bool{}
 	for _, l := range sel {
-		want[l] = true
+		want[rawOf[l-1]] = true
 	}
 	gs, err := scanGcode(zf, want)
 	if err != nil {
 		return nil, err
 	}
+	byPart := map[int]*gcodeLayer{}
+	for _, l := range sel {
+		byPart[l] = gs.Layers[rawOf[l-1]]
+	}
+	gs.Layers = byPart
 	var all []*gcodeLayer
 	used := map[int]bool{}
 	nseg := 0
@@ -571,7 +667,7 @@ func renderLayerSheet(archive, sha string, plate int, sp sheetParams, w, h int) 
 	return &PreviewOutput{Kind: "gcode_layers", Width: img.Bounds().Dx(), Height: img.Bounds().Dy(), Legend: lines, PNG: b, Layers: sel,
 		Represented:    []string{"segments d'extrusion de chaque couche choisie, colorés par type (FEATURE)", "numéro de couche et hauteur Z dans chaque vignette"},
 		NotRepresented: []string{"déplacements à vide", "rétractions et purges", "épaisseur réelle des filets", "couches non choisies", "temps"},
-		Render:         map[string]any{"plate": plate, "layers": sel, "layers_total": total, "tiles": n, "columns": cols, "segments": nseg, "artifact_sha256": sha, "view_mm": []float64{vb.w(), vb.h()}}}, nil
+		Render:         map[string]any{"plate": plate, "layers": sel, "layers_total": total, "layers_raw_total": rawTotal, "support_only_layers_skipped": skipped, "tiles": n, "columns": cols, "segments": nseg, "artifact_sha256": sha, "view_mm": []float64{vb.w(), vb.h()}}}, nil
 }
 
 func joinInts(a []int) string {
