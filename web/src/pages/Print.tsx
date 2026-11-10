@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Box, ExternalLink, Plus, RefreshCw, ScanSearch, ShieldCheck } from 'lucide-react';
 import { Button, EmptyState, Field, Input, Panel, ProgressBar, Segmented, Select, Tag, Toggle, useToast } from '../components';
 import { api, assetUrl, describeError } from '../api/client';
@@ -35,12 +35,9 @@ export const isTodoJob = (j: PrintJob) => ['PREPARED', 'VALIDATED', 'UPLOADED', 
 /**
  * Liste des travaux d'impression et détail du travail ouvert (ex-« Historique » de l'écran Impressions, logique inchangée) :
  * les vues de G10 (À faire, En cours, Terminées) en sont des réglages. `views` : filtres proposés (le premier est le défaut) ; `filter` : tri côté écran.
- * Le travail ouvert se retrouve aussi dans l'URL (?job=…).
+ * Chaque ligne mène à la fiche adressable de l'impression (/impressions/:id).
  */
 export function JobsView({ title, views, filter, empty }: { title: string; views: HistoryView[]; filter?: (j: PrintJob) => boolean; empty: { title: string; text: string; action?: ReactNode } }) {
-  const [sp, setSp] = useSearchParams();
-  const jid = sp.get('job') ?? '';
-  const setJid = (id: string) => { const n = new URLSearchParams(sp); if (id) n.set('job', id); else n.delete('job'); setSp(n, { replace: true }); };
   const printers = useAsync((s) => api.printers(s), []);
   const [view, setView] = useState<HistoryView>(views[0]);
   const [grouped, setGrouped] = useState(false);
@@ -51,7 +48,6 @@ export function JobsView({ title, views, filter, empty }: { title: string; views
 
   const plist = printers.data?.printers ?? [];
   const shown = (jobs.data?.print_jobs ?? []).filter((j) => (filter ? filter(j) : true));
-  const job = jobs.data?.print_jobs.find((j) => j.id === jid);
   const toast = useToast();
   const prog = jobs.data?.progress ?? {};
   const counts = jobs.data?.counts ?? {};
@@ -73,12 +69,11 @@ export function JobsView({ title, views, filter, empty }: { title: string; views
             <>{d.groups.map((g) => (
               <details key={g.model_id || 'none'} open className="prt-group">
                 <summary><strong>{g.model_name}</strong> · {g.count} impression(s){g.failed > 0 && ` · ${g.failed} échec(s)`}</summary>
-                <JobRows jobs={g.jobs.filter((j) => (filter ? filter(j) : true))} jid={jid} setJid={setJid} prog={prog} history={history} printers={plist} />
+                <JobRows jobs={g.jobs.filter((j) => (filter ? filter(j) : true))} prog={prog} history={history} printers={plist} />
               </details>))}</>
-          ) : <JobRows jobs={shown} jid={jid} setJid={setJid} prog={prog} history={history} printers={plist} />}
+          ) : <JobRows jobs={shown} prog={prog} history={history} printers={plist} />}
         </Async>
       </Panel>
-      {job && <JobDetail key={job.id} job={job} printer={plist.find((p) => p.id === job.printer_id)} progress={prog[job.id]} onChange={jobs.reload} />}
     </div>
   );
 }
@@ -89,7 +84,7 @@ export function NewDirectJob() {
   const printers = useAsync((s) => api.printers(s), []);
   const plist = printers.data?.printers ?? [];
   if (!printers.data) return null;
-  return <NewJob printers={plist} defaultPrinter={plist[0]?.id} onCreated={(j) => nav(`/impressions?vue=en-cours&job=${encodeURIComponent(j.id)}`)} />;
+  return <NewJob printers={plist} defaultPrinter={plist[0]?.id} onCreated={(j) => nav(`/impressions/${encodeURIComponent(j.id)}`)} />;
 }
 
 export function stateText(j: PrintJob, p?: JobProgress): string {
@@ -118,7 +113,7 @@ export function LaunchButton({ job, size = 'sm', onNeedConfirm }: { job: PrintJo
   return <Button variant="primary" size={size} icon={<ShieldCheck size={13} />} disabled={busy} onClick={go} title="Ouvre la page de confirmation du serveur : c'est là que vous approuvez le lancement. Ce bouton ne lance rien.">{busy ? 'Demande…' : 'Vérifier et lancer'}</Button>;
 }
 
-export function JobRows({ jobs, jid, setJid, prog, history, printers }: { jobs: PrintJob[]; jid: string; setJid: (id: string) => void; prog: Record<string, JobProgress>; history: (a: 'archive' | 'trash' | 'restore', ids: string[]) => void; printers: PrinterView[] }) {
+export function JobRows({ jobs, prog, history, printers }: { jobs: PrintJob[]; prog: Record<string, JobProgress>; history: (a: 'archive' | 'trash' | 'restore', ids: string[]) => void; printers: PrinterView[] }) {
   return (
     <ul className="jobs" aria-label="Impressions">
       {jobs.map((j) => {
@@ -126,12 +121,12 @@ export function JobRows({ jobs, jid, setJid, prog, history, printers }: { jobs: 
         const active = ACTIVE.includes(j.state);
         const pr = printers.find((x) => x.id === j.printer_id);
         return (
-          <li key={j.id} className={`job${jid === j.id ? ' sel' : ''}`}>
+          <li key={j.id} className="job">
             <span className="job-th" aria-hidden><Box size={22} /></span>
-            <button type="button" className="job-main" aria-pressed={jid === j.id} onClick={() => setJid(jid === j.id ? '' : j.id)}>
+            <Link className="job-main" to={`/impressions/${encodeURIComponent(j.id)}`}>
               <b>{j.name ?? j.id}</b>
               <span className="job-note">{j.last_error ? j.last_error : `${pr?.name ?? j.printer_id}${j.plate ? ` · plaque ${j.plate}` : ''} · ${fmtDate(j.updated_at)}`}</span>
-            </button>
+            </Link>
             <span className={`pill ${pillClass(j.state)}`}><i />{stateText(j, p)}</span>
             <span className="job-acts">
               <LaunchButton job={j} />
@@ -203,7 +198,7 @@ export function NewJob({ printers, defaultPrinter, onCreated }: { printers: Prin
 
 function trays(ams: number): string[] { return ['ext', ...Array.from({ length: ams * 4 }, (_, i) => `ams${Math.floor(i / 4) + 1}:${(i % 4) + 1}`)]; }
 
-function JobDetail({ job, printer, progress, onChange }: { job: PrintJob; printer?: PrinterView; progress?: JobProgress; onChange: () => void }) {
+export function JobDetail({ job, printer, progress, onChange }: { job: PrintJob; printer?: PrinterView; progress?: JobProgress; onChange: () => void }) {
   const toast = useToast();
   const step = stepIndex(job);
   const filaments = job.summary?.filament_presets ?? [];

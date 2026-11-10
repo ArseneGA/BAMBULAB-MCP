@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Moon, Sun, X } from 'lucide-react';
-import { StatusDot, ToastProvider } from './components';
+import { Moon, Search, Sun, X } from 'lucide-react';
+import { SearchPanel, StatusDot, ToastProvider, useSearchShortcut } from './components';
 import type { Status } from './components';
 import { MobileTabBar, NavProgress, RouteFallback, useRouteBusy } from './components';
 import { useTheme } from '@shared/theme';
@@ -84,7 +84,7 @@ function ThemeButton() {
   );
 }
 
-function Sidebar({ badges }: { badges: Record<string, number> }) {
+function Sidebar({ badges, onSearch }: { badges: Record<string, number>; onSearch: () => void }) {
   const c = useConnection();
   const [count, setCount] = useState<number>();
   useEffect(() => {
@@ -99,6 +99,7 @@ function Sidebar({ badges }: { badges: Record<string, number> }) {
         <img className="brand-logo" src={LOGO_URL} alt="" width={36} height={36} />
         <div><b>{PRODUCT_NAME}</b><small>{TAGLINE}</small></div>
       </Link>
+      <button type="button" className="search-btn" onClick={onSearch} aria-label="Rechercher (raccourci : barre oblique ou Ctrl+K)"><Search size={15} aria-hidden /><span>Rechercher</span><kbd aria-hidden>/</kbd></button>
       <nav className="nav" aria-label="Navigation principale">
         {NAV.map((e) => {
           const I = e.icon;
@@ -137,6 +138,8 @@ function Frame() {
   const c = useConnection();
   const busy = useRouteBusy();
   const todo = useTodoCount();
+  const [searching, setSearching] = useState(false);
+  useSearchShortcut(() => setSearching(true));
   useFocusHeading();
   const badges = { accueil: todo, impressions: todo };
   return (
@@ -145,15 +148,17 @@ function Frame() {
       <div className="halos" aria-hidden><div className="halo a" /><div className="halo b" /><div className="halo c" /><div className="halo d" /></div>
       <a className="skip-link" href="#contenu">Aller au contenu</a>
       <div className="app">
-        <Sidebar badges={badges} />
+        <Sidebar badges={badges} onSearch={() => setSearching(true)} />
         <div className="app-body">
           <header className="topbar">
             <Link to="/" className="brand" aria-label={`${PRODUCT_NAME}, accueil`}><img className="brand-logo" src={LOGO_URL} alt="" width={28} height={28} /><b>{PRODUCT_NAME}</b></Link>
+            <button type="button" className="search-btn-icon" onClick={() => setSearching(true)} aria-label="Rechercher"><Search size={20} aria-hidden /></button>
           </header>
           <div className="banners"><ServerBanner /><HttpsBanner />{c.server === 'online' && <MenuChangedBanner />}</div>
           <Main />
         </div>
       </div>
+      <SearchPanel open={searching} onClose={() => setSearching(false)} />
       <MobileTabBar badges={badges} sheetExtra={<div className="sheet-foot"><ServiceLine /><ThemeButton /></div>} />
     </>
   );
