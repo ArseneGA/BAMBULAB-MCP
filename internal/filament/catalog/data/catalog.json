@@ -1,0 +1,7593 @@
+{
+ "schema": 1,
+ "generated": "2026-11-10",
+ "sources": [
+  {
+   "kind": "official_profile",
+   "ref": "Bambu Studio resources/profiles/BBL (version 02.09.00.74) : filament/filaments_color_codes.json (fichier du 2026-11-02), filament/Bambu *.json, info/nozzle_incompatibles.json",
+   "retrieved": "2026-11-10",
+   "note": "profils installés avec Bambu Studio, lus hors ligne ; couleurs, noms FR/EN, températures, densité, diamètre, dureté de buse requise"
+  },
+  {
+   "kind": "official_site",
+   "ref": "https://wiki.bambulab.com/en/general/bambu-filament-drying-cover",
+   "retrieved": "2026-11-10",
+   "note": "plages de séchage sur plateau chauffant, 12 h, rapportées par une recherche web (page non téléchargeable en direct : HTTP 402) ; valeur indicative"
+  }
+ ],
+ "drying_heatbed": {
+  "source_kind": "official_site",
+  "source": "https://wiki.bambulab.com/en/general/bambu-filament-drying-cover",
+  "retrieved": "2026-11-10",
+  "hours": 12,
+  "ranges_c": {
+   "PLA": [
+    65,
+    75
+   ],
+   "PETG": [
+    75,
+    85
+   ],
+   "ABS": [
+    90,
+    100
+   ],
+   "ASA": [
+    90,
+    100
+   ],
+   "TPU": [
+    80,
+    90
+   ]
+  }
+ },
+ "families": [
+  {
+   "id": "GFA00",
+   "name": "PLA Basic",
+   "preset_line": "Bambu PLA Basic",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 21.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Basic @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA01",
+   "name": "PLA Matte",
+   "preset_line": "Bambu PLA Matte",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "matte",
+   "finish_fr": "mat",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.32,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Matte @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA02",
+   "name": "PLA Metal",
+   "preset_line": "Bambu PLA Metal",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "metal",
+   "finish_fr": "métal",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.25,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Metal @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA05",
+   "name": "PLA Silk",
+   "preset_line": "Bambu PLA Silk",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "silk",
+   "finish_fr": "soie",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 230,
+   "nozzle_temp_first_layer_c": 230,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.32,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.6",
+     "0.8"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Silk @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA06",
+   "name": "PLA Silk+",
+   "preset_line": "Bambu PLA Silk+",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "silk",
+   "finish_fr": "soie",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 230,
+   "nozzle_temp_first_layer_c": 230,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.27,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.6",
+     "0.8"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Silk+ @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA07",
+   "name": "PLA Marble",
+   "preset_line": "Bambu PLA Marble",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "marble",
+   "finish_fr": "marbre",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.22,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.2"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Marble @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA08",
+   "name": "PLA Sparkle",
+   "preset_line": "Bambu PLA Sparkle",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "sparkle",
+   "finish_fr": "paillettes",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.2"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Sparkle @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA09",
+   "name": "PLA Tough",
+   "preset_line": "Bambu PLA Tough",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Tough @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA10",
+   "name": "PLA Tough+",
+   "preset_line": "Bambu PLA Tough+",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 245,
+   "nozzle_temp_first_layer_c": 245,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.21,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 21.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Tough+ @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA11",
+   "name": "PLA Aero",
+   "preset_line": "Bambu PLA Aero",
+   "type": "PLA-AERO",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "aero",
+   "finish_fr": "allégé (mousse)",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 30,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.21,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 6.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.6",
+     "0.8"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Aero @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA12",
+   "name": "PLA Glow",
+   "preset_line": "Bambu PLA Glow",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "glow",
+   "finish_fr": "phosphorescent",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Glow @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA13",
+   "name": "PLA Dynamic",
+   "preset_line": "Bambu PLA Dynamic",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "dynamic",
+   "finish_fr": "dynamique",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Dynamic @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA15",
+   "name": "PLA Galaxy",
+   "preset_line": "Bambu PLA Galaxy",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "galaxy",
+   "finish_fr": "galaxie",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.19,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 21.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.2"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Galaxy @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA16",
+   "name": "PLA Wood",
+   "preset_line": "Bambu PLA Wood",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "wood",
+   "finish_fr": "bois",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.21,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.2"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Wood @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA17",
+   "name": "PLA Translucent",
+   "preset_line": "Bambu PLA Translucent",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "translucent",
+   "finish_fr": "translucide",
+   "translucent": true,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.22,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.2"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Translucent @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA18",
+   "name": "PLA Lite",
+   "preset_line": "Bambu PLA Lite",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 210,
+   "nozzle_temp_first_layer_c": 210,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.4,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 16.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Lite @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA19",
+   "name": "PLA Pure",
+   "preset_line": "Bambu PLA Pure",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.24,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Pure @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA20",
+   "name": "PLA Palette",
+   "preset_line": "Bambu PLA Palette",
+   "type": "PLA",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 21.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA Palette @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFA50",
+   "name": "PLA-CF",
+   "preset_line": "Bambu PLA-CF",
+   "type": "PLA-CF",
+   "class": "PLA",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 45,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.22,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PLA-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFB00",
+   "name": "ABS",
+   "preset_line": "Bambu ABS",
+   "type": "ABS",
+   "class": "ABS",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 270,
+   "nozzle_temp_first_layer_c": 260,
+   "bed_temp_c": {
+    "engineering_plate": 90,
+    "high_temp_plate": 90,
+    "textured_pei": 90
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 80,
+   "density_g_cm3": 1.04,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 28.6,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu ABS @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFB01",
+   "name": "ASA",
+   "preset_line": "Bambu ASA",
+   "type": "ASA",
+   "class": "ASA",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 270,
+   "nozzle_temp_first_layer_c": 270,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 35,
+   "density_g_cm3": 1.05,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu ASA @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFB02",
+   "name": "ASA Aero",
+   "preset_line": "Bambu ASA-Aero",
+   "type": "ASA-AERO",
+   "class": "ASA",
+   "vendor": "Bambu Lab",
+   "finish": "aero",
+   "finish_fr": "allégé (mousse)",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 270,
+   "nozzle_temp_first_layer_c": 270,
+   "bed_temp_c": {
+    "engineering_plate": 90,
+    "high_temp_plate": 90,
+    "textured_pei": 90
+   },
+   "fan_min_pct": 30,
+   "fan_max_pct": 50,
+   "density_g_cm3": 0.99,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.6",
+     "0.8"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu ASA-Aero @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFB50",
+   "name": "ABS-GF",
+   "preset_line": "Bambu ABS-GF",
+   "type": "ABS-GF",
+   "class": "ABS",
+   "vendor": "Bambu Lab",
+   "finish": "glass",
+   "finish_fr": "fibre de verre",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 270,
+   "nozzle_temp_first_layer_c": 260,
+   "bed_temp_c": {
+    "engineering_plate": 90,
+    "high_temp_plate": 90,
+    "textured_pei": 90
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.08,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu ABS-GF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFB51",
+   "name": "ASA-CF",
+   "preset_line": "Bambu ASA-CF",
+   "type": "ASA-CF",
+   "class": "ASA",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 275,
+   "nozzle_temp_first_layer_c": 275,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 25,
+   "density_g_cm3": 1.02,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu ASA-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFC00",
+   "name": "PC",
+   "preset_line": "Bambu PC",
+   "type": "PC",
+   "class": "PC",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 280,
+   "nozzle_temp_first_layer_c": 270,
+   "bed_temp_c": {
+    "engineering_plate": 110,
+    "high_temp_plate": 110,
+    "textured_pei": 110
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 60,
+   "density_g_cm3": 1.185,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PC @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFC01",
+   "name": "PC FR",
+   "preset_line": "Bambu PC FR",
+   "type": "PC",
+   "class": "PC",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 280,
+   "nozzle_temp_first_layer_c": 270,
+   "bed_temp_c": {
+    "engineering_plate": 110,
+    "high_temp_plate": 110,
+    "textured_pei": 110
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 60,
+   "density_g_cm3": 1.19,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PC FR @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFG00",
+   "name": "PETG Basic",
+   "preset_line": "Bambu PETG Basic",
+   "type": "PETG",
+   "class": "PETG",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 255,
+   "nozzle_temp_first_layer_c": 255,
+   "bed_temp_c": {
+    "engineering_plate": 70,
+    "high_temp_plate": 70,
+    "textured_pei": 70
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 40,
+   "density_g_cm3": 1.25,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "drying_bed_temp_c": 80,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PETG Basic @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFG01",
+   "name": "PETG Translucent",
+   "preset_line": "Bambu PETG Translucent",
+   "type": "PETG",
+   "class": "PETG",
+   "vendor": "Bambu Lab",
+   "finish": "translucent",
+   "finish_fr": "translucide",
+   "translucent": true,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 245,
+   "nozzle_temp_first_layer_c": 250,
+   "bed_temp_c": {
+    "engineering_plate": 70,
+    "high_temp_plate": 70,
+    "textured_pei": 70
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.25,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 6.0,
+   "drying_bed_temp_c": 80,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "incompatible_nozzles": {
+    "Standard": [
+     "0.2"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PETG Translucent @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFG02",
+   "name": "PETG HF",
+   "preset_line": "Bambu PETG HF",
+   "type": "PETG",
+   "class": "PETG",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 245,
+   "nozzle_temp_first_layer_c": 230,
+   "bed_temp_c": {
+    "engineering_plate": 70,
+    "high_temp_plate": 70,
+    "textured_pei": 70
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 40,
+   "density_g_cm3": 1.28,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 21.0,
+   "drying_bed_temp_c": 80,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PETG HF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFG03",
+   "name": "PETG Matte",
+   "preset_line": "Bambu PETG Matte",
+   "type": "PETG",
+   "class": "PETG",
+   "vendor": "Bambu Lab",
+   "finish": "matte",
+   "finish_fr": "mat",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 255,
+   "nozzle_temp_first_layer_c": 255,
+   "bed_temp_c": {
+    "engineering_plate": 70,
+    "high_temp_plate": 70,
+    "textured_pei": 70
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 40,
+   "density_g_cm3": 1.25,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "drying_bed_temp_c": 80,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PETG Matte @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFG50",
+   "name": "PETG-CF",
+   "preset_line": "Bambu PETG-CF",
+   "type": "PETG-CF",
+   "class": "PETG",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 255,
+   "nozzle_temp_first_layer_c": 255,
+   "bed_temp_c": {
+    "engineering_plate": 70,
+    "high_temp_plate": 70,
+    "textured_pei": 70
+   },
+   "fan_min_pct": 0,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.25,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 14.0,
+   "drying_bed_temp_c": 80,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PETG-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFN04",
+   "name": "PAHT-CF",
+   "preset_line": "Bambu PAHT-CF",
+   "type": "PA-CF",
+   "class": "PA",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 290,
+   "nozzle_temp_first_layer_c": 290,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.06,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PAHT-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFN05",
+   "name": "PA6-CF",
+   "preset_line": "Bambu PA6-CF",
+   "type": "PA6-CF",
+   "class": "PA",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 275,
+   "nozzle_temp_first_layer_c": 275,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.1,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PA6-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFN06",
+   "name": "PPA-CF",
+   "preset_line": "Bambu PPA-CF",
+   "type": "PPA-CF",
+   "class": "PA",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 290,
+   "nozzle_temp_first_layer_c": 290,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.17,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "drying_bed_temp_c": 100,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PPA-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFN08",
+   "name": "PA6-GF",
+   "preset_line": "Bambu PA6-GF",
+   "type": "PA-GF",
+   "class": "PA",
+   "vendor": "Bambu Lab",
+   "finish": "glass",
+   "finish_fr": "fibre de verre",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 290,
+   "nozzle_temp_first_layer_c": 290,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.14,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PA6-GF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFS02",
+   "name": "Support for PLA",
+   "preset_line": "Bambu Support For PLA",
+   "type": "PLA",
+   "class": "SUPPORT",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": true,
+   "soluble": false,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 40,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.3,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "drying_bed_temp_c": 70,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu Support For PLA @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFS03",
+   "name": "Support for PA/PET",
+   "preset_line": "Bambu Support For PA/PET",
+   "type": "PA",
+   "class": "SUPPORT",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": true,
+   "soluble": false,
+   "nozzle_temp_c": 280,
+   "nozzle_temp_first_layer_c": 280,
+   "bed_temp_c": {
+    "engineering_plate": 100,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 0,
+   "fan_max_pct": 60,
+   "density_g_cm3": 1.22,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu Support For PA/PET @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFS04",
+   "name": "PVA",
+   "preset_line": "Bambu PVA",
+   "type": "PVA",
+   "class": "SUPPORT",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": true,
+   "soluble": true,
+   "nozzle_temp_c": 220,
+   "nozzle_temp_first_layer_c": 220,
+   "bed_temp_c": {
+    "cool_plate": 45,
+    "high_temp_plate": 55,
+    "textured_pei": 55
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.27,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 6.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PVA @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFS05",
+   "name": "Support for PLA/PETG",
+   "preset_line": "Bambu Support For PLA/PETG",
+   "type": "PLA",
+   "class": "SUPPORT",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": true,
+   "soluble": false,
+   "nozzle_temp_c": 210,
+   "nozzle_temp_first_layer_c": 210,
+   "bed_temp_c": {
+    "cool_plate": 35,
+    "high_temp_plate": 60,
+    "textured_pei": 60
+   },
+   "fan_min_pct": 20,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.19,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 6.0,
+   "drying_bed_temp_c": 80,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu Support For PLA/PETG @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFS06",
+   "name": "Support for ABS",
+   "preset_line": "Bambu Support for ABS",
+   "type": "ABS",
+   "class": "SUPPORT",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": true,
+   "soluble": false,
+   "nozzle_temp_c": 270,
+   "nozzle_temp_first_layer_c": 260,
+   "bed_temp_c": {
+    "engineering_plate": 90,
+    "high_temp_plate": 90,
+    "textured_pei": 90
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.16,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 6.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu Support for ABS @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFT01",
+   "name": "PET-CF",
+   "preset_line": "Bambu PET-CF",
+   "type": "PET-CF",
+   "class": "PET",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 270,
+   "nozzle_temp_first_layer_c": 270,
+   "bed_temp_c": {
+    "engineering_plate": 80,
+    "high_temp_plate": 100,
+    "textured_pei": 100
+   },
+   "fan_min_pct": 10,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.29,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 8.0,
+   "drying_bed_temp_c": 90,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PET-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFT02",
+   "name": "PPS-CF",
+   "preset_line": "Bambu PPS-CF",
+   "type": "PPS-CF",
+   "class": "PPS",
+   "vendor": "Bambu Lab",
+   "finish": "carbon",
+   "finish_fr": "fibre de carbone",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 320,
+   "nozzle_temp_first_layer_c": 320,
+   "bed_temp_c": {
+    "engineering_plate": 110,
+    "high_temp_plate": 110,
+    "textured_pei": 110
+   },
+   "fan_min_pct": 0,
+   "fan_max_pct": 30,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 6.0,
+   "drying_bed_temp_c": 100,
+   "required_nozzle_hrc": 40,
+   "hardened_nozzle_required": true,
+   "incompatible_nozzles": {
+    "High Flow": [
+     "0.4"
+    ],
+    "E3D High Flow": [
+     "0.4"
+    ]
+   },
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu PPS-CF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFU00",
+   "name": "TPU 95A HF",
+   "preset_line": "Bambu TPU 95A HF",
+   "type": "TPU",
+   "class": "TPU",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 230,
+   "nozzle_temp_first_layer_c": 230,
+   "bed_temp_c": {
+    "cool_plate": 30,
+    "engineering_plate": 30,
+    "high_temp_plate": 35,
+    "textured_pei": 35
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.22,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 12.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu TPU 95A HF @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFU01",
+   "name": "TPU 95A",
+   "preset_line": "Bambu TPU 95A",
+   "type": "TPU",
+   "class": "TPU",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 230,
+   "nozzle_temp_first_layer_c": 230,
+   "bed_temp_c": {
+    "cool_plate": 30,
+    "engineering_plate": 30,
+    "high_temp_plate": 35,
+    "textured_pei": 35
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.22,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 15.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu TPU 95A @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFU02",
+   "name": "TPU for AMS",
+   "preset_line": "Bambu TPU for AMS",
+   "type": "TPU-AMS",
+   "class": "TPU",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 230,
+   "nozzle_temp_first_layer_c": 230,
+   "bed_temp_c": {
+    "cool_plate": 30,
+    "engineering_plate": 30,
+    "high_temp_plate": 35,
+    "textured_pei": 35
+   },
+   "fan_min_pct": 20,
+   "fan_max_pct": 50,
+   "density_g_cm3": 1.26,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 18.0,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu TPU for AMS @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFU03",
+   "name": "TPU 90A",
+   "preset_line": "Bambu TPU 90A",
+   "type": "TPU",
+   "class": "TPU",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 225,
+   "nozzle_temp_first_layer_c": 225,
+   "bed_temp_c": {
+    "cool_plate": 30,
+    "engineering_plate": 30,
+    "high_temp_plate": 35,
+    "textured_pei": 35
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.24,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 2.8,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu TPU 90A @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFU04",
+   "name": "TPU 85A",
+   "preset_line": "Bambu TPU 85A",
+   "type": "TPU",
+   "class": "TPU",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 225,
+   "nozzle_temp_first_layer_c": 225,
+   "bed_temp_c": {
+    "cool_plate": 30,
+    "engineering_plate": 30,
+    "high_temp_plate": 35,
+    "textured_pei": 35
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.18,
+   "diameter_mm": 1.75,
+   "max_volumetric_speed_mm3_s": 2.2,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu TPU 85A @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  },
+  {
+   "id": "GFU06",
+   "name": "TPU 75A (2.85mm)",
+   "preset_line": "Bambu TPU 75A(2.85mm)",
+   "type": "TPU",
+   "class": "TPU",
+   "vendor": "Bambu Lab",
+   "finish": "standard",
+   "finish_fr": "standard",
+   "translucent": false,
+   "support_material": false,
+   "soluble": false,
+   "nozzle_temp_c": 225,
+   "nozzle_temp_first_layer_c": 225,
+   "bed_temp_c": {
+    "cool_plate": 30,
+    "engineering_plate": 30,
+    "high_temp_plate": 35,
+    "textured_pei": 35
+   },
+   "fan_min_pct": 100,
+   "fan_max_pct": 100,
+   "density_g_cm3": 1.18,
+   "diameter_mm": 2.85,
+   "max_volumetric_speed_mm3_s": 2.2,
+   "required_nozzle_hrc": 3,
+   "hardened_nozzle_required": false,
+   "confidence": "official_profile",
+   "source": {
+    "kind": "official_profile",
+    "ref": "Bambu Studio profiles/BBL/filament/Bambu TPU 75A(2.85mm) @base.json (+ héritage fdm_filament_*), info/nozzle_incompatibles.json",
+    "profile_version": "02.09.00.74",
+    "retrieved": "2026-11-10"
+   }
+  }
+ ],
+ "colors": [
+  {
+   "id": "GFA00-10100",
+   "family_id": "GFA00",
+   "color_code": "10100",
+   "tray_color_code": "W1",
+   "name": {
+    "de": "Jade-Weiß",
+    "en": "Jade White",
+    "it": "Bianco giada",
+    "fr": "Blanc de jade",
+    "es": "Blanco jade"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10101",
+   "family_id": "GFA00",
+   "color_code": "10101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10102",
+   "family_id": "GFA00",
+   "color_code": "10102",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Silber",
+    "en": "Silver",
+    "it": "Argento",
+    "fr": "Argenté",
+    "es": "Plateado"
+   },
+   "hex": [
+    "#A6A9AA"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10103",
+   "family_id": "GFA00",
+   "color_code": "10103",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#8E9089"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10104",
+   "family_id": "GFA00",
+   "color_code": "10104",
+   "tray_color_code": "D2",
+   "name": {
+    "de": "Hellgrau",
+    "en": "Light Gray",
+    "it": "Grigio chiaro",
+    "fr": "Gris clair",
+    "es": "Gris claro"
+   },
+   "hex": [
+    "#D1D3D5"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10105",
+   "family_id": "GFA00",
+   "color_code": "10105",
+   "tray_color_code": "D3",
+   "name": {
+    "de": "Dunkelgrau",
+    "en": "Dark Gray",
+    "it": "Grigio scuro",
+    "fr": "Gris foncé",
+    "es": "Gris oscuro"
+   },
+   "hex": [
+    "#545454"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10200",
+   "family_id": "GFA00",
+   "color_code": "10200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#C12E1F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10201",
+   "family_id": "GFA00",
+   "color_code": "10201",
+   "tray_color_code": "P0",
+   "name": {
+    "de": "Beige",
+    "en": "Beige",
+    "it": "Beige",
+    "fr": "Beige",
+    "es": "Beis"
+   },
+   "hex": [
+    "#F7E6DE"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10202",
+   "family_id": "GFA00",
+   "color_code": "10202",
+   "tray_color_code": "P6",
+   "name": {
+    "de": "Magenta",
+    "en": "Magenta",
+    "it": "Magenta",
+    "fr": "Magenta",
+    "es": "Magenta"
+   },
+   "hex": [
+    "#EC008C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10203",
+   "family_id": "GFA00",
+   "color_code": "10203",
+   "tray_color_code": "P1",
+   "name": {
+    "de": "Pink",
+    "en": "Pink",
+    "it": "Rosa",
+    "fr": "Rose",
+    "es": "Rosa"
+   },
+   "hex": [
+    "#F55A74"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10204",
+   "family_id": "GFA00",
+   "color_code": "10204",
+   "tray_color_code": "R3",
+   "name": {
+    "de": "Heißes Pink",
+    "en": "Hot Pink",
+    "it": "Fucsia",
+    "fr": "Rose vif",
+    "es": "Rosa fucsia"
+   },
+   "hex": [
+    "#F5547C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10205",
+   "family_id": "GFA00",
+   "color_code": "10205",
+   "tray_color_code": "R2",
+   "name": {
+    "de": "Kastanienrot",
+    "en": "Maroon Red",
+    "it": "Rosso bordeaux",
+    "fr": "Rouge marron",
+    "es": "Rojo granate"
+   },
+   "hex": [
+    "#9D2235"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10300",
+   "family_id": "GFA00",
+   "color_code": "10300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Orange",
+    "en": "Orange",
+    "it": "Arancione",
+    "fr": "Orange",
+    "es": "Naranja"
+   },
+   "hex": [
+    "#FF6A13"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10301",
+   "family_id": "GFA00",
+   "color_code": "10301",
+   "tray_color_code": "A1",
+   "name": {
+    "de": "Kürbis-Orange",
+    "en": "Pumpkin Orange",
+    "it": "Arancione zucca",
+    "fr": "Orange citrouille",
+    "es": "Naranja calabaza"
+   },
+   "hex": [
+    "#FF9016"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10400",
+   "family_id": "GFA00",
+   "color_code": "10400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#F4EE2A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10401",
+   "family_id": "GFA00",
+   "color_code": "10401",
+   "tray_color_code": "Y4",
+   "name": {
+    "de": "Gold",
+    "en": "Gold",
+    "it": "Oro",
+    "fr": "Doré",
+    "es": "Dorado"
+   },
+   "hex": [
+    "#E4BD68"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10402",
+   "family_id": "GFA00",
+   "color_code": "10402",
+   "tray_color_code": "Y2",
+   "name": {
+    "de": "Sonnenblumen-Gelb",
+    "en": "Sunflower Yellow",
+    "it": "Giallo girasole",
+    "fr": "Jaune tournesol",
+    "es": "Amarillo girasol"
+   },
+   "hex": [
+    "#FEC600"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10501",
+   "family_id": "GFA00",
+   "color_code": "10501",
+   "tray_color_code": "G6",
+   "name": {
+    "de": "Bambusgrün",
+    "en": "Bambu Green",
+    "it": "Verde bambù",
+    "fr": "Vert bambou",
+    "es": "Verde bambú"
+   },
+   "hex": [
+    "#00AE42"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10502",
+   "family_id": "GFA00",
+   "color_code": "10502",
+   "tray_color_code": "G2",
+   "name": {
+    "de": "Mistelzweig-Grün",
+    "en": "Mistletoe Green",
+    "it": "Verde vischio",
+    "fr": "Vert gui",
+    "es": "Verde muérdago"
+   },
+   "hex": [
+    "#3F8E43"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10503",
+   "family_id": "GFA00",
+   "color_code": "10503",
+   "tray_color_code": "G3",
+   "name": {
+    "de": "Hellgrün",
+    "en": "Bright Green",
+    "it": "Verde brillante",
+    "fr": "Vert vif",
+    "es": "Verde brillante"
+   },
+   "hex": [
+    "#BECF00"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10601",
+   "family_id": "GFA00",
+   "color_code": "10601",
+   "tray_color_code": "B9",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#0A2989"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10602",
+   "family_id": "GFA00",
+   "color_code": "10602",
+   "tray_color_code": "B1",
+   "name": {
+    "de": "Blau-Grau",
+    "en": "Blue Gray",
+    "it": "Grigio blu",
+    "fr": "Bleu gris",
+    "es": "Gris azulado"
+   },
+   "hex": [
+    "#5B6579"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10603",
+   "family_id": "GFA00",
+   "color_code": "10603",
+   "tray_color_code": "B8",
+   "name": {
+    "de": "Cyan",
+    "en": "Cyan",
+    "it": "Ciano",
+    "fr": "Cyan",
+    "es": "Cian"
+   },
+   "hex": [
+    "#0086D6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10604",
+   "family_id": "GFA00",
+   "color_code": "10604",
+   "tray_color_code": "B3",
+   "name": {
+    "de": "Kobaltblau",
+    "en": "Cobalt Blue",
+    "it": "Blu cobalto",
+    "fr": "Bleu cobalt",
+    "es": "Azul cobalto"
+   },
+   "hex": [
+    "#0056B8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10605",
+   "family_id": "GFA00",
+   "color_code": "10605",
+   "tray_color_code": "B5",
+   "name": {
+    "de": "Türkis",
+    "en": "Turquoise",
+    "it": "Turchese",
+    "fr": "Turquoise",
+    "es": "Turquesa"
+   },
+   "hex": [
+    "#00B1B7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10700",
+   "family_id": "GFA00",
+   "color_code": "10700",
+   "tray_color_code": "P5",
+   "name": {
+    "de": "Lila",
+    "en": "Purple",
+    "it": "Viola",
+    "fr": "Violet",
+    "es": "Púrpura"
+   },
+   "hex": [
+    "#5E43B7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10701",
+   "family_id": "GFA00",
+   "color_code": "10701",
+   "tray_color_code": "P2",
+   "name": {
+    "de": "Indigo-Violett",
+    "en": "Indigo Purple",
+    "it": "Viola indaco",
+    "fr": "Violet indigo",
+    "es": "Púrpura índigo"
+   },
+   "hex": [
+    "#482960"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10800",
+   "family_id": "GFA00",
+   "color_code": "10800",
+   "tray_color_code": "N0",
+   "name": {
+    "de": "Braun",
+    "en": "Brown",
+    "it": "Marrone",
+    "fr": "Marron",
+    "es": "Marrón"
+   },
+   "hex": [
+    "#9D432C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10801",
+   "family_id": "GFA00",
+   "color_code": "10801",
+   "tray_color_code": "Y3",
+   "name": {
+    "de": "Bronze",
+    "en": "Bronze",
+    "it": "Bronzo",
+    "fr": "Bronze",
+    "es": "Bronce"
+   },
+   "hex": [
+    "#847D48"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10802",
+   "family_id": "GFA00",
+   "color_code": "10802",
+   "tray_color_code": "N1",
+   "name": {
+    "de": "Kakaobraun",
+    "en": "Cocoa Brown",
+    "it": "Marrone cacao",
+    "fr": "Marron cacao",
+    "es": "Marrón cacao"
+   },
+   "hex": [
+    "#6F5034"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10900",
+   "family_id": "GFA00",
+   "color_code": "10900",
+   "tray_color_code": "M0",
+   "name": {
+    "de": "Arktisches Flüstern",
+    "en": "Arctic Whisper",
+    "it": "Arctic Whisper",
+    "fr": "Murmure arctique",
+    "es": "Susurro ártico"
+   },
+   "hex": [
+    "#9CDBD9",
+    "#FFFFFF"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10901",
+   "family_id": "GFA00",
+   "color_code": "10901",
+   "tray_color_code": "M1",
+   "name": {
+    "de": "Sonnenbrise",
+    "en": "Solar Breeze",
+    "it": "Solar Breeze",
+    "fr": "Brise solaire",
+    "es": "Brisa solar"
+   },
+   "hex": [
+    "#E94B3C",
+    "#FFFFFF"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10902",
+   "family_id": "GFA00",
+   "color_code": "10902",
+   "tray_color_code": "M2",
+   "name": {
+    "de": "Meer und Wiese",
+    "en": "Ocean to Meadow",
+    "it": "Azzurro/verde con gradazione",
+    "fr": "Océan à Prairie",
+    "es": "Del océano a la pradera"
+   },
+   "hex": [
+    "#307FE2",
+    "#54FF9B"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10903",
+   "family_id": "GFA00",
+   "color_code": "10903",
+   "tray_color_code": "M3",
+   "name": {
+    "de": "Zitrus-Pink",
+    "en": "Pink Citrus",
+    "it": "Rosa citrus",
+    "fr": "Agrume rose",
+    "es": "Rosa cítrico"
+   },
+   "hex": [
+    "#F78F77",
+    "#E4505A"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10904",
+   "family_id": "GFA00",
+   "color_code": "10904",
+   "tray_color_code": "M4",
+   "name": {
+    "de": "Minze-Limette",
+    "en": "Mint Lime",
+    "it": "Lime menta",
+    "fr": "Menthe citron vert",
+    "es": "Lima menta"
+   },
+   "hex": [
+    "#B6FF43",
+    "#4EC939"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10905",
+   "family_id": "GFA00",
+   "color_code": "10905",
+   "tray_color_code": "M5",
+   "name": {
+    "de": "Blaubeere-Bubblegum",
+    "en": "Blueberry Bubblegum",
+    "it": "Mirtillo",
+    "fr": "Chewing-gum myrtilles",
+    "es": "Chicle de arándano"
+   },
+   "hex": [
+    "#6FCAEF",
+    "#8573DD"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10906",
+   "family_id": "GFA00",
+   "color_code": "10906",
+   "tray_color_code": "M6",
+   "name": {
+    "de": "Leuchtende Abenddämmerung",
+    "en": "Dusk Glare",
+    "it": "Dusk Glare",
+    "fr": "Éclat crépusculaire",
+    "es": "Resplandor del crepúsculo"
+   },
+   "hex": [
+    "#CE4406",
+    "#ED9558"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA00-10907",
+   "family_id": "GFA00",
+   "color_code": "10907",
+   "tray_color_code": "M7",
+   "name": {
+    "de": "Zuckerwatten-Wolke",
+    "en": "Cotton Candy Cloud",
+    "it": "Zucchero filato",
+    "fr": "Nuage de barbe à papa",
+    "es": "Nube de algodón de azúcar"
+   },
+   "hex": [
+    "#E7C1D5",
+    "#8EC9E9"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11100",
+   "family_id": "GFA01",
+   "color_code": "11100",
+   "tray_color_code": "W2",
+   "name": {
+    "de": "Elfenbeinweiß",
+    "en": "Ivory White",
+    "it": "Bianco avorio",
+    "fr": "Blanc ivoire",
+    "es": "Blanco marfil"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11101",
+   "family_id": "GFA01",
+   "color_code": "11101",
+   "tray_color_code": "K1",
+   "name": {
+    "de": "Kohlschwarz",
+    "en": "Charcoal",
+    "it": "Carbone",
+    "fr": "Anthracite",
+    "es": "Carbón"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11102",
+   "family_id": "GFA01",
+   "color_code": "11102",
+   "tray_color_code": "D3",
+   "name": {
+    "de": "Aschgrau",
+    "en": "Ash Gray",
+    "it": "Grigio cenere",
+    "fr": "Gris cendré",
+    "es": "Gris ceniza"
+   },
+   "hex": [
+    "#9B9EA0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11103",
+   "family_id": "GFA01",
+   "color_code": "11103",
+   "tray_color_code": "W3",
+   "name": {
+    "de": "Knochenweiß",
+    "en": "Bone White",
+    "it": "Bianco osso",
+    "fr": "Blanc os",
+    "es": "Blanco hueso"
+   },
+   "hex": [
+    "#CBC6B8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11104",
+   "family_id": "GFA01",
+   "color_code": "11104",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Nardo-Grau",
+    "en": "Nardo Gray",
+    "it": "Grigio Nardo",
+    "fr": "Gris nardo",
+    "es": "Gris nardo"
+   },
+   "hex": [
+    "#757575"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11200",
+   "family_id": "GFA01",
+   "color_code": "11200",
+   "tray_color_code": "R1",
+   "name": {
+    "de": "Scharlachrot",
+    "en": "Scarlet Red",
+    "it": "Rosso scarlatto",
+    "fr": "Rouge écarlate",
+    "es": "Rojo escarlata"
+   },
+   "hex": [
+    "#DE4343"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11201",
+   "family_id": "GFA01",
+   "color_code": "11201",
+   "tray_color_code": "P3",
+   "name": {
+    "de": "Sakura-Pink",
+    "en": "Sakura Pink",
+    "it": "Rosa sakura",
+    "fr": "Rose sakura",
+    "es": "Rosa sakura"
+   },
+   "hex": [
+    "#E8AFCF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11202",
+   "family_id": "GFA01",
+   "color_code": "11202",
+   "tray_color_code": "R4",
+   "name": {
+    "de": "Dunkelrot",
+    "en": "Dark Red",
+    "it": "Rosso scuro",
+    "fr": "Rouge foncé",
+    "es": "Rojo oscuro"
+   },
+   "hex": [
+    "#BB3D43"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11203",
+   "family_id": "GFA01",
+   "color_code": "11203",
+   "tray_color_code": "R2",
+   "name": {
+    "de": "Terrakotta",
+    "en": "Terracotta",
+    "it": "Terracotta",
+    "fr": "Terre cuite",
+    "es": "Terracota"
+   },
+   "hex": [
+    "#B15533"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11204",
+   "family_id": "GFA01",
+   "color_code": "11204",
+   "tray_color_code": "R3",
+   "name": {
+    "de": "Pflaume",
+    "en": "Plum",
+    "it": "Prugna",
+    "fr": "Prune",
+    "es": "Ciruela"
+   },
+   "hex": [
+    "#950051"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11300",
+   "family_id": "GFA01",
+   "color_code": "11300",
+   "tray_color_code": "A2",
+   "name": {
+    "de": "Mandarine-Orange",
+    "en": "Mandarin Orange",
+    "it": "Arancio mandarino",
+    "fr": "Mandarine",
+    "es": "Naranja Mandarina"
+   },
+   "hex": [
+    "#F99963"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11400",
+   "family_id": "GFA01",
+   "color_code": "11400",
+   "tray_color_code": "Y2",
+   "name": {
+    "de": "Zitronengelb",
+    "en": "Lemon Yellow",
+    "it": "Giallo limone",
+    "fr": "Jaune citron",
+    "es": "Amarillo limón"
+   },
+   "hex": [
+    "#F7D959"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11401",
+   "family_id": "GFA01",
+   "color_code": "11401",
+   "tray_color_code": "Y3",
+   "name": {
+    "de": "Wüstenbraun",
+    "en": "Desert Tan",
+    "it": "Sabbia",
+    "fr": "Brun clair du désert",
+    "es": "Arena del desierto"
+   },
+   "hex": [
+    "#E8DBB7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11500",
+   "family_id": "GFA01",
+   "color_code": "11500",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Grasgrün",
+    "en": "Grass Green",
+    "it": "Verde prato",
+    "fr": "Vert herbacé",
+    "es": "Verde hierba"
+   },
+   "hex": [
+    "#61C680"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11501",
+   "family_id": "GFA01",
+   "color_code": "11501",
+   "tray_color_code": "G7",
+   "name": {
+    "de": "Dunkelgrün",
+    "en": "Dark Green",
+    "it": "Verde scuro",
+    "fr": "Vert foncé",
+    "es": "Verde oscuro"
+   },
+   "hex": [
+    "#68724D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11502",
+   "family_id": "GFA01",
+   "color_code": "11502",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Apfelgrün",
+    "en": "Apple Green",
+    "it": "Verde mela",
+    "fr": "Vert pomme",
+    "es": "Verde manzana"
+   },
+   "hex": [
+    "#C2E189"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11600",
+   "family_id": "GFA01",
+   "color_code": "11600",
+   "tray_color_code": "B3",
+   "name": {
+    "de": "Marineblau",
+    "en": "Marine Blue",
+    "it": "Blu marino",
+    "fr": "Bleu marine",
+    "es": "Azul marino"
+   },
+   "hex": [
+    "#0078BF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11601",
+   "family_id": "GFA01",
+   "color_code": "11601",
+   "tray_color_code": "B4",
+   "name": {
+    "de": "Eisblau",
+    "en": "Ice Blue",
+    "it": "Blu ghiaccio",
+    "fr": "Bleu glacier",
+    "es": "Azul hielo"
+   },
+   "hex": [
+    "#A3D8E1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11602",
+   "family_id": "GFA01",
+   "color_code": "11602",
+   "tray_color_code": "B6",
+   "name": {
+    "de": "Dunkelblau",
+    "en": "Dark Blue",
+    "it": "Blu scuro",
+    "fr": "Bleu foncé",
+    "es": "Azul oscuro"
+   },
+   "hex": [
+    "#042F56"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11603",
+   "family_id": "GFA01",
+   "color_code": "11603",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Himmelblau",
+    "en": "Sky Blue",
+    "it": "Azzurro cielo",
+    "fr": "Bleu ciel",
+    "es": "Azul cielo"
+   },
+   "hex": [
+    "#56B7E6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11700",
+   "family_id": "GFA01",
+   "color_code": "11700",
+   "tray_color_code": "P4",
+   "name": {
+    "de": "Flieder-Violett",
+    "en": "Lilac Purple",
+    "it": "Lilla",
+    "fr": "Violet lilas",
+    "es": "Púrpura lila"
+   },
+   "hex": [
+    "#AE96D4"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11800",
+   "family_id": "GFA01",
+   "color_code": "11800",
+   "tray_color_code": "N1",
+   "name": {
+    "de": "Milchkaffee-Braun",
+    "en": "Latte Brown",
+    "it": "Caffelatte",
+    "fr": "Marron latte",
+    "es": "Marrón Latte"
+   },
+   "hex": [
+    "#D3B7A7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11801",
+   "family_id": "GFA01",
+   "color_code": "11801",
+   "tray_color_code": "N2",
+   "name": {
+    "de": "Dunkelbraun",
+    "en": "Dark Brown",
+    "it": "Marrone scuro",
+    "fr": "Marron foncé",
+    "es": "Marrón oscuro"
+   },
+   "hex": [
+    "#7D6556"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11802",
+   "family_id": "GFA01",
+   "color_code": "11802",
+   "tray_color_code": "N0",
+   "name": {
+    "de": "Dunkel-Schokoladenbraun",
+    "en": "Dark Chocolate",
+    "it": "Cioccolato",
+    "fr": "Chocolat noir",
+    "es": "Chocolate oscuro"
+   },
+   "hex": [
+    "#4D3324"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA01-11803",
+   "family_id": "GFA01",
+   "color_code": "11803",
+   "tray_color_code": "N3",
+   "name": {
+    "de": "Karamell",
+    "en": "Caramel",
+    "it": "Caramello",
+    "fr": "Caramel",
+    "es": "Caramelo"
+   },
+   "hex": [
+    "#AE835B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA02-13100",
+   "family_id": "GFA02",
+   "color_code": "13100",
+   "tray_color_code": "D2",
+   "name": {
+    "en": "Iron Gray Metallic"
+   },
+   "hex": [
+    "#43403D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA02-13400",
+   "family_id": "GFA02",
+   "color_code": "13400",
+   "tray_color_code": "Y1",
+   "name": {
+    "en": "Iridium Gold Metallic"
+   },
+   "hex": [
+    "#B39B84"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA02-13500",
+   "family_id": "GFA02",
+   "color_code": "13500",
+   "tray_color_code": "G2",
+   "name": {
+    "en": "Oxide Green Metallic"
+   },
+   "hex": [
+    "#1D7C6A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA02-13600",
+   "family_id": "GFA02",
+   "color_code": "13600",
+   "tray_color_code": "B2",
+   "name": {
+    "en": "Cobalt Blue Metallic"
+   },
+   "hex": [
+    "#39699E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA02-13800",
+   "family_id": "GFA02",
+   "color_code": "13800",
+   "tray_color_code": "N3",
+   "name": {
+    "en": "Copper Brown Metallic"
+   },
+   "hex": [
+    "#AA6443"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13104",
+   "family_id": "GFA05",
+   "color_code": "13104",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Silber",
+    "en": "Silver",
+    "it": "Argento",
+    "fr": "Argenté",
+    "es": "Plateado"
+   },
+   "hex": [
+    "#EAECEB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13105",
+   "family_id": "GFA05",
+   "color_code": "13105",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13202",
+   "family_id": "GFA05",
+   "color_code": "13202",
+   "tray_color_code": "P3",
+   "name": {
+    "de": "Pink",
+    "en": "Pink",
+    "it": "Rosa",
+    "fr": "Rose",
+    "es": "Rosa"
+   },
+   "hex": [
+    "#EEB1C1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13300",
+   "family_id": "GFA05",
+   "color_code": "13300",
+   "tray_color_code": "N4",
+   "name": {
+    "de": "Kupfer",
+    "en": "Copper",
+    "it": "Rame",
+    "fr": "Cuivre",
+    "es": "Cobre"
+   },
+   "hex": [
+    "#5E4B3C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13401",
+   "family_id": "GFA05",
+   "color_code": "13401",
+   "tray_color_code": "Y4",
+   "name": {
+    "de": "Gold",
+    "en": "Gold",
+    "it": "Oro",
+    "fr": "Doré",
+    "es": "Dorado"
+   },
+   "hex": [
+    "#E5B03D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13502",
+   "family_id": "GFA05",
+   "color_code": "13502",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Grün",
+    "en": "Green",
+    "it": "Verde",
+    "fr": "Vert",
+    "es": "Verde"
+   },
+   "hex": [
+    "#4CE4A0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13601",
+   "family_id": "GFA05",
+   "color_code": "13601",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#147BD1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13701",
+   "family_id": "GFA05",
+   "color_code": "13701",
+   "tray_color_code": "P5",
+   "name": {
+    "de": "Lila",
+    "en": "Purple",
+    "it": "Viola",
+    "fr": "Violet",
+    "es": "Púrpura"
+   },
+   "hex": [
+    "#854CE4"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13901",
+   "family_id": "GFA05",
+   "color_code": "13901",
+   "tray_color_code": "T1",
+   "name": {
+    "de": "Goldenes Rosa",
+    "en": "Gilded Rose",
+    "it": "Rosa con sfumature dorate",
+    "fr": "Rose doré",
+    "es": "Rosa dorado"
+   },
+   "hex": [
+    "#FF9425",
+    "#C16784"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13902",
+   "family_id": "GFA05",
+   "color_code": "13902",
+   "tray_color_code": "T2",
+   "name": {
+    "de": "Mitternachtsglanz",
+    "en": "Midnight Blaze",
+    "it": "Midnight Blaze",
+    "fr": "Feu de minuit",
+    "es": "Resplandor de medianoche"
+   },
+   "hex": [
+    "#0047BB",
+    "#7D1B49"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13903",
+   "family_id": "GFA05",
+   "color_code": "13903",
+   "tray_color_code": "T3",
+   "name": {
+    "de": "Neon City",
+    "en": "Neon City",
+    "it": "Neon City",
+    "fr": "Ville de Néon",
+    "es": "Ciudad de neón"
+   },
+   "hex": [
+    "#0047BB",
+    "#BB22A3"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13904",
+   "family_id": "GFA05",
+   "color_code": "13904",
+   "tray_color_code": "T4",
+   "name": {
+    "de": "Hawaii-Blau",
+    "en": "Blue Hawaii",
+    "it": "Blue Hawaii",
+    "fr": "Hawaï bleu",
+    "es": "Azul Hawái"
+   },
+   "hex": [
+    "#418FDE",
+    "#70C884"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13905",
+   "family_id": "GFA05",
+   "color_code": "13905",
+   "tray_color_code": "T5",
+   "name": {
+    "de": "Dunkler Samt (Schwarz-Rot)",
+    "en": "Velvet Eclipse (Black-Red)",
+    "it": "Velvet Eclipse (nero/rosso)",
+    "fr": "Éclipse de velours (Noir-Rouge)",
+    "es": "Eclipse de terciopelo (negro-rojo)"
+   },
+   "hex": [
+    "#000000",
+    "#A34342"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13906",
+   "family_id": "GFA05",
+   "color_code": "13906",
+   "tray_color_code": "M1",
+   "name": {
+    "en": "South Beach"
+   },
+   "hex": [
+    "#F772A4",
+    "#00918B"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13909",
+   "family_id": "GFA05",
+   "color_code": "13909",
+   "tray_color_code": "M4",
+   "name": {
+    "en": "Aurora Purple"
+   },
+   "hex": [
+    "#7F3696",
+    "#006EC9"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13912",
+   "family_id": "GFA05",
+   "color_code": "13912",
+   "tray_color_code": "M8",
+   "name": {
+    "en": "Dawn Radiance"
+   },
+   "hex": [
+    "#EC984C",
+    "#6CD4BC",
+    "#A66EB9",
+    "#D87694"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13913",
+   "family_id": "GFA05",
+   "color_code": "13913",
+   "tray_color_code": "T7",
+   "name": {
+    "en": "Mystic Magenta"
+   },
+   "hex": [
+    "#720062",
+    "#3A913F"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA05-13916",
+   "family_id": "GFA05",
+   "color_code": "13916",
+   "tray_color_code": "T9",
+   "name": {
+    "en": "Phantom Blue"
+   },
+   "hex": [
+    "#00629B",
+    "#000000"
+   ],
+   "kind": "multicolor",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13108",
+   "family_id": "GFA06",
+   "color_code": "13108",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Titangrau",
+    "en": "Titan Gray",
+    "it": "Grigio titanio",
+    "fr": "Gris titane",
+    "es": "Gris titán"
+   },
+   "hex": [
+    "#5F6367"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13109",
+   "family_id": "GFA06",
+   "color_code": "13109",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Silber",
+    "en": "Silver",
+    "it": "Argento",
+    "fr": "Argenté",
+    "es": "Plateado"
+   },
+   "hex": [
+    "#C8C8C8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13110",
+   "family_id": "GFA06",
+   "color_code": "13110",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13205",
+   "family_id": "GFA06",
+   "color_code": "13205",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Candy-Rot",
+    "en": "Candy Red",
+    "it": "Rosso caramella",
+    "fr": "Rouge bonbon",
+    "es": "Rojo caramelo"
+   },
+   "hex": [
+    "#D02727"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13206",
+   "family_id": "GFA06",
+   "color_code": "13206",
+   "tray_color_code": "R1",
+   "name": {
+    "de": "Gold-Rosa",
+    "en": "Rose Gold",
+    "it": "Oro rosa",
+    "fr": "Doré rose",
+    "es": "Oro rosa"
+   },
+   "hex": [
+    "#BA9594"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13207",
+   "family_id": "GFA06",
+   "color_code": "13207",
+   "tray_color_code": "R2",
+   "name": {
+    "de": "Pink",
+    "en": "Pink",
+    "it": "Rosa",
+    "fr": "Rose",
+    "es": "Rosa"
+   },
+   "hex": [
+    "#F7ADA6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13404",
+   "family_id": "GFA06",
+   "color_code": "13404",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Champagner",
+    "en": "Champagne",
+    "it": "Champagne",
+    "fr": "Champagne",
+    "es": "Champán"
+   },
+   "hex": [
+    "#F3CFB2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13405",
+   "family_id": "GFA06",
+   "color_code": "13405",
+   "tray_color_code": "Y1",
+   "name": {
+    "de": "Gold",
+    "en": "Gold",
+    "it": "Oro",
+    "fr": "Doré",
+    "es": "Dorado"
+   },
+   "hex": [
+    "#F4A925"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13506",
+   "family_id": "GFA06",
+   "color_code": "13506",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Candy-Grün",
+    "en": "Candy Green",
+    "it": "Verde caramella",
+    "fr": "Vert bonbon",
+    "es": "Verde caramelo"
+   },
+   "hex": [
+    "#018814"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13507",
+   "family_id": "GFA06",
+   "color_code": "13507",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Minze",
+    "en": "Mint",
+    "it": "Menta",
+    "fr": "Menthe",
+    "es": "Menta"
+   },
+   "hex": [
+    "#96DCB9"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13603",
+   "family_id": "GFA06",
+   "color_code": "13603",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Babyblau",
+    "en": "Baby Blue",
+    "it": "Blu-turchese chiaro",
+    "fr": "Bleu layette",
+    "es": "Azul bebé"
+   },
+   "hex": [
+    "#A8C6EE"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13604",
+   "family_id": "GFA06",
+   "color_code": "13604",
+   "tray_color_code": "B1",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#008BDA"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA06-13702",
+   "family_id": "GFA06",
+   "color_code": "13702",
+   "tray_color_code": "P0",
+   "name": {
+    "de": "Lila",
+    "en": "Purple",
+    "it": "Viola",
+    "fr": "Violet",
+    "es": "Púrpura"
+   },
+   "hex": [
+    "#8671CB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA07-13103",
+   "family_id": "GFA07",
+   "color_code": "13103",
+   "tray_color_code": "D4",
+   "name": {
+    "de": "Weißer Marmor",
+    "en": "White Marble",
+    "it": "Marmo bianco",
+    "fr": "Marbre blanc",
+    "es": "Mármol blanco"
+   },
+   "hex": [
+    "#F7F3F0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA07-13201",
+   "family_id": "GFA07",
+   "color_code": "13201",
+   "tray_color_code": "R5",
+   "name": {
+    "de": "Granitrot",
+    "en": "Red Granite",
+    "it": "Rosso granito",
+    "fr": "Granit rouge",
+    "es": "Granate rojo"
+   },
+   "hex": [
+    "#AD4E38"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA08-13101",
+   "family_id": "GFA08",
+   "color_code": "13101",
+   "tray_color_code": "K2",
+   "name": {
+    "de": "Glitzerndes Onyx-Schwarz",
+    "en": "Onyx Black Sparkle",
+    "it": "Nero onice con brillantini",
+    "fr": "Onyx noir scintillant",
+    "es": "Negro ónix brillante"
+   },
+   "hex": [
+    "#2D2B28"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA08-13102",
+   "family_id": "GFA08",
+   "color_code": "13102",
+   "tray_color_code": "D5",
+   "name": {
+    "de": "Glitzerndes Schiefergrau",
+    "en": "Slate Gray Sparkle",
+    "it": "Grigio ardesia con brillantini",
+    "fr": "Gris ardoise scintillant",
+    "es": "Gris pizarra brillante"
+   },
+   "hex": [
+    "#8E9089"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA08-13200",
+   "family_id": "GFA08",
+   "color_code": "13200",
+   "tray_color_code": "R2",
+   "name": {
+    "de": "Glitzerndes Karminrot",
+    "en": "Crimson Red Sparkle",
+    "it": "Rosso cremisi con brillantini",
+    "fr": "Pourpre scintillant",
+    "es": "Rojo carmesí brillante"
+   },
+   "hex": [
+    "#792B36"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA08-13402",
+   "family_id": "GFA08",
+   "color_code": "13402",
+   "tray_color_code": "Y1",
+   "name": {
+    "de": "Klassisches Glitzer-Gold",
+    "en": "Classic Gold Sparkle",
+    "it": "Oro con brillantini",
+    "fr": "Doré classique scintillant",
+    "es": "Dorado clásico brillante"
+   },
+   "hex": [
+    "#CEA629"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA08-13501",
+   "family_id": "GFA08",
+   "color_code": "13501",
+   "tray_color_code": "G3",
+   "name": {
+    "de": "Glitzerndes Alpengrün",
+    "en": "Alpine Green Sparkle",
+    "it": "Verde alpino con brillantini",
+    "fr": "Vert alpin scintillant",
+    "es": "Verde alpino brillante"
+   },
+   "hex": [
+    "#3F5443"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA08-13700",
+   "family_id": "GFA08",
+   "color_code": "13700",
+   "tray_color_code": "B7",
+   "name": {
+    "de": "Glitzerndes Königslila",
+    "en": "Royal Purple Sparkle",
+    "it": "Viola reale con brillantini",
+    "fr": "Violet royal scintillant",
+    "es": "Púrpura real brillante"
+   },
+   "hex": [
+    "#483D8B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12100",
+   "family_id": "GFA09",
+   "color_code": "12100",
+   "tray_color_code": "W3",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#F9F7F4"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12101",
+   "family_id": "GFA09",
+   "color_code": "12101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#25282A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12102",
+   "family_id": "GFA09",
+   "color_code": "12102",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#515A6C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12103",
+   "family_id": "GFA09",
+   "color_code": "12103",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Silber",
+    "en": "Silver",
+    "it": "Argento",
+    "fr": "Argenté",
+    "es": "Plateado"
+   },
+   "hex": [
+    "#898D8D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12200",
+   "family_id": "GFA09",
+   "color_code": "12200",
+   "tray_color_code": "R3",
+   "name": {
+    "de": "Zinnoberrot",
+    "en": "Vermilion Red",
+    "it": "Rosso vermiglio",
+    "fr": "Rouge vermillon",
+    "es": "Rojo bermellón"
+   },
+   "hex": [
+    "#DD3C22"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12300",
+   "family_id": "GFA09",
+   "color_code": "12300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Orange",
+    "en": "Orange",
+    "it": "Arancione",
+    "fr": "Orange",
+    "es": "Naranja"
+   },
+   "hex": [
+    "#FF7F41"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12400",
+   "family_id": "GFA09",
+   "color_code": "12400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#FEDB00"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12500",
+   "family_id": "GFA09",
+   "color_code": "12500",
+   "tray_color_code": "G4",
+   "name": {
+    "de": "Tannengrün",
+    "en": "Pine Green",
+    "it": "Verde pino",
+    "fr": "Vert pin",
+    "es": "Verde pino"
+   },
+   "hex": [
+    "#00482B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12600",
+   "family_id": "GFA09",
+   "color_code": "12600",
+   "tray_color_code": "B4",
+   "name": {
+    "de": "Hellblau",
+    "en": "Light Blue",
+    "it": "Azzurro chiaro",
+    "fr": "Bleu clair",
+    "es": "Azul claro"
+   },
+   "hex": [
+    "#0085AD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA09-12700",
+   "family_id": "GFA09",
+   "color_code": "12700",
+   "tray_color_code": "B5",
+   "name": {
+    "de": "Lavendelblau",
+    "en": "Lavender Blue",
+    "it": "Blu lavanda",
+    "fr": "Bleu lavande",
+    "es": "Azul lavanda"
+   },
+   "hex": [
+    "#6667AB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12104",
+   "family_id": "GFA10",
+   "color_code": "12104",
+   "tray_color_code": "K0",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12105",
+   "family_id": "GFA10",
+   "color_code": "12105",
+   "tray_color_code": "D0",
+   "name": {
+    "en": "Gray"
+   },
+   "hex": [
+    "#AFB1AE"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12106",
+   "family_id": "GFA10",
+   "color_code": "12106",
+   "tray_color_code": "D1",
+   "name": {
+    "en": "Silver"
+   },
+   "hex": [
+    "#959698"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12107",
+   "family_id": "GFA10",
+   "color_code": "12107",
+   "tray_color_code": "W0",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12301",
+   "family_id": "GFA10",
+   "color_code": "12301",
+   "tray_color_code": "A0",
+   "name": {
+    "en": "Orange"
+   },
+   "hex": [
+    "#DC3A27"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12401",
+   "family_id": "GFA10",
+   "color_code": "12401",
+   "tray_color_code": "Y0",
+   "name": {
+    "en": "Yellow"
+   },
+   "hex": [
+    "#F4D53F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA10-12601",
+   "family_id": "GFA10",
+   "color_code": "12601",
+   "tray_color_code": "B0",
+   "name": {
+    "en": "Cyan"
+   },
+   "hex": [
+    "#009BD8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA11-14102",
+   "family_id": "GFA11",
+   "color_code": "14102",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA11-14103",
+   "family_id": "GFA11",
+   "color_code": "14103",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA11-14104",
+   "family_id": "GFA11",
+   "color_code": "14104",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#CDCECA"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA12-15200",
+   "family_id": "GFA12",
+   "color_code": "15200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Leuchtend-Pink",
+    "en": "Glow Pink",
+    "it": "Rosa fosforescente",
+    "fr": "Rose éclatant",
+    "es": "Rosa brillante"
+   },
+   "hex": [
+    "#F17B8F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA12-15300",
+   "family_id": "GFA12",
+   "color_code": "15300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Leuchtend-Orange",
+    "en": "Glow Orange",
+    "it": "Arancione fosforescente",
+    "fr": "Orange éclatant",
+    "es": "Naranja brillante"
+   },
+   "hex": [
+    "#FF9D5B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA12-15400",
+   "family_id": "GFA12",
+   "color_code": "15400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Leuchtend-Gelb",
+    "en": "Glow Yellow",
+    "it": "Giallo fosforescente",
+    "fr": "Jaune éclatant",
+    "es": "Amarillo brillante"
+   },
+   "hex": [
+    "#F8FF80"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA12-15500",
+   "family_id": "GFA12",
+   "color_code": "15500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Leuchtend-Grün",
+    "en": "Glow Green",
+    "it": "Verde fosforescente",
+    "fr": "Vert éclatant",
+    "es": "Verde brillante"
+   },
+   "hex": [
+    "#A1FFAC"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA12-15600",
+   "family_id": "GFA12",
+   "color_code": "15600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Leuchtend-Blau",
+    "en": "Glow Blue",
+    "it": "Blu fosforescente",
+    "fr": "Bleu éclatant",
+    "es": "Azul brillante"
+   },
+   "hex": [
+    "#7AC0E9"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA13-15100",
+   "family_id": "GFA13",
+   "color_code": "15100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "UV-Farbwechsel – Weiß nach Koralle",
+    "en": "UV Color Changing - White to Coral",
+    "it": "Cambia colore con l'esposizione ai raggi UV - Da bianco a corallo",
+    "fr": "Changement de couleur UV - Blanc à corail",
+    "es": "De blanco a coral (Cambia con los rayos UV)"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA15-13203",
+   "family_id": "GFA15",
+   "color_code": "13203",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Braun",
+    "en": "Brown",
+    "it": "Marrone",
+    "fr": "Marron",
+    "es": "Marrón"
+   },
+   "hex": [
+    "#684A43"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA15-13503",
+   "family_id": "GFA15",
+   "color_code": "13503",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Grün",
+    "en": "Green",
+    "it": "Verde",
+    "fr": "Vert",
+    "es": "Verde"
+   },
+   "hex": [
+    "#3B665E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA15-13504",
+   "family_id": "GFA15",
+   "color_code": "13504",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Nebel",
+    "en": "Nebulae",
+    "it": "Nebula",
+    "fr": "Nébuleuse",
+    "es": "Nebulosa"
+   },
+   "hex": [
+    "#424379"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA15-13602",
+   "family_id": "GFA15",
+   "color_code": "13602",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Lila",
+    "en": "Purple",
+    "it": "Viola",
+    "fr": "Violet",
+    "es": "Púrpura"
+   },
+   "hex": [
+    "#594177"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA16-13106",
+   "family_id": "GFA16",
+   "color_code": "13106",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiße Eiche",
+    "en": "White Oak",
+    "it": "Rovere bianco",
+    "fr": "Chêne blanc",
+    "es": "Roble blanco"
+   },
+   "hex": [
+    "#D6CCA3"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA16-13107",
+   "family_id": "GFA16",
+   "color_code": "13107",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarze Walnuss",
+    "en": "Black Walnut",
+    "it": "Noce nero",
+    "fr": "Noyer noir",
+    "es": "Nogal negro"
+   },
+   "hex": [
+    "#4F3F24"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA16-13204",
+   "family_id": "GFA16",
+   "color_code": "13204",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rosenholz",
+    "en": "Rosewood",
+    "it": "Palissandro",
+    "fr": "Palissandre",
+    "es": "Palo de rosa"
+   },
+   "hex": [
+    "#4C241C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA16-13403",
+   "family_id": "GFA16",
+   "color_code": "13403",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Ockergelb",
+    "en": "Ochre Yellow",
+    "it": "Giallo ocra",
+    "fr": "Jaune ocre",
+    "es": "Amarillo ocre"
+   },
+   "hex": [
+    "#C98935"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA16-13505",
+   "family_id": "GFA16",
+   "color_code": "13505",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Klassische Birke",
+    "en": "Classic Birch",
+    "it": "Betulla",
+    "fr": "Bouleau classique",
+    "es": "Abedul clásico"
+   },
+   "hex": [
+    "#918669"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA16-13801",
+   "family_id": "GFA16",
+   "color_code": "13801",
+   "tray_color_code": "N0",
+   "name": {
+    "de": "Lehmbraun",
+    "en": "Clay Brown",
+    "it": "Marrone argilla",
+    "fr": "Marron argile",
+    "es": "Marrón arcilla"
+   },
+   "hex": [
+    "#995F11"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13210",
+   "family_id": "GFA17",
+   "color_code": "13210",
+   "tray_color_code": "R0",
+   "name": {
+    "en": "Red"
+   },
+   "hex": [
+    "#B50011"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13211",
+   "family_id": "GFA17",
+   "color_code": "13211",
+   "tray_color_code": "R1",
+   "name": {
+    "en": "Cherry Pink"
+   },
+   "hex": [
+    "#F5B6CD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13301",
+   "family_id": "GFA17",
+   "color_code": "13301",
+   "tray_color_code": "A0",
+   "name": {
+    "en": "Orange"
+   },
+   "hex": [
+    "#F74E02"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13410",
+   "family_id": "GFA17",
+   "color_code": "13410",
+   "tray_color_code": "Y0",
+   "name": {
+    "en": "Mellow Yellow"
+   },
+   "hex": [
+    "#F5DBAB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13510",
+   "family_id": "GFA17",
+   "color_code": "13510",
+   "tray_color_code": "G0",
+   "name": {
+    "en": "Light Jade"
+   },
+   "hex": [
+    "#96D8AF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13610",
+   "family_id": "GFA17",
+   "color_code": "13610",
+   "tray_color_code": "B0",
+   "name": {
+    "en": "Ice Blue"
+   },
+   "hex": [
+    "#B8CDE9"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13611",
+   "family_id": "GFA17",
+   "color_code": "13611",
+   "tray_color_code": "B1",
+   "name": {
+    "en": "Blue"
+   },
+   "hex": [
+    "#0047BB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13612",
+   "family_id": "GFA17",
+   "color_code": "13612",
+   "tray_color_code": "B2",
+   "name": {
+    "en": "Teal"
+   },
+   "hex": [
+    "#009FA1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13710",
+   "family_id": "GFA17",
+   "color_code": "13710",
+   "tray_color_code": "P0",
+   "name": {
+    "en": "Purple"
+   },
+   "hex": [
+    "#8344B0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA17-13711",
+   "family_id": "GFA17",
+   "color_code": "13711",
+   "tray_color_code": "P1",
+   "name": {
+    "en": "Lavender"
+   },
+   "hex": [
+    "#B8ACD6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16100",
+   "family_id": "GFA18",
+   "color_code": "16100",
+   "tray_color_code": "K0",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16101",
+   "family_id": "GFA18",
+   "color_code": "16101",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#999D9D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16102",
+   "family_id": "GFA18",
+   "color_code": "16102",
+   "tray_color_code": "D1",
+   "name": {
+    "en": "Dark Gray"
+   },
+   "hex": [
+    "#8C8B8C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16103",
+   "family_id": "GFA18",
+   "color_code": "16103",
+   "tray_color_code": "W0",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16200",
+   "family_id": "GFA18",
+   "color_code": "16200",
+   "tray_color_code": "R0",
+   "name": {
+    "en": "Red"
+   },
+   "hex": [
+    "#C6001A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16301",
+   "family_id": "GFA18",
+   "color_code": "16301",
+   "tray_color_code": "A1",
+   "name": {
+    "en": "Orange"
+   },
+   "hex": [
+    "#FF671F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16400",
+   "family_id": "GFA18",
+   "color_code": "16400",
+   "tray_color_code": "Y0",
+   "name": {
+    "en": "Yellow"
+   },
+   "hex": [
+    "#EFE255"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16401",
+   "family_id": "GFA18",
+   "color_code": "16401",
+   "tray_color_code": "Y1",
+   "name": {
+    "en": "Sunflower Yellow"
+   },
+   "hex": [
+    "#FFB549"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16501",
+   "family_id": "GFA18",
+   "color_code": "16501",
+   "tray_color_code": "G1",
+   "name": {
+    "en": "Green"
+   },
+   "hex": [
+    "#00BB31"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16600",
+   "family_id": "GFA18",
+   "color_code": "16600",
+   "tray_color_code": "B0",
+   "name": {
+    "en": "Cyan"
+   },
+   "hex": [
+    "#4DAFDA"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16601",
+   "family_id": "GFA18",
+   "color_code": "16601",
+   "tray_color_code": "B1",
+   "name": {
+    "en": "Blue"
+   },
+   "hex": [
+    "#004EA8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16700",
+   "family_id": "GFA18",
+   "color_code": "16700",
+   "tray_color_code": "P0",
+   "name": {
+    "en": "Matte Beige"
+   },
+   "hex": [
+    "#ECC3B2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA18-16800",
+   "family_id": "GFA18",
+   "color_code": "16800",
+   "tray_color_code": "N0",
+   "name": {
+    "en": "Cocoa Brown"
+   },
+   "hex": [
+    "#745335"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA19-17100",
+   "family_id": "GFA19",
+   "color_code": "17100",
+   "tray_color_code": "W00",
+   "name": {
+    "en": "Pure White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA19-17101",
+   "family_id": "GFA19",
+   "color_code": "17101",
+   "tray_color_code": "K00",
+   "name": {
+    "en": "Absolute Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA19-17200",
+   "family_id": "GFA19",
+   "color_code": "17200",
+   "tray_color_code": "P00",
+   "name": {
+    "en": "Milky Pink"
+   },
+   "hex": [
+    "#F7CED7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA19-17300",
+   "family_id": "GFA19",
+   "color_code": "17300",
+   "tray_color_code": "A00",
+   "name": {
+    "en": "Apricot"
+   },
+   "hex": [
+    "#FFB673"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA19-17600",
+   "family_id": "GFA19",
+   "color_code": "17600",
+   "tray_color_code": "B00",
+   "name": {
+    "en": "Baby Blue"
+   },
+   "hex": [
+    "#A4DBE8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA20-18100",
+   "family_id": "GFA20",
+   "color_code": "18100",
+   "tray_color_code": "W00",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA20-18101",
+   "family_id": "GFA20",
+   "color_code": "18101",
+   "tray_color_code": "K00",
+   "name": {
+    "en": "Key"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA20-18200",
+   "family_id": "GFA20",
+   "color_code": "18200",
+   "tray_color_code": "R00",
+   "name": {
+    "en": "Magenta"
+   },
+   "hex": [
+    "#E24585"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA20-18400",
+   "family_id": "GFA20",
+   "color_code": "18400",
+   "tray_color_code": "Y00",
+   "name": {
+    "en": "Yellow"
+   },
+   "hex": [
+    "#FCE300"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA20-18600",
+   "family_id": "GFA20",
+   "color_code": "18600",
+   "tray_color_code": "B00",
+   "name": {
+    "en": "Cyan"
+   },
+   "hex": [
+    "#0090DA"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14100",
+   "family_id": "GFA50",
+   "color_code": "14100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14101",
+   "family_id": "GFA50",
+   "color_code": "14101",
+   "tray_color_code": "D6",
+   "name": {
+    "de": "Lava-Grau",
+    "en": "Lava Gray",
+    "it": "Grigio lava",
+    "fr": "Gris lave",
+    "es": "Gris lava"
+   },
+   "hex": [
+    "#4D5054"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14200",
+   "family_id": "GFA50",
+   "color_code": "14200",
+   "tray_color_code": "R4",
+   "name": {
+    "de": "Burgunderrot",
+    "en": "Burgundy Red",
+    "it": "Rosso borgogna",
+    "fr": "Rouge bordeaux",
+    "es": "Rojo burdeos"
+   },
+   "hex": [
+    "#951E23"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14500",
+   "family_id": "GFA50",
+   "color_code": "14500",
+   "tray_color_code": "G7",
+   "name": {
+    "de": "Matcha-Grün",
+    "en": "Matcha Green",
+    "it": "Verde matcha",
+    "fr": "Vert matcha",
+    "es": "Verde matcha"
+   },
+   "hex": [
+    "#5C9748"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14600",
+   "family_id": "GFA50",
+   "color_code": "14600",
+   "tray_color_code": "B9",
+   "name": {
+    "de": "Jeansblau",
+    "en": "Jeans Blue",
+    "it": "Blu jeans",
+    "fr": "Jean bleu",
+    "es": "Azul vaquero"
+   },
+   "hex": [
+    "#6E88BC"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14601",
+   "family_id": "GFA50",
+   "color_code": "14601",
+   "tray_color_code": "B6",
+   "name": {
+    "de": "Königsblau",
+    "en": "Royal Blue",
+    "it": "Blu royal",
+    "fr": "Bleu royal",
+    "es": "Azul real"
+   },
+   "hex": [
+    "#2842AD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFA50-14700",
+   "family_id": "GFA50",
+   "color_code": "14700",
+   "tray_color_code": "P7",
+   "name": {
+    "de": "Iris-Violett",
+    "en": "Iris Purple",
+    "it": "Viola iris",
+    "fr": "Violet iris",
+    "es": "Púrpura iris"
+   },
+   "hex": [
+    "#69398E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40100",
+   "family_id": "GFB00",
+   "color_code": "40100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40101",
+   "family_id": "GFB00",
+   "color_code": "40101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40102",
+   "family_id": "GFB00",
+   "color_code": "40102",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Silber",
+    "en": "Silver",
+    "it": "Argento",
+    "fr": "Argenté",
+    "es": "Plateado"
+   },
+   "hex": [
+    "#87909A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40200",
+   "family_id": "GFB00",
+   "color_code": "40200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#D32941"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40300",
+   "family_id": "GFB00",
+   "color_code": "40300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Orange",
+    "en": "Orange",
+    "it": "Arancione",
+    "fr": "Orange",
+    "es": "Naranja"
+   },
+   "hex": [
+    "#FF6A13"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40400",
+   "family_id": "GFB00",
+   "color_code": "40400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#FCE900"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40401",
+   "family_id": "GFB00",
+   "color_code": "40401",
+   "tray_color_code": "Y2",
+   "name": {
+    "de": "Beige",
+    "en": "Beige",
+    "it": "Beige",
+    "fr": "Beige",
+    "es": "Beis"
+   },
+   "hex": [
+    "#DFD1A7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40402",
+   "family_id": "GFB00",
+   "color_code": "40402",
+   "tray_color_code": "Y1",
+   "name": {
+    "de": "Mandarinengelb",
+    "en": "Tangerine Yellow",
+    "it": "Giallo tangerine",
+    "fr": "Jaune mandarine",
+    "es": "Amarillo mandarina"
+   },
+   "hex": [
+    "#FFC72C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40500",
+   "family_id": "GFB00",
+   "color_code": "40500",
+   "tray_color_code": "G6",
+   "name": {
+    "de": "Bambusgrün",
+    "en": "Bambu Green",
+    "it": "Verde bambù",
+    "fr": "Vert bambou",
+    "es": "Verde bambú"
+   },
+   "hex": [
+    "#00AE42"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40501",
+   "family_id": "GFB00",
+   "color_code": "40501",
+   "tray_color_code": "B8",
+   "name": {
+    "de": "Minze",
+    "en": "Mint",
+    "it": "Menta",
+    "fr": "Menthe",
+    "es": "Menta"
+   },
+   "hex": [
+    "#7AE1BF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40502",
+   "family_id": "GFB00",
+   "color_code": "40502",
+   "tray_color_code": "G7",
+   "name": {
+    "de": "Olive",
+    "en": "Olive",
+    "it": "Oliva",
+    "fr": "Olive",
+    "es": "Oliva"
+   },
+   "hex": [
+    "#789D4A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40600",
+   "family_id": "GFB00",
+   "color_code": "40600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#0A2CA5"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40601",
+   "family_id": "GFB00",
+   "color_code": "40601",
+   "tray_color_code": "B4",
+   "name": {
+    "de": "Azurblau",
+    "en": "Azure",
+    "it": "Azzurro",
+    "fr": "Bleu azur",
+    "es": "Azul celeste"
+   },
+   "hex": [
+    "#489FDF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40602",
+   "family_id": "GFB00",
+   "color_code": "40602",
+   "tray_color_code": "B6",
+   "name": {
+    "de": "Marineblau",
+    "en": "Navy Blue",
+    "it": "Blu navy",
+    "fr": "Bleu marine",
+    "es": "Azul marino oscuro"
+   },
+   "hex": [
+    "#0C2340"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40700",
+   "family_id": "GFB00",
+   "color_code": "40700",
+   "tray_color_code": "P6",
+   "name": {
+    "de": "Lila",
+    "en": "Purple",
+    "it": "Viola",
+    "fr": "Violet",
+    "es": "Púrpura"
+   },
+   "hex": [
+    "#AF1685"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB00-40701",
+   "family_id": "GFB00",
+   "color_code": "40701",
+   "tray_color_code": "P4",
+   "name": {
+    "de": "Lavendel",
+    "en": "Lavender",
+    "it": "Lavanda",
+    "fr": "Lavande",
+    "es": "Lavanda"
+   },
+   "hex": [
+    "#7248BD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB01-45100",
+   "family_id": "GFB01",
+   "color_code": "45100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFAF2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB01-45101",
+   "family_id": "GFB01",
+   "color_code": "45101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB01-45102",
+   "family_id": "GFB01",
+   "color_code": "45102",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#8A949E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB01-45200",
+   "family_id": "GFB01",
+   "color_code": "45200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#E02928"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB01-45500",
+   "family_id": "GFB01",
+   "color_code": "45500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Grün",
+    "en": "Green",
+    "it": "Verde",
+    "fr": "Vert",
+    "es": "Verde"
+   },
+   "hex": [
+    "#00A6A0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB01-45600",
+   "family_id": "GFB01",
+   "color_code": "45600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#2140B4"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB02-46100",
+   "family_id": "GFB02",
+   "color_code": "46100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#F5F1DD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41100",
+   "family_id": "GFB50",
+   "color_code": "41100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41101",
+   "family_id": "GFB50",
+   "color_code": "41101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41102",
+   "family_id": "GFB50",
+   "color_code": "41102",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#C6C6C6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41200",
+   "family_id": "GFB50",
+   "color_code": "41200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#E83100"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41300",
+   "family_id": "GFB50",
+   "color_code": "41300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Orange",
+    "en": "Orange",
+    "it": "Arancione",
+    "fr": "Orange",
+    "es": "Naranja"
+   },
+   "hex": [
+    "#F48438"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41400",
+   "family_id": "GFB50",
+   "color_code": "41400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#FFE133"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41500",
+   "family_id": "GFB50",
+   "color_code": "41500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Grün",
+    "en": "Green",
+    "it": "Verde",
+    "fr": "Vert",
+    "es": "Verde"
+   },
+   "hex": [
+    "#61BF36"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB50-41600",
+   "family_id": "GFB50",
+   "color_code": "41600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#0C3B95"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFB51-46101",
+   "family_id": "GFB51",
+   "color_code": "46101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC00-60100",
+   "family_id": "GFC00",
+   "color_code": "60100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC00-60101",
+   "family_id": "GFC00",
+   "color_code": "60101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC00-60102",
+   "family_id": "GFC00",
+   "color_code": "60102",
+   "tray_color_code": "C0",
+   "name": {
+    "de": "Klares Schwarz",
+    "en": "Clear Black",
+    "it": "Nero trasparente",
+    "fr": "Noir transparent",
+    "es": "Negro transparente"
+   },
+   "hex": [
+    "#686865"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC00-60103",
+   "family_id": "GFC00",
+   "color_code": "60103",
+   "tray_color_code": "C1",
+   "name": {
+    "de": "Durchsichtig",
+    "en": "Transparent",
+    "it": "Trasparente",
+    "fr": "Transparent",
+    "es": "Translúcido"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC01-63100",
+   "family_id": "GFC01",
+   "color_code": "63100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC01-63101",
+   "family_id": "GFC01",
+   "color_code": "63101",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFC01-63102",
+   "family_id": "GFC01",
+   "color_code": "63102",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#A8A8AA"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30105",
+   "family_id": "GFG00",
+   "color_code": "30105",
+   "tray_color_code": "K00",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30106",
+   "family_id": "GFG00",
+   "color_code": "30106",
+   "tray_color_code": "W00",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30107",
+   "family_id": "GFG00",
+   "color_code": "30107",
+   "tray_color_code": "D00",
+   "name": {
+    "en": "Gray"
+   },
+   "hex": [
+    "#7F7E83"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30108",
+   "family_id": "GFG00",
+   "color_code": "30108",
+   "tray_color_code": "D01",
+   "name": {
+    "en": "Misty Blue"
+   },
+   "hex": [
+    "#688197"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30201",
+   "family_id": "GFG00",
+   "color_code": "30201",
+   "tray_color_code": "R00",
+   "name": {
+    "en": "Red"
+   },
+   "hex": [
+    "#D6001C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30301",
+   "family_id": "GFG00",
+   "color_code": "30301",
+   "tray_color_code": "A00",
+   "name": {
+    "en": "Orange"
+   },
+   "hex": [
+    "#FF671F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30402",
+   "family_id": "GFG00",
+   "color_code": "30402",
+   "tray_color_code": "Y00",
+   "name": {
+    "en": "Yellow"
+   },
+   "hex": [
+    "#FCE300"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30403",
+   "family_id": "GFG00",
+   "color_code": "30403",
+   "tray_color_code": "Y01",
+   "name": {
+    "en": "Dark Beige"
+   },
+   "hex": [
+    "#DBC8B6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30404",
+   "family_id": "GFG00",
+   "color_code": "30404",
+   "tray_color_code": "Y04",
+   "name": {
+    "en": "Sunflower Yellow"
+   },
+   "hex": [
+    "#FFB81C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30502",
+   "family_id": "GFG00",
+   "color_code": "30502",
+   "tray_color_code": "G00",
+   "name": {
+    "en": "Green"
+   },
+   "hex": [
+    "#009639"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30503",
+   "family_id": "GFG00",
+   "color_code": "30503",
+   "tray_color_code": "G01",
+   "name": {
+    "en": "Pine Green"
+   },
+   "hex": [
+    "#034638"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30504",
+   "family_id": "GFG00",
+   "color_code": "30504",
+   "tray_color_code": "G04",
+   "name": {
+    "en": "Bright Green"
+   },
+   "hex": [
+    "#97D700"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30603",
+   "family_id": "GFG00",
+   "color_code": "30603",
+   "tray_color_code": "B00",
+   "name": {
+    "en": "Reflex Blue"
+   },
+   "hex": [
+    "#001489"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30604",
+   "family_id": "GFG00",
+   "color_code": "30604",
+   "tray_color_code": "B01",
+   "name": {
+    "en": "Navy Blue"
+   },
+   "hex": [
+    "#0086D6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30701",
+   "family_id": "GFG00",
+   "color_code": "30701",
+   "tray_color_code": "P01",
+   "name": {
+    "en": "Purple"
+   },
+   "hex": [
+    "#8A75D1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30702",
+   "family_id": "GFG00",
+   "color_code": "30702",
+   "tray_color_code": "P02",
+   "name": {
+    "en": "Hot Pink"
+   },
+   "hex": [
+    "#F277C6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG00-30800",
+   "family_id": "GFG00",
+   "color_code": "30800",
+   "tray_color_code": "N00",
+   "name": {
+    "en": "Dark Brown"
+   },
+   "hex": [
+    "#4F2C1D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32100",
+   "family_id": "GFG01",
+   "color_code": "32100",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Durchsichtiges Grau",
+    "en": "Translucent Gray",
+    "it": "Grigio traslucido",
+    "fr": "Gris translucide",
+    "es": "Gris translúcido"
+   },
+   "hex": [
+    "#8E8E8E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32101",
+   "family_id": "GFG01",
+   "color_code": "32101",
+   "tray_color_code": "C0",
+   "name": {
+    "de": "Klar",
+    "en": "Clear",
+    "it": "Trasparente",
+    "fr": "Transparent",
+    "es": "Transparente"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32200",
+   "family_id": "GFG01",
+   "color_code": "32200",
+   "tray_color_code": "P1",
+   "name": {
+    "de": "Durchsichtiges Pink",
+    "en": "Translucent Pink",
+    "it": "Rosa traslucido",
+    "fr": "Rose translucide",
+    "es": "Rosa translúcido"
+   },
+   "hex": [
+    "#F9C1BD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32300",
+   "family_id": "GFG01",
+   "color_code": "32300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Durchsichtiges Orange",
+    "en": "Translucent Orange",
+    "it": "Arancione traslucido",
+    "fr": "Orange translucide",
+    "es": "Naranja translúcido"
+   },
+   "hex": [
+    "#FF911A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32500",
+   "family_id": "GFG01",
+   "color_code": "32500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Durchsichtiges Olivgrün",
+    "en": "Translucent Olive",
+    "it": "Oliva traslucido",
+    "fr": "Olive translucide",
+    "es": "Oliva translúcido"
+   },
+   "hex": [
+    "#748C45"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32501",
+   "family_id": "GFG01",
+   "color_code": "32501",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Durchsichtiges Blaugrün",
+    "en": "Translucent Teal",
+    "it": "Verde petrolio traslucido",
+    "fr": "Bleu sarcelle translucide",
+    "es": "Verde azulado translúcido"
+   },
+   "hex": [
+    "#77EDD7"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32600",
+   "family_id": "GFG01",
+   "color_code": "32600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Durchsichtiges Hellblau",
+    "en": "Translucent Light Blue",
+    "it": "Azzurro traslucido",
+    "fr": "Bleu clair translucide",
+    "es": "Azul claro translúcido"
+   },
+   "hex": [
+    "#61B0FF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32700",
+   "family_id": "GFG01",
+   "color_code": "32700",
+   "tray_color_code": "P0",
+   "name": {
+    "de": "Durchsichtiges Lila",
+    "en": "Translucent Purple",
+    "it": "Viola traslucido",
+    "fr": "Violet translucide",
+    "es": "Púrpura translúcido"
+   },
+   "hex": [
+    "#D6ABFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG01-32800",
+   "family_id": "GFG01",
+   "color_code": "32800",
+   "tray_color_code": "N0",
+   "name": {
+    "de": "Durchsichtiges Braun",
+    "en": "Translucent Brown",
+    "it": "Marrone traslucido",
+    "fr": "Marron translucide",
+    "es": "Marrón translúcido"
+   },
+   "hex": [
+    "#C9A381"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33100",
+   "family_id": "GFG02",
+   "color_code": "33100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33101",
+   "family_id": "GFG02",
+   "color_code": "33101",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#ADB1B2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33102",
+   "family_id": "GFG02",
+   "color_code": "33102",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33103",
+   "family_id": "GFG02",
+   "color_code": "33103",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Dunkelgrau",
+    "en": "Dark Gray",
+    "it": "Grigio scuro",
+    "fr": "Gris foncé",
+    "es": "Gris oscuro"
+   },
+   "hex": [
+    "#515151"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33200",
+   "family_id": "GFG02",
+   "color_code": "33200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#BC0900"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33300",
+   "family_id": "GFG02",
+   "color_code": "33300",
+   "tray_color_code": "A0",
+   "name": {
+    "de": "Orange",
+    "en": "Orange",
+    "it": "Arancione",
+    "fr": "Orange",
+    "es": "Naranja"
+   },
+   "hex": [
+    "#F75403"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33400",
+   "family_id": "GFG02",
+   "color_code": "33400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#FFD00B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33401",
+   "family_id": "GFG02",
+   "color_code": "33401",
+   "tray_color_code": "Y1",
+   "name": {
+    "de": "Creme",
+    "en": "Cream",
+    "it": "Panna",
+    "fr": "Crème",
+    "es": "Crema"
+   },
+   "hex": [
+    "#F9DFB9"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33500",
+   "family_id": "GFG02",
+   "color_code": "33500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Grün",
+    "en": "Green",
+    "it": "Verde",
+    "fr": "Vert",
+    "es": "Verde"
+   },
+   "hex": [
+    "#00AE42"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33501",
+   "family_id": "GFG02",
+   "color_code": "33501",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Limettengrün",
+    "en": "Lime Green",
+    "it": "Verde lime",
+    "fr": "Vert citron",
+    "es": "Verde lima"
+   },
+   "hex": [
+    "#6EE53C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33502",
+   "family_id": "GFG02",
+   "color_code": "33502",
+   "tray_color_code": "G2",
+   "name": {
+    "de": "Waldgrün",
+    "en": "Forest Green",
+    "it": "Verde foresta",
+    "fr": "Vert forêt",
+    "es": "Verde bosque"
+   },
+   "hex": [
+    "#39541A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33600",
+   "family_id": "GFG02",
+   "color_code": "33600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#002E96"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33601",
+   "family_id": "GFG02",
+   "color_code": "33601",
+   "tray_color_code": "B1",
+   "name": {
+    "de": "Blauer See",
+    "en": "Lake Blue",
+    "it": "Blu lago",
+    "fr": "Bleu lac",
+    "es": "Azul Lago"
+   },
+   "hex": [
+    "#1F79E5"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG02-33801",
+   "family_id": "GFG02",
+   "color_code": "33801",
+   "tray_color_code": "N1",
+   "name": {
+    "de": "Erdnussbraun",
+    "en": "Peanut Brown",
+    "it": "Cognac",
+    "fr": "Marron cacahuète",
+    "es": "Marrón cacahuete"
+   },
+   "hex": [
+    "#875718"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35100",
+   "family_id": "GFG03",
+   "color_code": "35100",
+   "tray_color_code": "W00",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35101",
+   "family_id": "GFG03",
+   "color_code": "35101",
+   "tray_color_code": "K00",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35102",
+   "family_id": "GFG03",
+   "color_code": "35102",
+   "tray_color_code": "D00",
+   "name": {
+    "en": "Gray"
+   },
+   "hex": [
+    "#7F7E83"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35200",
+   "family_id": "GFG03",
+   "color_code": "35200",
+   "tray_color_code": "R00",
+   "name": {
+    "en": "Red"
+   },
+   "hex": [
+    "#D6001C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35300",
+   "family_id": "GFG03",
+   "color_code": "35300",
+   "tray_color_code": "A00",
+   "name": {
+    "en": "Orange"
+   },
+   "hex": [
+    "#FF671F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35400",
+   "family_id": "GFG03",
+   "color_code": "35400",
+   "tray_color_code": "Y00",
+   "name": {
+    "en": "Yellow"
+   },
+   "hex": [
+    "#FFD100"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35500",
+   "family_id": "GFG03",
+   "color_code": "35500",
+   "tray_color_code": "G00",
+   "name": {
+    "en": "Lime"
+   },
+   "hex": [
+    "#C0DF16"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35501",
+   "family_id": "GFG03",
+   "color_code": "35501",
+   "tray_color_code": "G01",
+   "name": {
+    "en": "Avocado Green"
+   },
+   "hex": [
+    "#BCE194"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35600",
+   "family_id": "GFG03",
+   "color_code": "35600",
+   "tray_color_code": "B00",
+   "name": {
+    "en": "Baby Blue"
+   },
+   "hex": [
+    "#B9D9EB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35601",
+   "family_id": "GFG03",
+   "color_code": "35601",
+   "tray_color_code": "B01",
+   "name": {
+    "en": "Cyan"
+   },
+   "hex": [
+    "#00A9E0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35602",
+   "family_id": "GFG03",
+   "color_code": "35602",
+   "tray_color_code": "B02",
+   "name": {
+    "en": "Dark Blue"
+   },
+   "hex": [
+    "#003087"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35603",
+   "family_id": "GFG03",
+   "color_code": "35603",
+   "tray_color_code": "B03",
+   "name": {
+    "en": "Turquoise"
+   },
+   "hex": [
+    "#00C7B1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35700",
+   "family_id": "GFG03",
+   "color_code": "35700",
+   "tray_color_code": "P00",
+   "name": {
+    "en": "Pink"
+   },
+   "hex": [
+    "#FABBCB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35701",
+   "family_id": "GFG03",
+   "color_code": "35701",
+   "tray_color_code": "P01",
+   "name": {
+    "en": "Rose Beige"
+   },
+   "hex": [
+    "#F0BDA5"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35702",
+   "family_id": "GFG03",
+   "color_code": "35702",
+   "tray_color_code": "P02",
+   "name": {
+    "en": "Violet"
+   },
+   "hex": [
+    "#A7A4E0"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35703",
+   "family_id": "GFG03",
+   "color_code": "35703",
+   "tray_color_code": "P03",
+   "name": {
+    "en": "Hot Pink"
+   },
+   "hex": [
+    "#EF4A81"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG03-35801",
+   "family_id": "GFG03",
+   "color_code": "35801",
+   "tray_color_code": "N01",
+   "name": {
+    "en": "Caramel"
+   },
+   "hex": [
+    "#BF9474"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG50-31100",
+   "family_id": "GFG50",
+   "color_code": "31100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG50-31101",
+   "family_id": "GFG50",
+   "color_code": "31101",
+   "tray_color_code": "D6",
+   "name": {
+    "de": "Titangrau",
+    "en": "Titan Gray",
+    "it": "Grigio titanio",
+    "fr": "Gris titane",
+    "es": "Gris titán"
+   },
+   "hex": [
+    "#565656"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG50-31200",
+   "family_id": "GFG50",
+   "color_code": "31200",
+   "tray_color_code": "R4",
+   "name": {
+    "de": "Ziegelrot",
+    "en": "Brick Red",
+    "it": "Rosso mattone",
+    "fr": "Rouge brique",
+    "es": "Rojo ladrillo"
+   },
+   "hex": [
+    "#9F332A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG50-31500",
+   "family_id": "GFG50",
+   "color_code": "31500",
+   "tray_color_code": "G7",
+   "name": {
+    "de": "Malachitgrün",
+    "en": "Malachite Green",
+    "it": "Verde malachite",
+    "fr": "Vert malachite",
+    "es": "Verde malaquita"
+   },
+   "hex": [
+    "#16B08E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG50-31600",
+   "family_id": "GFG50",
+   "color_code": "31600",
+   "tray_color_code": "B6",
+   "name": {
+    "de": "Indigo-Blau",
+    "en": "Indigo Blue",
+    "it": "Blu indaco",
+    "fr": "Bleu indigo",
+    "es": "Azul índigo"
+   },
+   "hex": [
+    "#324585"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFG50-31700",
+   "family_id": "GFG50",
+   "color_code": "31700",
+   "tray_color_code": "P7",
+   "name": {
+    "de": "Lila-Violett",
+    "en": "Violet Purple",
+    "it": "Viola",
+    "fr": "Violet pourpre",
+    "es": "Violeta púrpura"
+   },
+   "hex": [
+    "#583061"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN04-70100",
+   "family_id": "GFN04",
+   "color_code": "70100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN05-72100",
+   "family_id": "GFN05",
+   "color_code": "72100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN06-73100",
+   "family_id": "GFN06",
+   "color_code": "73100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72102",
+   "family_id": "GFN08",
+   "color_code": "72102",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#EAEAE4"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72103",
+   "family_id": "GFN08",
+   "color_code": "72103",
+   "tray_color_code": "D1",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#353533"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72104",
+   "family_id": "GFN08",
+   "color_code": "72104",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72200",
+   "family_id": "GFN08",
+   "color_code": "72200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Orange",
+    "en": "Orange",
+    "it": "Arancione",
+    "fr": "Orange",
+    "es": "Naranja"
+   },
+   "hex": [
+    "#FF4800"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72400",
+   "family_id": "GFN08",
+   "color_code": "72400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#FFCE00"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72500",
+   "family_id": "GFN08",
+   "color_code": "72500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Limette",
+    "en": "Lime",
+    "it": "Lime",
+    "fr": "Citron vert",
+    "es": "Lima"
+   },
+   "hex": [
+    "#C5ED48"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72600",
+   "family_id": "GFN08",
+   "color_code": "72600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#75AED8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFN08-72800",
+   "family_id": "GFN08",
+   "color_code": "72800",
+   "tray_color_code": "N0",
+   "name": {
+    "de": "Braun",
+    "en": "Brown",
+    "it": "Marrone",
+    "fr": "Marron",
+    "es": "Marrón"
+   },
+   "hex": [
+    "#5B492F"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFS02-65104",
+   "family_id": "GFS02",
+   "color_code": "65104",
+   "tray_color_code": "W1",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFS03-65500",
+   "family_id": "GFS03",
+   "color_code": "65500",
+   "tray_color_code": "G1",
+   "name": {
+    "de": "Grün",
+    "en": "Green",
+    "it": "Verde",
+    "fr": "Vert",
+    "es": "Verde"
+   },
+   "hex": [
+    "#C0DF16"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFS04-66400",
+   "family_id": "GFS04",
+   "color_code": "66400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Klar",
+    "en": "Clear",
+    "it": "Trasparente",
+    "fr": "Transparent",
+    "es": "Transparente"
+   },
+   "hex": [
+    "#F0F1A8"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFS05-65102",
+   "family_id": "GFS05",
+   "color_code": "65102",
+   "tray_color_code": "C0",
+   "name": {
+    "de": "Natur",
+    "en": "Nature",
+    "it": "Naturale",
+    "fr": "Nature",
+    "es": "Naturaleza"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFS05-65103",
+   "family_id": "GFS05",
+   "color_code": "65103",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFS06-66100",
+   "family_id": "GFS06",
+   "color_code": "66100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFT01-71100",
+   "family_id": "GFT01",
+   "color_code": "71100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFT02-76100",
+   "family_id": "GFT02",
+   "color_code": "76100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU00-51100",
+   "family_id": "GFU00",
+   "color_code": "51100",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#101820"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU00-51101",
+   "family_id": "GFU00",
+   "color_code": "51101",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#898D8D"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU00-51102",
+   "family_id": "GFU00",
+   "color_code": "51102",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU00-51200",
+   "family_id": "GFU00",
+   "color_code": "51200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#C8102E"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU00-51400",
+   "family_id": "GFU00",
+   "color_code": "51400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#F3E600"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU00-51600",
+   "family_id": "GFU00",
+   "color_code": "51600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#0072CE"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU01-50100",
+   "family_id": "GFU01",
+   "color_code": "50100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU01-50101",
+   "family_id": "GFU01",
+   "color_code": "50101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53100",
+   "family_id": "GFU02",
+   "color_code": "53100",
+   "tray_color_code": "W0",
+   "name": {
+    "de": "Weiß",
+    "en": "White",
+    "it": "Bianco",
+    "fr": "Blanc",
+    "es": "Blanco"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53101",
+   "family_id": "GFU02",
+   "color_code": "53101",
+   "tray_color_code": "K0",
+   "name": {
+    "de": "Schwarz",
+    "en": "Black",
+    "it": "Nero",
+    "fr": "Noir",
+    "es": "Negro"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53102",
+   "family_id": "GFU02",
+   "color_code": "53102",
+   "tray_color_code": "D0",
+   "name": {
+    "de": "Grau",
+    "en": "Gray",
+    "it": "Grigio",
+    "fr": "Gris",
+    "es": "Gris"
+   },
+   "hex": [
+    "#939393"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53200",
+   "family_id": "GFU02",
+   "color_code": "53200",
+   "tray_color_code": "R0",
+   "name": {
+    "de": "Rot",
+    "en": "Red",
+    "it": "Rosso",
+    "fr": "Rouge",
+    "es": "Rojo"
+   },
+   "hex": [
+    "#ED0000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53400",
+   "family_id": "GFU02",
+   "color_code": "53400",
+   "tray_color_code": "Y0",
+   "name": {
+    "de": "Gelb",
+    "en": "Yellow",
+    "it": "Giallo",
+    "fr": "Jaune",
+    "es": "Amarillo"
+   },
+   "hex": [
+    "#F9EF41"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53500",
+   "family_id": "GFU02",
+   "color_code": "53500",
+   "tray_color_code": "G0",
+   "name": {
+    "de": "Neongrün",
+    "en": "Neon Green",
+    "it": "Verde neon",
+    "fr": "Vert fluo",
+    "es": "Verde neón"
+   },
+   "hex": [
+    "#90FF1A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU02-53600",
+   "family_id": "GFU02",
+   "color_code": "53600",
+   "tray_color_code": "B0",
+   "name": {
+    "de": "Blau",
+    "en": "Blue",
+    "it": "Blu",
+    "fr": "Bleu",
+    "es": "Azul"
+   },
+   "hex": [
+    "#5898DD"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51103",
+   "family_id": "GFU03",
+   "color_code": "51103",
+   "tray_color_code": "K0",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51105",
+   "family_id": "GFU03",
+   "color_code": "51105",
+   "tray_color_code": "W1",
+   "name": {
+    "en": "White"
+   },
+   "hex": [
+    "#FFFFFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51106",
+   "family_id": "GFU03",
+   "color_code": "51106",
+   "tray_color_code": "D0",
+   "name": {
+    "en": "Quicksilver"
+   },
+   "hex": [
+    "#9EA2A2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51601",
+   "family_id": "GFU03",
+   "color_code": "51601",
+   "tray_color_code": "B1",
+   "name": {
+    "en": "Crystal Blue"
+   },
+   "hex": [
+    "#7EB4E1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51700",
+   "family_id": "GFU03",
+   "color_code": "51700",
+   "tray_color_code": "P1",
+   "name": {
+    "en": "Grape Jelly"
+   },
+   "hex": [
+    "#D6ABFF"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51800",
+   "family_id": "GFU03",
+   "color_code": "51800",
+   "tray_color_code": "N0",
+   "name": {
+    "en": "Cocoa Brown"
+   },
+   "hex": [
+    "#5C4738"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51900",
+   "family_id": "GFU03",
+   "color_code": "51900",
+   "tray_color_code": "M0",
+   "name": {
+    "en": "Frozen"
+   },
+   "hex": [
+    "#40B6E4",
+    "#FFFFFF"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU03-51901",
+   "family_id": "GFU03",
+   "color_code": "51901",
+   "tray_color_code": "M1",
+   "name": {
+    "en": "Blaze"
+   },
+   "hex": [
+    "#D21B3C",
+    "#F1AAA8"
+   ],
+   "kind": "gradient",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU04-51107",
+   "family_id": "GFU04",
+   "color_code": "51107",
+   "tray_color_code": "K0",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU04-51201",
+   "family_id": "GFU04",
+   "color_code": "51201",
+   "tray_color_code": "P0",
+   "name": {
+    "en": "Rose Beige/Flesh"
+   },
+   "hex": [
+    "#F3CFB2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU04-51305",
+   "family_id": "GFU04",
+   "color_code": "51305",
+   "tray_color_code": "A1",
+   "name": {
+    "en": "Neon Orange"
+   },
+   "hex": [
+    "#F68B1B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU04-51500",
+   "family_id": "GFU04",
+   "color_code": "51500",
+   "tray_color_code": "G0",
+   "name": {
+    "en": "Light Cyan"
+   },
+   "hex": [
+    "#C3E2D6"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU04-51501",
+   "family_id": "GFU04",
+   "color_code": "51501",
+   "tray_color_code": "G1",
+   "name": {
+    "en": "Lime Green"
+   },
+   "hex": [
+    "#CDEA80"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56100",
+   "family_id": "GFU06",
+   "color_code": "56100",
+   "tray_color_code": "K00",
+   "name": {
+    "en": "Black"
+   },
+   "hex": [
+    "#000000"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56200",
+   "family_id": "GFU06",
+   "color_code": "56200",
+   "tray_color_code": "R00",
+   "name": {
+    "en": "Red"
+   },
+   "hex": [
+    "#E4002B"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56300",
+   "family_id": "GFU06",
+   "color_code": "56300",
+   "tray_color_code": "A00",
+   "name": {
+    "en": "Mandarin Orange"
+   },
+   "hex": [
+    "#FFA06A"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56400",
+   "family_id": "GFU06",
+   "color_code": "56400",
+   "tray_color_code": "Y00",
+   "name": {
+    "en": "Lemon Yellow"
+   },
+   "hex": [
+    "#FBDB65"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56401",
+   "family_id": "GFU06",
+   "color_code": "56401",
+   "tray_color_code": "Y01",
+   "name": {
+    "en": "Dark Ivory"
+   },
+   "hex": [
+    "#F1E6B2"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56500",
+   "family_id": "GFU06",
+   "color_code": "56500",
+   "tray_color_code": "G00",
+   "name": {
+    "en": "Dark Green"
+   },
+   "hex": [
+    "#617354"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56501",
+   "family_id": "GFU06",
+   "color_code": "56501",
+   "tray_color_code": "G01",
+   "name": {
+    "en": "Grass Green"
+   },
+   "hex": [
+    "#7CCC6C"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56600",
+   "family_id": "GFU06",
+   "color_code": "56600",
+   "tray_color_code": "B00",
+   "name": {
+    "en": "Cyan"
+   },
+   "hex": [
+    "#00A3E1"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56700",
+   "family_id": "GFU06",
+   "color_code": "56700",
+   "tray_color_code": "P00",
+   "name": {
+    "en": "Purple"
+   },
+   "hex": [
+    "#AD96DC"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  },
+  {
+   "id": "GFU06-56701",
+   "family_id": "GFU06",
+   "color_code": "56701",
+   "tray_color_code": "P01",
+   "name": {
+    "en": "Pink"
+   },
+   "hex": [
+    "#FABBCB"
+   ],
+   "kind": "single",
+   "confidence": "official_profile"
+  }
+ ]
+}

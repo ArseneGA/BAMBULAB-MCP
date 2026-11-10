@@ -116,6 +116,7 @@ func buildHandlers(c *core.Core, opts Options, withPublic bool) (mainH, publicH 
 	registerGcode(mux, c)           // trajectoires 3D du G-code pour la visionneuse couche par couche (gcode.go)
 	registerCamera(mux, c, human)   // caméra, détection d'échec, notifications (camera.go)
 	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)
+	registerFilamentCatalog(mux, c) // catalogue officiel des filaments Bambu, embarqué, lecture seule (filcatalog.go)
 	registerPlates(mux, c)          // plateau multi-pièces (plates.go)
 	registerExport(mux, c)          // export de projet : archive zip partageable (export.go)
 

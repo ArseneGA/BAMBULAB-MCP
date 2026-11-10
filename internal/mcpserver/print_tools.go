@@ -137,7 +137,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 		Name: "list_filaments", Title: "Filaments disponibles pour une imprimante",
 		Description: "Presets filament de Bambu Studio COMPATIBLES avec l'imprimante (modèle + buse), regroupés par famille (PLA, PETG, ABS/ASA, TPU, PA/PC, Support), avec le nom exact à utiliser. " +
 			"execute_headless_slice accepte aussi un nom libre en français ou anglais (« PETG transparent », « PLA mat », « PETG translucide ») résolu vers un preset de cette liste ; un nom inconnu renvoie les 5 plus proches. " +
-			"La couleur n'est donnée que si une bobine chargée la fournit (AMS lu ou bobine déclarée avec update_spool, slot « ext » pour la bobine externe) : jamais celle du profil. `family` filtre une famille.",
+			"La couleur n'est donnée que si une bobine chargée la fournit (AMS lu ou bobine déclarée avec update_spool, slot « ext » pour la bobine externe) : jamais celle du profil. `family` filtre une famille. Les couleurs officielles Bambu (hex, finitions, températures) sont dans search_filament_catalog.",
 		Annotations: ro,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ListFilamentsInput) (*mcp.CallToolResult, printing.FilamentList, error) {
 		l, err := p.ListFilaments(in.PrinterID, in.Family)

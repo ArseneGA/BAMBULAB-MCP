@@ -8,6 +8,9 @@ import type { AMSTrayView, ColorPlan, ColorWish, QueueEntry, QueueState, Spool, 
 import type { JobProgress, PrintJob } from '../api/printTypes';
 import { printSource } from '../api/progress';
 import { Async, Dialog, Notice, fmtDate, fmtNum } from './common';
+import { CatalogColorPicker } from './FilamentCatalog';
+import { colorName } from '../api/filcatalogApi';
+import type { CatalogColor } from '../api/filcatalogApi';
 import './filament.css';
 
 type Tab = 'bobines' | 'multicolore' | 'file';
@@ -152,12 +155,19 @@ function SpoolDialog({ spool, printerId, onClose, onSaved }: { spool?: Spool; pr
     last_dried_at: spool?.last_dried_at ?? '', drying_note: spool?.drying_note ?? '', slot: spool?.slot ?? '',
   });
   const [busy, setBusy] = useState(false);
+  const [catId, setCatId] = useState(spool?.catalog_color_id ?? '');
+  const [showCat, setShowCat] = useState(false);
   const toast = useToast();
+  const pickOfficial = (c: CatalogColor | undefined) => {
+    setCatId(c?.id ?? '');
+    if (c) setF((x) => ({ ...x, brand: x.brand || 'Bambu Lab', name: x.name || colorName(c), color_hex: x.color_hex || c.hex[0] }));
+  };
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   const num = (s: string) => (s.trim() === '' ? undefined : Number(s.replace(',', '.')));
   const save = () => {
     const body: SpoolInput = { material: f.material, brand: f.brand, name: f.name, color_hex: f.color_hex, net_weight_g: num(f.net_weight_g), remaining_g: num(f.remaining_g), price_per_kg: num(f.price_per_kg),
       opened_at: f.opened_at, last_dried_at: f.last_dried_at, drying_note: f.drying_note };
+    if (catId !== (spool?.catalog_color_id ?? '')) body.catalog_color_id = catId || '-';
     if (f.slot !== (spool?.slot ?? '')) { if (f.slot) { body.slot = f.slot; body.printer_id = printerId; body.replace_existing = true; } else body.unassign = true; }
     setBusy(true);
     (spool ? filamentApi.updateSpool(spool.id, body) : filamentApi.createSpool(body)).then(() => { toast('ok', 'Bobine enregistrée'); onSaved(); }, (e) => { toast('err', describeError(e)); setBusy(false); });
@@ -177,6 +187,12 @@ function SpoolDialog({ spool, printerId, onClose, onSaved }: { spool?: Spool; pr
         <Field label="Séchée le (AAAA-MM-JJ)"><Input value={f.last_dried_at} onChange={set('last_dried_at')} /></Field>
         <Field label="Séchage (réglage, remarque)"><Input value={f.drying_note} onChange={set('drying_note')} placeholder="55 °C, 8 h" /></Field>
       </div>
+      <div className="row-wrap" style={{ marginTop: 'var(--sp-3)' }}>
+        <Button size="sm" onClick={() => setShowCat((v) => !v)} aria-expanded={showCat}>{showCat ? 'Masquer les couleurs officielles' : 'Choisir une couleur officielle Bambu'}</Button>
+        {catId && <Tag tone="ok">catalogue : {catId}</Tag>}
+        {!catId && spool?.official_color && <span className="hint">Plus proche officielle : {spool.official_color.family} {spool.official_color.name} ({spool.official_color.hex}, ΔE {spool.official_color.delta_e})</span>}
+      </div>
+      {showCat && <CatalogColorPicker material={f.material} hex={f.color_hex} selectedId={catId} onPick={pickOfficial} />}
       <p className="hint">Ce que vous saisissez ici n'est jamais écrasé par la lecture de l'AMS.</p>
     </Dialog>
   );

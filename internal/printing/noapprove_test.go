@@ -81,6 +81,19 @@ func TestNoMCPToolCanApproveAConfirmation(t *testing.T) {
 			"approved": true, "approve": true, "nonce": "x", "token": "x"})
 		called++
 	}
+	// B3 : les outils du catalogue officiel des filaments sont en lecture seule et n'approuvent rien.
+	catTools := 0
+	for _, tl := range tools.Tools {
+		if tl.Name == "search_filament_catalog" || tl.Name == "get_filament_catalog_entry" {
+			catTools++
+			if tl.Annotations == nil || !tl.Annotations.ReadOnlyHint {
+				t.Fatalf("%s doit être en lecture seule", tl.Name)
+			}
+		}
+	}
+	if catTools != 2 {
+		t.Fatalf("outils du catalogue de filaments : %d/2", catTools)
+	}
 	if called < 20 {
 		t.Fatalf("seulement %d outils exercés", called)
 	}

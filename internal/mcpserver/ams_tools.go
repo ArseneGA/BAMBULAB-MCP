@@ -124,7 +124,7 @@ func registerAMSTools(s *mcp.Server, fs *filament.Service) {
 
 	addTool(s, &mcp.Tool{
 		Name: "update_spool", Title: "Créer ou modifier une bobine",
-		Description: "Sans spool_id : crée une bobine (material obligatoire). Avec spool_id : modifie les champs fournis (poids restant mesuré, prix/kg, couleur, dates d'ouverture/séchage, notes). " +
+		Description: "Sans spool_id : crée une bobine (material obligatoire, ou catalog_color_id). catalog_color_id rattache la bobine à une couleur du catalogue officiel Bambu (search_filament_catalog) et préremplit marque, nom, couleur et diamètre encore vides ; list_spools renvoie alors official_color. Avec spool_id : modifie les champs fournis (poids restant mesuré, prix/kg, couleur, dates d'ouverture/séchage, notes). " +
 			"printer_id + slot (ams1:1..ams4:4, ext) charge la bobine dans un emplacement ; unassign la range ; archived l'archive. " +
 			"Tout champ fourni est une saisie de l'utilisateur : la lecture de l'AMS ne l'écrase jamais. " +
 			"Appelé SANS matière ni spool_id (ou avec seulement spool_id), affiche à l'utilisateur une carte-formulaire pré-remplie (matière, couleur avec pastille, poids restant, prix).",

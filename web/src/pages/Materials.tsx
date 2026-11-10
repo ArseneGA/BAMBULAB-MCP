@@ -7,6 +7,7 @@ import { useAsync } from '../api/hooks';
 import type { PrinterModel } from '../api/printTypes';
 import type { MaterialDetail, MaterialProperty } from '../api/extraTypes';
 import { Async, Notice, fmtNum } from './common';
+import { FilamentCatalogSheets } from './FilamentCatalog';
 import './materials.css';
 
 const Unknown = () => <span className="unknown">inconnu</span>;
@@ -117,7 +118,7 @@ function Presets() {
 }
 
 export function MaterialsPage() {
-  const [tab, setTab] = useState<'machines' | 'materiaux'>('machines');
+  const [tab, setTab] = useState<'machines' | 'materiaux' | 'filaments'>('machines');
   const models = useAsync((s) => api.printerModels(s), []);
   const printers = useAsync((s) => api.printers(s), []);
   const mats = useAsync((s) => api.materials(s), []);
@@ -127,7 +128,7 @@ export function MaterialsPage() {
     <>
       <div className="page-head"><span className="eyebrow">Espace</span><h1>Matériaux et machines</h1><p>Modèles d'imprimantes Bambu Lab connus du service, parc enregistré, et base de matériaux issue des fiches techniques du fabricant. Une valeur absente reste « inconnu ».</p></div>
       <div className="stack">
-        <Tabs label="Sections" value={tab} onChange={setTab} tabs={[{ value: 'machines', label: 'Machines' }, { value: 'materiaux', label: 'Matériaux' }]} />
+        <Tabs label="Sections" value={tab} onChange={setTab} tabs={[{ value: 'machines', label: 'Machines' }, { value: 'materiaux', label: 'Matériaux' }, { value: 'filaments', label: 'Filaments Bambu' }]} />
         {tab === 'machines' && (
           <>
             <Async state={models} label="Chargement des modèles d'imprimantes">
@@ -156,6 +157,7 @@ export function MaterialsPage() {
             </Panel>
           </>
         )}
+        {tab === 'filaments' && <FilamentCatalogSheets />}
         {tab === 'materiaux' && (
           <>
             <Async state={mats} label="Chargement des matériaux">
