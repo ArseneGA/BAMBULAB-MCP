@@ -47,6 +47,8 @@ type PrinterState struct {
 	TotalLayers int
 	HMSCount    int
 	PrintError  int
+	// Percent : progression de l'impression en % (0 si inconnue). Sert au journal photo par paliers de 10 % (D8).
+	Percent int
 }
 
 // Backend est l'accès (en lecture) à la chaîne d'impression ; adapté sur *printing.Service (printing_backend.go).
@@ -84,6 +86,9 @@ type Config struct {
 	RateBurst  int
 	RateEvery  time.Duration
 	MaxViewers int
+	// PhotoReferenced : renvoie vrai quand une photo (empreinte sha256) est référencée ailleurs (galerie, projet) : la purge
+	// de rétention et de plafond (D8) ne la supprime alors JAMAIS. Facultatif.
+	PhotoReferenced func(ctx context.Context, sha string) bool
 }
 
 // Settings : réglages de la détection (non secrets), persistés.
@@ -94,12 +99,19 @@ type Settings struct {
 	Detector         DetectorConfig `json:"detector"`
 	AlertCooldownMin int            `json:"alert_cooldown_minutes" jsonschema:"minutes minimum entre deux alertes pour la même impression"`
 	// AlertPhotoRetentionDays : les photos d'alerte plus anciennes sont supprimées (0 = jamais). Les photos de fin sont conservées.
-	AlertPhotoRetentionDays int `json:"alert_photo_retention_days" jsonschema:"jours de conservation des photos d'alerte (0 = illimité, défaut 90) ; les photos de fin d'impression sont conservées"`
+	// Journal photo par paliers de 10 % (D8, étend N19).
+	ProgressPhotos          bool `json:"progress_photos" jsonschema:"photo automatique à chaque 10 % de progression (lecture caméra seule, jamais bloquante)"`
+	ProgressPhotoWidth      int  `json:"progress_photo_width" jsonschema:"largeur maximale des photos de palier en pixels (320 à 4096, défaut 1280)"`
+	ProgressPhotoQuality    int  `json:"progress_photo_quality" jsonschema:"qualité JPEG des photos de palier (40 à 95, défaut 80)"`
+	ProgressRetentionDays   int  `json:"progress_retention_days" jsonschema:"jours de conservation des photos de palier intermédiaires (0 = illimité, défaut 90) ; photos 100 % et impressions jugées réussies conservées"`
+	ProgressCapMB           int  `json:"progress_cap_mb" jsonschema:"plafond de volume des photos de palier en Mo (0 = aucun, défaut 2048)"`
+	AlertPhotoRetentionDays int  `json:"alert_photo_retention_days" jsonschema:"jours de conservation des photos d'alerte (0 = illimité, défaut 90) ; les photos de fin d'impression sont conservées"`
 }
 
 // DefaultSettings : valeurs par défaut.
 func DefaultSettings() Settings {
-	return Settings{Enabled: true, IntervalSeconds: 60, Detector: DefaultDetectorConfig(), AlertCooldownMin: 30, AlertPhotoRetentionDays: 90}
+	return Settings{Enabled: true, IntervalSeconds: 60, Detector: DefaultDetectorConfig(), AlertCooldownMin: 30, AlertPhotoRetentionDays: 90,
+		ProgressPhotos: true, ProgressPhotoWidth: 1280, ProgressPhotoQuality: 80, ProgressRetentionDays: 90, ProgressCapMB: 2048}
 }
 
 // Frame : une image reçue.
@@ -117,6 +129,7 @@ type Photo struct {
 	SHA256    string    `json:"sha256"`
 	Size      int       `json:"size_bytes"`
 	TakenAt   time.Time `json:"taken_at"`
+	Percent   int       `json:"percent,omitempty" jsonschema:"palier de progression (10 à 100) pour les photos de palier"`
 	URL       string    `json:"url" jsonschema:"route de l'interface qui sert l'image (cookie d'un navigateur enregistré ou jeton d'API)"`
 	Width     int       `json:"width,omitempty"`
 	Height    int       `json:"height,omitempty"`
@@ -250,6 +263,7 @@ type Service struct {
 	lastFrame map[string]Frame
 	live      map[string]liveEntry // capture partagée du suivi en direct (live.go)
 	rate      map[string]*bucket
+	progs     map[string]context.CancelFunc // journal photo par paliers : une boucle par impression en cours (progress.go)
 	wg        sync.WaitGroup
 
 	setMu    sync.Mutex
@@ -283,7 +297,7 @@ func New(c Config) (*Service, error) {
 		c.Scan = 5 * time.Second
 	}
 	return &Service{c: c, log: c.Log, hubs: map[string]*hub{}, snap: map[string]*sync.Mutex{}, refs: map[string]refImage{}, jobRefs: map[string]refImage{},
-		mons: map[string]*monitor{}, last: map[string]lastAnalysis{}, final: map[string]*sync.Mutex{}, nonce: map[string]nonceEntry{}, lastFrame: map[string]Frame{}}, nil
+		mons: map[string]*monitor{}, last: map[string]lastAnalysis{}, final: map[string]*sync.Mutex{}, nonce: map[string]nonceEntry{}, lastFrame: map[string]Frame{}, progs: map[string]context.CancelFunc{}}, nil
 }
 
 func (s *Service) now() time.Time { return s.c.Now().UTC() }
@@ -317,23 +331,40 @@ func (st *Settings) normalize(minSec float64) {
 	if st.AlertCooldownMin < 1 {
 		st.AlertCooldownMin = 30
 	}
+	if st.ProgressPhotoWidth < 320 || st.ProgressPhotoWidth > MaxJPEGSide {
+		st.ProgressPhotoWidth = 1280
+	}
+	if st.ProgressPhotoQuality < 40 || st.ProgressPhotoQuality > 95 {
+		st.ProgressPhotoQuality = 80
+	}
+	if st.ProgressRetentionDays < 0 {
+		st.ProgressRetentionDays = 90
+	}
+	if st.ProgressCapMB < 0 {
+		st.ProgressCapMB = 2048
+	}
 	st.Detector.normalize()
 	sort.Strings(st.DisabledPrinters)
 }
 
 // SettingsPatch : modification partielle des réglages (champs absents = inchangés).
 type SettingsPatch struct {
-	Enabled          *bool    `json:"enabled,omitempty"`
-	IntervalSeconds  *float64 `json:"interval_seconds,omitempty" jsonschema:"5 à 3600"`
-	Threshold        *float64 `json:"threshold,omitempty" jsonschema:"score d'alerte, 0.1 à 1"`
-	DiffThreshold    *float64 `json:"diff_threshold,omitempty" jsonschema:"écart de luminance qui fait une cellule « changée », 4 à 100"`
-	PersistFrames    *int     `json:"persist_frames,omitempty" jsonschema:"1 à 10"`
-	StallMinutes     *float64 `json:"stall_minutes,omitempty"`
-	ConsecutiveAlert *int     `json:"consecutive_alerts,omitempty" jsonschema:"1 à 20"`
-	CooldownMinutes  *int     `json:"alert_cooldown_minutes,omitempty"`
-	PhotoRetention   *int     `json:"alert_photo_retention_days,omitempty" jsonschema:"0 (illimité) à 3650 ; défaut 90"`
-	DisablePrinters  []string `json:"disable_printers,omitempty"`
-	EnablePrinters   []string `json:"enable_printers,omitempty"`
+	Enabled           *bool    `json:"enabled,omitempty"`
+	IntervalSeconds   *float64 `json:"interval_seconds,omitempty" jsonschema:"5 à 3600"`
+	Threshold         *float64 `json:"threshold,omitempty" jsonschema:"score d'alerte, 0.1 à 1"`
+	DiffThreshold     *float64 `json:"diff_threshold,omitempty" jsonschema:"écart de luminance qui fait une cellule « changée », 4 à 100"`
+	PersistFrames     *int     `json:"persist_frames,omitempty" jsonschema:"1 à 10"`
+	StallMinutes      *float64 `json:"stall_minutes,omitempty"`
+	ConsecutiveAlert  *int     `json:"consecutive_alerts,omitempty" jsonschema:"1 à 20"`
+	CooldownMinutes   *int     `json:"alert_cooldown_minutes,omitempty"`
+	PhotoRetention    *int     `json:"alert_photo_retention_days,omitempty" jsonschema:"0 (illimité) à 3650 ; défaut 90"`
+	ProgressPhotos    *bool    `json:"progress_photos,omitempty" jsonschema:"journal photo à chaque 10 %"`
+	ProgressWidth     *int     `json:"progress_photo_width,omitempty" jsonschema:"320 à 4096"`
+	ProgressQuality   *int     `json:"progress_photo_quality,omitempty" jsonschema:"40 à 95"`
+	ProgressRetention *int     `json:"progress_retention_days,omitempty" jsonschema:"0 (illimité) à 3650 ; défaut 90"`
+	ProgressCapMB     *int     `json:"progress_cap_mb,omitempty" jsonschema:"0 (aucun) à 1048576 ; défaut 2048"`
+	DisablePrinters   []string `json:"disable_printers,omitempty"`
+	EnablePrinters    []string `json:"enable_printers,omitempty"`
 }
 
 // UpdateSettings applique et persiste une modification (validée).
@@ -389,6 +420,33 @@ func (s *Service) UpdateSettings(ctx context.Context, p SettingsPatch) (Settings
 			return st, fmt.Errorf("%w : alert_photo_retention_days entre 0 et 3650", ErrInvalid)
 		}
 		st.AlertPhotoRetentionDays = *p.PhotoRetention
+	}
+	if p.ProgressPhotos != nil {
+		st.ProgressPhotos = *p.ProgressPhotos
+	}
+	if p.ProgressWidth != nil {
+		if *p.ProgressWidth < 320 || *p.ProgressWidth > MaxJPEGSide {
+			return st, fmt.Errorf("%w : progress_photo_width entre 320 et %d", ErrInvalid, MaxJPEGSide)
+		}
+		st.ProgressPhotoWidth = *p.ProgressWidth
+	}
+	if p.ProgressQuality != nil {
+		if *p.ProgressQuality < 40 || *p.ProgressQuality > 95 {
+			return st, fmt.Errorf("%w : progress_photo_quality entre 40 et 95", ErrInvalid)
+		}
+		st.ProgressPhotoQuality = *p.ProgressQuality
+	}
+	if p.ProgressRetention != nil {
+		if *p.ProgressRetention < 0 || *p.ProgressRetention > 3650 {
+			return st, fmt.Errorf("%w : progress_retention_days entre 0 et 3650", ErrInvalid)
+		}
+		st.ProgressRetentionDays = *p.ProgressRetention
+	}
+	if p.ProgressCapMB != nil {
+		if *p.ProgressCapMB < 0 || *p.ProgressCapMB > 1048576 {
+			return st, fmt.Errorf("%w : progress_cap_mb entre 0 et 1048576", ErrInvalid)
+		}
+		st.ProgressCapMB = *p.ProgressCapMB
 	}
 	dis := map[string]bool{}
 	for _, id := range st.DisabledPrinters {
@@ -801,7 +859,7 @@ func (s *Service) OpenPhoto(ctx context.Context, sha string) ([]byte, error) {
 
 // PhotosForJob liste les photos rattachées à une impression (photo de fin, alertes), plus anciennes d'abord.
 func (s *Service) PhotosForJob(ctx context.Context, jobID string) ([]Photo, error) {
-	rows, err := s.c.Store.DB().QueryContext(ctx, `SELECT id,printer_id,kind,sha256,size,taken_at FROM camera_photos WHERE print_job_id=? ORDER BY taken_at`, jobID)
+	rows, err := s.c.Store.DB().QueryContext(ctx, `SELECT id,printer_id,kind,sha256,size,taken_at,COALESCE(percent,0) FROM camera_photos WHERE print_job_id=? AND status='ok' ORDER BY taken_at`, jobID)
 	if err != nil {
 		return nil, err
 	}
@@ -810,7 +868,7 @@ func (s *Service) PhotosForJob(ctx context.Context, jobID string) ([]Photo, erro
 	for rows.Next() {
 		var p Photo
 		var at string
-		if err := rows.Scan(&p.ID, &p.PrinterID, &p.Kind, &p.SHA256, &p.Size, &at); err != nil {
+		if err := rows.Scan(&p.ID, &p.PrinterID, &p.Kind, &p.SHA256, &p.Size, &at, &p.Percent); err != nil {
 			return nil, err
 		}
 		p.JobID, p.URL = jobID, "/api/camera/photos/"+p.SHA256
@@ -908,6 +966,9 @@ func (s *Service) Close() {
 	for _, m := range s.mons {
 		m.cancel()
 	}
+	for _, c := range s.progs {
+		c()
+	}
 	s.mu.Unlock()
 	s.wg.Wait()
 }
@@ -923,9 +984,20 @@ func decodeJPEG(b []byte) (image.Image, error) {
 // contenu quand plus rien ne le référence. Les photos de fin d'impression et de confirmation sont conservées.
 func (s *Service) PurgeOldPhotos(ctx context.Context) (int, error) {
 	days := s.Settings(ctx).AlertPhotoRetentionDays
-	if days <= 0 {
-		return 0, nil
+	n := 0
+	var err error
+	if days > 0 {
+		n, err = s.purgeAlertPhotos(ctx, days)
 	}
+	if pn, perr := s.PurgeProgressPhotos(ctx); perr != nil {
+		s.log.Warn("purge des photos de palier impossible", "err", perr)
+	} else {
+		n += pn
+	}
+	return n, err
+}
+
+func (s *Service) purgeAlertPhotos(ctx context.Context, days int) (int, error) {
 	cutoff := store.FormatTime(s.now().AddDate(0, 0, -days))
 	rows, err := s.c.Store.DB().QueryContext(ctx, `SELECT id,sha256 FROM camera_photos WHERE kind IN ('alert','snapshot') AND taken_at < ?`, cutoff)
 	if err != nil {

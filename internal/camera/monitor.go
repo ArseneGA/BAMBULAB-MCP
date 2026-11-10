@@ -45,14 +45,16 @@ func (s *Service) Run(ctx context.Context) {
 }
 
 func (s *Service) scan(ctx context.Context) {
-	if !s.Settings(ctx).Enabled {
-		return
-	}
+	detect := s.Settings(ctx).Enabled
 	jobs, err := s.c.Backend.PrintingJobs(ctx)
 	if err != nil {
 		return
 	}
 	for _, j := range jobs {
+		s.startProgress(ctx, j) // journal photo par paliers de 10 % (D8) : indépendant de la détection d'échec
+		if !detect {
+			continue
+		}
 		s.mu.Lock()
 		_, running := s.mons[j.ID]
 		if !running {
@@ -309,6 +311,7 @@ func (s *Service) AttachEvents(subscribe func(func(PrintEvent))) {
 		if ev.To != contracts.PrintCompleted && ev.To != contracts.PrintFailed {
 			return
 		}
+		completed := ev.To == contracts.PrintCompleted
 		s.mu.Lock()
 		delete(s.jobRefs, ev.JobID)
 		s.mu.Unlock()
@@ -316,8 +319,12 @@ func (s *Service) AttachEvents(subscribe func(func(PrintEvent))) {
 			defer func() { _ = recover() }()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if _, _, err := s.FinalPhoto(ctx, ev.PrinterID, ev.JobID); err != nil {
+			_, _, err := s.FinalPhoto(ctx, ev.PrinterID, ev.JobID)
+			if err != nil {
 				s.log.Debug("photo de fin non prise", "print_job", ev.JobID, "err", err)
+			}
+			if completed {
+				s.finishProgress(ctx, ev.JobID, ev.PrinterID, err) // palier 100 % = photo de fin (D8)
 			}
 		}()
 	})

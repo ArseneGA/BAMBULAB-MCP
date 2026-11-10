@@ -27,6 +27,7 @@ type fakeBackend struct {
 	mu       sync.Mutex
 	jobState contracts.PrintState
 	layer    atomic.Int64
+	pct      atomic.Int64 // progression en % (journal photo par paliers)
 	hms      atomic.Int64
 	stopReqs atomic.Int64
 }
@@ -50,7 +51,7 @@ func (b *fakeBackend) PrintingJobs(context.Context) ([]JobInfo, error) {
 }
 func (b *fakeBackend) Job(context.Context, string) (JobInfo, error) { return b.job(), nil }
 func (b *fakeBackend) State(context.Context, string) (PrinterState, error) {
-	return PrinterState{Reachable: true, Printing: true, Layer: int(b.layer.Load()), TotalLayers: 100, HMSCount: int(b.hms.Load())}, nil
+	return PrinterState{Reachable: true, Printing: true, Layer: int(b.layer.Load()), TotalLayers: 100, HMSCount: int(b.hms.Load()), Percent: int(b.pct.Load())}, nil
 }
 func (b *fakeBackend) StopURL(context.Context, string) (string, error) {
 	b.stopReqs.Add(1)
