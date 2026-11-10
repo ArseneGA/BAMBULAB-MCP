@@ -45,6 +45,11 @@ func registerProjects(mux *http.ServeMux, c *core.Core) {
 		o, err := c.Insights.SetVerdict(r.Context(), insights.SetVerdictInput{PrintJobID: r.PathValue("id"), Verdict: in.Verdict, Reason: in.Reason, Note: in.Note, Source: insights.SourceHumanWeb})
 		projectsReply(c, w, o, err)
 	})
+	// Retire le verdict (bouton « Annuler » de l'Accueil, 8 s après un tap) : aucun effet sur l'imprimante ni sur la file.
+	mux.HandleFunc("DELETE /api/prints/{id}/verdict", func(w http.ResponseWriter, r *http.Request) {
+		o, err := c.Insights.ClearVerdict(r.Context(), r.PathValue("id"))
+		projectsReply(c, w, o, err)
+	})
 }
 
 // projectsReply traduit les erreurs en statuts HTTP (une erreur interne n'expose pas son détail).

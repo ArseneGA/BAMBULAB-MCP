@@ -21,7 +21,7 @@ export interface Progress {
   units_judged_redo: number; units_unjudged: number; complete: boolean; text: string;
 }
 export interface Project {
-  id: string; name: string; description?: string; status: ProjectStatus; collection_id?: string; parent_id?: string; due_date?: string; archived?: boolean; rev: number;
+  id: string; name: string; description?: string; status: ProjectStatus; collection_id?: string; parent_id?: string; due_date?: string; archived?: boolean; rev: number; created_at?: string; updated_at?: string;
 }
 export interface PartLine {
   model_id: string; model_name?: string; quantity: number; role?: string; implicit?: boolean; trashed?: boolean; printed: number; judged_success: number;
@@ -37,7 +37,7 @@ export interface ListItem { project: Project; depth: number; progress: Progress;
 export interface ProjectList { projects: ListItem[]; total: number; counts_by_status: Record<string, number>; note: string }
 export interface PendingVerdict { print_job_id: string; name?: string; model_name?: string; state: string; material_family?: string; finished_at?: string }
 export interface PendingList { pending: PendingVerdict[]; total: number; fail_reasons: Array<{ id: string; label: string }>; note: string }
-export interface VerdictReply { print_job_id: string; verdict: Verdict; fail_reason?: string; changed: boolean; note: string; warnings?: string[] }
+export interface VerdictReply { print_job_id: string; verdict: Verdict; fail_reason?: string; previous_verdict?: Verdict; changed: boolean; note: string; warnings?: string[] }
 
 async function req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   let res: Response;
@@ -74,4 +74,6 @@ export const projectsApi = {
   pending: (signal?: AbortSignal) => req<PendingList>('GET', '/api/verdicts/pending', undefined, signal),
   setVerdict: (printJobId: string, verdict: Verdict, reason?: string, note?: string) =>
     req<VerdictReply>('POST', `/api/prints/${encodeURIComponent(printJobId)}/verdict`, { verdict, ...(reason ? { reason } : {}), ...(note ? { note } : {}) }),
+  /** « Annuler » (8 s après un tap) : retire le verdict ; l'impression redevient non jugée. Aucun effet sur l'imprimante. */
+  clearVerdict: (printJobId: string) => req<{ print_job_id: string; changed: boolean; note: string }>('DELETE', `/api/prints/${encodeURIComponent(printJobId)}/verdict`),
 };

@@ -27,6 +27,8 @@ export interface LogEntry {
   estimated: { seconds?: number; grams?: number }; actual: { seconds?: number; grams?: number; basis?: string };
   duration_delta_pct?: number; mass_delta_pct?: number; planned_cost?: CostEstimate; actual_cost?: CostEstimate;
   photos?: string[]; camera_photos?: Array<{ id: string; kind: 'final' | 'alert'; sha256: string; taken_at: string }>; rating?: number; comment?: string; defects?: string[]; experiment_id?: string; candidate_id?: string; result_ids?: string[];
+  /** G9 : jugement de l'humain (vide = pas encore jugé), raison, 100 % atteint (la pièce compte « imprimée », verdict ou pas). */
+  verdict?: 'success' | 'failed' | 'redo' | ''; fail_reason?: string; verdict_at?: string; reached_100?: boolean;
   created_at: string; updated_at: string;
 }
 export interface LogList { entries: LogEntry[]; total: number; created_from_finished_prints: number; defect_catalog: Array<{ id: string; label: string }> }

@@ -71,6 +71,16 @@ func TestProjectsEndpoints(t *testing.T) {
 	if code != 200 || part["judged_failed"] != float64(1) || !strings.Contains(part["text"].(string), "jugée ratée") {
 		t.Errorf("fiche après verdict : %v", part)
 	}
+	// « Annuler » (G10) : le verdict est retiré, l'impression redevient en attente de verdict.
+	if code, cl := do(t, "DELETE", srv.URL+"/api/prints/jobP/verdict", ""); code != 200 || cl["changed"] != true {
+		t.Errorf("retrait du verdict : %d %v", code, cl)
+	}
+	if code, pend := do(t, "GET", srv.URL+"/api/verdicts/pending", ""); code != 200 || pend["total"] != float64(1) {
+		t.Errorf("de nouveau en attente : %d %v", code, pend)
+	}
+	if code, _ := do(t, "POST", srv.URL+"/api/prints/jobP/verdict", `{"verdict":"failed","reason":"warping"}`); code != 200 {
+		t.Errorf("verdict à nouveau : %d", code)
+	}
 	if code, pend := do(t, "GET", srv.URL+"/api/verdicts/pending", ""); code != 200 || pend["total"] != float64(0) {
 		t.Errorf("plus rien en attente : %d %v", code, pend)
 	}
