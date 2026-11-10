@@ -72,7 +72,7 @@ func (b PrintingBackend) State(ctx context.Context, printerID string) (PrinterSt
 		return PrinterState{}, err
 	}
 	return PrinterState{Reachable: st.Reachable && st.State != string(printer.StateOffline), Printing: st.State == string(printer.StatePrinting),
-		Layer: st.Layer, TotalLayers: st.TotalLayers, HMSCount: st.HMSCount, PrintError: st.PrintError}, nil
+		Layer: st.Layer, TotalLayers: st.TotalLayers, HMSCount: st.HMSCount, PrintError: st.PrintError, Percent: st.Percent}, nil
 }
 
 func (b PrintingBackend) StopURL(ctx context.Context, jobID string) (string, error) {
