@@ -79,3 +79,16 @@ func StageName(id int) string {
 
 // StageIdle dit si l'étape est « repos » (à ne pas historiser).
 func StageIdle(id int) bool { return id < 0 || id == StageIdle255 }
+
+// preparationStages : étapes de PRÉPARATION (ou de calibration) pendant lesquelles l'imprimante rapporte « running » sans que
+// couche, pourcentage ni temps restant ne bougent : chauffe, nettoyage de la buse, mise à niveau du plateau, scans,
+// calibrations. La supervision n'y déclare pas l'impression « bloquée » avant un délai propre aux préparations (FB2).
+var preparationStages = map[int]bool{
+	StageBedLeveling: true, StageHeatbedPreheat: true, StageSweepXY: true, StageChangingFilament: true, StageHeatingHotend: true,
+	StageCalibratingExtr: true, StageScanningBed: true, StageInspectFirstLayer: true, StageIdentifyPlate: true, StageCalibratingLidar: true,
+	StageHoming: true, StageCleaningNozzle: true, StageCheckExtruderTemp: true, 18: true, StageCalibratingFlow: true, 22: true, 24: true,
+	StageMotorNoiseCali: true, 29: true,
+}
+
+// IsPreparationStage dit si l'étape est une préparation / calibration (aucune progression de couche attendue).
+func IsPreparationStage(id int) bool { return preparationStages[id] }

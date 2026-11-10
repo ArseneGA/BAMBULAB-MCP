@@ -3,6 +3,7 @@ package printing
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 // WatchConfig règle les délais de la supervision (tests : valeurs courtes).
 type WatchConfig struct {
 	StallAfter     time.Duration // progression figée avant « bloquée » (défaut 5 min)
+	PrepStallAfter time.Duration // pendant une étape de préparation / calibration (chauffe, nettoyage, mise à niveau...) : durée de l'étape avant que « bloquée » redevienne possible (défaut 20 min)
 	IdleGrace      time.Duration // IDLE persistant avant de conclure à un abandon (défaut 8 s)
 	MismatchGrace  time.Duration // fichier non reconnu avant de conclure (défaut 30 s)
 	InconsistAfter time.Duration // consignes incohérentes avant l'alerte (défaut 45 s)
@@ -45,6 +47,7 @@ func (c WatchConfig) withDefaults() WatchConfig {
 		}
 	}
 	d(&c.StallAfter, 5*time.Minute)
+	d(&c.PrepStallAfter, 20*time.Minute)
 	d(&c.IdleGrace, 8*time.Second)
 	d(&c.MismatchGrace, 30*time.Second)
 	d(&c.InconsistAfter, 45*time.Second)
@@ -148,11 +151,77 @@ func errorsText(es []printer.ErrorInfo, withAction bool) string {
 	return strings.Join(parts, " ; ")
 }
 
+const maxErrorLog = 20
+
+// errorLogRefresh : une erreur toujours active voit sa dernière observation réécrite en base au plus toutes les 30 s.
+const errorLogRefresh = 30 * time.Second
+
+// noteErrors range les codes d'erreur du rapport courant : ErrorDetails ne contient QUE ce qui est actif maintenant (vide si
+// l'imprimante ne rapporte plus rien), ErrorLog garde l'historique horodaté (première et dernière observation active, drapeau
+// Active). Renvoie vrai si l'ensemble des actifs a changé (nouveau code, code disparu) ou si une observation doit être
+// réécrite : seul cas qui justifie une écriture en base.
+func (p *PrintProgress) noteErrors(es []printer.ErrorInfo, now time.Time) bool {
+	changed := len(es) != len(p.ErrorDetails)
+	active := map[string]bool{}
+	for _, e := range es {
+		key := errorKey(e)
+		active[key] = true
+		found := false
+		for i := range p.ErrorLog {
+			if errorKey(p.ErrorLog[i].ErrorInfo) != key {
+				continue
+			}
+			found = true
+			c := &p.ErrorLog[i]
+			if !c.Active {
+				c.FirstSeenAt, c.Active, changed = now, true, true // revenu après une disparition : nouvelle occurrence
+			}
+			if now.Sub(c.LastSeenAt) >= errorLogRefresh {
+				c.LastSeenAt, changed = now, true
+			}
+			c.ErrorInfo = e
+		}
+		if !found {
+			p.ErrorLog = append(p.ErrorLog, Cause{ErrorInfo: e, Active: true, FirstSeenAt: now, LastSeenAt: now})
+			changed = true
+		}
+	}
+	for i := range p.ErrorLog {
+		if c := &p.ErrorLog[i]; c.Active && !active[errorKey(c.ErrorInfo)] {
+			c.Active, changed = false, true // périmé : reste dans l'historique avec sa dernière observation
+		}
+	}
+	if over := len(p.ErrorLog) - maxErrorLog; over > 0 {
+		p.ErrorLog = p.ErrorLog[over:]
+	}
+	p.ErrorDetails = append([]printer.ErrorInfo(nil), es...)
+	return changed
+}
+
+func errorKey(e printer.ErrorInfo) string { return e.Code }
+
+// causes sépare les codes actifs de l'historique (plus récents d'abord dans l'historique).
+func (p *PrintProgress) causes() (active, history []Cause) {
+	if p == nil {
+		return nil, nil
+	}
+	for _, c := range p.ErrorLog {
+		if c.Active {
+			active = append(active, c)
+		} else {
+			history = append(history, c)
+		}
+	}
+	sort.SliceStable(history, func(i, k int) bool { return history[i].LastSeenAt.After(history[k].LastSeenAt) })
+	return active, history
+}
+
 func copyProgress(p *PrintProgress) PrintProgress {
 	if p == nil {
 		return PrintProgress{}
 	}
 	c := *p
+	c.ErrorLog = append([]Cause(nil), p.ErrorLog...)
 	c.Stages = append([]StageSeen(nil), p.Stages...)
 	c.ErrorDetails = append([]printer.ErrorInfo(nil), p.ErrorDetails...)
 	c.Alerted = append([]string(nil), p.Alerted...)
@@ -229,12 +298,9 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 	terminal := st.State == printer.StateFinished || st.State == printer.StateFailed
 	pg.PrinterState, pg.Percent, pg.Layer, pg.TotalLayers, pg.RemainingMin = string(st.State), st.Progress, st.Layer, st.TotalLayers, st.RemainingMin
 	pg.ObservedAt, pg.MatchesFile, pg.PrinterReason = now, m, st.FailReason
-	if errs := decodeErrors(st); len(errs) > 0 {
-		pg.ErrorDetails = errs
-	}
-	stageNew := false
+	stageNew := pg.noteErrors(decodeErrors(st), now) // FB3 : actifs (error_details) séparés de l'historique horodaté (error_log)
 	if m {
-		stageNew = pg.noteStage(st, now)
+		stageNew = pg.noteStage(st, now) || stageNew
 	}
 	if m && active {
 		pg.SeenActive = true
@@ -357,6 +423,21 @@ func (s *Service) checkStall(ctx context.Context, j Job, pg *PrintProgress, st p
 		pg.Sig, pg.SigAt = sig, now
 		pg.Blocked = ""
 	}
+	// Étape de préparation ou de calibration (chauffe, nettoyage de la buse, mise à niveau du plateau, scans, calibrations) :
+	// l'imprimante rapporte « running » sans que couche, % ni temps restant bougent, et les consignes de chauffe se
+	// succèdent : ce n'est pas un blocage (FB2, fausse alerte pendant la mise à niveau du 9/11). Les horloges repartent à
+	// zéro tant que l'étape dure ; au-delà de PrepStallAfter l'étape est réellement anormale et la règle habituelle reprend.
+	if st.StageSeen && printer.IsPreparationStage(st.Stage) {
+		since := now
+		if n := len(pg.Stages); n > 0 && pg.Stages[n-1].ID == st.Stage && !pg.Stages[n-1].FirstSeen.IsZero() {
+			since = pg.Stages[n-1].FirstSeen
+		}
+		if now.Sub(since) < wc.PrepStallAfter {
+			pg.Sig, pg.SigAt = sig, now
+			pg.Blocked, pg.InconsistAt = "", time.Time{}
+			return
+		}
+	}
 	// consignes incohérentes en pleine impression (hors fin d'impression où le G-code coupe les chauffes)
 	endPhase := st.Progress >= 97 || (st.TotalLayers > 0 && st.Layer >= st.TotalLayers) || (st.RemainingMin <= 1 && st.Progress > 0)
 	var inconsist string
@@ -408,6 +489,15 @@ func (s *Service) closeFromPrinter(ctx context.Context, id string, ev contracts.
 	cause := ""
 	if len(pg.ErrorDetails) > 0 {
 		cause = " ; cause : " + errorsText(pg.ErrorDetails, false)
+	} else if _, hist := pg.causes(); len(hist) > 0 { // plus rien d'actif : le dernier code vu, signalé comme tel
+		var es []printer.ErrorInfo
+		for i, c := range hist {
+			if i >= 3 {
+				break
+			}
+			es = append(es, c.ErrorInfo)
+		}
+		cause = " ; dernier(s) code(s) vu(s) avant sa disparition : " + errorsText(es, false)
 	}
 	msg := why + cause
 	pg.Attention, pg.Blocked, pg.Unreachable = "", "", ""

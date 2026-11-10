@@ -364,9 +364,12 @@ type PrintStatus struct {
 	Wait   *WaitInfo     `json:"wait,omitempty" jsonschema:"présent quand wait_seconds ou wait_for_print_change a attendu : ce qui a changé, ou échéance"`
 	// Alert : « bloquée : … », « attend une action à l'écran : <texte HMS> » ou « injoignable… » : à signaler tout de suite à l'utilisateur.
 	Alert string `json:"alert,omitempty" jsonschema:"situation à signaler : impression bloquée, attente d'une action à l'écran (texte HMS décodé), imprimante injoignable"`
-	// Causes : erreurs décodées (print_error, HMS) vues pour cette impression, surtout utiles quand elle a échoué.
-	Causes []printer.ErrorInfo `json:"causes,omitempty" jsonschema:"codes d'erreur de l'imprimante décodés (texte, gravité, consigne, lien wiki)"`
-	Note   string              `json:"note,omitempty"`
+	// Causes : codes d'erreur ACTIFS (print_error, HMS rapportés encore par l'imprimante à la dernière observation), horodatés.
+	// CausesHistory : codes vus pendant l'impression mais périmés (l'imprimante ne les rapporte plus), horodatés : ce n'est pas
+	// une cause en cours (FB3).
+	Causes        []Cause `json:"causes,omitempty" jsonschema:"codes d'erreur ACTIFS maintenant, décodés (texte, gravité, consigne, lien wiki) avec première et dernière observation ; vide si hms_count et print_error sont à 0"`
+	CausesHistory []Cause `json:"causes_history,omitempty" jsonschema:"historique : codes d'erreur vus pendant l'impression mais plus rapportés par l'imprimante (périmés), horodatés ; pas une cause en cours"`
+	Note          string  `json:"note,omitempty"`
 }
 
 // GetPrintStatus relit l'impression et, si elle est active, rafraîchit depuis l'imprimante.
@@ -408,7 +411,12 @@ func (s *Service) GetPrintStatus(ctx context.Context, id string) (*PrintStatus, 
 	out.Job = j
 	if j.Print != nil {
 		out.Alert = alertSentence(j.Print)
-		out.Causes = j.Print.ErrorDetails
+		out.Causes, out.CausesHistory = j.Print.causes()
+		if len(j.Print.ErrorLog) == 0 { // impression enregistrée avant l'historique horodaté : codes vus, sans heure
+			for _, e := range j.Print.ErrorDetails {
+				out.CausesHistory = append(out.CausesHistory, Cause{ErrorInfo: e})
+			}
+		}
 	}
 	out.Progress = s.ProgressFor(ctx, j)
 	out.Stages = stageSummary(j, curSt)

@@ -128,8 +128,11 @@ func (s *Service) analyzeOnce(ctx context.Context, j JobInfo, m *monitor, st Set
 		s.mu.Lock()
 		ref, ok := s.refs[j.PrinterID]
 		s.mu.Unlock()
+		if jr, jok := s.jobReference(ctx, j.ID); jok { // la référence de CETTE impression prime sur la photo de la page de confirmation
+			ref, ok = jr, true
+		}
 		switch {
-		case ok && s.now().Sub(ref.at) < 3*time.Hour:
+		case ok && (s.now().Sub(ref.at) < 3*time.Hour || ref.job):
 			if ri, err := decodeJPEG(ref.jpeg); err == nil {
 				m.det.SetReference(ri) // photo prise à l'ouverture de /confirm : plateau vide attesté par l'humain
 			}
@@ -260,12 +263,21 @@ func (s *Service) AnalyzeLatest(ctx context.Context, printerID string) (*Analysi
 			rep := la.Report
 			out.Report, out.ReportAt = &rep, la.At
 		}
+		// Pas encore d'analyse du détecteur, ou analyse sans référence alors qu'une référence de cette impression existe :
+		// analyse ponctuelle de l'image fraîche contre la référence prise après la confirmation (FB1).
+		if out.Report == nil || !out.Report.ReferenceSet {
+			if rep, ok := s.analyzeAgainstReference(ctx, *job, p.JPEG, p.TakenAt); ok {
+				out.Report, out.ReportAt = &rep, p.TakenAt
+			}
+		}
 	}
 	switch {
 	case job == nil:
 		out.Note = "Aucune impression en cours sur cette imprimante : image seule, pas d'analyse automatique."
 	case out.Report == nil:
-		out.Note = "Impression en cours, mais le détecteur n'a pas encore analysé d'image (premier instantané dans moins de l'intervalle configuré). Juge l'image toi-même."
+		out.Note = "Impression en cours, mais le détecteur n'a pas encore analysé d'image (premier instantané dans moins de l'intervalle configuré) et aucune image de référence du plateau vide n'a pu être prise après la confirmation. Juge l'image toi-même."
+	case !out.Report.ReferenceSet:
+		out.Note = "Aucune image de référence du plateau vide n'a pu être prise pour cette impression (caméra injoignable à la confirmation ?) : l'analyse visuelle automatique est limitée. Juge l'image toi-même : filaments en vrac (spaghetti), pièce décollée, panache autour de la buse."
 	default:
 		out.Note = "Juge toi-même l'image : cherche des filaments en vrac (spaghetti) hors de la pièce, une pièce décollée ou déplacée, un panache de filament autour de la buse. Le score du détecteur local et ses signaux sont donnés à titre indicatif. Tu ne peux pas arrêter l'impression : si elle est perdue, propose à l'utilisateur d'ouvrir la page d'arrêt (cancel_print renvoie le lien)."
 	}
@@ -283,9 +295,23 @@ func (s *Service) LastReport(jobID string) (Report, time.Time, bool) {
 // AttachEvents abonne le service aux fins d'impression : photo de fin rattachée à l'impression, mémoire libérée.
 func (s *Service) AttachEvents(subscribe func(func(PrintEvent))) {
 	subscribe(func(ev PrintEvent) {
+		if ev.To == contracts.PrintStartRequested { // l'humain vient de confirmer : le plateau est vide, la tête n'a pas bougé
+			go func() {
+				defer func() { _ = recover() }()
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if err := s.captureReference(ctx, ev.PrinterID, ev.JobID); err != nil {
+					s.log.Warn("image de référence du plateau non prise (détection visuelle sans référence propre à l'impression)", "print_job", ev.JobID, "err", err)
+				}
+			}()
+			return
+		}
 		if ev.To != contracts.PrintCompleted && ev.To != contracts.PrintFailed {
 			return
 		}
+		s.mu.Lock()
+		delete(s.jobRefs, ev.JobID)
+		s.mu.Unlock()
 		go func() {
 			defer func() { _ = recover() }()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
