@@ -27,6 +27,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/issues"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/projects"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/sheets"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/library"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
@@ -106,6 +107,8 @@ type Core struct {
 	Issues *issues.Service
 	// Projects : suivi de projet de premier rang (projets, sous-projets, avancement ; G9, internal/projects). Ne lance jamais d'impression.
 	Projects *projects.Service
+	// Sheets : fiche pièce (PJ5) et fiche d'impression (PJ10), lecture seule (G9, internal/sheets).
+	Sheets *sheets.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
