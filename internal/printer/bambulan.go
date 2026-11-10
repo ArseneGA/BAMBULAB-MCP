@@ -142,6 +142,9 @@ type Bambu struct {
 	startMu  sync.Mutex // réservation : un seul Start à la fois
 	uploadMu sync.Mutex
 	accMu    sync.Mutex // une commande d'accessoire à la fois (accessories.go)
+	skipMu   sync.Mutex // une commande skip_objects à la fois (skip.go)
+
+	skipReply string // dernière réponse explicite à skip_objects, sous mu (skip.go)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -486,6 +489,9 @@ func (b *Bambu) onMessage(payload []byte) {
 		return
 	}
 	cmd := str(pm["command"])
+	if cmd == "skip_objects" {
+		b.noteSkipReply(pm)
+	}
 	if cmd == "push_status" || (cmd == "" && pm["gcode_state"] != nil) {
 		b.mu.Lock()
 		b.merger.merge(pm)

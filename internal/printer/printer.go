@@ -74,6 +74,8 @@ type Status struct {
 	FullReportSeen bool            `json:"full_report_seen"`      // au moins un pushall complet fusionné
 	AMS            *AMSState       `json:"ams,omitempty"`         // état AMS du dernier rapport (nil si aucun)
 	Accessories    *AccessoryState `json:"accessories,omitempty"` // lumières, ventilateurs, vitesse du dernier rapport (nil si aucun transmis)
+	// SkippedObjects : identifiants des objets déjà ignorés (print.s_obj) ; absent si aucun ou non transmis.
+	SkippedObjects []int `json:"skipped_objects,omitempty"`
 }
 
 // HasError indique une erreur d'imprimante (print_error ou HMS non vide).

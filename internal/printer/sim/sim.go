@@ -141,6 +141,7 @@ type Sim struct {
 	lastBeat  time.Time
 	starts    []StartRecord
 	cmds      []string // commandes d'impression reçues (scenarios.go)
+	skipRaw   []string // charges utiles skip_objects reçues (skip.go)
 	gcodes    []string // paramètres des gcode_line reçus (accessories.go)
 	reportSeq int
 	cancel    context.CancelFunc
@@ -240,7 +241,7 @@ func (s *Sim) Close() error {
 func (s *Sim) SetFault(name string, on bool) error {
 	switch name {
 	case FaultOffline, FaultDropAfterStart, FaultSlowAck, FaultIgnoreStart, FaultRejectStart, FaultHMSError, FaultFileMissing, FaultPlateOccupied,
-		FaultFreeze, FaultStopStaysRunning, FaultResumeBroken:
+		FaultFreeze, FaultStopStaysRunning, FaultResumeBroken, FaultIgnoreSkip:
 	default:
 		return fmt.Errorf("sim: unknown fault %q", name)
 	}
@@ -456,6 +457,8 @@ func (s *Sim) handleRequest(payload []byte) {
 		s.onFilamentCommand(cmd, seq)
 	case "project_file":
 		s.onProjectFile(seq, p)
+	case "skip_objects":
+		s.onSkipObjects(seq, p)
 	case "pause", "resume", "stop":
 		s.mu.Lock()
 		err := s.p.control(cmd, time.Now())

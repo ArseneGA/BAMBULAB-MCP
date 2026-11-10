@@ -108,6 +108,9 @@ type Service struct {
 	// ownResume : impression -> instant de SA commande de reprise (une reprise vue ensuite n'est pas « hors Printalk », FB14).
 	ownResume map[string]time.Time
 
+	// skipReqs : demandes d'ignorer des objets préparées par la sous-commande humaine (skip.go), à usage unique, TTL court.
+	skipReqs map[string]*skipReq
+
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
 	stopping map[string]bool     // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)
@@ -882,6 +885,8 @@ type PrinterStatus struct {
 	// Accessoires (N4) : état rapporté (lumières, ventilateurs, vitesse) et ceux que le modèle possède ; facultatifs.
 	Accessories          *printer.AccessoryState  `json:"accessories,omitempty" jsonschema:"état courant des lumières, ventilateurs et de la vitesse, tel que rapporté par l'imprimante (champ absent = non transmis)"`
 	AvailableAccessories *contracts.AccessoryCaps `json:"available_accessories,omitempty" jsonschema:"accessoires que possède ce modèle (set_printer_light, set_printer_fan, set_print_speed_level)"`
+	// SkippedObjects : objets déjà ignorés pendant l'impression en cours (print.s_obj) ; facultatif, absent si aucun.
+	SkippedObjects []int `json:"skipped_objects,omitempty" jsonschema:"identifiants des objets déjà ignorés pendant l'impression en cours (print.s_obj de l'imprimante) ; absent si aucun ou non transmis"`
 }
 
 // LastJobInfo : dernière impression suivie sur cette imprimante.
@@ -924,6 +929,7 @@ func (s *Service) GetPrinterStatus(ctx context.Context, printerID string) (*Prin
 	st, err := ad.Status(cctx)
 	out := statusOut(printerID, st, s.now())
 	out.Accessories = st.Accessories
+	out.SkippedObjects = st.SkippedObjects
 	if caps, ok := printer.AccessoriesFor(rec.ModelID); ok {
 		out.AvailableAccessories = &caps
 	}

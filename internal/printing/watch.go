@@ -250,7 +250,7 @@ func progressChanged(old *PrintProgress, n *PrintProgress, stageNew bool) bool {
 		old.MatchesFile != n.MatchesFile || old.Attention != n.Attention || old.Blocked != n.Blocked || old.Unreachable != n.Unreachable ||
 		old.WasGone != n.WasGone || old.IdleSince.IsZero() != n.IdleSince.IsZero() || old.MismatchAt.IsZero() != n.MismatchAt.IsZero() ||
 		old.InconsistAt.IsZero() != n.InconsistAt.IsZero() || old.GoneSince.IsZero() != n.GoneSince.IsZero() || old.SeenActive != n.SeenActive ||
-		len(old.ErrorDetails) != len(n.ErrorDetails) || old.Sig != n.Sig || !old.SigAt.Equal(n.SigAt)
+		len(old.ErrorDetails) != len(n.ErrorDetails) || len(old.SkippedObjects) != len(n.SkippedObjects) || old.Sig != n.Sig || !old.SigAt.Equal(n.SigAt)
 }
 
 // observe applique un rapport d'imprimante à une impression PRINTING (voir l'en-tête du fichier).
@@ -299,6 +299,9 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 	oldProg := j.Print // état enregistré AVANT ce relevé (FB14 : détecter les changements d'état hors Printalk)
 	pg.PrinterState, pg.Percent, pg.Layer, pg.TotalLayers, pg.RemainingMin = string(st.State), st.Progress, st.Layer, st.TotalLayers, st.RemainingMin
 	pg.ObservedAt, pg.MatchesFile, pg.PrinterReason = now, m, st.FailReason
+	if m {
+		pg.SkippedObjects = append([]int(nil), st.SkippedObjects...)
+	}
 	stageNew := pg.noteErrors(decodeErrors(st), now) // FB3 : actifs (error_details) séparés de l'historique horodaté (error_log)
 	if m {
 		stageNew = pg.noteStage(st, now) || stageNew

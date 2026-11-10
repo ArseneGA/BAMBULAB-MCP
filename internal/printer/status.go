@@ -81,6 +81,7 @@ func (m *reportMerger) toStatus() Status {
 		FullReportSeen: m.full,
 		AMS:            parseAMS(d),
 		Accessories:    parseAccessories(d),
+		SkippedObjects: parseSkippedObjects(d),
 	}
 	s.Temps = Temps{
 		Nozzle:       num(d["nozzle_temper"]),

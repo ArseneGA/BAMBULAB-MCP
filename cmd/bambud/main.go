@@ -123,6 +123,8 @@ func main() {
 			os.Exit(schemaVersionMain(os.Stdout))
 		case "agent":
 			os.Exit(agentMain(os.Args[2:], os.Stdout, os.Stderr))
+		case "skip-objects":
+			os.Exit(skipObjectsMain(os.Args[2:], os.Stdout, os.Stderr))
 		case "doctor":
 			os.Exit(doctorMain(os.Args[2:], os.Stdout, os.Stderr))
 		}
