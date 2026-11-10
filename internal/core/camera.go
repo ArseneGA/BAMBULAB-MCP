@@ -10,6 +10,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/filament"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/sheets"
 )
 
 // wireCamera branche la caméra (instantanés, détection d'échec, photo de /confirm) et les notifications sur la chaîne
@@ -43,6 +44,10 @@ func (c *Core) wireCamera() error {
 	w.Attach(c.Printing)
 	if c.Filament != nil {
 		c.Filament.Subscribe(func(e filament.Event) { nv.Emit(context.Background(), FilamentNotification(nv, e)) })
+	}
+	// Fiches pièce et impression (G9, lecture seule) : lisent le journal, la caméra, les bobines, l'audit.
+	if c.Sheets, err = sheets.New(sheets.Config{Store: c.Store, Insights: c.Insights, Projects: c.Projects, Camera: cam}); err != nil {
+		return fmt.Errorf("fiches pièce et impression : %w", err)
 	}
 	c.AddRunHook(cam.Run)
 	c.AddRunHook(w.Run)
