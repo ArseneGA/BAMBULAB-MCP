@@ -1,266 +1,309 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Box, Camera, Plus, Printer as PrinterIcon, ShieldCheck } from 'lucide-react';
-import { EmptyState, ProgressBar } from '../components';
-import { api, assetUrl, BASE } from '../api/client';
-import { useAsync, useConnection } from '../api/hooks';
+import { AlertTriangle, Bell, Box, CheckCircle2, FolderKanban, Plus, ShieldCheck, TriangleAlert, Upload } from 'lucide-react';
+import { Button, EmptyState, ErrorState, Skeleton } from '../components';
+import { VerdictBar, useVerdictFlow } from '../components/VerdictBar';
+import { api, ApiError } from '../api/client';
+import { useAsync, useConnection, isOffline } from '../api/hooks';
+import type { AsyncState } from '../api/hooks';
 import { insightsApi } from '../api/insights';
 import type { LogEntry } from '../api/insights';
 import { filamentApi } from '../api/filamentApi';
-import type { QueueEntry } from '../api/filamentApi';
-import type { PrintJob, PrinterStatus, PrinterView } from '../api/printTypes';
-import { finishAt, formatEta, formatMinutes, printSource } from '../api/progress';
-import { PRODUCT_NAME, TAGLINE } from '../brand';
-import { Async, FormatBadge, fmtBytes, fmtDate, fmtNum } from './common';
-import { isPrinting, usePrinterStatus } from './Printers';
-import { LaunchButton, stateText } from './Print';
-import { logOutcomeLabel, printerPill, queueStateLabel } from '@shared/labels';
-import './screens.css';
+import { dashboardApi } from '../api/dashboardApi';
+import type { CameraAlert } from '../api/dashboardApi';
+import { projectsApi, STATUS_LABEL, VERDICT_LABEL } from '../api/projectsTypes';
+import type { ListItem, PendingList, ProjectDetail } from '../api/projectsTypes';
+import type { PrintJob, PrinterView } from '../api/printTypes';
+import { formatEta } from '../api/progress';
+import { PRODUCT_NAME } from '../brand';
+import { fmtNum } from './common';
+import { LiveCard } from './dashboard/LiveCard';
+import type { LiveReport } from './dashboard/LiveCard';
+import { TODO_MAX, ageText, buildTodo, dormantProjects, fmtTime, isPrinted, judgedText, lowSpools, monthStats, printingTitle, readDormantDays, useVisiblePolling } from './dashboard/logic';
+import type { TodoItem } from './dashboard/logic';
+import { logOutcomeLabel, printStateLabel } from '@shared/labels';
+import './dashboard/dashboard.css';
 
-const SHORTCUTS = [
-  { to: '/bibliotheque', title: 'Retrouver ou importer', text: 'Recherche, collections, filtres de format, import non destructif.' },
-  { to: '/impressions/nouvelle', title: 'Nouvelle impression', text: 'Choisir un modèle, préciser le résultat voulu, préparer l\'impression.' },
-  { to: '/projets', title: 'Projets', text: 'Regrouper les pièces d\'un même objet et suivre son avancement.' },
-  { to: '/matieres', title: 'Matières', text: 'Bobines, couleurs, fiches techniques ; l\'inconnu reste inconnu.' },
-  { to: '/impressions', title: 'Impressions', text: 'Ce qui est à faire, en cours, terminé ; confirmation explicite avant tout lancement.' },
-  { to: '/impressions?vue=bilan', title: 'Bilan et coûts', text: 'Matière, électricité, usure : estimations à partir de vos tarifs.' },
-] as const;
+/* ---------- briques communes ---------- */
 
+/** Lecture tolérante : une route absente (404, G9 pas encore là) ou en erreur donne `undefined`, jamais une erreur d'écran. */
+const soft = <T,>(p: Promise<T>): Promise<T | undefined> => p.catch((e) => { if (e instanceof ApiError || (e as Error).name !== 'AbortError') return undefined; throw e; });
+
+const ACTIVE = ['PREPARED', 'SLICING', 'UPLOADING', 'START_REQUESTED', 'PRINTING'];
 const money = (v: number, cur = 'EUR') => `${fmtNum(v, 2)} ${cur === 'EUR' ? '€' : cur}`;
-const hm = (s?: number) => formatEta(s);
 
-const monthRange = () => {
-  const to = new Date();
-  const from = new Date(to.getFullYear(), to.getMonth(), 1);
-  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  return { from: iso(from), to: iso(to) };
-};
+/** Heure de la dernière donnée reçue pour un bloc (« Mis à jour à 14:32 »). */
+function useStamp(data: unknown): Date | undefined {
+  const seen = useRef<unknown>(undefined);
+  const at = useRef<Date | undefined>(undefined);
+  if (data !== undefined && data !== seen.current) { seen.current = data; at.current = new Date(); }
+  return at.current;
+}
 
-/** Photo du plateau : instantané du serveur, rafraîchissable à la demande (le flux n'est jamais ouvert en arrière-plan). */
-function Snapshot({ printer, live }: { printer: PrinterView; live: boolean }) {
-  const [stamp, setStamp] = useState(() => Date.now());
-  const [failed, setFailed] = useState(false);
-  if (!printer.access_code_set) return <div className="live-cam live-cam-empty"><Camera aria-hidden /><span>Caméra disponible une fois le code d'accès saisi.</span></div>;
+/**
+ * Un bloc de l'Accueil, indépendant des autres : squelette au chargement, erreur lisible en trois parties, ou — si le service ne répond plus —
+ * la dernière valeur connue avec « Dernière mise à jour à… » (le bandeau d'erreur est unique, celui de la coque).
+ */
+function Block<T>({ id, title, state, actions, children, empty, foot }: { id: string; title: string; state: AsyncState<T>; actions?: ReactNode; children: (d: T) => ReactNode; empty?: (d: T) => ReactNode | null; foot?: ReactNode }) {
+  const at = useStamp(state.data);
+  let body: ReactNode;
+  if (state.data === undefined) {
+    if (state.error) body = isOffline(state.error)
+      ? <p className="sub" role="status">Indisponible pour l'instant : le service ne répond pas.</p>
+      : <ErrorState title="Cette partie n'a pas pu se charger" text="La lecture a échoué." impact="Le reste de l'Accueil reste utilisable ; rien n'a été modifié." action={<Button size="sm" onClick={state.reload}>Réessayer</Button>} details={state.error.message} />;
+    else body = <Skeleton lines={3} label={`Chargement : ${title}`} />;
+  } else body = empty?.(state.data) ?? children(state.data);
   return (
-    <div className="live-cam">
-      {failed
-        ? <div className="live-cam-empty"><Camera aria-hidden /><span>Caméra indisponible pour cette imprimante.</span></div>
-        : <img src={`${BASE}/api/printers/${encodeURIComponent(printer.id)}/camera/snapshot?t=${stamp}`} alt={`Photo du plateau de ${printer.name}`} onError={() => setFailed(true)} onLoad={() => setFailed(false)} />}
-      {live && !failed && <span className="rec"><i />Dernière photo</span>}
-      <button type="button" className="btn btn-sm cam-btn" onClick={() => { setFailed(false); setStamp(Date.now()); }}><Camera size={14} aria-hidden />Photo</button>
+    <section className="panel dash-block" aria-label={title} id={id} aria-busy={state.data === undefined && !state.error}>
+      <div className="panel-h"><h2 className="dash-h">{title}</h2>{actions}</div>
+      {body}
+      {state.error && state.data !== undefined && <p className="sub dash-stale" role="status">Service injoignable : dernière mise à jour à {fmtTime(at)}.</p>}
+      {foot}
+    </section>
+  );
+}
+
+/* ---------- 0. Salutation ---------- */
+function Greeting({ printing, eta }: { printing: number; eta?: string }) {
+  const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return (
+    <div>
+      <h1>Bonjour</h1>
+      <p className="sub">{today.charAt(0).toUpperCase() + today.slice(1)} · {printing > 0 ? `${printing} impression${printing > 1 ? 's' : ''} en cours${eta ? `, fin vers ${eta}` : ''}` : 'Tout est calme.'}</p>
     </div>
   );
 }
 
-function LivePrinter({ printer, activeJob }: { printer: PrinterView; activeJob?: PrintJob }) {
-  const st = usePrinterStatus(printer.id, 5000);
-  const d: PrinterStatus | undefined = st.data;
-  const pill = printerPill(d, !!st.error);
-  const printing = isPrinting(d);
-  const eta = d && d.remaining_minutes > 0 ? d.remaining_minutes * 60 : undefined;
-  const title = activeJob?.name ?? d?.current_file;
-  return (
-    <section className="panel" aria-label={`Imprimante ${printer.name} en direct`}>
-      <div className="panel-h">
-        <div className="prn-id"><div className="ico"><PrinterIcon aria-hidden /></div><div><h3>{printer.name}</h3><div className="sub mono">{printer.host}</div></div></div>
-        <span className={`pill ${pill.cls}`} role="status"><i />{pill.label}</span>
-      </div>
-      <div className="live">
-        <div>
-          {printing && d ? (
-            <>
-              {title && <div className="live-title">{title}</div>}
-              <ProgressBar large label={`Impression en cours sur ${printer.name}`} source={{ state: 'running', percent: d.progress_percent, remaining_minutes: d.remaining_minutes, phase_label: d.total_layers > 0 ? `couche ${d.layer} sur ${d.total_layers}` : undefined }} hideEta />
-              <dl className="kv2">
-                <div><dt>Temps restant</dt><dd>{formatMinutes(d.remaining_minutes) ?? 'inconnu'}</dd></div>
-                <div><dt>Fin estimée</dt><dd>{finishAt(eta) ?? 'inconnue'}</dd></div>
-                <div><dt>Buse</dt><dd className="mono">{Math.round(d.temps.nozzle)} / {Math.round(d.temps.nozzle_target)} °C</dd></div>
-                <div><dt>Plateau</dt><dd className="mono">{Math.round(d.temps.bed)} / {Math.round(d.temps.bed_target)} °C</dd></div>
-              </dl>
-            </>
-          ) : (
-            <>
-              <div className="live-title">{!d ? 'Lecture de l\'état…' : !d.reachable ? 'Imprimante injoignable' : 'Aucune impression en cours'}</div>
-              {d?.display && <p className="sub">{d.display}</p>}
-              {d?.explanation && <p className="sub">{d.explanation}</p>}
-              {d?.error && <p className="sub">{d.error}</p>}
-              {d?.reachable && <dl className="kv2">
-                <div><dt>Buse</dt><dd className="mono">{Math.round(d.temps.nozzle)} / {Math.round(d.temps.nozzle_target)} °C</dd></div>
-                <div><dt>Plateau</dt><dd className="mono">{Math.round(d.temps.bed)} / {Math.round(d.temps.bed_target)} °C</dd></div>
-                {d.last_job && <div><dt>Dernière impression</dt><dd>{d.last_job.name}</dd></div>}
-                {d.hms_count > 0 && <div><dt>Alertes de l'imprimante</dt><dd>{d.hms_count}</dd></div>}
-              </dl>}
-              {d?.reachable && <p className="sub">Prête : choisissez un modèle, préparez-le, puis lancez après confirmation.</p>}
-            </>
-          )}
-          {d?.updated_at && <p className="sub live-stamp">Relevé à {fmtDate(d.updated_at)}</p>}
-        </div>
-        <Snapshot printer={printer} live={printing} />
-      </div>
-    </section>
-  );
-}
+/* ---------- 1. À faire ---------- */
+const TODO_ICON = { confirm: ShieldCheck, alert: TriangleAlert, verdict: CheckCircle2, spool: Bell, dormant: FolderKanban } as const;
+const TODO_KIND = { confirm: 'À confirmer', alert: 'Alerte', verdict: 'Verdict', spool: 'Bobine basse', dormant: 'Projet dormant' } as const;
 
-function QueuePanel() {
-  const q = useAsync((s) => filamentApi.queue(false, s), []);
-  const reload = useRef(q.reload); reload.current = q.reload;
-  useEffect(() => { const t = window.setInterval(() => reload.current(), 8000); return () => window.clearInterval(t); }, []);
-  const entries: QueueEntry[] = (q.data?.queue ?? []).filter((e) => !['done', 'failed', 'removed'].includes(e.state));
+function TodoBlock({ items, reasons, onChange }: { items: TodoItem[]; reasons: string[]; onChange: () => void }) {
+  const [all, setAll] = useState(false);
+  const flow = useVerdictFlow(onChange);
+  const shown = all ? items : items.slice(0, TODO_MAX);
   return (
-    <section className="panel" aria-label="File d'attente">
-      <div className="panel-h"><h3>File d'attente</h3>{entries.length > 0 ? <span className="pill wait"><i />{entries.length} en attente</span> : <Link className="btn btn-ghost btn-sm" to="/impressions?vue=en-cours">Gérer</Link>}</div>
-      <Async state={q} label="Chargement de la file" empty={() => entries.length === 0 ? <p className="sub">Aucune impression en file. Ajoutez-en depuis <Link to="/impressions?vue=en-cours">la file d'attente</Link>.</p> : null}>
-        {() => (
-          <ul className="rowlist">
-            {entries.map((e) => (
-              <li key={e.id}>
-                <span className="th" aria-hidden><Box size={20} /></span>
-                <div className="grow"><b>{e.file_name ?? e.print_job_id}</b><small>{[e.estimated_minutes ? formatMinutes(e.estimated_minutes) : undefined, e.estimated_grams ? `${fmtNum(e.estimated_grams, 0)} g` : undefined, queueStateLabel(e.state).label].filter(Boolean).join(' · ')}</small></div>
-                {e.state === 'ready' && e.confirm_url && <a className="btn btn-primary btn-sm" href={assetUrl(e.confirm_url)} title="Ouvre la page de confirmation : vous y approuvez le lancement"><ShieldCheck size={13} aria-hidden />Vérifier et lancer</a>}
+    <>
+      <section className="panel dash-block dash-todo" aria-label="À faire" id="a-faire">
+        <div className="panel-h"><h2 className="dash-h">À faire</h2><span className="pill wait"><i />{items.length}</span></div>
+        <ul className="dash-todo-list">
+          {shown.map((t) => {
+            const I = TODO_ICON[t.kind];
+            return (
+              <li key={t.key} className={`dash-todo-row dash-todo-${t.kind}`}>
+                <span className="dash-todo-ico"><I size={18} aria-hidden /></span>
+                <div className="grow"><b>{t.title}</b><small><span className="dash-kind">{TODO_KIND[t.kind]}</span> · {t.detail}</small></div>
+                {t.kind === 'confirm' && t.href && (t.server
+                  ? <a className="btn btn-primary btn-sm" href={t.href} title="Ouvre la page de confirmation du serveur : c'est là que vous approuvez le lancement. Ce lien ne lance rien."><ShieldCheck size={13} aria-hidden />Vérifier et lancer</a>
+                  : <Link className="btn btn-secondary btn-sm" to={t.href}>Ouvrir la fiche</Link>)}
+                {t.kind === 'verdict' && t.verdict && <VerdictBar label={t.title} reasons={reasons} busy={flow.busy} onGive={(v, r) => flow.give(t.verdict!.print_job_id, t.title, v, r)} />}
+                {(t.kind === 'alert' || t.kind === 'spool' || t.kind === 'dormant') && t.href && <Link className="btn btn-secondary btn-sm" to={t.href}>{t.kind === 'alert' ? 'Examiner' : 'Ouvrir'}</Link>}
               </li>
-            ))}
-          </ul>
-        )}
-      </Async>
-      <p className="sub panel-foot">Rien ne démarre seul : chaque lancement passe par votre confirmation.</p>
-    </section>
+            );
+          })}
+        </ul>
+        {items.length > TODO_MAX && <Button size="sm" variant="ghost" onClick={() => setAll((a) => !a)}>{all ? 'Réduire' : `Voir tout (${items.length})`}</Button>}
+      </section>
+      {flow.bar}
+    </>
   );
 }
 
-function LongJobs({ jobs, prog, printers }: { jobs: PrintJob[]; prog: Record<string, import('../api/printTypes').JobProgress>; printers: PrinterView[] }) {
-  const longs = jobs.filter((j) => ['PREPARED', 'SLICING', 'UPLOADING'].includes(j.state));
-  if (longs.length === 0) return null;
+/* ---------- 3. Projets en cours ---------- */
+function ProjectCard({ item }: { item: ListItem }) {
+  const detail = useAsync((s) => soft<ProjectDetail>(projectsApi.get(item.project.id, s)), [item.project.id]);
+  const p = detail.data?.progress ?? item.progress;
+  const pct = p.units_total > 0 ? Math.round((p.units_printed / p.units_total) * 100) : 0;
+  const extra = p.text.includes('dont') || p.units_printed === 0 ? '' : ` · dont ${p.units_judged_success} jugée${p.units_judged_success > 1 ? 's' : ''} réussie${p.units_judged_success > 1 ? 's' : ''}${p.units_unjudged > 0 ? `, ${p.units_unjudged} non jugée${p.units_unjudged > 1 ? 's' : ''}` : ''}`;
+  const cost = detail.data?.totals;
   return (
-    <section className="panel" aria-label="Préparations en cours" style={{ marginTop: 'var(--sp-6)' }}>
-      <div className="panel-h"><h3>Préparations en cours</h3><span className="pill run"><i />{longs.length}</span></div>
-      <ul className="rowlist">
-        {longs.map((j) => (
-          <li key={j.id} className="long-job">
-            <span className="th" aria-hidden><Box size={20} /></span>
-            <div className="grow"><b>{j.name ?? j.id}</b><small>{printers.find((p) => p.id === j.printer_id)?.name ?? j.printer_id} · {stateText(j, prog[j.id])}</small></div>
-            <div className="long-bar"><ProgressBar label={`Avancement : ${j.name ?? j.id}`} source={printSource(j, prog[j.id])} /></div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <li className="dash-proj">
+      <div className="dash-proj-h"><b>{item.project.name}</b><span className={`pill ${item.project.status === 'printing' ? 'run' : ''}`}><i />{STATUS_LABEL[item.project.status]}</span></div>
+      <div className="dash-bar"><div className="dash-track" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`Avancement de ${item.project.name} : ${p.text}`}><span style={{ width: `${pct}%` }} /></div></div>
+      <p className="sub">{p.text}{extra}</p>
+      {detail.data?.next_action && <p className="sub">Prochaine action : {detail.data.next_action}</p>}
+      {cost?.available && cost.actual_cost > 0 && <p className="sub">Coût à date : {money(cost.actual_cost, cost.currency)}</p>}
+    </li>
   );
 }
 
-function Recent() {
-  const log = useAsync((s) => insightsApi.log({ limit: 4 }, s), []);
+/* ---------- 4. Dernières impressions ---------- */
+function RecentRow({ e, reasons, flow }: { e: LogEntry; reasons: string[]; flow: ReturnType<typeof useVerdictFlow> }) {
+  const [edit, setEdit] = useState(false);
+  const o = logOutcomeLabel(e.outcome);
+  const secs = e.actual.seconds ?? e.estimated.seconds;
+  const grams = e.actual.grams ?? e.estimated.grams;
+  const name = e.name ?? e.model_name ?? e.print_job_id;
+  const verdict = e.verdict || undefined;
   return (
-    <section className="panel flush" aria-label="Dernières impressions" style={{ marginTop: 'var(--sp-6)' }}>
-      <div className="panel-h panel-h-pad"><h3>Dernières impressions</h3><Link className="btn btn-ghost btn-sm" to="/impressions?vue=terminees">Tout voir</Link></div>
-      <Async state={log} label="Chargement du journal" empty={(d) => d.entries.length === 0 ? <p className="sub panel-foot">Le journal se remplit à la fin de chaque impression.</p> : null}>
-        {(d) => (
-          <ul className="jobs">
-            {d.entries.map((e: LogEntry) => {
-              const o = logOutcomeLabel(e.outcome);
-              const secs = e.actual.seconds ?? e.estimated.seconds;
-              const grams = e.actual.grams ?? e.estimated.grams;
-              const cost = (e.actual_cost ?? e.planned_cost)?.total;
-              return (
-                <li key={e.id} className="job job-log">
-                  <span className="job-th" aria-hidden><Box size={22} /></span>
-                  <div className="job-main"><b>{e.name ?? e.model_name ?? e.print_job_id}</b><span className="job-note">{e.comment ?? `${e.printer_model ?? e.printer_id ?? ''} · ${fmtDate(e.finished_at)}`}</span></div>
-                  <span className="job-meta mono">{secs ? <span>{hm(secs)}</span> : null}{e.material_family && <span>{e.material_family}</span>}{grams ? <span>{fmtNum(grams, 0)} g</span> : null}{cost !== undefined && <span>{money(cost, (e.actual_cost ?? e.planned_cost)?.currency)}</span>}</span>
-                  <span className={`pill ${o.pill}`}><i />{o.label}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Async>
-    </section>
+    <li className="job job-log">
+      <span className="job-th" aria-hidden><Box size={22} /></span>
+      <div className="job-main"><Link to={`/impressions/${encodeURIComponent(e.print_job_id)}`}><b>{name}</b></Link><span className="job-note">{e.printer_model ?? e.printer_id ?? ''}</span></div>
+      <span className="job-meta mono">{secs ? <span>{formatEta(secs)}</span> : null}{e.material_family && <span>{e.material_family}</span>}{grams ? <span>{fmtNum(grams, 0)} g</span> : null}</span>
+      <span className={`pill ${o.pill}`}><i />{o.label}</span>
+      {isPrinted(e) && (verdict && !edit
+        ? <span className="verdict-pill"><span className={`pill ${verdict === 'success' ? 'ok' : verdict === 'failed' ? 'fail' : 'wait'}`}><i />{VERDICT_LABEL[verdict]}</span><Button size="sm" variant="ghost" onClick={() => setEdit(true)}>Modifier</Button></span>
+        : <VerdictBar label={name} reasons={reasons} busy={flow.busy} onGive={(v, r) => { setEdit(false); flow.give(e.print_job_id, name, v, r); }} />)}
+    </li>
   );
 }
 
-function RecentModels() {
-  const recent = useAsync((s) => api.models({ sort: 'updated', desc: true, limit: 5 }, s), []);
-  return (
-    <section className="panel" aria-label="Récemment modifiés" style={{ marginTop: 'var(--sp-6)' }}>
-      <div className="panel-h"><h3>Récemment modifiés</h3><Link className="btn btn-ghost btn-sm" to="/bibliotheque">Bibliothèque</Link></div>
-      <Async state={recent} label="Chargement" empty={(d) => d.models.length === 0 ? <p className="sub">Le catalogue est vide. <Link to="/bibliotheque">Importer des modèles</Link>.</p> : null}>
-        {(d) => (
-          <ul className="rowlist">
-            {d.models.map((m) => (
-              <li key={m.id}><Link to={`/modele/${m.id}`} className="row-a"><FormatBadge formats={m.formats} size={40} /><span className="grow"><b>{m.name}</b><small>{m.collection_path ?? '—'} · {fmtBytes(m.size_bytes)} · {fmtDate(m.updated_at)}</small></span></Link></li>
-            ))}
-          </ul>
-        )}
-      </Async>
-    </section>
-  );
-}
-
+/* ---------- l'Accueil ---------- */
 export function Home() {
   const conn = useConnection();
   const printers = useAsync((s) => api.printers(s), []);
   const jobs = useAsync((s) => api.printJobs(s, 'all'), []);
-  const jobsReload = useRef(jobs.reload); jobsReload.current = jobs.reload;
-  const range = useMemo(monthRange, []);
+  const log = useAsync((s) => insightsApi.log({ limit: 200 }, s), []);
+  const range = useMemo(() => { const to = new Date(); const from = new Date(to.getFullYear(), to.getMonth(), 1); const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; return { from: iso(from), to: iso(to) }; }, []);
   const month = useAsync((s) => insightsApi.dashboard(range, s), [range.from, range.to]);
+  const pending = useAsync((s) => soft<PendingList>(projectsApi.pending(s)), []);
+  const projects = useAsync((s) => soft(projectsApi.list({}, s)), []);
+  const spools = useAsync((s) => filamentApi.spools({}, s), []);
+  const queue = useAsync((s) => filamentApi.queue(false, s), []);
+  const models = useAsync((s) => api.models({ limit: 1 }, s), []);
+
+  // Sondages : seulement onglet visible (Page Visibility), reprise immédiate au retour.
+  const refresh = useRef<() => void>(() => undefined);
+  refresh.current = () => { jobs.reload(); pending.reload(); log.reload(); };
+  useVisiblePolling(() => refresh.current(), 4000);
+  const reloadAll = useCallback(() => { refresh.current(); month.reload(); projects.reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const plist = printers.data?.printers ?? [];
   const all = jobs.data?.print_jobs ?? [];
-  const activeJobs = all.filter((j) => ['PREPARED', 'SLICING', 'UPLOADING', 'START_REQUESTED', 'PRINTING'].includes(j.state));
-  const busy = activeJobs.length > 0;
-  useEffect(() => { if (!busy) return; const t = window.setInterval(() => jobsReload.current(), 4000); return () => window.clearInterval(t); }, [busy]);
-  const printing = all.find((j) => j.state === 'PRINTING');
-  const printer = plist.find((p) => p.id === printing?.printer_id) ?? plist[0];
-  const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const prog = jobs.data?.progress ?? {};
+  const printingJobs = all.filter((j) => j.state === 'PRINTING');
+  const busy = all.filter((j) => ACTIVE.includes(j.state));
+
+  // État des imprimantes remonté par les cartes : titre d'onglet, fin estimée, alertes.
+  const [reports, setReports] = useState<Record<string, LiveReport>>({});
+  const onReport = useCallback((r: LiveReport) => setReports((m) => (m[r.printerId]?.status === r.status && m[r.printerId]?.failed === r.failed ? m : { ...m, [r.printerId]: r })), []);
+  const live = Object.values(reports).map((r) => r.status).filter((s) => s && s.reachable && ['printing', 'paused'].includes(s.state)) as NonNullable<LiveReport['status']>[];
+  const first = live[0];
+  const firstJob = printingJobs.find((j) => j.printer_id === first?.printer_id);
+  useEffect(() => {
+    if (!first) return;
+    document.title = printingTitle(first.progress_percent, firstJob?.name ?? first.current_file, PRODUCT_NAME);
+    return () => { document.title = PRODUCT_NAME; };
+  }, [first?.progress_percent, firstJob?.name, first?.current_file]); // eslint-disable-line react-hooks/exhaustive-deps
+  const etaText = first && first.remaining_minutes > 0 ? new Date(Date.now() + first.remaining_minutes * 60_000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : undefined;
+
+  // Alertes de la caméra pour les impressions en cours.
+  const [camAlerts, setCamAlerts] = useState<Array<{ job: PrintJob; alert: CameraAlert }>>([]);
+  const pjKey = printingJobs.map((j) => j.id).join(',');
+  const loadAlerts = useCallback(() => {
+    Promise.all(printingJobs.map((job) => soft(dashboardApi.jobAlerts(job.id)).then((r) => ({ job, alert: r?.alerts?.[0] })))).then((rs) => setCamAlerts(rs.filter((x): x is { job: PrintJob; alert: CameraAlert } => !!x.alert)));
+  }, [pjKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAlerts(); }, [loadAlerts]);
+  useVisiblePolling(loadAlerts, 30_000, printingJobs.length > 0);
+
+  const dormantDays = readDormantDays();
+  const items = projects.data?.projects ?? [];
+  const roots = items.filter((i) => !i.project.parent_id && !i.project.archived && !['done', 'in_use', 'abandoned'].includes(i.project.status));
+  const shownProjects = [...roots].sort((a, b) => Number(b.project.status === 'printing') - Number(a.project.status === 'printing') || (b.project.updated_at ?? '').localeCompare(a.project.updated_at ?? '')).slice(0, 3);
+  const queueEntries = (queue.data?.queue ?? []).filter((e) => !['done', 'failed', 'removed'].includes(e.state));
+  const low = lowSpools(spools.data?.spools ?? []);
+  const spoolsNeeded = low.flatMap((s) => {
+    const q = queueEntries.find((e) => (e.assignments ?? []).some((a) => a.tray === s.slot) && e.printer_id === s.printer_id);
+    return q ? [{ name: q.file_name ?? q.print_job_id, spool: s }] : [];
+  });
+  const alertItems = [
+    ...camAlerts.map((c) => ({ job: c.job, summary: `Alerte de la caméra · ${ageText(c.alert.at)}`.replace(/ · $/, ''), at: c.alert.at })),
+    ...all.filter((j) => j.state === 'FAILED' && !j.archived && !j.trashed && Date.now() - new Date(j.updated_at).getTime() < 3 * 86_400_000).map((j) => ({ job: j, summary: `${printStateLabel(j.state).label} · ${ageText(j.updated_at)}`, at: j.updated_at })),
+  ];
+  const todo = buildTodo({ jobs: all, pending: pending.data?.pending ?? [], alerts: alertItems, spoolsNeeded, dormant: dormantProjects(items, dormantDays) });
+  const reasons = (pending.data?.fail_reasons ?? []).map((r) => r.id);
+  /** Action principale de l'Accueil : un lien vers la page de confirmation du serveur s'il y en a une en attente. */
+  const mainConfirm = todo.find((t) => t.kind === 'confirm' && t.server && t.href);
+
+  const stats = monthStats(log.data?.entries ?? []);
   const t = month.data?.totals;
-  const mats = (month.data?.by_material ?? []).slice(0, 2).map((m) => m.name).join(' et ');
-  const finished = t ? t.succeeded + t.partial + t.failed : 0;
-  const nPrinting = all.filter((j) => j.state === 'PRINTING').length;
+  const pct = stats.judged > 0 ? Math.round((stats.success / stats.judged) * 100) : undefined;
+  const recentFlow = useVerdictFlow(reloadAll);
+  const firstRun = printers.data && models.data && plist.length === 0 && models.data.total === 0;
+
+  // Imprimante qui imprime d'abord, puis par nom (ordre stable).
+  const sorted: PrinterView[] = [...plist].sort((a, b) => Number(!!reports[b.id]?.status && ['printing', 'paused'].includes(reports[b.id].status!.state)) - Number(!!reports[a.id]?.status && ['printing', 'paused'].includes(reports[a.id].status!.state)) || a.name.localeCompare(b.name));
+  const printerAlert = live.find((s) => s.hms_count > 0 || s.print_error > 0 || s.state === 'failed');
+  const alertJob = camAlerts[0]?.job ?? firstJob;
+  const showAlert = camAlerts.length > 0 || !!printerAlert || Object.values(reports).some((r) => r.failed && printingJobs.some((j) => j.printer_id === r.printerId));
 
   return (
     <>
       <div className="page-head">
-        <div>
-          <h1>Bonjour</h1>
-          <div className="sub">{today.charAt(0).toUpperCase() + today.slice(1)}{nPrinting > 0 ? ` · ${nPrinting} impression${nPrinting > 1 ? 's' : ''} en cours` : ` · ${PRODUCT_NAME}, ${TAGLINE.toLowerCase()}`}</div>
+        <Greeting printing={busy.filter((j) => j.state === 'PRINTING').length} eta={etaText} />
+        <div className="head-acts">
+          {mainConfirm
+            ? <a className="btn btn-primary" href={mainConfirm.href} title="Ouvre la page de confirmation du serveur : c'est là que vous approuvez le lancement. Ce lien ne lance rien."><ShieldCheck size={16} aria-hidden />Vérifier et lancer</a>
+            : <Link className="btn btn-primary" to="/impressions/nouvelle"><Plus size={16} aria-hidden />Nouvelle impression</Link>}
         </div>
-        <div className="head-acts"><Link className="btn btn-secondary" to="/bibliotheque"><Plus size={16} aria-hidden />Importer un modèle</Link></div>
       </div>
 
-      <div className="stats">
-        <div className="panel stat"><div className="overline">Impressions du mois</div><div className="v">{t ? t.prints : '—'}</div><div className="d">{t ? `dont ${nPrinting} en cours` : 'journal indisponible'}</div></div>
-        <div className="panel stat"><div className="overline">Filament consommé</div><div className="v">{t ? fmtNum(t.filament_grams / 1000, 2) : '—'}<small>kg</small></div><div className="d">{mats || 'matière'}</div></div>
-        <div className="panel stat"><div className="overline">Coût du mois</div><div className="v">{t ? fmtNum(t.cost, 2) : '—'}<small>{month.data?.currency === 'EUR' || !month.data ? '€' : month.data.currency}</small></div><div className="d">estimation matière + électricité</div></div>
-        <div className="panel stat"><div className="overline">Taux de réussite</div><div className="v">{t?.success_rate !== undefined ? fmtNum(t.success_rate * 100, 0) : '—'}<small>%</small></div><div className="d">{t ? `${t.succeeded} réussie${t.succeeded > 1 ? 's' : ''} sur ${finished} terminée${finished > 1 ? 's' : ''}` : ''}</div></div>
+      {showAlert && (
+        <div className="dash-alert" role="alert">
+          <AlertTriangle size={20} aria-hidden />
+          <div className="grow"><b>{camAlerts.length > 0 ? 'La caméra signale un problème sur l\'impression en cours' : printerAlert ? 'L\'imprimante signale une alerte' : 'L\'imprimante ne répond plus pendant une impression'}</b>
+            <p>Examinez le plateau. Rien ne s'arrête tout seul : l'arrêt se valide sur une page du serveur, depuis la fiche de l'impression.</p></div>
+          {alertJob && <Link className="btn btn-danger btn-sm" to={`/impressions/${encodeURIComponent(alertJob.id)}`}>Examiner et arrêter…</Link>}
+        </div>
+      )}
+
+      {todo.length > 0 && <TodoBlock items={todo} reasons={reasons} onChange={reloadAll} />}
+
+      <div className="dash-live-zone" aria-label="En direct" role="region">
+        <div className="panel-h dash-live-h"><h2 className="dash-h">En direct</h2></div>
+        {printers.data === undefined
+          ? (printers.error ? (isOffline(printers.error) ? <p className="sub" role="status">Indisponible pour l'instant : le service ne répond pas.</p> : <ErrorState title="Les imprimantes n'ont pas pu être lues" text="La lecture a échoué." impact="Le reste de l'Accueil reste utilisable." action={<Button size="sm" onClick={printers.reload}>Réessayer</Button>} />) : <Skeleton lines={3} label="Chargement des imprimantes" />)
+          : plist.length === 0
+            ? <section className="panel"><EmptyState title="Aucune imprimante enregistrée" text="Ajoutez votre imprimante pour la suivre en direct : état, photo du plateau, progression." action={<Link className="btn btn-primary btn-sm" to="/imprimantes"><Plus size={13} aria-hidden />Ajouter une imprimante</Link>} /></section>
+            : <div className="dash-live-grid">{sorted.map((p, i) => <LiveCard key={p.id} printer={p} job={printingJobs.find((j) => j.printer_id === p.id)} big={i === 0 || !!reports[p.id]?.status && ['printing', 'paused'].includes(reports[p.id].status!.state)} onReport={onReport} />)}</div>}
       </div>
 
-      <div className="grid g-home">
-        {printers.data && plist.length === 0
-          ? <section className="panel"><EmptyState title="Aucune imprimante enregistrée" text="Ajoutez votre imprimante pour suivre l'impression en direct." action={<Link className="btn btn-primary btn-sm" to="/imprimantes"><Plus size={13} aria-hidden />Ajouter une imprimante</Link>} /></section>
-          : printer ? <LivePrinter key={printer.id} printer={printer} activeJob={printing} /> : <section className="panel"><p className="sub">Chargement de l'imprimante…</p></section>}
-        <QueuePanel />
-      </div>
+      {!firstRun && !projects.error && projects.data !== undefined && (
+        <Block id="projets" title="Projets en cours" state={projects} actions={<Link className="btn btn-ghost btn-sm" to="/projets">Tous les projets</Link>}
+          empty={() => shownProjects.length === 0 ? <EmptyState title="Aucun projet en cours" text="Un projet regroupe les pièces d'un même objet et suit son avancement." action={<Link className="btn btn-secondary btn-sm" to="/projets">Créer un projet</Link>} /> : null}>
+          {() => <ul className="dash-projs">{shownProjects.map((i) => <ProjectCard key={i.project.id} item={i} />)}</ul>}
+        </Block>
+      )}
 
-      <LongJobs jobs={all} prog={prog} printers={plist} />
+      <Block id="dernieres" title="Dernières impressions" state={log} actions={<Link className="btn btn-ghost btn-sm" to="/impressions?vue=terminees">Tout voir</Link>}
+        empty={(d) => d.entries.length === 0 ? <p className="sub">Le journal se remplit à la fin de chaque impression.</p> : null}>
+        {(d) => <ul className="jobs">{d.entries.slice(0, 5).map((e) => <RecentRow key={e.id} e={e} reasons={reasons} flow={recentFlow} />)}</ul>}
+      </Block>
+      {recentFlow.bar}
 
-      {all.some((j) => ['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(j.state)) && (
-        <section className="panel" aria-label="Prêtes à lancer" style={{ marginTop: 'var(--sp-6)' }}>
-          <div className="panel-h"><h3>Prêtes à lancer</h3><span className="pill wait"><i />En attente de vous</span></div>
-          <ul className="rowlist">
-            {all.filter((j) => ['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(j.state)).map((j) => (
-              <li key={j.id}><span className="th" aria-hidden><Box size={20} /></span><div className="grow"><b>{j.name ?? j.id}</b><small>{plist.find((p) => p.id === j.printer_id)?.name ?? j.printer_id} · {stateText(j)}</small></div><LaunchButton job={j} /></li>
-            ))}
-          </ul>
-          <p className="sub panel-foot">« Vérifier et lancer » ouvre la page de confirmation du serveur : vous y vérifiez la photo du plateau et approuvez.</p>
+      <Block id="chiffres" title="Chiffres du mois" state={month} actions={<Link className="btn btn-ghost btn-sm" to="/impressions?vue=bilan">Bilan</Link>}>
+        {() => (
+          <div className="stats dash-stats">
+            <div className="stat" title="Mesuré : impressions du journal arrivées à 100 % ce mois-ci"><div className="overline">Impressions</div><div className="v">{stats.printed}</div><div className="d">terminées ce mois-ci · <span className="lvl">mesuré</span></div></div>
+            <div className="stat" title="Calculé : réussies jugées / jugées. Les impressions non jugées sont dites, jamais comptées dans le taux."><div className="overline">Taux de réussite</div><div className="v">{pct !== undefined ? pct : 0}<small>%</small></div><div className="d">{judgedText(stats)} · <span className="lvl">calculé</span></div></div>
+            <div className="stat" title="Mesuré : durées réelles du journal"><div className="overline">Heures machine</div><div className="v">{fmtNum(t?.machine_hours ?? 0, 1)}<small>h</small></div><div className="d">{(t?.prints ?? 0) === 0 ? 'aucune impression ce mois-ci' : 'durées réelles'} · <span className="lvl">mesuré</span></div></div>
+            <div className="stat" title="Estimé : matière et électricité d'après vos tarifs"><div className="overline">Matière et coût</div><div className="v">{fmtNum((t?.filament_grams ?? 0) / 1000, 2)}<small>kg · {money(t?.cost ?? 0, month.data?.currency)}</small></div><div className="d">d'après vos tarifs · <span className="lvl">estimé</span></div></div>
+          </div>
+        )}
+      </Block>
+
+      {low.length > 0 && (
+        <section className="panel dash-block" aria-label="Bobines basses" id="bobines-basses">
+          <div className="panel-h"><h2 className="dash-h">Bobines basses</h2><Link className="btn btn-ghost btn-sm" to="/matieres">Ouvrir Matières</Link></div>
+          <ul className="dash-spools">{low.map((s) => <li key={s.id}><span className="swatch" style={{ background: s.color_hex ? `#${s.color_hex.replace('#', '')}` : 'var(--well)' }} aria-hidden /><b>{s.name || s.material}</b><span className="sub">il reste ~{Math.round(s.remaining_g)} g · {s.status === 'empty' ? 'vide' : 'presque vide'}</span></li>)}</ul>
         </section>
       )}
 
-      <Recent />
-      <RecentModels />
-
-      <h2 className="shortcuts-h">Raccourcis</h2>
-      <ol className="shortcuts" aria-label="Raccourcis">
-        {SHORTCUTS.map((s, i) => (
-          <li key={s.title}><Link to={s.to} className="panel shortcut"><span className="n mono" aria-hidden>{i + 1}</span><span className="t"><b>{s.title}</b><small>{s.text}</small></span><ArrowUpRight size={15} aria-hidden /></Link></li>
-        ))}
-      </ol>
+      {firstRun ? (
+        <section className="panel dash-block" aria-label="Premiers pas">
+          <div className="panel-h"><h2 className="dash-h">Pour commencer</h2></div>
+          <ol className="dash-steps">
+            <li><span className="n" aria-hidden>1</span><div className="grow"><b>Ajouter une imprimante</b><small>Son modèle, son adresse sur le réseau local.</small></div><Link className="btn btn-primary btn-sm" to="/imprimantes">Ajouter</Link></li>
+            <li><span className="n" aria-hidden>2</span><div className="grow"><b>Importer un modèle</b><small>Un fichier 3D de votre choix ; l'original n'est jamais modifié.</small></div><Link className="btn btn-secondary btn-sm" to="/bibliotheque">Importer</Link></li>
+            <li><span className="n" aria-hidden>3</span><div className="grow"><b>Préparer une impression</b><small>Le lancement se confirme sur une page du serveur.</small></div><Link className="btn btn-secondary btn-sm" to="/impressions/nouvelle">Préparer</Link></li>
+          </ol>
+        </section>
+      ) : (
+        <div className="dash-shortcuts" aria-label="Raccourcis">
+          <Link className="btn btn-primary" to="/impressions/nouvelle"><Plus size={16} aria-hidden />Nouvelle impression</Link>
+          <Link className="btn btn-secondary" to="/bibliotheque"><Upload size={16} aria-hidden />Importer un modèle</Link>
+        </div>
+      )}
       {conn.server === 'online' && !conn.importEnabled && conn.importNote && <p className="sub" style={{ marginTop: 'var(--sp-4)' }}>{conn.importNote}</p>}
     </>
   );

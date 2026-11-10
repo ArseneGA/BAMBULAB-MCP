@@ -1,0 +1,16 @@
+/* Fiche impression (G10 UX7) : jetons seulement. */
+.ps-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+.ps-row { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: var(--sp-3); padding: 3px 0; }
+.ps-row dt { color: var(--text-3); font-size: var(--t-meta); }
+.ps-row dd { margin: 0; overflow-wrap: anywhere; }
+.ps-board { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; gap: var(--sp-3); grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ps-step { display: grid; gap: var(--sp-1); }
+.ps-step img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r-sm); background: var(--well); display: block; }
+.ps-none { aspect-ratio: 4 / 3; border-radius: var(--r-sm); border: 1px dashed var(--line-strong); background: var(--surface-2); display: grid; place-content: center; justify-items: center; gap: 2px; padding: var(--sp-2); text-align: center; color: var(--text-3); font-size: var(--t-caption); }
+.ps-none small { color: var(--text-3); }
+.ps-pct { font-size: var(--t-caption); color: var(--text-2); text-align: center; font-variant-numeric: tabular-nums; }
+.ps-acts { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.job-main { color: inherit; text-decoration: none; }
+.job-main:hover b { color: var(--text-accent); }
+@media (max-width: 760px) { .ps-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ps-dl { margin: 0; display: grid; gap: 2px; }

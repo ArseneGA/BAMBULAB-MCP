@@ -123,7 +123,7 @@ export function ProjectCard({ app, data, onOpen }: CardProps<ProjectData>) {
   const t = d.totals;
   const setStatus = (status: string) => { void run(`s-${status}`, 'submit_project_status', { project_id: p.id, status }); };
   const setQty = (m: PartRow, q: number) => { void run(`q-${m.model_id}`, 'submit_project_part', { project_id: p.id, model_id: m.model_id, quantity: q }); };
-  const openPart = (id: string) => { void run(`o-${id}`, 'get_model_details', { model_id: id }); };
+  const openPart = (id: string) => { void run(`o-${id}`, 'get_part_sheet', { model_id: id }); };
   const openProject = (id: string) => { void run(id, 'get_project', { id }); };
   const path = (d.path ?? []).map((x) => x.name).join(' › ');
   return (

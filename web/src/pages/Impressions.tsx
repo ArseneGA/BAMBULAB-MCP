@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { PageHeader, Skeleton, Tabs } from '../components';
 import { api } from '../api/client';
@@ -24,6 +24,13 @@ const newPrint = (
  * Les écrans existants (historique des travaux, file d'attente, journal, vue d'ensemble des coûts) sont déplacés ici, logique inchangée.
  */
 export function ImpressionsPage() {
+  const [sp] = useSearchParams();
+  const legacyJob = sp.get('job'); // ancien lien « ?job=… » : le détail est maintenant adressable (/impressions/:id)
+  if (legacyJob) return <Navigate replace to={`/impressions/${encodeURIComponent(legacyJob)}`} />;
+  return <ImpressionsViews />;
+}
+
+function ImpressionsViews() {
   const [sp] = useSearchParams();
   const jobs = useAsync((s) => api.printJobs(s, 'all'), []);
   const todo = (jobs.data?.print_jobs ?? []).filter(isTodoJob).length;

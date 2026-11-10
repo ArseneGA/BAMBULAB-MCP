@@ -1,0 +1,14 @@
+/* Fiche modèle à onglets (G10 UX7) : jetons seulement. */
+.mt-stats { margin-bottom: var(--sp-3); }
+.mt-foot { padding: 0 var(--sp-6) var(--sp-4); }
+.mt-profiles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.mt-profile { padding: var(--sp-4) var(--sp-5); }
+.mt-profile-h { display: flex; justify-content: space-between; gap: var(--sp-3); align-items: baseline; margin-bottom: var(--sp-2); }
+.mt-profile .sub { margin-top: var(--sp-1); }
+.more-menu { position: relative; }
+.more-menu > summary { list-style: none; cursor: pointer; }
+.more-menu > summary::-webkit-details-marker { display: none; }
+.more-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 220px; display: grid; padding: var(--sp-1); border-radius: var(--r-md); background: var(--surface-3); border: 1px solid var(--line-strong); box-shadow: var(--shadow-pop); }
+.more-menu-list a, .more-menu-list button { text-align: left; padding: var(--sp-2) var(--sp-3); min-height: var(--control-h); border: 0; background: none; color: var(--text); font: inherit; border-radius: var(--r-xs); cursor: pointer; text-decoration: none; display: flex; align-items: center; }
+.more-menu-list a:hover, .more-menu-list button:hover:not(:disabled) { background: var(--primary-subtle); color: var(--text-accent); }
+.mdl-files { max-width: 960px; }

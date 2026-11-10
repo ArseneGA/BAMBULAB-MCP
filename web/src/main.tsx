@@ -12,6 +12,8 @@ import { PrintersPage } from './pages/Printers';
 import { SettingsPage } from './pages/settings/Appearance';
 import { TariffsPage } from './pages/settings/Tariffs';
 import { SecurityPage } from './pages/settings/Security';
+import { SuiviPage } from './pages/settings/Suivi';
+import { PrintSheetPage } from './pages/impressions/PrintSheet';
 import { AdvancedPage } from './pages/settings/Advanced';
 import { Library } from './pages/Library';
 import { ModelPage } from './pages/Model';
@@ -63,10 +65,12 @@ createRoot(document.getElementById('root')!).render(
               <Route path="modele/:id/essais/:exp" element={<ComparePage />} />
               <Route path="impressions" element={<ImpressionsPage />} />
               <Route path="impressions/nouvelle" element={<NewPrintPage />} />
+              <Route path="impressions/:id" element={<PrintSheetPage />} />
               <Route path="imprimantes" element={<PrintersPage />} />
               <Route path="matieres" element={<MatieresPage />} />
               <Route path="reglages" element={<SettingsPage />} />
               <Route path="reglages/tarifs" element={<TariffsPage />} />
+              <Route path="reglages/suivi" element={<SuiviPage />} />
               <Route path="reglages/securite" element={<SecurityPage />} />
               <Route path="reglages/agent-windows" element={<AgentsPage />} />
               <Route path="reglages/avance" element={<AdvancedPage />} />

@@ -3,6 +3,8 @@ import { CompareCard, normalizeCompare } from './compare';
 import { CostsCard, normalizeCosts, type CostsData } from './costs';
 import { IssuesCard, normalizeIssues, type IssuesData } from './issues';
 import { LibraryCard, normalizeLibrary, type LibraryData } from './library';
+import { PartCard, normalizePart, type PartData } from './part';
+import { PrintSheetCard, normalizePrintSheet, type PrintSheetData } from './print-sheet';
 import { PrintersCard, normalizePrinters, type PrintersData } from './printers';
 import { PrintsCard, normalizePrints, type PrintsData } from './prints';
 import { ProjectCard, normalizeProject, type ProjectData } from './project';
@@ -24,10 +26,14 @@ export type CardData =
   | { card: 'printers'; data: PrintersData }
   | { card: 'issues'; data: IssuesData }
   | { card: 'project'; data: ProjectData }
-  | { card: 'verdict'; data: VerdictData };
+  | { card: 'verdict'; data: VerdictData }
+  | { card: 'part'; data: PartData }
+  | { card: 'print-sheet'; data: PrintSheetData };
 
 export function classifyCard(s: unknown): CardData | undefined {
   let d: unknown;
+  if ((d = normalizePart(s))) return { card: 'part', data: d as PartData }; // fiche pièce : counts + profiles + prints (jamais la fiche modèle, qui a files)
+  if ((d = normalizePrintSheet(s))) return { card: 'print-sheet', data: d as PrintSheetData };
   if ((d = normalizeProject(s))) return { card: 'project', data: d as ProjectData }; // avant les coûts : list_projects a aussi une clé `projects`
   if ((d = normalizeVerdict(s))) return { card: 'verdict', data: d as VerdictData };
   if ((d = normalizeCompare(s))) return { card: 'compare', data: d as CompareOutput };
@@ -51,6 +57,8 @@ export function CardView({ app, card, onOpen }: { app: CardApp; card: CardData; 
     case 'issues': return <IssuesCard app={app} data={card.data} onOpen={onOpen} />;
     case 'project': return <ProjectCard app={app} data={card.data} onOpen={onOpen} />;
     case 'verdict': return <VerdictCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'part': return <PartCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'print-sheet': return <PrintSheetCard app={app} data={card.data} onOpen={onOpen} />;
   }
 }
 

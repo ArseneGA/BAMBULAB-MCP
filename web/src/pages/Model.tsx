@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Box, Cpu, FileWarning, FolderInput, GitCompare, Pencil, ShieldAlert, SlidersHorizontal, Tags, Trash2, Undo2 } from 'lucide-react';
-import { Breadcrumb, Button, EmptyState, Field, Input, List, PageHeader, Panel, StatusDot, Tag, useToast } from '../components';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Box, Cpu, FileWarning, FolderInput, MoreHorizontal, Pencil, ShieldAlert, SlidersHorizontal, Tags, Trash2, Undo2 } from 'lucide-react';
+import { Button, EmptyState, Field, Input, List, PageHeader, Panel, StatusDot, Tag, Tabs, useToast } from '../components';
 import { api, ApiError, describeError } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
 import type { ModelDetails, Operation, PreviewRef } from '../api/types';
@@ -10,6 +10,9 @@ import type { LoadedModel } from '../viewer/glbEngine';
 import { Async, Dialog, Notice, fmtBytes, fmtDate, fmtDims, fmtNum, shortSha } from './common';
 import { OperationFlow } from './OperationFlow';
 import { AnalysisTools, DownloadLink, ExportTools } from './ModelTools';
+import { tabsOf } from '../nav';
+import { useTab } from '../tabs';
+import { ModelImpressionsTab, ModelProfilesTab } from './model/ModelTabs';
 import './model.css';
 
 export function ModelPage() {
@@ -44,6 +47,10 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
   const nav = useNavigate();
   const toast = useToast();
   const conn = useConnection();
+  const [tabRaw, setTab] = useTab('/modele/:id');
+  // « infos » (ancien nom de l'onglet de provenance, licence et journal) est regroupé dans « Fichiers et versions » : au plus 4 onglets.
+  const [qs] = useSearchParams();
+  const tab = qs.get('vue') === 'infos' ? 'fichiers' : tabRaw;
   const [edit, setEdit] = useState<Edit>(null);
   const [val, setVal] = useState('');
   const [ops, setOps] = useState<Operation[] | null>(null);
@@ -111,21 +118,23 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
   const parts = loaded?.parts ?? [];
   return (
     <>
-      <div className="mdl-head">
-        <div>
-          <Breadcrumb items={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: m.collection_path ?? 'Sans collection' }, { label: m.model.name }]} />
-          <h1>{m.model.name}</h1>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
-            {(m.model.tags ?? []).length === 0 ? <span className="hint" style={{ margin: 0 }}>Aucune étiquette</span> : (m.model.tags ?? []).map((t) => <Tag key={t}>{t}</Tag>)}
-          </div>
-        </div>
-        <div className="mdl-actions">
-          <Button icon={<GitCompare size={15} />} onClick={() => nav(`/modele/${encodeURIComponent(id)}/essais`)} title="Les essais de réglages de ce modèle : comparer des variantes, enregistrer un résultat">Essais de réglages</Button>
-          <Button variant="primary" icon={<SlidersHorizontal size={15} />} disabled={winOnly || trashed} onClick={() => nav(`/modele/${encodeURIComponent(id)}/preparer`)} title={winOnly ? 'Fichier à copier sur Linux avant préparation' : 'Objectif de finition et variantes'}>Préparer</Button>
-        </div>
-      </div>
+      <PageHeader title={m.model.name} crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: m.collection_path ?? 'Sans collection', to: '/bibliotheque' }, { label: m.model.name }]}
+        help={(m.model.tags ?? []).length === 0 ? 'Aucune étiquette' : (m.model.tags ?? []).map((t) => `#${t}`).join(' ')}
+        actions={(
+          <>
+            <Button variant="primary" icon={<SlidersHorizontal size={15} />} disabled={winOnly || trashed} onClick={() => nav(`/modele/${encodeURIComponent(id)}/preparer`)} title={winOnly ? 'Fichier à copier sur Linux avant préparation' : 'Objectif de finition et variantes'}>Préparer</Button>
+            <details className="more-menu">
+              <summary className="btn btn-secondary" aria-label="Plus d'actions"><MoreHorizontal size={16} aria-hidden /></summary>
+              <div className="more-menu-list" role="menu">
+                <Link role="menuitem" to={`/modele/${encodeURIComponent(id)}/essais`} title="Les essais de réglages de ce modèle : comparer des variantes, enregistrer un résultat">Essais de réglages</Link>
+                <button type="button" role="menuitem" disabled={trashed} onClick={() => start('Mettre à la corbeille', [{ op: 'delete', model_ids: [id] }])}>Mettre à la corbeille…</button>
+              </div>
+            </details>
+          </>
+        )}
+        below={<Tabs label="Vues du modèle" value={tab} onChange={setTab} tabs={tabsOf('/modele/:id')} />} />
 
-      <div className="mdl">
+      {tab === 'apercu' && <div className="mdl">
         <div className="mdl-stage">
           {trashed && (
             <Notice tone="warn" icon={<Trash2 size={16} aria-hidden />} title="Ce modèle est dans la corbeille" actions={<Button size="sm" icon={<Undo2 size={14} />} onClick={restore}>Restaurer</Button>}>
@@ -170,6 +179,10 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
             )}
           </Panel>
 
+        </div>
+      </div>}
+
+      {tab === 'fichiers' && <div className="mdl-files stack">
           <Panel title="Fichiers associés" actions={trashed ? undefined : <ExportTools m={m} />}>
             {m.files.map((f) => (
               <div key={f.id} className={`frow${f.availability === 'windows_only' ? ' frow-miss' : ''}`}>
@@ -233,8 +246,10 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
               </ul>
             )}
           </Panel>
-        </div>
-      </div>
+      </div>}
+
+      {tab === 'impressions' && <ModelImpressionsTab id={id} />}
+      {tab === 'profils' && <ModelProfilesTab id={id} />}
 
       <Dialog open={edit !== null} onClose={() => setEdit(null)} title={{ rename: 'Renommer le modèle', move: 'Déplacer vers une collection', tags: 'Modifier les étiquettes', license: 'Définir la licence', null: '' }[String(edit) as 'rename']}
         footer={<><Button onClick={() => setEdit(null)}>Annuler</Button><Button variant="primary" disabled={!val.trim()} onClick={submitEdit}>Prévisualiser</Button></>}>

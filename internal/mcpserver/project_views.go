@@ -7,7 +7,11 @@ package mcpserver
 //
 //	ui://bambu/project.html  get_project, list_projects                    (submit_project_status, submit_project_part)
 //	ui://bambu/verdict.html  get_pending_verdicts, set_print_verdict       (submit_print_verdict)
+//	ui://bambu/part.html         get_part_sheet                                (miniatures : get_sheet_photo, réservé à la carte)
+//	ui://bambu/print-sheet.html  get_print_sheet                               (bandeau de verdict : submit_print_verdict)
 const (
-	ProjectViewURI = "ui://bambu/project.html"
-	VerdictViewURI = "ui://bambu/verdict.html"
+	ProjectViewURI    = "ui://bambu/project.html"
+	VerdictViewURI    = "ui://bambu/verdict.html"
+	PartViewURI       = "ui://bambu/part.html"
+	PrintSheetViewURI = "ui://bambu/print-sheet.html"
 )
