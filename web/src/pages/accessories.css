@@ -1,0 +1,9 @@
+/* Panneau « Accessoires » de la page Imprimantes (N4). Les jetons de couleur viennent du thème ; aucun état n'est porté par la couleur seule. */
+.acc { display: grid; gap: var(--sp-3); border-top: 1px solid var(--line, currentColor); padding-top: var(--sp-4); }
+.acc h4 { margin: 0; }
+.acc .hint { margin: 0; }
+.acc-row { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: center; justify-content: space-between; }
+.acc-name { min-width: 0; overflow-wrap: anywhere; }
+.acc-btns { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.acc-btns .btn[aria-pressed='true'] { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.acc-btns .btn[disabled] { cursor: not-allowed; opacity: 0.6; }

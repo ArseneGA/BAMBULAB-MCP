@@ -141,6 +141,7 @@ type Bambu struct {
 	seq      atomic.Int64
 	startMu  sync.Mutex // réservation : un seul Start à la fois
 	uploadMu sync.Mutex
+	accMu    sync.Mutex // une commande d'accessoire à la fois (accessories.go)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -476,6 +477,10 @@ func (b *Bambu) onMessage(payload []byte) {
 	if info, ok := top["info"].(map[string]any); ok {
 		b.handleInfo(info)
 	}
+	if sm, ok := top["system"].(map[string]any); ok { // réponses de ledctrl (accessories.go) : même routage par sequence_id
+		b.deliver(sm)
+		return
+	}
 	pm, ok := top["print"].(map[string]any)
 	if !ok {
 		return
@@ -489,6 +494,11 @@ func (b *Bambu) onMessage(payload []byte) {
 		b.notify()
 		return
 	}
+	b.deliver(pm)
+}
+
+// deliver remet une réponse à la commande qui attend ce sequence_id.
+func (b *Bambu) deliver(pm map[string]any) {
 	seq := str(pm["sequence_id"])
 	b.mu.Lock()
 	ch := b.waiters[seq]

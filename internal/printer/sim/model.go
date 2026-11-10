@@ -43,12 +43,13 @@ type model struct {
 	resumeBroken     bool // resume repasse RUNNING figé, consigne plateau à 0
 	wifi             int
 	taskSeq          int
-	ams              *amsModel // AMS simulé (ams.go) ; nil = aucun
+	ams              *amsModel     // AMS simulé (ams.go) ; nil = aucun
+	acc              accModelState // éclairage, ventilateurs, vitesse (accessories.go)
 }
 
 func newModel(c Config) *model {
 	return &model{gcodeState: "IDLE", prepareDur: c.PrepareDuration, printDur: c.PrintDuration,
-		totalLayers: c.TotalLayers, nozzle: 25, bed: 25, chamber: 25, wifi: -45, ams: newAMSModel(DefaultAMSConfig())}
+		totalLayers: c.TotalLayers, nozzle: 25, bed: 25, chamber: 25, wifi: -45, ams: newAMSModel(DefaultAMSConfig()), acc: newAccState()}
 }
 
 func (m *model) setHMS(on bool) {
@@ -208,7 +209,7 @@ func (m *model) report(c Config) map[string]any {
 		"task_id":              m.taskID,
 		"wifi_signal":          fmt.Sprintf("%ddBm", m.wifi),
 		"nozzle_diameter":      "0.4",
-		"spd_lvl":              2,
+		"spd_lvl":              m.acc.speed,
 		"stg_cur":              m.stageNow(time.Now()),
 		"print_type":           "local",
 		"hw_switch_state":      0,
@@ -219,6 +220,7 @@ func (m *model) report(c Config) map[string]any {
 		r["task_id"] = "0"
 	}
 	m.addAMS(r)
+	m.addAccessories(r)
 	return r
 }
 

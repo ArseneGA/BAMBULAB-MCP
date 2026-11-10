@@ -59,20 +59,21 @@ type Status struct {
 	TotalLayers    int `json:"total_layers"`
 	RemainingMin   int `json:"remaining_minutes"`
 	Temps          Temps
-	PrintError     int        `json:"print_error"`
-	HMS            []HMSError `json:"hms,omitempty"`
-	FailReason     string     `json:"fail_reason,omitempty"`
-	SubtaskName    string     `json:"subtask_name,omitempty"`
-	GcodeFile      string     `json:"gcode_file,omitempty"`
-	TaskID         string     `json:"task_id,omitempty"`
-	Firmware       string     `json:"firmware,omitempty"`
-	UpdatedAt      time.Time  `json:"updated_at"`       // horodatage de la dernière info reçue
-	Stale          bool       `json:"stale"`            // UpdatedAt plus ancien que le seuil de fraîcheur
-	Connected      bool       `json:"connected"`        // session MQTT active
-	Stage          int        `json:"stage"`            // étape courante (stg_cur) ; significatif seulement si StageSeen
-	StageSeen      bool       `json:"stage_seen"`       // l'imprimante a transmis stg_cur
-	FullReportSeen bool       `json:"full_report_seen"` // au moins un pushall complet fusionné
-	AMS            *AMSState  `json:"ams,omitempty"`    // état AMS du dernier rapport (nil si aucun)
+	PrintError     int             `json:"print_error"`
+	HMS            []HMSError      `json:"hms,omitempty"`
+	FailReason     string          `json:"fail_reason,omitempty"`
+	SubtaskName    string          `json:"subtask_name,omitempty"`
+	GcodeFile      string          `json:"gcode_file,omitempty"`
+	TaskID         string          `json:"task_id,omitempty"`
+	Firmware       string          `json:"firmware,omitempty"`
+	UpdatedAt      time.Time       `json:"updated_at"`            // horodatage de la dernière info reçue
+	Stale          bool            `json:"stale"`                 // UpdatedAt plus ancien que le seuil de fraîcheur
+	Connected      bool            `json:"connected"`             // session MQTT active
+	Stage          int             `json:"stage"`                 // étape courante (stg_cur) ; significatif seulement si StageSeen
+	StageSeen      bool            `json:"stage_seen"`            // l'imprimante a transmis stg_cur
+	FullReportSeen bool            `json:"full_report_seen"`      // au moins un pushall complet fusionné
+	AMS            *AMSState       `json:"ams,omitempty"`         // état AMS du dernier rapport (nil si aucun)
+	Accessories    *AccessoryState `json:"accessories,omitempty"` // lumières, ventilateurs, vitesse du dernier rapport (nil si aucun transmis)
 }
 
 // HasError indique une erreur d'imprimante (print_error ou HMS non vide).

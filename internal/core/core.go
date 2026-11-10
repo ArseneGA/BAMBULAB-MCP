@@ -399,6 +399,7 @@ func (c *Core) Capabilities() contracts.Capabilities {
 			{ID: "goals_experiments", Available: true, Note: "objectifs, candidats, expériences, comparaison ; la découpe exige Bambu Studio (sinon erreur slicer_missing)"},
 			{ID: "printer_lan", Available: true, Note: "adaptateur Bambu LAN (MQTT/FTPS) : registre d'imprimantes, dépôt, confirmation humaine, lancement, suivi ; validé contre le simulateur seulement, aucune imprimante réelle contactée"},
 			{ID: "print_chain", Available: true, Note: "découpe headless -> validation -> dépôt -> confirmation humaine -> lancement -> suivi -> réconciliation ; la découpe exige Bambu Studio"},
+			{ID: "printer_accessories", Available: true, Note: "lumières, ventilateurs et vitesse d'impression en cours (set_printer_light, set_printer_fan, set_print_speed_level) ; commandes de liste blanche, jamais de lancement ni d'arrêt ; table par modèle non vérifiée sur du matériel réel"},
 			{ID: "cad_worker", Available: cadOK, Note: cadNote},
 			{ID: "windows_agent", Available: false, Note: "Windows : non utilisé (aucun agent appairé ; le mode Linux seul est normal)"},
 		},

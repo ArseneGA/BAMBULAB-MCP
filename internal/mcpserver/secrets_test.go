@@ -39,3 +39,31 @@ func TestGetJobStatusRedactsSecrets(t *testing.T) {
 		t.Fatalf("résultat légitime perdu : %s", s)
 	}
 }
+
+// TestAccessoryToolsTakeNoSecret : les outils d'accessoires (N4) n'ont aucun champ qui puisse porter un secret (code d'accès,
+// jeton, mot de passe) ni un G-code libre ; leur schéma d'entrée est fermé sur les seuls champs d'accessoire.
+func TestAccessoryToolsTakeNoSecret(t *testing.T) {
+	c := startCore(t)
+	cs := connectClient(t, mcpserver.New(c))
+	lt, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, tl := range lt.Tools {
+		if tl.Name != "set_printer_light" && tl.Name != "set_printer_fan" && tl.Name != "set_print_speed_level" {
+			continue
+		}
+		n++
+		raw, _ := json.Marshal(tl.InputSchema)
+		low := strings.ToLower(string(raw))
+		for _, bad := range []string{"access", "secret", "token", "password", "passcode", "gcode", "param", "command"} {
+			if strings.Contains(low, bad) {
+				t.Errorf("%s : champ suspect %q dans le schéma d'entrée : %s", tl.Name, bad, raw)
+			}
+		}
+	}
+	if n != 3 {
+		t.Fatalf("%d outils d'accessoires trouvés, 3 attendus", n)
+	}
+}

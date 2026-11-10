@@ -391,7 +391,7 @@ func (s *Service) ListPrinterModels(ctx context.Context) ([]contracts.PrinterMod
 	for _, r := range raws {
 		var m contracts.PrinterModel
 		if json.Unmarshal([]byte(r), &m) == nil {
-			out = append(out, m)
+			out = append(out, withAccessories(m))
 		}
 	}
 	return out, nil
@@ -402,7 +402,7 @@ func (s *Service) GetPrinterModel(ctx context.Context, idOrName string) (contrac
 	_, _ = s.EnsureModels(ctx)
 	var m contracts.PrinterModel
 	if err := s.d.Store.GetDoc(ctx, "printer_models", idOrName, &m); err == nil {
-		return m, nil
+		return withAccessories(m), nil
 	}
 	all, err := s.ListPrinterModels(ctx)
 	if err != nil {
@@ -879,6 +879,9 @@ type PrinterStatus struct {
 	Display     string       `json:"display,omitempty"`
 	Explanation string       `json:"explanation,omitempty" jsonschema:"ce que signifie l'état brut (gcode_state FAILED = annulation OU erreur) et la cause connue"`
 	LastJob     *LastJobInfo `json:"last_job,omitempty"`
+	// Accessoires (N4) : état rapporté (lumières, ventilateurs, vitesse) et ceux que le modèle possède ; facultatifs.
+	Accessories          *printer.AccessoryState  `json:"accessories,omitempty" jsonschema:"état courant des lumières, ventilateurs et de la vitesse, tel que rapporté par l'imprimante (champ absent = non transmis)"`
+	AvailableAccessories *contracts.AccessoryCaps `json:"available_accessories,omitempty" jsonschema:"accessoires que possède ce modèle (set_printer_light, set_printer_fan, set_print_speed_level)"`
 }
 
 // LastJobInfo : dernière impression suivie sur cette imprimante.
@@ -920,6 +923,10 @@ func (s *Service) GetPrinterStatus(ctx context.Context, printerID string) (*Prin
 	defer cancel()
 	st, err := ad.Status(cctx)
 	out := statusOut(printerID, st, s.now())
+	out.Accessories = st.Accessories
+	if caps, ok := printer.AccessoriesFor(rec.ModelID); ok {
+		out.AvailableAccessories = &caps
+	}
 	if err != nil {
 		out.Error = err.Error()
 	}

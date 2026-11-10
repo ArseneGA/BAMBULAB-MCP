@@ -39,7 +39,15 @@ func TestNoMCPToolCanApproveAConfirmation(t *testing.T) {
 	}
 	forbidden := []string{"plate_clear", "approved", "approve", "nonce", "token", "confirm_token", "human"}
 	called := 0
+	// N4 : les outils d'accessoires ne portent aucun nom de lancement, d'arrêt, de reprise ni d'approbation.
+	accessory := map[string]bool{"set_printer_light": false, "set_printer_fan": false, "set_print_speed_level": false}
 	for _, tl := range tools.Tools {
+		if _, ok := accessory[tl.Name]; ok {
+			accessory[tl.Name] = true
+			if forbiddenToolName.MatchString(tl.Name) {
+				t.Fatalf("outil d'accessoire au nom interdit : %s", tl.Name)
+			}
+		}
 		low := strings.ToLower(tl.Name)
 		codeTool := tl.Name == "approve_print_with_code" || tl.Name == "approve_stop_with_code" || tl.Name == "validate_action_with_code"
 		if (strings.Contains(low, "approve") && !codeTool) || strings.Contains(low, "from_app") || low == "confirm_print" {
@@ -75,6 +83,18 @@ func TestNoMCPToolCanApproveAConfirmation(t *testing.T) {
 	}
 	if called < 20 {
 		t.Fatalf("seulement %d outils exercés", called)
+	}
+	for n, ok := range accessory {
+		if !ok {
+			t.Fatalf("outil d'accessoire %s absent", n)
+		}
+	}
+	// Les outils d'accessoires ont reçu des arguments forgés (ci-dessus) : aucune commande de lancement, d'arrêt, de
+	// pause ni de reprise n'a pu partir ; seules des commandes d'accessoires peuvent avoir été publiées.
+	for _, c := range r.sim.Commands() {
+		if c != "ledctrl" && c != "gcode_line" && c != "print_speed" {
+			t.Fatalf("commande inattendue reçue par l'imprimante pendant l'énumération des outils : %q", c)
+		}
 	}
 	v := r.call("get_print_confirmation_view", map[string]any{"confirmation_id": confID})
 	if v["approved"] != false {

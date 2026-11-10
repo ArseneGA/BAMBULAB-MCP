@@ -114,6 +114,7 @@ func New(c *core.Core) *mcp.Server {
 		AddLaunchTools(s, c)                   // approbation par code de lancement depuis la vue (launch_tools.go)
 		AddLiveTools(s, c)                     // carte de suivi en direct : image caméra partagée, état (live_tools.go)
 		AddRecoveryTools(s, c.Printing)        // relance, reprise, chargement, fichiers de la carte, diagnostic (recovery_tools.go)
+		AddAccessoryTools(s, c.Printing)       // lumières, ventilateurs, vitesse de l'impression en cours (accessory_tools.go)
 		AddStrengthTools(s, c)                 // test de résistance : plan_strength_test, assess_strength, get_strength_report (strength_tools.go)
 	}
 	if c.Camera != nil && c.Notify != nil {

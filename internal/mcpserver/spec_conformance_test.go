@@ -84,3 +84,44 @@ func TestToolsListConformsToMCPSpec(t *testing.T) {
 		t.Errorf("trop peu d'appels vérifiés : %d", checked)
 	}
 }
+
+// TestAccessoryToolsConformToSpec : set_printer_light, set_printer_fan et set_print_speed_level (N4) ont un titre, un
+// outputSchema objet, des annotations d'écriture non destructives et idempotentes, et un nom qui n'évoque ni lancement,
+// ni arrêt, ni reprise, ni approbation.
+func TestAccessoryToolsConformToSpec(t *testing.T) {
+	c := startCore(t)
+	cs := connectClient(t, mcpserver.New(c))
+	lt, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forbidden := regexp.MustCompile(`(?i)approve|start|launch|stop|resume|cancel`)
+	want := map[string]bool{"set_printer_light": false, "set_printer_fan": false, "set_print_speed_level": false}
+	for _, tl := range lt.Tools {
+		if _, ok := want[tl.Name]; !ok {
+			continue
+		}
+		want[tl.Name] = true
+		if forbidden.MatchString(tl.Name) {
+			t.Errorf("%s : nom interdit", tl.Name)
+		}
+		if tl.Title == "" || tl.Description == "" {
+			t.Errorf("%s : Title et description requis", tl.Name)
+		}
+		if ty, ok := schemaType(t, tl.OutputSchema); tl.OutputSchema == nil || !ok || ty != "object" {
+			t.Errorf("%s : outputSchema.type = %v, attendu \"object\"", tl.Name, ty)
+		}
+		if ty, ok := schemaType(t, tl.InputSchema); !ok || ty != "object" {
+			t.Errorf("%s : inputSchema.type = %v", tl.Name, ty)
+		}
+		a := tl.Annotations
+		if a == nil || a.ReadOnlyHint || a.DestructiveHint == nil || *a.DestructiveHint || !a.IdempotentHint {
+			t.Errorf("%s : annotations attendues (écriture, non destructif, idempotent) : %+v", tl.Name, a)
+		}
+	}
+	for n, ok := range want {
+		if !ok {
+			t.Errorf("outil %s absent", n)
+		}
+	}
+}

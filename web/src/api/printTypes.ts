@@ -14,8 +14,15 @@ export interface PrinterStatus {
   remaining_minutes: number; temps: { nozzle: number; nozzle_target: number; bed: number; bed_target: number; chamber: number }; print_error: number; hms_count: number;
   fail_reason?: string; current_file?: string; firmware?: string; updated_at?: string;
   hms_codes?: string[]; display?: string; explanation?: string;
+  /** N4 : état des accessoires rapporté par l'imprimante et ceux que le modèle possède (champs facultatifs). */
+  accessories?: AccessoryState; available_accessories?: AccessoryCaps;
   last_job?: { print_job_id: string; name: string; state: PrintState; stopped_by_user?: boolean; at: string };
 }
+/** Accessoires pilotables du modèle (N4). */
+export interface AccessoryCaps { chamber_light: boolean; work_light: boolean; part_fan: boolean; aux_fan: boolean; chamber_fan: boolean; speed_levels: boolean; note?: string }
+/** État rapporté par l'imprimante ; chaque champ est absent tant qu'elle ne l'a pas transmis. */
+export interface AccessoryState { chamber_light?: string; work_light?: string; part_fan_percent?: number; aux_fan_percent?: number; chamber_fan_percent?: number; speed_level?: number; speed_name?: string; speed_percent?: number }
+export interface AccessoryResult { printer_id: string; accessory: string; value: string; applied: boolean; message: string; accessories?: AccessoryState; available_accessories: AccessoryCaps }
 export type HistoryView = 'all' | 'active' | 'finished' | 'failed' | 'archived' | 'trash';
 export interface JobProgress { job_id: string; state: string; percent: number; phase?: string; message?: string; bytes_done?: number; bytes_total?: number; eta_seconds?: number; queue_position?: number; running_ahead?: number; stalled?: boolean; estimated?: boolean }
 export interface ModelGroup { model_id: string; model_name: string; count: number; failed: number; jobs: PrintJob[] }
