@@ -31,8 +31,14 @@ const (
 	MaxPhotosPerPart = 6
 	// DefaultRetention : durée de conservation d'une archive prête sur le serveur.
 	DefaultRetention = 24 * time.Hour
-	// LinkTTL : durée de validité d'une URL de téléchargement signée.
-	LinkTTL = 10 * time.Minute
+	// DefaultLinkTTL : durée de validité par défaut d'une URL de téléchargement signée (FB13 : 10 min étaient trop
+	// courtes pour un téléchargement lancé depuis un autre appareil). Réglable (BAMBU_EXPORT_LINK_TTL), toujours
+	// entre MinLinkTTL et MaxLinkTTL, et jamais au-delà de la conservation de l'archive.
+	DefaultLinkTTL = 2 * time.Hour
+	MinLinkTTL     = time.Minute
+	MaxLinkTTL     = 24 * time.Hour
+	// LinkTTL : alias de DefaultLinkTTL (compatibilité).
+	LinkTTL = DefaultLinkTTL
 	// MaxKept : nombre maximal d'archives prêtes conservées (les plus anciennes expirent d'abord).
 	MaxKept = 20
 	// DefaultLicense : valeur du champ licence quand l'utilisateur n'en choisit pas.
@@ -125,11 +131,13 @@ type Record struct {
 
 // Link est une URL de téléchargement signée, à durée limitée.
 type Link struct {
-	URL       string    `json:"url" jsonschema:"URL absolue signée (valable sans jeton jusqu'à expires_at)"`
-	Path      string    `json:"path" jsonschema:"même lien, relatif à l'adresse du service"`
-	ExpiresAt time.Time `json:"expires_at"`
-	FileName  string    `json:"file_name"`
-	SizeBytes int64     `json:"size_bytes"`
+	URL        string    `json:"url" jsonschema:"URL absolue signée (valable sans jeton jusqu'à expires_at)"`
+	Path       string    `json:"path" jsonschema:"même lien, relatif à l'adresse du service"`
+	Public     bool      `json:"internet_reachable" jsonschema:"true : url passe par l'adresse publique restreinte (joignable hors du réseau privé) ; toujours signée et limitée dans le temps"`
+	PrivateURL string    `json:"private_url,omitempty" jsonschema:"même lien sur l'adresse du réseau privé (quand url est l'adresse publique)"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	FileName   string    `json:"file_name"`
+	SizeBytes  int64     `json:"size_bytes"`
 }
 
 // Started est la réponse d'un lancement.

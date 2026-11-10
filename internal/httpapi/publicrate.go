@@ -30,6 +30,8 @@ type PublicRateLimits struct {
 	TokenPerMinute  int // POST /oauth/token (défaut 60)
 	MCPPerMinute    int // /mcp sans jeton valide (défaut 60)
 	UploadPerMinute int // PUT|POST /upload/<jeton> (défaut 30)
+	// DownloadPerMinute : GET /api/exports/<id>.zip signé (défaut 20)
+	DownloadPerMinute int
 }
 
 // Bornes : une limite configurable reste une limite.
@@ -37,7 +39,7 @@ const maxPublicRate = 100000
 
 // DefaultPublicRateLimits : valeurs par défaut.
 func DefaultPublicRateLimits() PublicRateLimits {
-	return PublicRateLimits{RegisterPerHour: 10, TokenPerMinute: 60, MCPPerMinute: 60, UploadPerMinute: 30}
+	return PublicRateLimits{RegisterPerHour: 10, TokenPerMinute: 60, MCPPerMinute: 60, UploadPerMinute: 30, DownloadPerMinute: 20}
 }
 
 func (l PublicRateLimits) withDefaults() PublicRateLimits {
@@ -53,6 +55,9 @@ func (l PublicRateLimits) withDefaults() PublicRateLimits {
 	}
 	if l.UploadPerMinute <= 0 {
 		l.UploadPerMinute = d.UploadPerMinute
+	}
+	if l.DownloadPerMinute <= 0 {
+		l.DownloadPerMinute = d.DownloadPerMinute
 	}
 	return l
 }
@@ -80,8 +85,10 @@ func ParsePublicRateLimits(s string) (PublicRateLimits, error) {
 			out.MCPPerMinute = n
 		case "upload":
 			out.UploadPerMinute = n
+		case "download":
+			out.DownloadPerMinute = n
 		default:
-			return out, fmt.Errorf("limite %q inconnue : clés register, token, mcp, upload", part)
+			return out, fmt.Errorf("limite %q inconnue : clés register, token, mcp, upload, download", part)
 		}
 	}
 	return out, nil
@@ -116,6 +123,8 @@ func (l *publicLimiter) allow(cat, ip string) (bool, time.Duration) {
 		burst, per = l.lim.TokenPerMinute, time.Minute
 	case "upload":
 		burst, per = l.lim.UploadPerMinute, time.Minute
+	case "download":
+		burst, per = l.lim.DownloadPerMinute, time.Minute
 	default:
 		burst, per = l.lim.MCPPerMinute, time.Minute
 	}
@@ -194,6 +203,8 @@ func (l *publicLimiter) wrap(o Options, next http.Handler) http.Handler {
 			cat = "mcp"
 		case isUploadLinkRequest(r):
 			cat = "upload"
+		case isPublicExportDownload(r):
+			cat = "download"
 		}
 		if cat != "" {
 			if ok, wait := l.allow(cat, o.clientAddr(r)); !ok {
