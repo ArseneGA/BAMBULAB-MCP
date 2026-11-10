@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Download, Plus, Trash2, Settings, FileBox, Folder } from 'lucide-react';
 import {
-  Button, EmptyState, ErrorState, Field, IconButton, Input, List, LoadingState, Panel, SearchInput, Segmented, Select, Slider,
+  Button, EmptyState, ErrorState, Field, IconButton, Input, List, LoadingState, PageHeader, Panel, SearchInput, Segmented, Select, Slider,
   StatusDot, Tabs, Tag, Toggle, Tooltip, Tree, useToast,
 } from '../components';
 import { colorTokens, radii, spacingScale } from '@shared/theme';
@@ -41,7 +41,7 @@ function Specimen({ forcedTheme }: { forcedTheme?: 'light' | 'dark' }) {
 
       <section>
         <span className="eyebrow">Typographie</span>
-        <h1>Titre de fiche modèle</h1>
+        <h2 className="spec-h1">Titre de fiche modèle</h2>
         <p>Grotesque pour l'interface, lisible à petite taille. Les valeurs et cotes passent en mono :</p>
         <p className="mono">10.00 × 20.00 × 30.00 mm · 0.20 mm · 9f2c1a0b</p>
       </section>
@@ -129,12 +129,9 @@ export function DesignPage() {
   const { theme, setTheme } = useTheme();
   return (
     <>
-      <div className="page-head">
-        <span className="eyebrow">Système de design</span>
-        <h1>Tokens et composants</h1>
-        <p>Les deux thèmes sont affichés côte à côte ; la bascule change le thème de toute l'application.</p>
-        <div><Segmented label="Thème de l'application" value={theme} onChange={setTheme} options={[{ value: 'light', label: 'Clair' }, { value: 'dark', label: 'Sombre' }]} /></div>
-      </div>
+      <PageHeader title="Système de design" help="Jetons et composants. Les deux thèmes sont affichés côte à côte ; la bascule change le thème de toute l'application."
+        crumbs={[{ label: 'Réglages', to: '/reglages' }, { label: 'Avancé', to: '/reglages/avance' }, { label: 'Système de design' }]}
+        actions={<Segmented label="Thème de l'application" value={theme} onChange={setTheme} options={[{ value: 'light', label: 'Clair' }, { value: 'dark', label: 'Sombre' }]} />} />
       <Notice tone="info" title="Page de spécimen : valeurs fictives">Les noms, cotes et messages ci-dessous illustrent les composants du système de design. Aucun ne provient du catalogue, d'une imprimante ou d'une bobine.</Notice>
       <div className="specimens">
         <Specimen forcedTheme="light" />

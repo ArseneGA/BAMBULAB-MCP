@@ -9,3 +9,4 @@
 .sp { display: grid; gap: 4px; justify-items: start; font-size: var(--fs-xs); color: var(--text-2); }
 .sp i { display: block; background: var(--accent); }
 .sp i.rad { width: 36px; height: 36px; background: var(--surface-3); border: 1px solid var(--line-strong); }
+.spec-h1 { font-size: var(--t-title-1); line-height: var(--lh-tight); font-weight: 600; letter-spacing: -0.02em; }

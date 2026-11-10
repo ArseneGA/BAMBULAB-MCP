@@ -6,8 +6,8 @@ import type { AsyncState } from '../api/hooks';
 import type { CompareCandidate, CompareOutput, Experiment } from '../api/goalTypes';
 import type { Measurement, MemoryResponse, PrintResult } from '../api/extraTypes';
 import { Async, Dialog, Notice, fmtDate } from './common';
+import { resultOutcomeLabel } from '@shared/labels';
 
-export const OUTCOME: Record<string, string> = { success: 'réussi', partial: 'partiel', failed: 'raté' };
 
 /** Mémoire des essais comparables (GET /api/print-memory) et essais enregistrés pendant cette session. */
 export function MemoryPanel({ state, saved }: { state: AsyncState<MemoryResponse>; saved: PrintResult[] }) {
@@ -15,7 +15,7 @@ export function MemoryPanel({ state, saved }: { state: AsyncState<MemoryResponse
     <Panel title="Mémoire des essais comparables">
       {saved.length > 0 && (
         <Notice tone="info" icon={<Check size={16} aria-hidden />} title={saved.length === 1 ? 'Essai enregistré' : `${saved.length} essais enregistrés`}>
-          {saved[0].id} : {OUTCOME[saved[0].outcome] ?? saved[0].outcome}. {saved[0].deviations && saved[0].deviations.length > 0 ? `Écarts de réglage consignés : ${saved[0].deviations.map((d) => d.key).join(', ')}. ` : 'Aucun écart de réglage. '}{saved[0].reuse_conditions}
+          {saved[0].id} : {resultOutcomeLabel(saved[0].outcome).label.toLowerCase()}. {saved[0].deviations && saved[0].deviations.length > 0 ? `Écarts de réglage consignés : ${saved[0].deviations.map((d) => d.key).join(', ')}. ` : 'Aucun écart de réglage. '}{saved[0].reuse_conditions}
         </Notice>
       )}
       <Async state={state} label="Recherche d'essais comparables">
@@ -24,7 +24,7 @@ export function MemoryPanel({ state, saved }: { state: AsyncState<MemoryResponse
           : (
             <>
               <ul className="cmp-mem" aria-label="Essais antérieurs">{m.hits.map((h) => (
-                <li key={h.result_id}><Tag tone={h.outcome === 'success' ? 'ok' : h.outcome === 'failed' ? 'err' : 'warn'}>{OUTCOME[h.outcome] ?? h.outcome}</Tag> <span>{h.comparability}</span>{h.observations && <span className="hint"> — {h.observations}</span>}<span className="mono dim"> {fmtDate(h.created_at)} · {h.filament}</span></li>
+                <li key={h.result_id}><Tag tone={h.outcome === 'success' ? 'ok' : h.outcome === 'failed' ? 'err' : 'warn'}>{resultOutcomeLabel(h.outcome).label}</Tag> <span>{h.comparability}</span>{h.observations && <span className="hint"> — {h.observations}</span>}<span className="mono dim"> {fmtDate(h.created_at)} · {h.filament}</span></li>
               ))}</ul>
               <p className="hint" style={{ margin: 'var(--sp-2) 0 0' }}>{m.note}</p>
             </>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
-import { Field, Input, Panel, SearchInput, Tabs, Tag } from '../components';
+import { Field, Input, Panel, SearchInput, Tag } from '../components';
 import { api } from '../api/client';
 import { useAsync } from '../api/hooks';
 import type { PrinterModel } from '../api/printTypes';
@@ -116,72 +116,61 @@ function Presets() {
   );
 }
 
-export function MaterialsPage() {
-  const [tab, setTab] = useState<'machines' | 'materiaux'>('machines');
+/** Imprimantes › Modèles connus : modèles d'imprimantes Bambu Lab connus du service (ex-Matériaux › Machines ; le parc enregistré est dans « Mes imprimantes »). */
+export function KnownModelsView() {
   const models = useAsync((s) => api.printerModels(s), []);
-  const printers = useAsync((s) => api.printers(s), []);
-  const mats = useAsync((s) => api.materials(s), []);
   const [sel, setSel] = useState<string>('');
+  return (
+    <div className="stack">
+      <Async state={models} label="Chargement des modèles d'imprimantes">
+        {(d) => {
+          const cur = d.models.find((m) => m.id === sel) ?? d.models[0];
+          return (
+            <div className="mat-layout">
+              <Panel title={`Modèles (${d.models.length})`} flush>
+                <ul className="list" role="listbox" aria-label="Modèles d'imprimantes">
+                  {d.models.map((m) => (
+                    <li key={m.id} role="presentation"><button type="button" role="option" className="list-item" aria-selected={cur?.id === m.id} onClick={() => setSel(m.id)}><span className="mat-list-item"><strong>{m.name}</strong><span className="mono">{m.build_volume ? `${m.build_volume.x}×${m.build_volume.y}×${m.build_volume.z}` : '—'}</span></span></button></li>
+                  ))}
+                </ul>
+              </Panel>
+              {cur && <ModelSheet m={cur} />}
+            </div>
+          );
+        }}
+      </Async>
+      <p className="hint" style={{ margin: 0 }}>Vos machines enregistrées sont dans <Link to="/imprimantes">Mes imprimantes</Link>.</p>
+    </div>
+  );
+}
+
+/** Matières › Fiches matières : base de matériaux issue des fiches techniques du fabricant. Une valeur absente reste « inconnu ». */
+export function MaterialSheetsView() {
+  const mats = useAsync((s) => api.materials(s), []);
   const [msel, setMsel] = useState<string>('');
   return (
-    <>
-      <div className="page-head"><span className="eyebrow">Espace</span><h1>Matériaux et machines</h1><p>Modèles d'imprimantes Bambu Lab connus du service, parc enregistré, et base de matériaux issue des fiches techniques du fabricant. Une valeur absente reste « inconnu ».</p></div>
-      <div className="stack">
-        <Tabs label="Sections" value={tab} onChange={setTab} tabs={[{ value: 'machines', label: 'Machines' }, { value: 'materiaux', label: 'Matériaux' }]} />
-        {tab === 'machines' && (
-          <>
-            <Async state={models} label="Chargement des modèles d'imprimantes">
-              {(d) => {
-                const cur = d.models.find((m) => m.id === sel) ?? d.models[0];
-                return (
-                  <div className="mat-layout">
-                    <Panel title={`Modèles (${d.models.length})`} flush>
-                      <ul className="list" role="listbox" aria-label="Modèles d'imprimantes">
-                        {d.models.map((m) => (
-                          <li key={m.id} role="presentation"><button type="button" role="option" className="list-item" aria-selected={cur?.id === m.id} onClick={() => setSel(m.id)}><span className="mat-list-item"><strong>{m.name}</strong><span className="mono">{m.build_volume ? `${m.build_volume.x}×${m.build_volume.y}×${m.build_volume.z}` : '—'}</span></span></button></li>
-                        ))}
-                      </ul>
-                    </Panel>
-                    {cur && <ModelSheet m={cur} />}
-                  </div>
-                );
-              }}
-            </Async>
-            <Panel title="Imprimantes enregistrées">
-              <Async state={printers} label="Chargement du parc">
-                {(d) => d.printers.length === 0
-                  ? <p className="hint" style={{ margin: 0 }}>Aucune imprimante enregistrée. Ajoutez-en une depuis <Link to="/imprimantes">Imprimantes</Link>.</p>
-                  : <ul style={{ margin: 0, paddingLeft: 'var(--sp-4)' }}>{d.printers.map((p) => <li key={p.id}><strong>{p.name}</strong> · {p.model_name} · buse <span className="mono">{p.nozzle_mm} mm</span> · AMS {p.ams_units} · firmware {p.firmware ?? 'inconnu'}</li>)}</ul>}
-              </Async>
-            </Panel>
-          </>
-        )}
-        {tab === 'materiaux' && (
-          <>
-            <Async state={mats} label="Chargement des matériaux">
-              {(d) => {
-                const cur = d.materials.find((m) => m.id === msel) ?? d.materials[0];
-                return (
-                  <>
-                    <Notice tone="info" title={`Base de matériaux du ${d.version}`}>{d.note} {d.disclaimer}</Notice>
-                    <div className="mat-layout">
-                      <Panel title={`Matériaux (${d.materials.length})`} flush>
-                        <ul className="list" role="listbox" aria-label="Matériaux">
-                          {d.materials.map((m) => (
-                            <li key={m.id} role="presentation"><button type="button" role="option" className="list-item" aria-selected={cur?.id === m.id} onClick={() => setMsel(m.id)}><span className="mat-list-item"><strong>{m.name}</strong><span className="mono">{m.family} · {m.known_properties} connue(s){m.unknown_properties.length > 0 ? ` · ${m.unknown_properties.length} inconnue(s)` : ''}</span></span></button></li>
-                          ))}
-                        </ul>
-                      </Panel>
-                      {cur && <MaterialSheet key={cur.id} id={cur.id} />}
-                    </div>
-                  </>
-                );
-              }}
-            </Async>
-            <Presets />
-          </>
-        )}
-      </div>
-    </>
+    <div className="stack">
+      <Async state={mats} label="Chargement des matériaux">
+        {(d) => {
+          const cur = d.materials.find((m) => m.id === msel) ?? d.materials[0];
+          return (
+            <>
+              <Notice tone="info" title={`Base de matériaux du ${d.version}`}>{d.note} {d.disclaimer}</Notice>
+              <div className="mat-layout">
+                <Panel title={`Matériaux (${d.materials.length})`} flush>
+                  <ul className="list" role="listbox" aria-label="Matériaux">
+                    {d.materials.map((m) => (
+                      <li key={m.id} role="presentation"><button type="button" role="option" className="list-item" aria-selected={cur?.id === m.id} onClick={() => setMsel(m.id)}><span className="mat-list-item"><strong>{m.name}</strong><span className="mono">{m.family} · {m.known_properties} connue(s){m.unknown_properties.length > 0 ? ` · ${m.unknown_properties.length} inconnue(s)` : ''}</span></span></button></li>
+                    ))}
+                  </ul>
+                </Panel>
+                {cur && <MaterialSheet key={cur.id} id={cur.id} />}
+              </div>
+            </>
+          );
+        }}
+      </Async>
+      <Presets />
+    </div>
   );
 }

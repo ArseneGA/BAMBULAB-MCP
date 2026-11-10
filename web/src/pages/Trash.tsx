@@ -1,25 +1,24 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Undo2 } from 'lucide-react';
-import { Button, EmptyState, Tabs, Tag, useToast } from '../components';
+import { Button, EmptyState, PageHeader, Tabs, Tag, useToast } from '../components';
+import { LibraryNav } from './LibraryNav';
+import { tabsOf } from '../nav';
+import { useTab } from '../tabs';
 import { api, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import { Async, FormatBadge, fmtDate } from './common';
 import './library.css';
 
-type Tab = 'trash' | 'dups';
-
 /** Corbeille (restauration) et doublons exacts (lecture seule : rien n'est jamais supprimé automatiquement). */
 export function TrashPage() {
-  const [tab, setTab] = useState<Tab>('trash');
+  const [tab, setTab] = useTab('/bibliotheque/corbeille');
   return (
     <>
-      <div className="page-head">
-        <span className="eyebrow">Espace</span><h1>Corbeille et doublons</h1>
-        <p>Les suppressions vont en corbeille et restent récupérables. Les doublons exacts (même empreinte sha256) sont signalés mais jamais supprimés automatiquement.</p>
-      </div>
-      <Tabs<Tab> label="Sections" value={tab} onChange={setTab} tabs={[{ value: 'trash', label: 'Corbeille' }, { value: 'dups', label: 'Doublons exacts' }]} />
-      <div style={{ marginTop: 'var(--sp-4)' }}>{tab === 'trash' ? <TrashList /> : <Duplicates />}</div>
+      <PageHeader title="Corbeille et doublons" help="Les suppressions vont en corbeille et restent récupérables ; les doublons exacts (même fichier) ne sont jamais supprimés automatiquement."
+        crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: 'Corbeille et doublons' }]}
+        below={<><LibraryNav /><Tabs label="Corbeille ou doublons" value={tab} onChange={setTab} tabs={tabsOf('/bibliotheque/corbeille')} /></>} />
+      {tab === 'corbeille' ? <TrashList /> : <Duplicates />}
     </>
   );
 }

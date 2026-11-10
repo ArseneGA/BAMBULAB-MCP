@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ProgressBar } from '@shared/components/ProgressBar';
 import { printSource } from '@shared/progress';
 import { LOGO_URL, PRODUCT_NAME, TAGLINE, pageTitle } from '../brand';
-import { mainNav, moreNav, workshopNav } from '../Shell';
+import { NAV } from '../nav';
 
 const html = (el: JSX.Element) => renderToStaticMarkup(el);
 
@@ -67,9 +67,9 @@ describe('identité du produit', () => {
 });
 
 describe('navigation', () => {
-  const all = [...mainNav, ...workshopNav, ...moreNav].map((n) => n.path);
-  it('contient les écrans de la maquette et les écrans annexes, sans doublon', () => {
-    for (const p of ['', 'bibliotheque', 'preparation', 'impressions', 'imprimantes', 'bobines', 'couts', 'gabarits', 'materiaux', 'corbeille', 'reglages']) expect(all).toContain(p);
+  const all = NAV.map((n) => n.path);
+  it('contient exactement les 7 entrées du menu (table nav.ts), sans doublon', () => {
+    expect(all).toEqual(['/', '/projets', '/bibliotheque', '/impressions', '/imprimantes', '/matieres', '/reglages']);
     expect(new Set(all).size).toBe(all.length);
   });
 });

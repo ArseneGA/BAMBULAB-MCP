@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, GitCompare, Plus, Trash2 } from 'lucide-react';
-import { Button, EmptyState, Field, Input, Panel, Select, Tag, Toggle } from '../components';
+import { Button, EmptyState, Field, Input, PageHeader, Panel, Select, Tag, Toggle } from '../components';
 import { api, describeError } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
 import type { Goal, GoalCriteriaCatalog, CriterionInfo, CriterionInput } from '../api/goalTypes';
@@ -9,7 +9,6 @@ import { GlbView } from '../viewer/LazyGlbView';
 import { Async, Notice, PendingBanner, fmtDims } from './common';
 import { PartsPanel, SettingsPanel } from './PrepareParts';
 import { PlatePanel } from './PlatePanel';
-import { PrepareNav } from './PrepareNav';
 import type { Part } from '../api/extraTypes';
 import './model.css';
 import './prepare.css';
@@ -25,17 +24,17 @@ function loadDraft(id: string): Draft {
   return { text: '', material: '', rows: [], machine: DEFAULT_MACHINE, count: 3 };
 }
 
+/** Préparer un modèle : objectif de finition, critères, essais de réglages (route /modele/:id/preparer). */
 export function PreparePage() {
-  const [sp, setSp] = useSearchParams();
-  const id = sp.get('model');
-  return <><PrepareNav />{id ? <PrepareView key={id} id={id} /> : <PickModel onPick={(m) => setSp({ model: m })} />}</>;
+  const { id } = useParams();
+  return id ? <PrepareView key={id} id={id} /> : null;
 }
 
-function PickModel({ onPick }: { onPick: (id: string) => void }) {
+/** Début de « Nouvelle impression » : choisir un modèle (l'assistant continue sur /modele/:id/preparer), ou composer un plateau. */
+export function PickModel({ onPick }: { onPick: (id: string) => void }) {
   const st = useAsync((s) => api.models({ limit: 100, sort: 'name' }, s), []);
   return (
     <>
-      <div className="page-head"><span className="eyebrow">Espace</span><h1>Préparation</h1><p>Choisissez le modèle à préparer : l'objectif de finition et les variantes portent sur une version précise du catalogue.</p></div>
       <Async state={st} label="Chargement du catalogue" empty={(d) => d.models.length === 0 ? <EmptyState title="Le catalogue est vide" text="Importez d'abord un modèle depuis la bibliothèque." action={<Link to="/bibliotheque"><Button size="sm">Ouvrir la bibliothèque</Button></Link>} /> : null}>
         {(d) => (
           <Panel title="Modèles">
@@ -84,7 +83,7 @@ function PrepareView({ id }: { id: string }) {
     try {
       const x = await api.createExperiment({ model_id: id, model_version_id: version?.id, expected_model_revision: version?.id, goal_id: goal.id, base: { machine: draft.machine.trim() || undefined }, base_profile_revision: draft.rev, candidates: draft.count });
       try { localStorage.setItem('atelier-last-experiment', JSON.stringify({ model_id: id, experiment_id: x.id })); } catch { /* ignore */ }
-      nav(`/comparaison?experiment=${encodeURIComponent(x.id)}`);
+      nav(`/modele/${encodeURIComponent(id)}/essais/${encodeURIComponent(x.id)}`);
     } catch (e) { setError(describeError(e)); setBusy(null); }
   };
 
@@ -97,13 +96,8 @@ function PrepareView({ id }: { id: string }) {
       <Async state={model} label="Chargement du modèle">
         {(d) => (
           <>
-            <div className="mdl-head">
-              <div>
-                <nav className="mdl-crumb" aria-label="Fil d'Ariane"><Link to="/bibliotheque">Bibliothèque</Link><span aria-hidden>/</span><Link to={`/modele/${d.model.id}`}>{d.model.name}</Link><span aria-hidden>/</span><span>Préparation</span></nav>
-                <h1>Préparation</h1>
-                <p className="hint" style={{ margin: 0 }}>{d.model.name} · version <span className="mono">{version?.label}</span> · <span className="mono">{cur?.name}</span> · {fmtDims(d.analysis.size_mm ?? d.model.dimensions)}</p>
-              </div>
-            </div>
+            <PageHeader title="Préparer" crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: d.model.name, to: `/modele/${d.model.id}` }, { label: 'Préparer' }]}
+              help={<>{d.model.name} · version <span className="mono">{version?.label}</span> · <span className="mono">{cur?.name}</span> · {fmtDims(d.analysis.size_mm ?? d.model.dimensions)}</>} />
             <div className="mdl">
               <div className="mdl-stage">
                 <div className="mdl-view">

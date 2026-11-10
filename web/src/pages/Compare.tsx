@@ -1,21 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Check, ClipboardCheck, SlidersHorizontal } from 'lucide-react';
-import { Button, EmptyState, Panel, ProgressBar, Tag } from '../components';
+import { Button, EmptyState, PageHeader, Panel, ProgressBar, Tag } from '../components';
 import { api, ApiError, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import type { ApplyOutput, CompareCandidate, CompareOutput, Experiment, Metric } from '../api/goalTypes';
-import type { ExperimentSummary, PrintResult } from '../api/extraTypes';
+import type { PrintResult } from '../api/extraTypes';
 import { MemoryPanel, RecordDialog } from './RecordResult';
-import { PrepareNav } from './PrepareNav';
 import { Async, Dialog, Notice, fmtDate, fmtNum } from './common';
+import { experimentStateLabel, sliceStateLabel } from '@shared/labels';
 import './model.css';
 import './compare.css';
 
-const STATE: Record<string, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
-  pending: { label: 'en attente' }, queued: { label: 'en file' }, running: { label: 'découpe en cours', tone: 'warn' },
-  succeeded: { label: 'terminée', tone: 'ok' }, failed: { label: 'échec', tone: 'err' }, cancelled: { label: 'annulée', tone: 'warn' },
-};
 const METRIC_ORDER: Array<[string, string]> = [
   ['print_time_s', 'Durée estimée'], ['filament_g', 'Matière estimée'], ['filament_m', 'Filament (longueur)'], ['layers', 'Couches'],
   ['layer_height_mm', 'Hauteur de couche'], ['support_g', 'Supports'], ['height_mm', 'Hauteur'],
@@ -33,35 +29,38 @@ function fmtMetric(id: string, m: Metric): string {
   return `${fmtNum(m.value, 2)} ${m.unit}`;
 }
 
+/** Un essai de réglages (route /modele/:id/essais/:exp) : comparer ses variantes, enregistrer le résultat réel. */
 export function ComparePage() {
-  const [sp] = useSearchParams();
-  let id = sp.get('experiment');
-  if (!id) { try { id = (JSON.parse(localStorage.getItem('atelier-last-experiment') ?? 'null') as { experiment_id?: string } | null)?.experiment_id ?? null; } catch { /* ignore */ } }
-  return <><PrepareNav />{id ? <CompareView key={id} id={id} /> : <ExperimentIndex />}</>;
+  const { exp } = useParams();
+  return exp ? <CompareView key={exp} id={exp} /> : null;
 }
 
-const EXP_STATE: Record<ExperimentSummary['state'], { label: string; tone?: 'ok' | 'warn' }> = {
-  running: { label: 'découpes en cours', tone: 'warn' }, complete: { label: 'terminée', tone: 'ok' }, partial: { label: 'terminée avec échecs', tone: 'warn' },
-};
+/** Les essais de réglages d'un modèle (route /modele/:id/essais). */
+export function ExperimentsPage() {
+  const { id } = useParams();
+  return id ? <ExperimentIndex modelId={id} /> : null;
+}
+
 
 /** Expériences passées (GET /api/experiments), la plus récente d'abord. */
-function ExperimentIndex() {
-  const list = useAsync((s) => api.experiments(undefined, s), []);
+function ExperimentIndex({ modelId }: { modelId: string }) {
+  const list = useAsync((s) => api.experiments(modelId, s), [modelId]);
   const models = useAsync((s) => api.models({ limit: 100, sort: 'name' }, s), []);
   const name = (id: string) => models.data?.models.find((m) => m.id === id)?.name ?? id;
   return (
     <>
-      <div className="page-head"><span className="eyebrow">Espace</span><h1>Comparaison</h1><p>Expériences de découpe déjà créées : rouvrez-en une pour comparer ses variantes ou enregistrer le résultat réel d'une impression.</p></div>
+      <PageHeader title="Essais de réglages" help="Les essais déjà créés pour ce modèle : rouvrez-en un pour comparer ses variantes ou enregistrer le résultat réel d'une impression."
+        crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: name(modelId), to: `/modele/${modelId}` }, { label: 'Essais de réglages' }]} />
       <Async state={list} label="Chargement des expériences" empty={(d) => d.experiments.length === 0
-        ? <EmptyState title="Aucune expérience" text="Une comparaison part d'un objectif validé : créez une expérience depuis la préparation d'un modèle." action={<Link to="/preparation"><Button size="sm" variant="primary" icon={<SlidersHorizontal size={14} />}>Ouvrir la préparation</Button></Link>} /> : null}>
+        ? <EmptyState title="Aucun essai de réglages" text="Un essai part d'un objectif validé : créez-en un depuis la préparation du modèle." action={<Link to={`/modele/${modelId}/preparer`}><Button size="sm" variant="primary" icon={<SlidersHorizontal size={14} />}>Préparer ce modèle</Button></Link>} /> : null}>
         {(d) => (
-          <Panel title={`Expériences (${d.experiments.length})`} flush>
-            <ul className="exp-list" aria-label="Expériences">
+          <Panel title={`Essais (${d.experiments.length})`} flush>
+            <ul className="exp-list" aria-label="Essais de réglages">
               {d.experiments.map((x) => (
                 <li key={x.id}>
-                  <Link to={`/comparaison?experiment=${encodeURIComponent(x.id)}`} className="exp-item">
+                  <Link to={`/modele/${encodeURIComponent(x.model_id)}/essais/${encodeURIComponent(x.id)}`} className="exp-item">
                     <strong>{name(x.model_id)}</strong>
-                    <span className="exp-meta"><Tag tone={EXP_STATE[x.state].tone}>{EXP_STATE[x.state].label}</Tag> {x.succeeded}/{x.candidates} découpes réussies{x.failed > 0 ? `, ${x.failed} en échec` : ''}</span>
+                    <span className="exp-meta"><Tag tone={experimentStateLabel(x.state).tone}>{experimentStateLabel(x.state).label}</Tag> {x.succeeded}/{x.candidates} préparations réussies{x.failed > 0 ? `, ${x.failed} en échec` : ''}</span>
                     <span className="mono dim">{fmtDate(x.created_at)} · {x.machine ?? 'machine inconnue'}{x.material_family ? ` · ${x.material_family}` : ''} · {x.id}</span>
                   </Link>
                 </li>
@@ -92,14 +91,8 @@ function CompareView({ id }: { id: string }) {
       <Async state={cmp} label="Chargement de l'expérience">
         {(c) => (
           <>
-            <div className="mdl-head">
-              <div>
-                <nav className="mdl-crumb" aria-label="Fil d'Ariane"><Link to="/bibliotheque">Bibliothèque</Link><span aria-hidden>/</span>{exp.data && <><Link to={`/modele/${exp.data.model_id}`}>Modèle</Link><span aria-hidden>/</span></>}<span>Comparaison</span></nav>
-                <h1>Comparaison des variantes</h1>
-                <p className="hint" style={{ margin: 0 }}>Expérience <span className="mono">{c.experiment_id}</span> · révision figée <span className="mono">{c.model_version_id}</span>{exp.data && <> · {exp.data.details.base.machine} · {exp.data.details.base.process}</>}</p>
-              </div>
-              {exp.data && <Link to={`/preparation?model=${exp.data.model_id}`}><Button icon={<SlidersHorizontal size={15} />}>Retour à la préparation</Button></Link>}
-            </div>
+            <PageHeader title="Comparaison des variantes" crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, ...(exp.data ? [{ label: 'Modèle', to: `/modele/${exp.data.model_id}` }, { label: 'Essais de réglages', to: `/modele/${exp.data.model_id}/essais` }] : []), { label: 'Essai' }]}
+              help={<>Expérience <span className="mono">{c.experiment_id}</span> · révision figée <span className="mono">{c.model_version_id}</span>{exp.data && <> · {exp.data.details.base.machine} · {exp.data.details.base.process}</>}</>} actions={<>              {exp.data && <Link to={`/modele/${exp.data.model_id}/preparer`}><Button icon={<SlidersHorizontal size={15} />}>Retour à la préparation</Button></Link>}</>} />
             {!c.complete && (
               <Notice tone="info" icon={<span className="spinner" aria-hidden />} title="Découpe des variantes en cours">
                 Bambu Studio découpe chaque candidat ; le tableau se complète tout seul ({c.pending?.length ?? 0} en attente).
@@ -139,7 +132,7 @@ function Table({ c, exp, onApply, onRecord }: { c: CompareOutput; exp?: Experime
         <thead>
           <tr><th scope="col"><span className="sr-only">Critère</span></th>
             {c.candidates.map((k) => (
-              <th key={k.id} scope="col"><span className="cmp-title">{k.label}</span><span className="cmp-state"><Tag tone={STATE[k.state]?.tone}>{STATE[k.state]?.label ?? k.state}</Tag>{k.kind === 'reference' && <Tag>référence</Tag>}{k.violates_non_negotiable && <Tag tone="err">viole un critère non négociable</Tag>}</span></th>
+              <th key={k.id} scope="col"><span className="cmp-title">{k.label}</span><span className="cmp-state"><Tag tone={sliceStateLabel(k.state).tone}>{sliceStateLabel(k.state).label}</Tag>{k.kind === 'reference' && <Tag>référence</Tag>}{k.violates_non_negotiable && <Tag tone="err">viole un critère non négociable</Tag>}</span></th>
             ))}</tr>
         </thead>
         <tbody>

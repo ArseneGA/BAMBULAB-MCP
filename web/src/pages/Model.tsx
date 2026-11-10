@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Box, Cpu, FileWarning, FolderInput, GitCompare, Pencil, ShieldAlert, SlidersHorizontal, Tags, Trash2, Undo2 } from 'lucide-react';
-import { Button, EmptyState, Field, Input, List, Panel, StatusDot, Tag, useToast } from '../components';
+import { Breadcrumb, Button, EmptyState, Field, Input, List, PageHeader, Panel, StatusDot, Tag, useToast } from '../components';
 import { api, ApiError, describeError } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
 import type { ModelDetails, Operation, PreviewRef } from '../api/types';
@@ -101,7 +101,7 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
           notice={winOnly ? 'Fichier source non copié sur Linux.' : undefined} />
       );
       case 'pending': return <PreviewPlaceholder icon={<span className="spinner" aria-hidden />} title="Aperçu en cours de calcul" text="Le service prépare le GLB d'aperçu. Cette page se met à jour toute seule." />;
-      case 'backend_missing': return <PreviewPlaceholder icon={<Cpu size={18} aria-hidden />} title="Backend CAO absent" text={`Un fichier STEP nécessite le worker géométrie (uv + CadQuery) pour être converti. ${p.note ?? ''} L'original est conservé intact.`} tone="warn" />;
+      case 'backend_missing': return <PreviewPlaceholder icon={<Cpu size={18} aria-hidden />} title="Conversion des fichiers STEP non installée" text={`Un fichier STEP nécessite le worker géométrie (uv + CadQuery) pour être converti. ${p.note ?? ''} L'original est conservé intact.`} tone="warn" />;
       case 'windows_only': return <PreviewPlaceholder icon={<FileWarning size={18} aria-hidden />} title="Fichier disponible sur Windows seulement" text="Importez-le avec copie pour obtenir un aperçu : il n'est pas encore sur le serveur Linux." tone="warn" />;
       case 'error': return <PreviewPlaceholder icon={<ShieldAlert size={18} aria-hidden />} title="L'aperçu a échoué" text={p.note ?? "Le calcul de l'aperçu a produit une erreur."} tone="err" />;
       default: return <PreviewPlaceholder icon={<Box size={18} aria-hidden />} title="Pas encore d'aperçu" text={p.note ?? "L'aperçu n'a pas été demandé pour ce fichier."} />;
@@ -113,15 +113,15 @@ function ModelBody({ m, id, reload }: { m: ModelDetails; id: string; reload: () 
     <>
       <div className="mdl-head">
         <div>
-          <nav className="mdl-crumb" aria-label="Fil d'Ariane"><Link to="/bibliotheque">Bibliothèque</Link><span aria-hidden>/</span><span>{m.collection_path ?? 'Sans collection'}</span></nav>
+          <Breadcrumb items={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: m.collection_path ?? 'Sans collection' }, { label: m.model.name }]} />
           <h1>{m.model.name}</h1>
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
             {(m.model.tags ?? []).length === 0 ? <span className="hint" style={{ margin: 0 }}>Aucune étiquette</span> : (m.model.tags ?? []).map((t) => <Tag key={t}>{t}</Tag>)}
           </div>
         </div>
         <div className="mdl-actions">
-          <Button icon={<GitCompare size={15} />} onClick={() => nav('/comparaison')} title="Ouvre la dernière expérience de comparaison">Comparer</Button>
-          <Button variant="primary" icon={<SlidersHorizontal size={15} />} disabled={winOnly || trashed} onClick={() => nav(`/preparation?model=${id}`)} title={winOnly ? 'Fichier à copier sur Linux avant préparation' : 'Objectif de finition et variantes'}>Préparer</Button>
+          <Button icon={<GitCompare size={15} />} onClick={() => nav(`/modele/${encodeURIComponent(id)}/essais`)} title="Les essais de réglages de ce modèle : comparer des variantes, enregistrer un résultat">Essais de réglages</Button>
+          <Button variant="primary" icon={<SlidersHorizontal size={15} />} disabled={winOnly || trashed} onClick={() => nav(`/modele/${encodeURIComponent(id)}/preparer`)} title={winOnly ? 'Fichier à copier sur Linux avant préparation' : 'Objectif de finition et variantes'}>Préparer</Button>
         </div>
       </div>
 
@@ -259,7 +259,7 @@ function PreviewPlaceholder({ icon, title, text, tone }: { icon: React.ReactNode
 
 function AnalysisBlock({ a, cad }: { a: ModelDetails['analysis']; cad?: ModelDetails['cad'] }) {
   if (a.state === 'pending') return <p className="hint" style={{ margin: 0 }} role="status"><span className="spinner" aria-hidden /> Analyse en cours…</p>;
-  if (a.state === 'backend_missing') return <Notice title="Analyse indisponible">{a.note ?? cad?.note ?? 'Backend CAO absent.'}</Notice>;
+  if (a.state === 'backend_missing') return <Notice title="Analyse indisponible">{a.note ?? cad?.note ?? 'La conversion des fichiers STEP n\'est pas installée.'}</Notice>;
   if (a.state === 'error') return <Notice tone="err" title="L'analyse a échoué">{a.note ?? 'Maillage illisible ou vide.'}</Notice>;
   if (a.state === 'none') return <p className="hint" style={{ margin: 0 }}>Pas encore analysé. {a.note}</p>;
   return (
@@ -285,7 +285,7 @@ function AnalysisBlock({ a, cad }: { a: ModelDetails['analysis']; cad?: ModelDet
 export function ModelNotFound() {
   return (
     <>
-      <div className="page-head"><span className="eyebrow">Espace</span><h1>Modèle introuvable</h1></div>
+      <PageHeader title="Modèle introuvable" crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: 'Modèle introuvable' }]} />
       <EmptyState title="Ce modèle n'existe pas dans le catalogue" action={<Link to="/bibliotheque"><Button size="sm">Retour à la bibliothèque</Button></Link>} />
     </>
   );

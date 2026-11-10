@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Box, Camera, Plus, Printer as PrinterIcon, Play } from 'lucide-react';
+import { ArrowUpRight, Box, Camera, Plus, Printer as PrinterIcon, ShieldCheck } from 'lucide-react';
 import { EmptyState, ProgressBar } from '../components';
 import { api, assetUrl, BASE } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
@@ -12,21 +12,20 @@ import type { PrintJob, PrinterStatus, PrinterView } from '../api/printTypes';
 import { finishAt, formatEta, formatMinutes, printSource } from '../api/progress';
 import { PRODUCT_NAME, TAGLINE } from '../brand';
 import { Async, FormatBadge, fmtBytes, fmtDate, fmtNum } from './common';
-import { QSTATE } from './Filament';
-import { isPrinting, statePill, usePrinterStatus } from './Printers';
+import { isPrinting, usePrinterStatus } from './Printers';
 import { LaunchButton, stateText } from './Print';
+import { logOutcomeLabel, printerPill, queueStateLabel } from '@shared/labels';
 import './screens.css';
 
 const SHORTCUTS = [
   { to: '/bibliotheque', title: 'Retrouver ou importer', text: 'Recherche, collections, filtres de format, import non destructif.' },
-  { to: '/preparation', title: 'Préciser le résultat', text: 'Objectif de finition traduit en critères validés par le serveur.' },
-  { to: '/comparaison', title: 'Comparer les variantes', text: 'Variantes découpées par Bambu Studio, mesures étiquetées.' },
-  { to: '/materiaux', title: 'Machines et matériaux', text: 'Modèles Bambu connus et parc enregistré ; l\'inconnu reste inconnu.' },
-  { to: '/impressions', title: 'Préparer, envoyer, confirmer', text: 'Découpe, dépôt sur l\'imprimante, confirmation explicite, suivi.' },
-  { to: '/couts', title: 'Coûts et journal', text: 'Matière, électricité, usure : estimations à partir de vos tarifs.' },
+  { to: '/impressions/nouvelle', title: 'Nouvelle impression', text: 'Choisir un modèle, préciser le résultat voulu, préparer l\'impression.' },
+  { to: '/projets', title: 'Projets', text: 'Regrouper les pièces d\'un même objet et suivre son avancement.' },
+  { to: '/matieres', title: 'Matières', text: 'Bobines, couleurs, fiches techniques ; l\'inconnu reste inconnu.' },
+  { to: '/impressions', title: 'Impressions', text: 'Ce qui est à faire, en cours, terminé ; confirmation explicite avant tout lancement.' },
+  { to: '/impressions?vue=bilan', title: 'Bilan et coûts', text: 'Matière, électricité, usure : estimations à partir de vos tarifs.' },
 ] as const;
 
-const OUTCOME: Record<string, { cls: string; label: string }> = { success: { cls: 'ok', label: 'Terminée' }, partial: { cls: 'wait', label: 'Partielle' }, failed: { cls: 'fail', label: 'Échec' }, cancelled: { cls: '', label: 'Annulée' } };
 const money = (v: number, cur = 'EUR') => `${fmtNum(v, 2)} ${cur === 'EUR' ? '€' : cur}`;
 const hm = (s?: number) => formatEta(s);
 
@@ -56,7 +55,7 @@ function Snapshot({ printer, live }: { printer: PrinterView; live: boolean }) {
 function LivePrinter({ printer, activeJob }: { printer: PrinterView; activeJob?: PrintJob }) {
   const st = usePrinterStatus(printer.id, 5000);
   const d: PrinterStatus | undefined = st.data;
-  const pill = statePill(d, !!st.error);
+  const pill = printerPill(d, !!st.error);
   const printing = isPrinting(d);
   const eta = d && d.remaining_minutes > 0 ? d.remaining_minutes * 60 : undefined;
   const title = activeJob?.name ?? d?.current_file;
@@ -89,7 +88,7 @@ function LivePrinter({ printer, activeJob }: { printer: PrinterView; activeJob?:
                 <div><dt>Buse</dt><dd className="mono">{Math.round(d.temps.nozzle)} / {Math.round(d.temps.nozzle_target)} °C</dd></div>
                 <div><dt>Plateau</dt><dd className="mono">{Math.round(d.temps.bed)} / {Math.round(d.temps.bed_target)} °C</dd></div>
                 {d.last_job && <div><dt>Dernière impression</dt><dd>{d.last_job.name}</dd></div>}
-                {d.hms_count > 0 && <div><dt>Alertes HMS</dt><dd>{d.hms_count}</dd></div>}
+                {d.hms_count > 0 && <div><dt>Alertes de l'imprimante</dt><dd>{d.hms_count}</dd></div>}
               </dl>}
               {d?.reachable && <p className="sub">Prête : choisissez un modèle, préparez-le, puis lancez après confirmation.</p>}
             </>
@@ -109,15 +108,15 @@ function QueuePanel() {
   const entries: QueueEntry[] = (q.data?.queue ?? []).filter((e) => !['done', 'failed', 'removed'].includes(e.state));
   return (
     <section className="panel" aria-label="File d'attente">
-      <div className="panel-h"><h3>File d'attente</h3>{entries.length > 0 ? <span className="pill wait"><i />{entries.length} en attente</span> : <Link className="btn btn-ghost btn-sm" to="/file">Gérer</Link>}</div>
-      <Async state={q} label="Chargement de la file" empty={() => entries.length === 0 ? <p className="sub">Aucune impression en file. Ajoutez-en depuis <Link to="/file">la file d'attente</Link>.</p> : null}>
+      <div className="panel-h"><h3>File d'attente</h3>{entries.length > 0 ? <span className="pill wait"><i />{entries.length} en attente</span> : <Link className="btn btn-ghost btn-sm" to="/impressions?vue=en-cours">Gérer</Link>}</div>
+      <Async state={q} label="Chargement de la file" empty={() => entries.length === 0 ? <p className="sub">Aucune impression en file. Ajoutez-en depuis <Link to="/impressions?vue=en-cours">la file d'attente</Link>.</p> : null}>
         {() => (
           <ul className="rowlist">
             {entries.map((e) => (
               <li key={e.id}>
                 <span className="th" aria-hidden><Box size={20} /></span>
-                <div className="grow"><b>{e.file_name ?? e.print_job_id}</b><small>{[e.estimated_minutes ? formatMinutes(e.estimated_minutes) : undefined, e.estimated_grams ? `${fmtNum(e.estimated_grams, 0)} g` : undefined, QSTATE[e.state]?.label].filter(Boolean).join(' · ')}</small></div>
-                {e.state === 'ready' && e.confirm_url && <a className="btn btn-primary btn-sm" href={assetUrl(e.confirm_url)} title="Ouvre la page de confirmation : vous y approuvez le lancement"><Play size={13} aria-hidden />Lancer</a>}
+                <div className="grow"><b>{e.file_name ?? e.print_job_id}</b><small>{[e.estimated_minutes ? formatMinutes(e.estimated_minutes) : undefined, e.estimated_grams ? `${fmtNum(e.estimated_grams, 0)} g` : undefined, queueStateLabel(e.state).label].filter(Boolean).join(' · ')}</small></div>
+                {e.state === 'ready' && e.confirm_url && <a className="btn btn-primary btn-sm" href={assetUrl(e.confirm_url)} title="Ouvre la page de confirmation : vous y approuvez le lancement"><ShieldCheck size={13} aria-hidden />Vérifier et lancer</a>}
               </li>
             ))}
           </ul>
@@ -132,8 +131,8 @@ function LongJobs({ jobs, prog, printers }: { jobs: PrintJob[]; prog: Record<str
   const longs = jobs.filter((j) => ['PREPARED', 'SLICING', 'UPLOADING'].includes(j.state));
   if (longs.length === 0) return null;
   return (
-    <section className="panel" aria-label="Travaux en cours" style={{ marginTop: 'var(--sp-6)' }}>
-      <div className="panel-h"><h3>Travaux en cours</h3><span className="pill run"><i />{longs.length}</span></div>
+    <section className="panel" aria-label="Préparations en cours" style={{ marginTop: 'var(--sp-6)' }}>
+      <div className="panel-h"><h3>Préparations en cours</h3><span className="pill run"><i />{longs.length}</span></div>
       <ul className="rowlist">
         {longs.map((j) => (
           <li key={j.id} className="long-job">
@@ -151,12 +150,12 @@ function Recent() {
   const log = useAsync((s) => insightsApi.log({ limit: 4 }, s), []);
   return (
     <section className="panel flush" aria-label="Dernières impressions" style={{ marginTop: 'var(--sp-6)' }}>
-      <div className="panel-h panel-h-pad"><h3>Dernières impressions</h3><Link className="btn btn-ghost btn-sm" to="/impressions">Tout voir</Link></div>
+      <div className="panel-h panel-h-pad"><h3>Dernières impressions</h3><Link className="btn btn-ghost btn-sm" to="/impressions?vue=terminees">Tout voir</Link></div>
       <Async state={log} label="Chargement du journal" empty={(d) => d.entries.length === 0 ? <p className="sub panel-foot">Le journal se remplit à la fin de chaque impression.</p> : null}>
         {(d) => (
           <ul className="jobs">
             {d.entries.map((e: LogEntry) => {
-              const o = OUTCOME[e.outcome] ?? OUTCOME.success;
+              const o = logOutcomeLabel(e.outcome);
               const secs = e.actual.seconds ?? e.estimated.seconds;
               const grams = e.actual.grams ?? e.estimated.grams;
               const cost = (e.actual_cost ?? e.planned_cost)?.total;
@@ -165,7 +164,7 @@ function Recent() {
                   <span className="job-th" aria-hidden><Box size={22} /></span>
                   <div className="job-main"><b>{e.name ?? e.model_name ?? e.print_job_id}</b><span className="job-note">{e.comment ?? `${e.printer_model ?? e.printer_id ?? ''} · ${fmtDate(e.finished_at)}`}</span></div>
                   <span className="job-meta mono">{secs ? <span>{hm(secs)}</span> : null}{e.material_family && <span>{e.material_family}</span>}{grams ? <span>{fmtNum(grams, 0)} g</span> : null}{cost !== undefined && <span>{money(cost, (e.actual_cost ?? e.planned_cost)?.currency)}</span>}</span>
-                  <span className={`pill ${o.cls}`}><i />{o.label}</span>
+                  <span className={`pill ${o.pill}`}><i />{o.label}</span>
                 </li>
               );
             })}
@@ -249,15 +248,15 @@ export function Home() {
               <li key={j.id}><span className="th" aria-hidden><Box size={20} /></span><div className="grow"><b>{j.name ?? j.id}</b><small>{plist.find((p) => p.id === j.printer_id)?.name ?? j.printer_id} · {stateText(j)}</small></div><LaunchButton job={j} /></li>
             ))}
           </ul>
-          <p className="sub panel-foot">« Lancer » ouvre la page de confirmation du serveur : vous y vérifiez la photo du plateau et approuvez.</p>
+          <p className="sub panel-foot">« Vérifier et lancer » ouvre la page de confirmation du serveur : vous y vérifiez la photo du plateau et approuvez.</p>
         </section>
       )}
 
       <Recent />
       <RecentModels />
 
-      <h2 className="shortcuts-h">Parcours</h2>
-      <ol className="shortcuts" aria-label="Parcours">
+      <h2 className="shortcuts-h">Raccourcis</h2>
+      <ol className="shortcuts" aria-label="Raccourcis">
         {SHORTCUTS.map((s, i) => (
           <li key={s.title}><Link to={s.to} className="panel shortcut"><span className="n mono" aria-hidden>{i + 1}</span><span className="t"><b>{s.title}</b><small>{s.text}</small></span><ArrowUpRight size={15} aria-hidden /></Link></li>
         ))}

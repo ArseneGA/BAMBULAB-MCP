@@ -1,0 +1,4 @@
+{
+  "_": "Préfixes d'URL réservés au serveur (pages humaines, API, MCP). Aucune route de l'interface web ne peut commencer par l'un d'eux. Lu par web/src/nav.test.ts ET par internal/webui/webui_test.go (G10, CA-N4).",
+  "prefixes": ["/setup", "/confirm", "/stop", "/action", "/enroll", "/oauth", "/api", "/mcp", "/health", "/agents/pair", "/about", "/privacy"]
+}

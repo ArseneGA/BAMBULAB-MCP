@@ -16,7 +16,7 @@ type Step = 'path' | 'scanned' | 'running' | 'done' | 'failed';
 /**
  * Import non destructif en deux temps : inventaire en lecture seule (POST /api/scan),
  * puis import (POST /api/import -> travail suivi par GET /api/jobs/{id}).
- * Les originaux ne sont jamais déplacés ni modifiés ; les chemins doivent être sous une racine autorisée par bambud.
+ * Les originaux ne sont jamais déplacés ni modifiés ; les chemins doivent être sous une racine autorisée par le service.
  */
 export function ImportDialog({ open, onClose, onImported }: { open: boolean; onClose: () => void; onImported: () => void }) {
   const conn = useConnection();
@@ -65,7 +65,7 @@ export function ImportDialog({ open, onClose, onImported }: { open: boolean; onC
   const cancel = async () => { if (job) { try { await api.cancelJob(job.id); } catch (e) { setError(describeError(e)); } } };
 
   const report = job?.state === 'succeeded' ? (job.result as ImportReport | undefined) : undefined;
-  const disabledReason = conn.server === 'offline' ? 'bambud est injoignable.' : !conn.importEnabled ? conn.importNote ?? "Aucune racine d'import n'est autorisée." : undefined;
+  const disabledReason = conn.server === 'offline' ? 'Printalk est injoignable.' : !conn.importEnabled ? conn.importNote ?? "Aucune racine d'import n'est autorisée." : undefined;
 
   const footer = (() => {
     switch (step) {
@@ -81,7 +81,7 @@ export function ImportDialog({ open, onClose, onImported }: { open: boolean; onC
 
   return (
     <Dialog open={open} onClose={onClose} title="Importer des modèles" wide footer={footer}>
-      {disabledReason && <Notice title="Import indisponible">{disabledReason} Démarrez bambud avec <span className="mono">--import-root &lt;dossier&gt;</span> (ou <span className="mono">BAMBU_IMPORT_ROOTS</span>).</Notice>}
+      {disabledReason && <Notice title="Import indisponible">{disabledReason} Autorisez un dossier d'import au démarrage du service : option <span className="mono">--import-root &lt;dossier&gt;</span> (ou variable <span className="mono">BAMBU_IMPORT_ROOTS</span>).</Notice>}
       {error && <Notice tone="err" title="Erreur">{error}</Notice>}
 
       {(step === 'path' || step === 'scanned') && (

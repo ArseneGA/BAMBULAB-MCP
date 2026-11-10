@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useId, useState } from 'react';
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, InputHTMLAttributes, KeyboardEvent, ReactNode, SelectHTMLAttributes } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Inbox, Search, X } from 'lucide-react';
 import './components.css';
 
@@ -97,9 +97,21 @@ export function Panel({ title, actions, children, className, flush }: { title?: 
 
 /* ---------- Tabs ---------- */
 export function Tabs<T extends string>({ value, onChange, tabs, label }: { value: T; onChange: (v: T) => void; tabs: Array<{ value: T; label: string; disabled?: boolean }>; label: string }) {
+  /** Flèches, Début et Fin déplacent l'onglet actif (motif WAI-ARIA « tabs », activation automatique). */
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+    const enabled = tabs.filter((t) => !t.disabled);
+    if (enabled.length < 2) return;
+    const i = Math.max(0, enabled.findIndex((t) => t.value === value));
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? enabled.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + enabled.length) % enabled.length;
+    e.preventDefault();
+    onChange(enabled[n].value);
+    const btns = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button[role="tab"]:not(:disabled)'));
+    btns[n]?.focus();
+  };
   return (
-    <div className="tabs" role="tablist" aria-label={label}>
-      {tabs.map((t) => <button key={t.value} role="tab" type="button" aria-selected={value === t.value} disabled={t.disabled} onClick={() => onChange(t.value)}>{t.label}</button>)}
+    <div className="tabs" role="tablist" aria-label={label} onKeyDown={onKey}>
+      {tabs.map((t) => <button key={t.value} role="tab" type="button" aria-selected={value === t.value} tabIndex={value === t.value ? 0 : -1} disabled={t.disabled} onClick={() => onChange(t.value)}>{t.label}</button>)}
     </div>
   );
 }
@@ -162,13 +174,34 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/* ---------- États vide / chargement / erreur ---------- */
+/* ---------- États vide / chargement / erreur (G10 UX5) ---------- */
+/** État vide en TROIS éléments : ce que c'est (title), pourquoi c'est vide (text), UNE action (action). Jamais un simple « — ». */
 export function EmptyState({ title, text, action }: { title: string; text?: string; action?: ReactNode }) {
   return <div className="state"><Inbox size={18} aria-hidden /><h3>{title}</h3>{text && <p>{text}</p>}{action}</div>;
+}
+/** Squelette : `lines` barres grises (pas de spinner global), la page ne saute pas à l'arrivée des données. */
+export function Skeleton({ lines = 3, label }: { lines?: number; label?: string }) {
+  return (
+    <div className="skeleton-block" role="status" aria-busy="true" aria-label={label ?? 'Chargement'}>
+      {Array.from({ length: lines }, (_, i) => <div key={i} className="skeleton" style={{ width: `${[92, 70, 82, 56][i % 4]}%` }} />)}
+    </div>
+  );
 }
 export function LoadingState({ label = 'Chargement' }: { label?: string }) {
   return <div className="state" role="status" aria-busy="true"><span className="spinner" aria-hidden /><h3>{label}</h3><div className="skeleton" style={{ width: 220 }} /><div className="skeleton" style={{ width: 150 }} /></div>;
 }
-export function ErrorState({ title, text, action }: { title: string; text?: string; action?: ReactNode }) {
-  return <div className="state state-err" role="alert"><AlertTriangle size={18} aria-hidden /><h3>{title}</h3>{text && <p>{text}</p>}{action}</div>;
+/**
+ * Erreur en TROIS parties : ce qui s'est passé (title, en clair), ce que ça change (impact), ce qu'on peut faire (action).
+ * Le détail technique est replié (« Détails techniques ») ; jamais de trace, de chemin serveur ni de secret.
+ */
+export function ErrorState({ title, text, impact, action, details }: { title: string; text?: string; impact?: string; action?: ReactNode; details?: string }) {
+  return (
+    <div className="state state-err" role="alert">
+      <AlertTriangle size={18} aria-hidden /><h3>{title}</h3>
+      {text && <p>{text}</p>}
+      {impact && <p className="state-impact">{impact}</p>}
+      {action}
+      {details && <details className="state-tech"><summary>Détails techniques</summary><p className="mono">{details}</p></details>}
+    </div>
+  );
 }

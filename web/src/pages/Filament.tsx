@@ -1,54 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, ExternalLink, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { Button, EmptyState, Field, Input, Panel, ProgressBar, Select, Tabs, Tag, useToast } from '../components';
+import { Button, EmptyState, Field, Input, Panel, ProgressBar, Select, Tag, useToast } from '../components';
 import { api, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import { filamentApi } from '../api/filamentApi';
-import type { AMSTrayView, ColorPlan, ColorWish, QueueEntry, QueueState, Spool, SpoolInput } from '../api/filamentApi';
+import type { AMSTrayView, ColorPlan, ColorWish, QueueEntry, Spool, SpoolInput } from '../api/filamentApi';
 import type { JobProgress, PrintJob } from '../api/printTypes';
 import { printSource } from '../api/progress';
 import { Async, Dialog, Notice, fmtDate, fmtNum } from './common';
+import { queueStateLabel, spoolStatusLabel } from '@shared/labels';
 import './filament.css';
 
-type Tab = 'bobines' | 'multicolore' | 'file';
-
 const SOURCE: Record<string, string> = { human: 'saisi', ams: 'lu sur l\'AMS', consumption: 'décompté', default: 'bobine neuve présumée' };
-const STATUS: Record<string, { label: string; tone?: 'ok' | 'warn' | 'err' }> = { ok: { label: 'suffisante', tone: 'ok' }, low: { label: 'presque vide', tone: 'warn' }, empty: { label: 'vide', tone: 'err' }, archived: { label: 'archivée' } };
-export const QSTATE: Record<QueueState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
-  slicing: { label: 'découpe', tone: 'warn' }, needs_assignments: { label: 'affectation à choisir', tone: 'warn' }, waiting: { label: 'en attente' }, uploading: { label: 'envoi en cours', tone: 'warn' },
-  ready: { label: 'prête : attend votre accord', tone: 'ok' }, printing: { label: 'en cours', tone: 'ok' }, done: { label: 'terminée', tone: 'ok' }, failed: { label: 'échec', tone: 'err' }, removed: { label: 'retirée' },
-};
 
 function Swatch({ color }: { color?: string }) {
   return <span className="fil-swatch" style={color ? { background: color } : undefined} aria-label={color ?? 'couleur inconnue'} title={color ?? 'couleur inconnue'} />;
 }
 
-export function FilamentPage({ initial = 'bobines' }: { initial?: Tab }) {
-  const [tab, setTab] = useState<Tab>(initial);
-  const [pid, setPid] = useState('');
-  const printers = useAsync((s) => api.printers(s), []);
-  const plist = printers.data?.printers ?? [];
-  const printer = plist.find((p) => p.id === pid) ?? plist[0];
-  return (
-    <>
-      <div className="page-head">
-        <span className="eyebrow">Espace</span><h1>Bobines, couleurs et file d'attente</h1>
-        <p>Inventaire des bobines et état de l'AMS, affectation des couleurs aux emplacements, file d'impressions. Aucune impression ne démarre ici : chaque lancement, y compris le suivant d'une file, se confirme sur la page de confirmation du serveur.</p>
-      </div>
-      <div className="fil-bar">
-        <Tabs label="Sections" value={tab} onChange={setTab} tabs={[{ value: 'bobines', label: 'Bobines et AMS' }, { value: 'multicolore', label: 'Multicolore' }, { value: 'file', label: 'File d\'attente' }]} />
-        {plist.length > 1 && <Select aria-label="Imprimante" value={printer?.id ?? ''} onChange={(e) => setPid(e.target.value)} options={plist.map((p) => ({ value: p.id, label: p.name }))} />}
-      </div>
-      {tab === 'bobines' && <SpoolsTab printerId={printer?.id} />}
-      {tab === 'multicolore' && <ColorsTab printerId={printer?.id} />}
-      {tab === 'file' && <QueueTab />}
-    </>
-  );
-}
-
 /* ---------------------------------------------------------------- Bobines et AMS */
 
-function SpoolsTab({ printerId }: { printerId?: string }) {
+export function SpoolsTab({ printerId }: { printerId?: string }) {
   const spools = useAsync((s) => filamentApi.spools({}, s), []);
   const ams = useAsync((s) => (printerId ? filamentApi.ams(printerId, s) : Promise.resolve(undefined)), [printerId]);
   const [edit, setEdit] = useState<Spool | 'new' | undefined>();
@@ -72,7 +43,7 @@ function SpoolsTab({ printerId }: { printerId?: string }) {
           </Async>
         )}
       </Panel>
-      <Panel title="Inventaire" actions={<Button size="sm" variant="primary" icon={<Plus size={13} />} onClick={() => setEdit('new')}>Nouvelle bobine</Button>}>
+      <Panel title="Inventaire" actions={<Button size="sm" variant="primary" icon={<Plus size={13} />} onClick={() => setEdit('new')}>Inscrire une bobine</Button>}>
         <Async state={spools} label="Chargement de l'inventaire" empty={(d) => d.spools.length === 0 ? <EmptyState title="Aucune bobine" text="Inscrivez vos bobines pour suivre leur poids restant, leur prix et être prévenu avant qu'une impression ne manque de matière." action={<Button size="sm" variant="primary" onClick={() => setEdit('new')}>Ajouter une bobine</Button>} /> : null}>
           {(d) => (
             <>
@@ -88,7 +59,7 @@ function SpoolsTab({ printerId }: { printerId?: string }) {
                       </div>
                       <div className="rest"><span>{fmtNum(sp.remaining_g, 0)} g</span><span className="muted">sur {fmtNum(sp.net_weight_g, 0)} g</span></div>
                       <div className="progress" role="progressbar" aria-label={`Restant de ${sp.name ?? sp.material}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><span style={{ width: `${pct}%`, background: lowish ? 'var(--st-wait)' : undefined }} /></div>
-                      <p className="spool-meta"><Tag tone={STATUS[sp.status]?.tone}>{STATUS[sp.status]?.label ?? sp.status}</Tag> <span className="sub">{SOURCE[sp.remaining_source]}</span></p>
+                      <p className="spool-meta"><Tag tone={spoolStatusLabel(sp.status).tone}>{spoolStatusLabel(sp.status).label}</Tag> <span className="sub">{SOURCE[sp.remaining_source]}</span></p>
                       {lowish && <p className="sub spool-low">Bientôt vide</p>}
                       <dl className="spool-facts">
                         <div><dt>Prix/kg</dt><dd className="mono">{sp.price_per_kg !== undefined ? fmtNum(sp.price_per_kg, 2) : <span className="unknown">inconnu</span>}</dd></div>
@@ -184,7 +155,7 @@ function SpoolDialog({ spool, printerId, onClose, onSaved }: { spool?: Spool; pr
 
 /* ---------------------------------------------------------------- Multicolore */
 
-function ColorsTab({ printerId }: { printerId?: string }) {
+export function ColorsTab({ printerId }: { printerId?: string }) {
   const jobs = useAsync((s) => api.printJobs(s), []);
   const candidates = (jobs.data?.print_jobs ?? []).filter((j) => ['VALIDATED', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(j.state));
   const [jid, setJid] = useState('');
@@ -260,7 +231,7 @@ function PlanView({ plan, wishes, onWish, onRecalc, job }: { plan: ColorPlan; wi
 
 /* ---------------------------------------------------------------- File d'attente */
 
-function QueueTab() {
+export function QueueTab() {
   const q = useAsync((s) => filamentApi.queue(true, s), []);
   const reloadRef = useRef(q.reload); reloadRef.current = q.reload;
   useEffect(() => { const t = window.setInterval(() => reloadRef.current(), 5000); return () => window.clearInterval(t); }, []);
@@ -306,7 +277,7 @@ function QueueTab() {
       </Panel>
       {history.length > 0 && (
         <Panel title="Récemment terminées">
-          <ul className="fil-history">{history.map((e) => <li key={e.id}><Tag tone={QSTATE[e.state].tone}>{QSTATE[e.state].label}</Tag> {e.file_name ?? e.print_job_id} <span className="sub">{e.message}</span></li>)}</ul>
+          <ul className="fil-history">{history.map((e) => <li key={e.id}><Tag tone={queueStateLabel(e.state).tone}>{queueStateLabel(e.state).label}</Tag> {e.file_name ?? e.print_job_id} <span className="sub">{e.message}</span></li>)}</ul>
         </Panel>
       )}
     </div>
@@ -314,7 +285,7 @@ function QueueTab() {
 }
 
 function QueueRow({ e, job, prog, first, last, onMove, onRemove, onRenew }: { e: QueueEntry; job?: PrintJob; prog?: JobProgress; first: boolean; last: boolean; onMove: (d: number) => void; onRemove: () => void; onRenew: () => void }) {
-  const st = QSTATE[e.state];
+  const st = queueStateLabel(e.state);
   return (
     <li className="fil-qrow">
       <span className="fil-rank mono">{e.position}</span>
