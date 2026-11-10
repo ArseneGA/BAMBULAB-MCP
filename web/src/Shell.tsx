@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { House, Boxes, SlidersHorizontal, Printer, Wifi, Disc3, Coins, Shapes, Layers, Trash2, Settings, Moon, Sun } from 'lucide-react';
+import { FolderKanban, House, Boxes, SlidersHorizontal, Printer, Wifi, Disc3, Coins, Shapes, Layers, Trash2, Settings, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { StatusDot, ToastProvider } from './components';
 import type { Status } from './components';
@@ -21,6 +21,7 @@ export const mainNav: NavItem[] = [
   { path: 'impressions', label: 'Impressions', icon: Printer },
 ];
 export const workshopNav: NavItem[] = [
+  { path: 'projets', label: 'Projets', icon: FolderKanban },
   { path: 'imprimantes', label: 'Imprimantes', icon: Wifi },
   { path: 'bobines', label: 'Bobines', icon: Disc3 },
   { path: 'couts', label: 'Coûts', icon: Coins },
@@ -33,7 +34,7 @@ export const moreNav: NavItem[] = [
 ];
 /** Titre de l'onglet selon l'écran courant (les écrans non listés gardent le nom du produit). */
 const TITLES: Array<[string, string]> = [
-  ['/bibliotheque', 'Bibliothèque'], ['/modele', 'Fiche modèle'], ['/preparation', 'Préparer'], ['/comparaison', 'Variantes'], ['/impressions', 'Impressions'],
+  ['/bibliotheque', 'Bibliothèque'], ['/modele', 'Fiche modèle'], ['/preparation', 'Préparer'], ['/comparaison', 'Variantes'], ['/impressions', 'Impressions'], ['/projets', 'Projets'],
   ['/imprimantes', 'Imprimantes'], ['/bobines', 'Bobines'], ['/file', 'File d\'attente'], ['/couts', 'Coûts'], ['/gabarits', 'Gabarits'], ['/materiaux', 'Matériaux'],
   ['/corbeille', 'Corbeille'], ['/reglages', 'Réglages'], ['/dysfonctionnements', 'Dysfonctionnements'], ['/agents', 'Agent Windows'], ['/design', 'Système de design'],
 ];

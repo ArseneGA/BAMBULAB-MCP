@@ -22,6 +22,7 @@ import { GabaritsPage } from './pages/Gabarits';
 import './pages/screens.css'; // en dernier : ses règles d'écran priment sur celles des composants
 const PreparePage = lazy(() => import('./pages/Prepare').then((m) => ({ default: m.PreparePage })));
 const ComparePage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ComparePage })));
+const ProjectsPage = lazy(() => import('./pages/Projects').then((m) => ({ default: m.ProjectsPage })));
 const IssuesPage = lazy(() => import('./pages/Issues').then((m) => ({ default: m.IssuesPage })));
 const InsightsPage = lazy(() => import('./pages/Insights').then((m) => ({ default: m.InsightsPage })));
 
@@ -52,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="materiaux" element={<MaterialsPage />} />
               <Route path="impressions" element={<PrintPage />} />
               <Route path="impression" element={<Navigate to="/impressions" replace />} />
+              <Route path="projets" element={<ProjectsPage />} />
               <Route path="imprimantes" element={<PrintersPage />} />
               <Route path="couts" element={<InsightsPage />} />
               <Route path="tableau-de-bord" element={<Navigate to="/couts" replace />} />
