@@ -40,6 +40,7 @@ type PromptDetails struct {
 	VibrationCali bool                 `json:"vibration_cali" jsonschema:"calibration des vibrations au démarrage (oui par défaut) ; fait partie de ce que l'humain approuve"`
 	Timelapse     bool                 `json:"timelapse" jsonschema:"timelapse enregistré pendant l'impression (non par défaut) ; fait partie de ce que l'humain approuve"`
 	Adhesion      []string             `json:"adhesion_warnings,omitempty" jsonschema:"avertissements de risque de décollement (pièce élancée sur peu de surface, sans bordure) : non bloquants, à lire avant de lancer"`
+	Slender       []string             `json:"slender_warnings,omitempty" jsonschema:"avertissement : troncs de supports ou piliers de la pièce plus hauts que N × leur section (G-code réel ; N = 10 par défaut) : risque de flexion, de chute et de spaghettis ; non bloquant mais à lire et acquitter avant de lancer"`
 	Overhang      []string             `json:"overhang_warnings,omitempty" jsonschema:"avertissement FORT : surplombs significatifs (> 200 mm² cumulés ou une zone > 100 mm²) alors que les supports sont désactivés ; non bloquant mais à lire et accepter avant de lancer"`
 	Colors        []FilamentColor      `json:"colors,omitempty" jsonschema:"couleur de chaque filament d'après la bobine RÉELLEMENT chargée (inventaire, AMS, bobine externe déclarée) ; « inconnue » sinon, jamais la couleur par défaut du profil"`
 	Reminder      string               `json:"reminder"`
@@ -67,7 +68,7 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 	if short == "" {
 		short = rec.Name
 	}
-	d := &PromptDetails{Colors: s.colorsFor(j), File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments, BedLeveling: !j.NoBedLeveling, FlowCali: !j.NoFlowCali, VibrationCali: !j.NoVibrationCali, Timelapse: j.Timelapse, Adhesion: j.adhesionNotes(), Overhang: j.overhangNotes(),
+	d := &PromptDetails{Colors: s.colorsFor(j), File: j.Name, PrinterName: rec.Name, PrinterModel: model.Name, SHA256: j.ArtifactSHA256, Plate: j.Plate, Materials: j.Assignments, BedLeveling: !j.NoBedLeveling, FlowCali: !j.NoFlowCali, VibrationCali: !j.NoVibrationCali, Timelapse: j.Timelapse, Adhesion: j.adhesionNotes(), Overhang: j.overhangNotes(), Slender: j.slenderNotes(),
 		Reminder: "Vérifie que le plateau est vide et dégagé : l'imprimante ne peut pas le savoir. Le dépôt du fichier n'a déclenché ni chauffe ni mouvement."}
 	if j.Validation != nil {
 		for _, w := range j.Validation.Warnings {

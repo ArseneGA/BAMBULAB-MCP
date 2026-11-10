@@ -94,6 +94,9 @@ func confirmationText(v *printing.ConfirmationView, baseURL string, views bool) 
 	for _, a := range b.Overhang {
 		sb.WriteString("AVERTISSEMENT FORT (non bloquant, à dire à l'utilisateur AVANT qu'il lance, il doit en prendre acte) : " + a + "\n")
 	}
+	for _, a := range b.Slender {
+		sb.WriteString("AVERTISSEMENT (non bloquant, à dire à l'utilisateur AVANT qu'il lance, il doit l'acquitter) : " + a + "\n")
+	}
 	if views {
 		sb.WriteString("La confirmation s'affiche dans la conversation (carte avec photo du plateau et températures) : dis à l'utilisateur de la compléter (cocher « plateau vide », saisir son code de lancement personnel DANS LA CARTE, Lancer). ")
 		sb.WriteString("Ne lui demande JAMAIS son code dans la conversation. Lien de secours, seulement s'il ne voit aucune carte : " + v.ConfirmURL + " .\n")

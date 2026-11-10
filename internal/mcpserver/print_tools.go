@@ -231,7 +231,8 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 	addTool(s, &mcp.Tool{
 		Name: "validate_print_artifact", Title: "Valider un artefact pour une imprimante",
 		Description: "Rapport : validation d'archive (structure, G-code, trajectoires) ET compatibilité avec l'imprimante réelle (modèle, buse, volume, plateau, matières/AMS déclarés). " +
-			"Accepte print_job_id, ou artifact_id (empreinte d'un .gcode.3mf du stockage, ex. une variante). Les contrôles bloquants empêchent le dépôt.",
+			"Accepte print_job_id, ou artifact_id (empreinte d'un .gcode.3mf du stockage, ex. une variante). Les contrôles bloquants empêchent le dépôt. " +
+			"Avertissements non bloquants tirés du G-code réel : risque de décollement mesuré sur la couche 1 (îlots et surface posés sur le plateau, bordure et bases comprises) et élancement des troncs de supports / piliers de la pièce (hauteur > N × section ; N = 10 par défaut, réglable par slender_ratio).",
 		Annotations: write,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in printing.ValidateInput) (*mcp.CallToolResult, printing.ValidateOutput, error) {
 		o, err := p.ValidateArtifact(ctx, in)
@@ -247,6 +248,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 		}
 		if w := o.Report.OverhangWarning(); w != "" {
 			txt += " AVERTISSEMENT FORT (non bloquant, à signaler à l'utilisateur, qui doit en prendre acte avant le lancement) : " + w
+		}
+		if o.Report.Slender.Flagged() {
+			txt += " AVERTISSEMENT (non bloquant, à signaler à l'utilisateur, qui doit l'acquitter avant le lancement) : " + o.Report.Slender.Summary()
 		}
 		return textResult(txt), *o, nil
 	})
