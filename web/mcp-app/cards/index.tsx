@@ -1,6 +1,7 @@
 import type { CardApp, CardProps } from './call';
 import { CompareCard, normalizeCompare } from './compare';
 import { CostsCard, normalizeCosts, type CostsData } from './costs';
+import { IssuesCard, normalizeIssues, type IssuesData } from './issues';
 import { LibraryCard, normalizeLibrary, type LibraryData } from './library';
 import { PrintersCard, normalizePrinters, type PrintersData } from './printers';
 import { PrintsCard, normalizePrints, type PrintsData } from './prints';
@@ -18,7 +19,8 @@ export type CardData =
   | { card: 'costs'; data: CostsData }
   | { card: 'spools'; data: SpoolsData }
   | { card: 'prints'; data: PrintsData }
-  | { card: 'printers'; data: PrintersData };
+  | { card: 'printers'; data: PrintersData }
+  | { card: 'issues'; data: IssuesData };
 
 export function classifyCard(s: unknown): CardData | undefined {
   let d: unknown;
@@ -28,6 +30,7 @@ export function classifyCard(s: unknown): CardData | undefined {
   if ((d = normalizeSpools(s))) return { card: 'spools', data: d as SpoolsData };
   if ((d = normalizePrints(s))) return { card: 'prints', data: d as PrintsData };
   if ((d = normalizePrinters(s))) return { card: 'printers', data: d as PrintersData };
+  if ((d = normalizeIssues(s))) return { card: 'issues', data: d as IssuesData };
   return undefined;
 }
 
@@ -39,6 +42,7 @@ export function CardView({ app, card, onOpen }: { app: CardApp; card: CardData; 
     case 'spools': return <SpoolsCard app={app} data={card.data} onOpen={onOpen} />;
     case 'prints': return <PrintsCard app={app} data={card.data} onOpen={onOpen} />;
     case 'printers': return <PrintersCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'issues': return <IssuesCard app={app} data={card.data} onOpen={onOpen} />;
   }
 }
 

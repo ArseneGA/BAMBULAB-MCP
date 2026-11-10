@@ -26,6 +26,7 @@ var cardLinks = map[string]string{
 	"get_print_log":       mcpserver.PrintsViewURI,
 	"list_print_log":      mcpserver.PrintsViewURI,
 	"list_printers":       mcpserver.PrintersViewURI,
+	"list_issues":         mcpserver.IssuesViewURI,
 }
 
 // Chaque outil lié à une carte porte le lien dans tools/list (clé imbriquée ET clé plate), reste visible du modèle, garde son nom,

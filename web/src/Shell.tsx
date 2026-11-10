@@ -35,7 +35,7 @@ export const moreNav: NavItem[] = [
 const TITLES: Array<[string, string]> = [
   ['/bibliotheque', 'Bibliothèque'], ['/modele', 'Fiche modèle'], ['/preparation', 'Préparer'], ['/comparaison', 'Variantes'], ['/impressions', 'Impressions'],
   ['/imprimantes', 'Imprimantes'], ['/bobines', 'Bobines'], ['/file', 'File d\'attente'], ['/couts', 'Coûts'], ['/gabarits', 'Gabarits'], ['/materiaux', 'Matériaux'],
-  ['/corbeille', 'Corbeille'], ['/reglages', 'Réglages'], ['/agents', 'Agent Windows'], ['/design', 'Système de design'],
+  ['/corbeille', 'Corbeille'], ['/reglages', 'Réglages'], ['/dysfonctionnements', 'Dysfonctionnements'], ['/agents', 'Agent Windows'], ['/design', 'Système de design'],
 ];
 
 function SideLink({ item, count }: { item: NavItem; count?: number }) {
