@@ -40,7 +40,8 @@ func TestNoMCPToolCanApproveAConfirmation(t *testing.T) {
 	// Outils G9 (suivi de projet, verdict) : exercés ci-dessous avec les autres ; aucun nom ne parle d'approbation, de
 	// lancement, d'arrêt, de reprise ou d'annulation, et aucun ne peut donc produire l'accord de lancement.
 	g9 := map[string]bool{"create_project": false, "update_project": false, "add_project_part": false, "remove_project_part": false, "get_project": false,
-		"list_projects": false, "set_print_verdict": false, "submit_print_verdict": false, "get_pending_verdicts": false, "submit_project_status": false, "submit_project_part": false}
+		"list_projects": false, "set_print_verdict": false, "submit_print_verdict": false, "get_pending_verdicts": false, "submit_project_status": false, "submit_project_part": false,
+		"get_part_sheet": false, "get_print_sheet": false, "get_sheet_photo": false}
 	for _, tl := range tools.Tools {
 		if _, ok := g9[tl.Name]; ok {
 			g9[tl.Name] = true

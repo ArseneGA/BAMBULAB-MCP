@@ -301,7 +301,7 @@ func auditCount(t *testing.T, c *core.Core, op string) int {
 // Aucun appel de lancement, d'arrêt, de reprise, d'approbation ou d'annulation dans le code G9 de mcpserver.
 func TestG9SourcesNeverStartStopResumeOrApprove(t *testing.T) {
 	re := regexp.MustCompile(`\.(Approve|Start|Stop|Resume|Cancel|Launch)[A-Za-z]*\(`)
-	for _, f := range []string{"project_tools.go", "project_views.go"} {
+	for _, f := range []string{"project_tools.go", "project_views.go", "sheet_tools.go"} {
 		b, err := os.ReadFile(filepath.Join(".", f))
 		if err != nil {
 			t.Fatal(err)
