@@ -156,6 +156,8 @@ export const PENDING = {
   ],
   total: 2, fail_reasons: FAIL_REASONS, note: '2 impression(s) terminée(s) sans verdict.',
 };
+// Fiches pièce et impression (G9, PJ5 et PJ10) : jeux d'essai du contrat, partagés avec les pages web.
+export { PART_SHEET, PART_SHEET_EMPTY, PRINT_SHEET, PRINT_SHEET_EXTERNAL, PRINT_SHEET_NO_CAMERA } from '../../src/api/sheets.fixtures';
 export const VERDICT_RESULT = {
   print_job_id: 'pj_1', log_id: 'log_1', verdict: 'failed', fail_reason: 'warping', verdict_at: '2026-11-10T08:00:00Z', verdict_source: 'human_card', previous_verdict: '',
   changed: true, note: 'Verdict enregistré : ratée (warping). Il n\'a aucun effet sur l\'imprimante ni sur la file.', fail_reasons: FAIL_REASONS,

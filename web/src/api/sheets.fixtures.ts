@@ -14,7 +14,7 @@ export const STRIP_FULL: PhotoStrip = (() => {
   const steps = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((p) => (p === 40 ? step(p, 'unavailable', 'caméra injoignable à ce palier') : step(p)));
   return { steps, thumbnail: steps[9], available: 9 };
 })();
-export const STRIP_NONE: PhotoStrip = { steps: [], available: 0, note: 'aucune photo de palier relevée pour cette impression' };
+export const STRIP_NONE: PhotoStrip = { steps: [], available: 0, note: 'photo non disponible : aucune photo de palier relevée pour cette impression' };
 
 export const PART_SHEET: PartSheet = {
   model: { id: 'mdl_sheet1', name: 'Équerre 40 mm', tags: ['atelier'], dimensions_mm: { x: 40, y: 40, z: 12 } },
@@ -96,4 +96,5 @@ export const PRINT_SHEET_EXTERNAL: PrintSheet = {
   approval: { status: 'not_applicable', text: 'Impression déclarée hors Printalk : aucun accord de lancement à relever.', level: 'measured' },
   camera: { available: false, reason: 'impression déclarée hors Printalk', alerts_status: 'unavailable', alerts: [], text: 'caméra non disponible (impression déclarée hors Printalk)', level: 'measured' },
   cost: { currency: 'EUR', level: 'computed' }, levels: { ...PRINT_SHEET.levels, duration: 'declared', grams: 'declared', profile: 'declared' },
+  unavailable: { actual_cost: 'impression déclarée hors Printalk : hors coût mesuré' },
 };

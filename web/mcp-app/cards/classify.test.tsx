@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { CardView, classifyCard } from './index';
-import { AMS, COLLECTION, COMPARE, DASHBOARD, ESTIMATE, HISTORY, PENDING, PRINTERS, PRINT_LOG, PROJECTS, PROJECT_DETAIL, PROJECT_LIST, QUEUE, SEARCH, SPOOLS, VERDICT_RESULT } from './fixtures';
+import { AMS, COLLECTION, COMPARE, DASHBOARD, ESTIMATE, HISTORY, PART_SHEET, PART_SHEET_EMPTY, PENDING, PRINTERS, PRINT_LOG, PRINT_SHEET, PRINT_SHEET_EXTERNAL, PRINT_SHEET_NO_CAMERA, PROJECTS, PROJECT_DETAIL, PROJECT_LIST, QUEUE, SEARCH, SPOOLS, VERDICT_RESULT } from './fixtures';
 import { mockApp, mount } from './testkit';
 
 let m: ReturnType<typeof mount>;
@@ -15,6 +15,8 @@ describe('classifyCard : une forme de résultat = une carte', () => {
     ['get_print_log', PRINT_LOG, 'prints'], ['list_printers', PRINTERS, 'printers'],
     ['get_project', PROJECT_DETAIL, 'project'], ['list_projects', PROJECT_LIST, 'project'],
     ['get_pending_verdicts', PENDING, 'verdict'], ['set_print_verdict', VERDICT_RESULT, 'verdict'],
+    ['get_part_sheet', PART_SHEET, 'part'], ['get_part_sheet (jamais imprimée)', PART_SHEET_EMPTY, 'part'], ['get_print_sheet', PRINT_SHEET, 'print-sheet'],
+    ['get_print_sheet (sans caméra)', PRINT_SHEET_NO_CAMERA, 'print-sheet'], ['get_print_sheet (déclarée)', PRINT_SHEET_EXTERNAL, 'print-sheet'],
   ];
   it.each(cases)('%s -> %s', (_t, data, card) => { expect(classifyCard(data)?.card).toBe(card); });
 
