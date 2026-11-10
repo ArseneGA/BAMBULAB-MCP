@@ -1,22 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Box, ExternalLink, Play, Plus, RefreshCw, ScanSearch, ShieldCheck } from 'lucide-react';
-import { Button, EmptyState, Field, Input, Panel, ProgressBar, Select, Tabs, Tag, Toggle, useToast } from '../components';
+import type { ReactNode } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Box, ExternalLink, Plus, RefreshCw, ScanSearch, ShieldCheck } from 'lucide-react';
+import { Button, EmptyState, Field, Input, Panel, ProgressBar, Segmented, Select, Tag, Toggle, useToast } from '../components';
 import { api, assetUrl, describeError } from '../api/client';
 import { useAsync, useConnection } from '../api/hooks';
 import type { HistoryView, JobProgress, CancelOutput, ConfirmationView, ReconcileOutput, FilamentAssignment, PrintJob, PrintState, PrinterView, StartOutput, UploadOutput, ValidationReport } from '../api/printTypes';
 import { printSource } from '../api/progress';
+import { printStateLabel } from '@shared/labels';
 import { Async, Dialog, Notice, fmtDate } from './common';
 import { CompletedBox } from './CompletedBox';
 import { GcodePanel } from './GcodePanel';
 import './print.css';
 
-export const STATE_LABEL: Record<PrintState, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
-  DRAFT: { label: 'brouillon' }, PREPARED: { label: 'préparée' }, SLICING: { label: 'découpe en cours', tone: 'warn' }, VALIDATED: { label: 'découpée' },
-  UPLOADING: { label: 'envoi en cours', tone: 'warn' }, UPLOADED: { label: 'déposée sur l\'imprimante' }, AWAITING_PRINT_CONFIRMATION: { label: 'attend votre confirmation', tone: 'warn' },
-  START_REQUESTED: { label: 'lancement demandé', tone: 'warn' }, PRINTING: { label: 'en cours d\'impression', tone: 'ok' }, COMPLETED: { label: 'terminée', tone: 'ok' },
-  FAILED: { label: 'échec', tone: 'err' }, CANCELLED: { label: 'annulée' }, START_UNKNOWN: { label: 'lancement incertain', tone: 'err' },
-};
 const STEPS = ['Découpe', 'Validation', 'Envoi', 'Confirmation', 'Lancement'];
 const stepIndex = (j: PrintJob): number => {
   if (['DRAFT', 'PREPARED', 'SLICING'].includes(j.state)) return 0;
@@ -30,16 +26,23 @@ const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : `k-${Date.now()}-$
 
 const ACTIVE: PrintState[] = ['PREPARED', 'SLICING', 'UPLOADING', 'START_REQUESTED', 'PRINTING'];
 /** Pastille d'état (maquette) : en cours = vert animé, attente = ambre, échec = rouge. */
-export const pillClass = (s: PrintState): string => {
-  if (s === 'PRINTING' || s === 'START_REQUESTED') return 'run';
-  const t = STATE_LABEL[s]?.tone;
-  return t === 'ok' ? 'ok' : t === 'warn' ? 'wait' : t === 'err' ? 'fail' : '';
-};
+export const pillClass = (s: PrintState): string => printStateLabel(s).pill;
 
-export function PrintPage() {
-  const [jid, setJid] = useState<string>('');
+const VIEW_LABEL: Record<HistoryView, string> = { all: 'Toutes', active: 'En cours', finished: 'Terminées', failed: 'Échecs', archived: 'Archivées', trash: 'Corbeille' };
+/** États qui attendent un geste de l'humain : à confirmer, ou prêts à partir. */
+export const isTodoJob = (j: PrintJob) => ['PREPARED', 'VALIDATED', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(j.state);
+
+/**
+ * Liste des travaux d'impression et détail du travail ouvert (ex-« Historique » de l'écran Impressions, logique inchangée) :
+ * les vues de G10 (À faire, En cours, Terminées) en sont des réglages. `views` : filtres proposés (le premier est le défaut) ; `filter` : tri côté écran.
+ * Le travail ouvert se retrouve aussi dans l'URL (?job=…).
+ */
+export function JobsView({ title, views, filter, empty }: { title: string; views: HistoryView[]; filter?: (j: PrintJob) => boolean; empty: { title: string; text: string; action?: ReactNode } }) {
+  const [sp, setSp] = useSearchParams();
+  const jid = sp.get('job') ?? '';
+  const setJid = (id: string) => { const n = new URLSearchParams(sp); if (id) n.set('job', id); else n.delete('job'); setSp(n, { replace: true }); };
   const printers = useAsync((s) => api.printers(s), []);
-  const [view, setView] = useState<HistoryView>('all');
+  const [view, setView] = useState<HistoryView>(views[0]);
   const [grouped, setGrouped] = useState(false);
   const jobs = useAsync((s) => api.printJobs(s, view, grouped), [view, grouped]);
   const reloadJobs = useRef(jobs.reload); reloadJobs.current = jobs.reload;
@@ -47,6 +50,7 @@ export function PrintPage() {
   useEffect(() => { if (!busy) return; const t = window.setInterval(() => reloadJobs.current(), 3000); return () => window.clearInterval(t); }, [busy]);
 
   const plist = printers.data?.printers ?? [];
+  const shown = (jobs.data?.print_jobs ?? []).filter((j) => (filter ? filter(j) : true));
   const job = jobs.data?.print_jobs.find((j) => j.id === jid);
   const toast = useToast();
   const prog = jobs.data?.progress ?? {};
@@ -57,47 +61,47 @@ export function PrintPage() {
   const failedIds = (jobs.data?.print_jobs ?? []).filter((j) => ['FAILED', 'CANCELLED'].includes(j.state)).map((j) => j.id);
 
   return (
-    <>
-      <div className="page-head">
-        <div><h1>Impressions</h1><div className="sub">Découpe, validation, dépôt sur l'imprimante puis suivi. Le lancement exige votre accord sur la page de confirmation du serveur : rien ne démarre sans elle.</div></div>
-        <div className="head-acts"><Button variant="secondary" icon={<RefreshCw size={14} />} onClick={jobs.reload}>Actualiser</Button></div>
-      </div>
-      <div className="prt">
-        {printers.data && <NewJob printers={plist} defaultPrinter={plist[0]?.id} onCreated={(j) => { setJid(j.id); jobs.reload(); }} />}
-        <Panel title="Historique" className="prt-hist flush">
-          <div className="prt-hist-bar">
-            <Tabs<HistoryView> label="Filtrer les impressions" value={view} onChange={setView} tabs={[
-              { value: 'all', label: `Toutes (${counts.all ?? 0})` }, { value: 'active', label: `En cours (${counts.active ?? 0})` }, { value: 'finished', label: `Terminées (${counts.finished ?? 0})` },
-              { value: 'failed', label: `Échecs (${counts.failed ?? 0})` }, { value: 'archived', label: `Archivées (${counts.archived ?? 0})` }, { value: 'trash', label: `Corbeille (${counts.trash ?? 0})` }]} />
-            <Toggle checked={grouped} onChange={setGrouped} label="Grouper par modèle" />
-            {view === 'failed' && failedIds.length > 0 && <Button size="sm" onClick={() => history('archive', failedIds)}>Archiver les {failedIds.length} échec(s)</Button>}
-          </div>
-          <Async state={jobs} label="Chargement des impressions" empty={(d) => d.print_jobs.length === 0 ? <p className="hint prt-empty">Aucune impression dans cette vue. Découpez un modèle pour une imprimante ci-dessus.</p> : null}>
-            {(d) => grouped && d.groups ? (
-              <>{d.groups.map((g) => (
-                <details key={g.model_id || 'none'} open className="prt-group">
-                  <summary><strong>{g.model_name}</strong> · {g.count} impression(s){g.failed > 0 && ` · ${g.failed} échec(s)`}</summary>
-                  <JobRows jobs={g.jobs} jid={jid} setJid={setJid} prog={prog} history={history} printers={plist} />
-                </details>))}</>
-            ) : <JobRows jobs={d.print_jobs} jid={jid} setJid={setJid} prog={prog} history={history} printers={plist} />}
-          </Async>
-        </Panel>
-        {job && <JobDetail key={job.id} job={job} printer={plist.find((p) => p.id === job.printer_id)} progress={prog[job.id]} onChange={jobs.reload} />}
-      </div>
-    </>
+    <div className="prt">
+      <Panel title={title} className="prt-hist flush" actions={<Button variant="ghost" size="sm" icon={<RefreshCw size={14} />} onClick={jobs.reload}>Actualiser</Button>}>
+        <div className="prt-hist-bar">
+          {views.length > 1 && <Segmented<HistoryView> label="Filtrer les impressions" value={view} onChange={setView} options={views.map((v) => ({ value: v, label: `${VIEW_LABEL[v]} (${counts[v] ?? 0})` }))} />}
+          <Toggle checked={grouped} onChange={setGrouped} label="Grouper par modèle" />
+          {view === 'failed' && failedIds.length > 0 && <Button size="sm" onClick={() => history('archive', failedIds)}>Archiver les {failedIds.length} échec(s)</Button>}
+        </div>
+        <Async state={jobs} label="Chargement des impressions" empty={(d) => (filter ? shown.length === 0 : d.print_jobs.length === 0) ? <div className="prt-empty"><EmptyState title={empty.title} text={empty.text} action={empty.action} /></div> : null}>
+          {(d) => grouped && d.groups ? (
+            <>{d.groups.map((g) => (
+              <details key={g.model_id || 'none'} open className="prt-group">
+                <summary><strong>{g.model_name}</strong> · {g.count} impression(s){g.failed > 0 && ` · ${g.failed} échec(s)`}</summary>
+                <JobRows jobs={g.jobs.filter((j) => (filter ? filter(j) : true))} jid={jid} setJid={setJid} prog={prog} history={history} printers={plist} />
+              </details>))}</>
+          ) : <JobRows jobs={shown} jid={jid} setJid={setJid} prog={prog} history={history} printers={plist} />}
+        </Async>
+      </Panel>
+      {job && <JobDetail key={job.id} job={job} printer={plist.find((p) => p.id === job.printer_id)} progress={prog[job.id]} onChange={jobs.reload} />}
+    </div>
   );
+}
+
+/** Impressions › Nouvelle impression : choisir un modèle (assistant de préparation), ou découper directement un modèle pour une imprimante. */
+export function NewDirectJob() {
+  const nav = useNavigate();
+  const printers = useAsync((s) => api.printers(s), []);
+  const plist = printers.data?.printers ?? [];
+  if (!printers.data) return null;
+  return <NewJob printers={plist} defaultPrinter={plist[0]?.id} onCreated={(j) => nav(`/impressions?vue=en-cours&job=${encodeURIComponent(j.id)}`)} />;
 }
 
 export function stateText(j: PrintJob, p?: JobProgress): string {
   if (j.state === 'PREPARED' || j.state === 'SLICING') {
-    if (p?.queue_position != null) return `en file (position ${p.queue_position})`;
-    if (p?.stalled) return 'découpe bloquée ?';
-    return p ? `découpe en cours · ${p.percent} %` : (STATE_LABEL[j.state]?.label ?? j.state);
+    if (p?.queue_position != null) return `En file (position ${p.queue_position})`;
+    if (p?.stalled) return 'Préparation bloquée ?';
+    return p ? `Préparation en cours · ${p.percent} %` : printStateLabel(j.state).label;
   }
-  if (j.state === 'UPLOADING' && p) return `envoi en cours · ${p.percent} %`;
-  if (j.state === 'PRINTING' && p) return `en cours d'impression · ${p.percent} %`;
-  if (j.state === 'CANCELLED' && j.stopped_by_user) return 'arrêtée par vous';
-  return STATE_LABEL[j.state]?.label ?? j.state;
+  if (j.state === 'UPLOADING' && p) return `Envoi en cours · ${p.percent} %`;
+  if (j.state === 'PRINTING' && p) return `Impression en cours · ${p.percent} %`;
+  if (j.state === 'CANCELLED' && j.stopped_by_user) return 'Arrêtée par vous';
+  return printStateLabel(j.state).label;
 }
 
 /** « Lancer » ne lance rien ici : il mène à la page de confirmation du serveur (/confirm/…), où l'humain approuve. */
@@ -111,7 +115,7 @@ export function LaunchButton({ job, size = 'sm', onNeedConfirm }: { job: PrintJo
     try { const c = await api.requestConfirmation(job.id); window.location.assign(assetUrl(c.confirm_url)); }
     catch (e) { toast('err', describeError(e)); onNeedConfirm?.(); } finally { setBusy(false); }
   };
-  return <Button variant="primary" size={size} icon={<Play size={13} />} disabled={busy} onClick={go} title="Ouvre la page de confirmation : vous y approuvez le lancement">{busy ? 'Demande…' : 'Lancer'}</Button>;
+  return <Button variant="primary" size={size} icon={<ShieldCheck size={13} />} disabled={busy} onClick={go} title="Ouvre la page de confirmation du serveur : c'est là que vous approuvez le lancement. Ce bouton ne lance rien.">{busy ? 'Demande…' : 'Vérifier et lancer'}</Button>;
 }
 
 export function JobRows({ jobs, jid, setJid, prog, history, printers }: { jobs: PrintJob[]; jid: string; setJid: (id: string) => void; prog: Record<string, JobProgress>; history: (a: 'archive' | 'trash' | 'restore', ids: string[]) => void; printers: PrinterView[] }) {
@@ -187,7 +191,7 @@ export function NewJob({ printers, defaultPrinter, onCreated }: { printers: Prin
     catch (e) { toast('err', describeError(e)); } finally { setBusy(false); }
   };
   return (
-    <Panel title="Nouvelle impression">
+    <Panel title="Ou découper directement un modèle pour une imprimante">
       {printers.length === 0 ? <NoPrinterHint /> : <div className="prt-new">
         <Field label="Modèle (dernière version, profil appliqué le cas échéant)"><Select value={model} onChange={(e) => setModel(e.target.value)} options={[{ value: '', label: 'Choisir…' }, ...(models.data?.models ?? []).filter((m) => m.formats.some((f) => ['stl', 'obj', '3mf'].includes(f))).map((m) => ({ value: m.id, label: m.name }))]} /></Field>
         <Field label="Imprimante"><Select value={pr} onChange={(e) => setPrinter(e.target.value)} options={[{ value: '', label: 'Choisir…' }, ...printers.map((p) => ({ value: p.id, label: `${p.name} (${p.model_name})` }))]} /></Field>
@@ -233,7 +237,7 @@ function JobDetail({ job, printer, progress, onChange }: { job: PrintJob; printe
   const setA = (i: number, p: Partial<FilamentAssignment>) => setAssign((l) => l.map((a, k) => (k === i ? { ...a, ...p } : a)));
 
   return (
-    <Panel title={`Impression : ${job.name ?? job.id}`} actions={<Tag tone={STATE_LABEL[job.state]?.tone}>{STATE_LABEL[job.state]?.label ?? job.state}</Tag>}>
+    <Panel title={`Impression : ${job.name ?? job.id}`} actions={<Tag tone={printStateLabel(job.state).tone}>{printStateLabel(job.state).label}</Tag>}>
       <div className="prt-detail">
         <ol className="prt-steps" aria-label="Étapes">{STEPS.map((s, i) => <li key={s} aria-current={i === step ? 'step' : undefined} data-done={i < step}>{s}</li>)}</ol>
         <p className="hint mono" style={{ margin: 0 }}>{job.id} · {printer?.name ?? job.printer_id} · plaque {job.plate ?? 1}{job.artifact_sha256 && ` · sha256 ${job.artifact_sha256.slice(0, 12)}…`}</p>
@@ -341,7 +345,7 @@ function ConfirmBox({ c, onStart, starting }: { c: ConfirmationView; onStart: ()
         <>
           <p style={{ margin: 0 }}>{c.instructions}</p>
           <a className="btn btn-primary" href={assetUrl(c.confirm_url)} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Ouvrir la page de confirmation</a>
-          {conn.browserEnrolled === false && <Notice title="Ce navigateur n'est pas enregistré" actions={<a className="btn btn-secondary btn-sm" href="/enroll" target="_blank" rel="noreferrer">Enregistrer ce navigateur</a>}>La page de confirmation exige un navigateur enregistré : lancez <span className="mono">bambud enroll</span> sur la machine du service, puis saisissez le code sur /enroll.</Notice>}
+          {conn.browserEnrolled === false && <Notice title="Ce navigateur n'est pas enregistré" actions={<a className="btn btn-secondary btn-sm" href="/enroll" target="_blank" rel="noreferrer">Enregistrer ce navigateur</a>}>La page de confirmation exige un navigateur enregistré : demandez un code d'enregistrement sur la machine du service (commande « enroll »), puis saisissez-le sur la page d'enregistrement.</Notice>}
           <p className="hint" style={{ margin: 0 }} role="status"><span className="spinner" aria-hidden /> En attente de votre accord sur cette page (vérification toutes les 2,5 s)…</p>
         </>
       ) : (

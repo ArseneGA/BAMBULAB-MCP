@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { AlertTriangle, Construction, ServerOff, X } from 'lucide-react';
-import { Button, ErrorState, IconButton, LoadingState } from '../components';
+import { Button, ErrorState, IconButton, Skeleton } from '../components';
 import { describeError, isOffline, useConnection } from '../api/hooks';
 import type { AsyncState } from '../api/hooks';
 import { insecureOrigin } from '../api/windowsLink';
@@ -34,22 +34,23 @@ export function FormatBadge({ formats, size = 40 }: { formats: string[]; size?: 
 /* ---------- États d'une requête ---------- */
 export function OfflineNotice({ onRetry }: { onRetry?: () => void }) {
   return (
-    <div className="state state-err" role="alert">
-      <ServerOff size={18} aria-hidden />
-      <h3>bambud est injoignable</h3>
-      <p>Le service ne répond pas. Vérifiez qu'il est démarré (<span className="mono">bambud</span>), puis réessayez. Aucune donnée n'est perdue : le catalogue est sur le serveur.</p>
-      {onRetry && <Button size="sm" onClick={onRetry}>Réessayer</Button>}
-    </div>
+    <ErrorState title="Printalk est injoignable" text="Le service ne répond pas pour l'instant."
+      impact="Les données affichées peuvent être périmées et les actions sont indisponibles. Aucune donnée n'est perdue : le catalogue est sur le serveur."
+      action={onRetry && <Button size="sm" onClick={onRetry}>Réessayer</Button>}
+      details="Vérifiez que le service est démarré sur la machine qui l'héberge, puis réessayez." />
   );
 }
 
-/** Rend le contenu une fois la requête réussie ; sinon chargement ou erreur (hors ligne distinguée). */
+/**
+ * Rend le contenu une fois la requête réussie ; sinon un squelette (chargement) ou une erreur en trois parties
+ * (ce qui s'est passé, ce que ça change, ce qu'on peut faire ; détail technique replié). Hors ligne distingué.
+ */
 export function Async<T>({ state, children, label = 'Chargement', empty }: { state: AsyncState<T>; children: (d: T) => ReactNode; label?: string; empty?: (d: T) => ReactNode | null }) {
   if (state.error && state.data === undefined) {
     if (isOffline(state.error)) return <OfflineNotice onRetry={state.reload} />;
-    return <ErrorState title="La requête a échoué" text={describeError(state.error)} action={<Button size="sm" onClick={state.reload}>Réessayer</Button>} />;
+    return <ErrorState title="Cette partie n'a pas pu se charger" text="La requête a échoué." impact="Le reste de la page reste utilisable ; rien n'a été modifié." action={<Button size="sm" onClick={state.reload}>Réessayer</Button>} details={describeError(state.error)} />;
   }
-  if (state.data === undefined) return <LoadingState label={label} />;
+  if (state.data === undefined) return <Skeleton lines={3} label={label} />;
   const e = empty?.(state.data);
   return <>{e ?? children(state.data)}</>;
 }
@@ -120,8 +121,10 @@ export function EnrollGate() {
     <div className="enroll-gate" role="alert">
       <ErrorState
         title="Enregistrer ce navigateur"
-        text="Ce serveur est protégé par un jeton d'API : l'interface web n'y accède que depuis un navigateur enregistré. Sur le poste qui fait tourner bambud, lancez « bambud enroll » dans un terminal : le code à 8 caractères s'affiche là (il n'est jamais transmis à Claude). Saisissez-le sur la page d'enregistrement."
+        text="Ce serveur est protégé par un jeton d'API : l'interface web n'y accède que depuis un navigateur enregistré."
+        impact="Tant que ce navigateur n'est pas enregistré, les écrans restent vides et aucun lancement ne peut être approuvé."
         action={<div className="enroll-gate-actions"><a className="enroll" href={enrollUrl(here)}>Enregistrer ce navigateur</a><Button variant="ghost" onClick={c.recheck}>J'ai terminé, réessayer</Button></div>}
+        details="Sur le poste qui fait tourner le service, lancez la commande « bambud enroll » dans un terminal : un code à 8 caractères s'affiche (il n'est jamais transmis à Claude). Saisissez-le sur la page d'enregistrement."
       />
     </div>
   );
@@ -147,7 +150,7 @@ export function ServerBanner() {
   return (
     <div className="server-banner" role="alert">
       <ServerOff size={14} aria-hidden />
-      <span>bambud est injoignable : les données affichées peuvent être périmées et les actions sont indisponibles.</span>
+      <span>Printalk est injoignable : les données affichées peuvent être périmées et les actions sont indisponibles.</span>
       <Button size="sm" variant="ghost" onClick={c.recheck}>Réessayer</Button>
     </div>
   );

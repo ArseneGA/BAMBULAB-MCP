@@ -18,3 +18,4 @@ img { max-width: 100%; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .skip-link { position: absolute; left: var(--sp-3); top: -60px; z-index: 100; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-sm); background: var(--solid); color: var(--text-1); box-shadow: var(--shadow-md); transition: top var(--dur-fast); }
 .skip-link:focus { top: var(--sp-3); }
+h1[tabindex='-1']:focus, main:focus { outline: none; box-shadow: none; }

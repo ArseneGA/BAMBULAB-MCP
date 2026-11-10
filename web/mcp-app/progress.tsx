@@ -37,13 +37,10 @@ export interface Prog {
 }
 
 const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !Array.isArray(v);
+import { jobStateLabel } from '@shared/labels';
 const num = (...vs: unknown[]): number | undefined => { for (const v of vs) if (typeof v === 'number' && Number.isFinite(v)) return v; return undefined; };
 const str = (...vs: unknown[]): string | undefined => { for (const v of vs) if (typeof v === 'string' && v.trim() !== '') return v; return undefined; };
 
-const STATE_LABEL: Record<string, string> = {
-  queued: 'En file d\'attente', pending: 'En attente', running: 'En cours', succeeded: 'Terminé', complete: 'Terminé', done: 'Terminé',
-  failed: 'Échec', canceled: 'Annulé', cancelled: 'Annulé', canceling: 'Annulation…',
-};
 const PHASE_LABEL: Record<string, string> = {
   queued: 'En file d\'attente', starting: 'Démarrage', slicing: 'Découpe', uploading: 'Envoi', upload: 'Envoi', receiving: 'Réception', importing: 'Import', analysing: 'Analyse',
   analyzing: 'Analyse', preview: 'Aperçu', validating: 'Validation', finishing: 'Finalisation',
@@ -132,7 +129,7 @@ export function ProgressCard({ app, first, pollMs = 3000 }: { app: AppLike; firs
 
   const eta = fmtEta(p.etaSeconds);
   const bytes = p.totalBytes !== undefined ? `${fmtBytes(p.doneBytes ?? 0)} / ${fmtBytes(p.totalBytes)}` : undefined;
-  const stateText = p.phaseLabel ?? (p.state ? STATE_LABEL[p.state] ?? p.state : undefined);
+  const stateText = p.phaseLabel ?? (p.state ? jobStateLabel(p.state).label : undefined);
   const cls = `prog${p.failed ? ' prog-failed' : ''}${p.terminal && !p.failed ? ' prog-done' : ''}${p.percent === null && !p.terminal ? ' prog-indet' : ''}`;
   return (
     <section className={cls} aria-label={p.title}>
@@ -140,7 +137,7 @@ export function ProgressCard({ app, first, pollMs = 3000 }: { app: AppLike; firs
         <h1>{p.title}</h1>
         <span className="prog-state" role="status">
           {p.terminal && !p.failed && <Check size={14} aria-hidden />}{p.failed && <AlertTriangle size={14} aria-hidden />}
-          {p.state ? STATE_LABEL[p.state] ?? p.state : 'En cours'}
+          {p.state ? jobStateLabel(p.state).label : 'En cours'}
         </span>
       </header>
       <div className="prog-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent ?? undefined} aria-valuetext={p.percent === null ? 'progression inconnue' : `${p.percent} %`}>

@@ -8,7 +8,7 @@ import type { ApplyOutput, CompareOutput, CreateExperimentInput, Experiment, Goa
 
 /**
  * Client de l'API HTTP de bambud. Les erreurs sont normalisées :
- *  - `offline`  : bambud est injoignable (réseau, service arrêté) ;
+ *  - `offline`  : Printalk est injoignable (réseau, service arrêté) ;
  *  - `status`/`code` : réponse d'erreur du serveur (not_allowed, not_found, invalid, conflict, backend_missing...).
  */
 export class ApiError extends Error {
@@ -37,7 +37,7 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError('bambud est injoignable', 0, 'offline', true);
+    throw new ApiError('Printalk est injoignable', 0, 'offline', true);
   }
   const text = await res.text();
   let data: unknown = undefined;
@@ -133,7 +133,7 @@ export const api = {
   async exportZip(modelIds: string[]): Promise<{ blob: Blob; files: number; skipped: number }> {
     let res: Response;
     try { res = await fetch(BASE + '/api/export', { method: 'POST', credentials: 'same-origin', headers: { ...CSRF_HEADER, 'Content-Type': 'application/json' }, body: JSON.stringify({ model_ids: modelIds }) }); }
-    catch { throw new ApiError('bambud est injoignable', 0, 'offline', true); }
+    catch { throw new ApiError('Printalk est injoignable', 0, 'offline', true); }
     if (!res.ok) {
       let d: { error?: string; code?: string } | undefined; try { d = await res.json() as { error?: string; code?: string }; } catch { /* corps non JSON */ }
       throw new ApiError(d?.error ?? `Erreur HTTP ${res.status}`, res.status, d?.code ?? 'http');
@@ -146,7 +146,7 @@ export const api = {
     let res: Response;
     try { res = await fetch(assetUrl(signedUrl), { signal, credentials: 'same-origin' }); } catch (e) {
       if ((e as Error).name === 'AbortError') throw e;
-      throw new ApiError('bambud est injoignable', 0, 'offline', true);
+      throw new ApiError('Printalk est injoignable', 0, 'offline', true);
     }
     if (res.status === 403) throw new ApiError("L'URL d'aperçu a expiré : rechargez la fiche.", 403, 'expired');
     if (!res.ok) throw new ApiError(`Aperçu indisponible (HTTP ${res.status})`, res.status, 'http');
@@ -170,12 +170,12 @@ export async function waitForJob(id: string, onUpdate: (j: Job) => void, signal?
 /** Message utilisateur pour une erreur d'API. */
 export function describeError(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.offline) return 'bambud est injoignable. Vérifiez que le service tourne puis réessayez.';
+    if (e.offline) return 'Printalk est injoignable. Vérifiez que le service tourne puis réessayez.';
     switch (e.code) {
       case 'not_allowed': return `Refusé : ${e.message}`;
       case 'slicer_missing': return 'Bambu Studio est introuvable sur le serveur : la découpe des variantes est indisponible.';
       case 'stale_revision': return `Révision périmée : ${e.message}`;
-      case 'backend_missing': return `Backend indisponible : ${e.message}`;
+      case 'backend_missing': return `Service indisponible : ${e.message}`;
       default: return e.message;
     }
   }

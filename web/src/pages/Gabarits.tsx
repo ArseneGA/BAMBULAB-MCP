@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, EmptyState, Field, Input, Panel, Select, Tabs, Tag, useToast } from '../components';
+import { Button, EmptyState, Field, Input, PageHeader, Panel, Select, Tag, useToast } from '../components';
+import { LibraryNav } from './LibraryNav';
 import { describeError, useAsync } from '../api/hooks';
 import { BASE } from '../api/client';
 import { initialForm, libraryApi, num, paramsFromForm } from '../api/libraryApi';
@@ -300,13 +301,13 @@ function CalibrationTab() {
   );
 }
 
+/** Bibliothèque › Pièces sur mesure (gabarits). La calibration d'une imprimante est dans Imprimantes › Calibration. */
 export function GabaritsPage() {
-  const [tab, setTab] = useState<'gabarits' | 'calibration'>('gabarits');
   return (
-    <div className="page gab-page">
-      <h1 className="page-title">Gabarits et calibration</h1>
-      <Tabs label="Sections" value={tab} onChange={setTab} tabs={[{ value: 'gabarits', label: 'Gabarits' }, { value: 'calibration', label: 'Calibration' }]} />
-      {tab === 'gabarits' ? <TemplatesTab /> : <CalibrationTab />}
-    </div>
+    <>
+      <PageHeader title="Pièces sur mesure" help="Créez une pièce paramétrique (gabarit) : elle rejoint la bibliothèque comme n'importe quel modèle." crumbs={[{ label: 'Bibliothèque', to: '/bibliotheque' }, { label: 'Pièces sur mesure' }]} below={<LibraryNav />} />
+      <div className="page gab-page"><TemplatesTab /></div>
+    </>
   );
 }
+export { CalibrationTab };

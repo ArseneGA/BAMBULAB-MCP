@@ -59,7 +59,7 @@ async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
     res = await fetch(BASE + path, { method: 'GET', signal, credentials: 'same-origin', headers: { ...CSRF_HEADER } });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError('bambud est injoignable', 0, 'offline', true);
+    throw new ApiError('Printalk est injoignable', 0, 'offline', true);
   }
   const text = await res.text();
   let data: unknown;

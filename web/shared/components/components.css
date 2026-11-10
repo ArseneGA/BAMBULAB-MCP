@@ -182,3 +182,10 @@ button.tag:hover { background: var(--well-strong); }
 .difftable .before { color: var(--text-3); text-decoration: line-through; text-decoration-color: var(--err); overflow-wrap: anywhere; }
 .difftable .after { color: var(--text-1); font-weight: 600; overflow-wrap: anywhere; }
 .logbox { margin: 0; max-height: 160px; overflow: auto; padding: var(--sp-2) var(--sp-3); background: var(--well); border-radius: var(--r-sm); font: 400 var(--fs-xs)/1.5 var(--mono); white-space: pre-wrap; }
+
+.skeleton-block { display: grid; gap: var(--sp-2); padding: var(--sp-4) 0; }
+.state-impact { color: var(--text-2); }
+.state-tech { color: var(--text-3); font-size: var(--t-caption); }
+.state-tech summary { cursor: pointer; width: fit-content; border-radius: var(--r-xs); }
+.state-tech p { overflow-wrap: anywhere; }
+.tabs { max-width: 100%; overflow-x: auto; }

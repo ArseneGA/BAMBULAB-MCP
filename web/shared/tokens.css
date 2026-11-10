@@ -124,3 +124,8 @@
   :root { --dur-fast: 0ms; --dur: 0ms; --dur-slow: 0ms; }
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+/* Écrans tactiles : toutes les cibles font au moins 44 px (la hauteur de 34 px reste pour la souris). */
+@media (pointer: coarse) {
+  :root { --control-h: 44px; --control-h-sm: 44px; }
+}

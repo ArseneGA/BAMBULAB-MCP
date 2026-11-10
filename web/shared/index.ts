@@ -7,3 +7,4 @@ export * from './components';
 export * from './theme';
 export * from './host';
 export * from './icons';
+export * from './labels';

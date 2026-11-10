@@ -6,10 +6,7 @@ import { useAsync } from '../api/hooks';
 import { insightsApi } from '../api/insights';
 import type { Adjustments, LogEntry, LogList } from '../api/insights';
 import { Async, Notice, fmtDate, fmtNum } from './common';
-
-const OUTCOME: Record<string, { label: string; tone?: 'ok' | 'warn' | 'err' }> = {
-  success: { label: 'réussie', tone: 'ok' }, partial: { label: 'partielle', tone: 'warn' }, failed: { label: 'ratée', tone: 'err' }, cancelled: { label: 'annulée' },
-};
+import { logOutcomeLabel } from '@shared/labels';
 
 function Delta({ v }: { v?: number }) {
   return v === undefined ? <span className="unknown">n/a</span> : <span className="mono">{v > 0 ? '+' : ''}{fmtNum(v, 1)} %</span>;
@@ -75,11 +72,11 @@ function Sheet({ e, defects, onChanged }: { e: LogEntry; defects: Array<{ id: st
     setBusy(true);
     try { const r = await insightsApi.addPhoto(e.id, f); onChanged(r.entry); toast('ok', 'Photo ajoutée'); } catch (x) { toast('err', describeError(x)); } finally { setBusy(false); if (file.current) file.current.value = ''; }
   };
-  const oc = OUTCOME[e.outcome];
+  const oc = logOutcomeLabel(e.outcome);
   const cost = e.actual_cost;
   return (
     <div className="stack">
-      <Panel title={e.name || e.print_job_id} actions={<Tag tone={oc?.tone}>{oc?.label ?? e.outcome}</Tag>}>
+      <Panel title={e.name || e.print_job_id} actions={<Tag tone={oc.tone}>{oc.label}</Tag>}>
         <dl className="kvl">
           <dt>Terminée</dt><dd className="mono">{fmtDate(e.finished_at)}</dd>
           <dt>Imprimante</dt><dd>{e.printer_model ?? <span className="unknown">inconnue</span>}</dd>
@@ -129,7 +126,7 @@ function Body({ data, reload }: { data: LogList; reload: () => void }) {
     <div className="ins-layout">
       <Panel title={`Impressions (${data.total})`} flush>
         <List label="Impressions terminées" items={entries} getKey={(e) => e.id} selectedKey={cur?.id} onSelect={(e) => setSel(e.id)}
-          render={(e) => <span className="ins-item"><strong>{e.name || e.print_job_id}</strong><span><Tag tone={OUTCOME[e.outcome]?.tone}>{OUTCOME[e.outcome]?.label ?? e.outcome}</Tag> {e.rating ? '★'.repeat(e.rating) : ''} <span className="mono dim">{fmtDate(e.finished_at)}</span></span></span>} />
+          render={(e) => <span className="ins-item"><strong>{e.name || e.print_job_id}</strong><span><Tag tone={logOutcomeLabel(e.outcome).tone}>{logOutcomeLabel(e.outcome).label}</Tag> {e.rating ? '★'.repeat(e.rating) : ''} <span className="mono dim">{fmtDate(e.finished_at)}</span></span></span>} />
       </Panel>
       {cur && <Sheet key={cur.id} e={cur} defects={data.defect_catalog} onChanged={(n) => { setLocal((l) => ({ ...l, [n.id]: n })); reload(); }} />}
     </div>

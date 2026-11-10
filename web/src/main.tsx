@@ -1,29 +1,35 @@
-import { Component, StrictMode, Suspense, lazy } from 'react';
+import { Component, StrictMode, lazy } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import '@shared/tokens.css';
 import '@shared/fonts.css';
 import '@shared/base.css';
 import { Shell } from './Shell';
-import { Button, ErrorState, LoadingState } from './components';
+import { Button, ErrorState } from './components';
 import { Home } from './pages/Home';
 import { PrintersPage } from './pages/Printers';
-import { SettingsPage } from './pages/Settings';
+import { SettingsPage } from './pages/settings/Appearance';
+import { TariffsPage } from './pages/settings/Tariffs';
+import { SecurityPage } from './pages/settings/Security';
+import { AdvancedPage } from './pages/settings/Advanced';
 import { Library } from './pages/Library';
 import { ModelPage } from './pages/Model';
 import { TrashPage } from './pages/Trash';
-import { MaterialsPage } from './pages/Materials';
-import { PrintPage } from './pages/Print';
+import { ImpressionsPage, NewPrintPage } from './pages/Impressions';
 import { AgentsPage } from './pages/Agents';
-import { FilamentPage } from './pages/Filament';
+import { MatieresPage } from './pages/Matieres';
 import { DesignPage } from './pages/Design';
 import { GabaritsPage } from './pages/Gabarits';
+import { ProjectsPlaceholder } from './pages/ProjectsPlaceholder';
+import { NotFoundPage } from './pages/NotFound';
+import { LegacyRedirect } from './pages/LegacyRedirects';
+import { LEGACY } from './redirects';
 import './pages/screens.css'; // en dernier : ses règles d'écran priment sur celles des composants
 const PreparePage = lazy(() => import('./pages/Prepare').then((m) => ({ default: m.PreparePage })));
 const ComparePage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ComparePage })));
+const ExperimentsPage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ExperimentsPage })));
 const IssuesPage = lazy(() => import('./pages/Issues').then((m) => ({ default: m.IssuesPage })));
-const InsightsPage = lazy(() => import('./pages/Insights').then((m) => ({ default: m.InsightsPage })));
 
 /** Évite la page blanche si un écran ou un chunk différé échoue au chargement. */
 class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -31,41 +37,45 @@ class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   static getDerivedStateFromError() { return { failed: true }; }
   render() {
     if (!this.state.failed) return this.props.children;
-    return <div style={{ padding: 24 }}><ErrorState title="Cet écran n'a pas pu se charger" text="Un fichier de l'interface est introuvable ou a échoué. Rechargez la page." action={<Button onClick={() => location.reload()}>Recharger</Button>} /></div>;
+    return <div style={{ padding: 24 }}><ErrorState title="Cet écran n'a pas pu se charger" text="Un fichier de l'interface est introuvable ou a échoué." impact="Le reste de Printalk n'est pas touché, et aucune donnée n'est perdue." action={<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><Button onClick={() => location.reload()}>Recharger</Button><a className="btn btn-secondary" href="/">Retour à l'accueil</a></div>} /></div>;
   }
 }
 
+/**
+ * Routes de l'interface (G10). La table de navigation est web/src/nav.ts ; les anciennes URL sont dans web/src/redirects.ts
+ * (une <Route> par ancienne URL, qui conserve les paramètres). Une route inconnue affiche « Introuvable » (plus de retour silencieux à l'accueil).
+ * Aucune route ne peut commencer par un préfixe réservé au serveur (/setup, /confirm, /stop, /enroll, /oauth, /api, /mcp, /health…).
+ */
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Boundary>
       <BrowserRouter>
-        <Suspense fallback={<LoadingState label="Chargement de l'écran" />}>
-          <Routes>
+        <Routes>
             <Route element={<Shell />}>
               <Route index element={<Home />} />
+              <Route path="projets" element={<ProjectsPlaceholder />} />
               <Route path="bibliotheque" element={<Library />} />
-              <Route path="modele" element={<Navigate to="/bibliotheque" replace />} />
+              <Route path="bibliotheque/gabarits" element={<GabaritsPage />} />
+              <Route path="bibliotheque/corbeille" element={<TrashPage />} />
               <Route path="modele/:id" element={<ModelPage />} />
-              <Route path="corbeille" element={<TrashPage />} />
-              <Route path="preparation" element={<PreparePage />} />
-              <Route path="comparaison" element={<ComparePage />} />
-              <Route path="materiaux" element={<MaterialsPage />} />
-              <Route path="impressions" element={<PrintPage />} />
-              <Route path="impression" element={<Navigate to="/impressions" replace />} />
+              <Route path="modele/:id/preparer" element={<PreparePage />} />
+              <Route path="modele/:id/essais" element={<ExperimentsPage />} />
+              <Route path="modele/:id/essais/:exp" element={<ComparePage />} />
+              <Route path="impressions" element={<ImpressionsPage />} />
+              <Route path="impressions/nouvelle" element={<NewPrintPage />} />
               <Route path="imprimantes" element={<PrintersPage />} />
-              <Route path="couts" element={<InsightsPage />} />
-              <Route path="tableau-de-bord" element={<Navigate to="/couts" replace />} />
+              <Route path="matieres" element={<MatieresPage />} />
               <Route path="reglages" element={<SettingsPage />} />
+              <Route path="reglages/tarifs" element={<TariffsPage />} />
+              <Route path="reglages/securite" element={<SecurityPage />} />
+              <Route path="reglages/agent-windows" element={<AgentsPage />} />
+              <Route path="reglages/avance" element={<AdvancedPage />} />
+              <Route path="reglages/avance/design" element={<DesignPage />} />
               <Route path="dysfonctionnements" element={<IssuesPage />} />
-              <Route path="bobines" element={<FilamentPage />} />
-              <Route path="file" element={<FilamentPage initial="file" />} />
-              <Route path="gabarits" element={<GabaritsPage />} />
-              <Route path="agents" element={<AgentsPage />} />
-              <Route path="design" element={<DesignPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {LEGACY.map((r) => <Route key={r.from} path={r.from.slice(1)} element={<LegacyRedirect />} />)}
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
-          </Routes>
-        </Suspense>
+        </Routes>
       </BrowserRouter>
     </Boundary>
   </StrictMode>,

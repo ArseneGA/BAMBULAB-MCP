@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, RefreshCw } from 'lucide-react';
-import { Button, EmptyState, List, Panel, ProgressBar, StatusDot, Tag, useToast } from '../components';
+import { Button, EmptyState, List, PageHeader, Panel, ProgressBar, StatusDot, Tag, useToast } from '../components';
+import { SettingsNav } from './settings/SettingsNav';
 import { api, describeError } from '../api/client';
 import { useAsync } from '../api/hooks';
 import type { AgentStatus } from '../api/printTypes';
@@ -24,10 +25,10 @@ export function AgentsPage() {
   const agent = list.find((a) => a.id === sel) ?? list[0];
   return (
     <>
-      <div className="page-head"><span className="eyebrow">Espace</span><h1>Agent Windows</h1><p>L'agent indexe vos dossiers Windows et copie, à votre demande, les fichiers choisis vers le stockage du serveur. Il ne peut ni lancer ni arrêter une impression.</p></div>
+      <PageHeader title="Agent Windows" help="L'agent indexe vos dossiers Windows et copie, à votre demande, les fichiers choisis vers le stockage du serveur. Il ne peut ni lancer ni arrêter une impression." crumbs={[{ label: 'Réglages', to: '/reglages' }, { label: 'Agent Windows' }]} below={<SettingsNav />} />
       <div className="stack">
         <Async state={agents} label="Chargement des agents" empty={(d) => d.agents.length === 0 ? (
-          <EmptyState title="Aucun agent Windows appairé" text="Sans agent, le serveur travaille seul sur son propre stockage. L'appairage se fait sur une page du serveur réservée au navigateur enregistré (jeton à usage unique), ou avec « bambud agent pair » sur la machine du service."
+          <EmptyState title="Aucun agent Windows appairé" text="Sans agent, le serveur travaille seul sur son propre stockage. L'appairage se fait sur une page du serveur réservée au navigateur enregistré (jeton à usage unique), ou avec la commande d'appairage de l'agent, sur la machine du service."
             action={<a className="btn btn-primary btn-sm" href="/agents/pair" target="_blank" rel="noreferrer"><ExternalLink size={13} aria-hidden /> Ouvrir la page d'appairage</a>} />
         ) : null}>
           {(d) => (

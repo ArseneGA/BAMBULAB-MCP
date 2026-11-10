@@ -47,14 +47,11 @@ const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !
 const num = (...vs: unknown[]): number | undefined => { for (const v of vs) if (typeof v === 'number' && Number.isFinite(v)) return v; return undefined; };
 const str = (...vs: unknown[]): string | undefined => { for (const v of vs) if (typeof v === 'string' && v.trim() !== '') return v; return undefined; };
 const textOf = (r: ToolResultLike) => (r.content ?? []).filter((c) => c.type === 'text').map((c) => c.text ?? '').join('\n').trim();
+import { finalOutcomeTitle, printStateLabel } from '@shared/labels';
 const sc = <T,>(r: unknown): T | undefined => ((r as ToolResultLike | undefined)?.structuredContent as T | undefined);
 
 const PRINT_STATES = new Set(['DRAFT', 'PREPARED', 'SLICING', 'VALIDATED', 'UPLOADING', 'UPLOADED', 'AWAITING_PRINT_CONFIRMATION', 'START_REQUESTED', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED', 'START_UNKNOWN', 'START_ABORTED_BEFORE_SEND']);
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
-const STATE_LABEL: Record<string, string> = {
-  DRAFT: 'Brouillon', PREPARED: 'Préparée', SLICING: 'Découpe', VALIDATED: 'Découpée', UPLOADING: 'Envoi', UPLOADED: 'Fichier déposé', AWAITING_PRINT_CONFIRMATION: 'En attente de confirmation',
-  START_REQUESTED: 'Démarrage', PRINTING: 'Impression en cours', COMPLETED: 'Terminée', FAILED: 'Échec', CANCELLED: 'Annulée', START_UNKNOWN: 'Démarrage incertain', START_ABORTED_BEFORE_SEND: 'Démarrage abandonné',
-};
 
 /** Reconnaît le suivi d'une impression : résultat de get_print_status / wait_for_print_change (PrintStatus) ou de get_live_state (enveloppe). */
 export function isLiveResult(raw: unknown): boolean { return normalizeLive(raw) !== undefined; }
@@ -187,7 +184,6 @@ interface ActionAsk { id: string; url: string; question?: string; details: strin
 type Note = { ok: boolean; text: string };
 
 const PRINTER_LABEL: Record<string, string> = { idle: 'Au repos', printing: 'Impression en cours', preparing: 'Préparation', paused: 'En pause', finish: 'Terminée', failed: 'Arrêtée' };
-const OUTCOME: Record<string, string> = { completed: 'Impression terminée', failed: 'Impression échouée', cancelled: 'Impression annulée' };
 
 export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs = 10_000, idleMs = 5 * 60_000 }: {
   app: AppLike; first: Live; pollMs?: number; frameMs?: number; frameErrMs?: number; idleMs?: number;
@@ -310,7 +306,7 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
   };
 
   const L = live;
-  const label = L.noJob ? (L.display ?? PRINTER_LABEL[L.printerState ?? ''] ?? 'Imprimante') : L.paused && !L.terminal ? 'En pause' : L.display && L.state === 'PRINTING' ? L.display : STATE_LABEL[L.state] ?? L.state;
+  const label = L.noJob ? (L.display ?? PRINTER_LABEL[L.printerState ?? ''] ?? 'Imprimante') : L.paused && !L.terminal ? 'En pause' : L.display && L.state === 'PRINTING' ? L.display : printStateLabel(L.state).label;
   const pct = L.percent;
   const ends = L.endsAtLocal ?? endFallback(L.remainingMin);
   const remaining = fmtMin(L.remainingMin);
@@ -388,7 +384,7 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
 
       {L.terminal && (
         <div className="live-final" role="status">
-          <h2>{OUTCOME[L.final?.outcome ?? ''] ?? (L.failed ? 'Impression arrêtée' : 'Impression terminée')}</h2>
+          <h2>{finalOutcomeTitle(L.final?.outcome, L.failed)}</h2>
           <dl className="live-temps">
             {L.final?.duration ? <div><dt>Durée réelle</dt><dd>{L.final.duration}</dd></div> : null}
             {L.final?.grams ? <div><dt>Filament</dt><dd>{fmtNum(L.final.grams)} g{L.final.gramsBasis ? <span className="dim"> ({L.final.gramsBasis})</span> : null}</dd></div> : null}

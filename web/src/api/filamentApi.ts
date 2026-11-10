@@ -64,7 +64,7 @@ async function call<T>(method: string, path: string, body?: unknown, signal?: Ab
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError('bambud est injoignable', 0, 'offline', true);
+    throw new ApiError('Printalk est injoignable', 0, 'offline', true);
   }
   const text = await res.text();
   let data: unknown;

@@ -15,6 +15,7 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "baseUrl": ".",
     "paths": { "@shared/*": ["shared/*"], "@shared": ["shared/index.ts"] },
     "noEmit": true,

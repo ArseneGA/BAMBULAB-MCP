@@ -15,7 +15,6 @@ export interface IssueQuery { state?: string; severity?: string; tool?: string; 
 export interface IssueUpdate { state?: IssueState; fix_commit?: string; severity?: IssueSeverity }
 
 export const SEVERITY_LABEL: Record<IssueSeverity, string> = { P0: 'P0 · bloquant', P1: 'P1 · grave', P2: 'P2 · gênant', P3: 'P3 · détail' };
-export const STATE_LABEL: Record<IssueState, string> = { new: 'nouveau', seen: 'vu', fixed: 'corrigé', dismissed: 'écarté' };
 
 async function req<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, asText = false): Promise<T> {
   let res: Response;
@@ -27,7 +26,7 @@ async function req<T>(method: string, path: string, body?: unknown, signal?: Abo
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError('bambud est injoignable', 0, 'offline', true);
+    throw new ApiError('Printalk est injoignable', 0, 'offline', true);
   }
   const text = await res.text();
   if (res.ok && asText) return text as T;
