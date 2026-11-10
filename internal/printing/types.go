@@ -91,6 +91,15 @@ type JobEvent struct {
 	Note  string               `json:"note,omitempty"`
 }
 
+// Cause : un code d'erreur (print_error ou HMS) vu pour une impression, avec sa première et sa dernière observation.
+// Active est vrai quand l'imprimante le rapporte encore à la dernière observation ; sinon il est périmé (historique).
+type Cause struct {
+	printer.ErrorInfo
+	Active      bool      `json:"active" jsonschema:"vrai si l'imprimante rapporte encore ce code à la dernière observation"`
+	FirstSeenAt time.Time `json:"first_seen_at" jsonschema:"première observation (RFC 3339)"`
+	LastSeenAt  time.Time `json:"last_seen_at" jsonschema:"dernière observation où ce code était actif (RFC 3339)"`
+}
+
 // PrintProgress est le dernier état observé de l'impression.
 type PrintProgress struct {
 	PrinterState  string    `json:"printer_state"`
@@ -111,7 +120,8 @@ type PrintProgress struct {
 	Attention    string              `json:"attention,omitempty" jsonschema:"« attend une action à l'écran : <texte HMS> » quand l'imprimante est en pause sur erreur"`
 	Blocked      string              `json:"blocked,omitempty" jsonschema:"« bloquée : … » : progression figée ou consignes incohérentes en pleine impression"`
 	Unreachable  string              `json:"unreachable,omitempty" jsonschema:"imprimante injoignable depuis un moment : l'état réel est inconnu"`
-	ErrorDetails []printer.ErrorInfo `json:"error_details,omitempty" jsonschema:"dernières erreurs (print_error, HMS) décodées vues pour cette impression"`
+	ErrorDetails []printer.ErrorInfo `json:"error_details,omitempty" jsonschema:"erreurs ACTIVES maintenant (print_error, HMS) décodées ; vide quand l'imprimante n'en rapporte plus (l'historique est dans error_log)"`
+	ErrorLog     []Cause             `json:"error_log,omitempty" jsonschema:"historique horodaté des codes d'erreur vus pour cette impression (actifs ou périmés)"`
 	WasGone      bool                `json:"was_gone,omitempty" jsonschema:"la liaison avec l'imprimante a été coupée puis rétablie pendant l'impression (redémarrage possible)"`
 	GoneSince    time.Time           `json:"gone_since,omitzero"`
 	IdleSince    time.Time           `json:"idle_since,omitzero"`

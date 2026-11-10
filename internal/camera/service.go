@@ -113,7 +113,7 @@ type Photo struct {
 	ID        string    `json:"id"`
 	PrinterID string    `json:"printer_id"`
 	JobID     string    `json:"print_job_id,omitempty"`
-	Kind      string    `json:"kind" jsonschema:"snapshot | confirm | final | alert"`
+	Kind      string    `json:"kind" jsonschema:"snapshot | confirm | reference | final | alert"`
 	SHA256    string    `json:"sha256"`
 	Size      int       `json:"size_bytes"`
 	TakenAt   time.Time `json:"taken_at"`
@@ -242,6 +242,7 @@ type Service struct {
 	hubs      map[string]*hub
 	snap      map[string]*sync.Mutex // un instantané à la fois par imprimante
 	refs      map[string]refImage    // dernière photo de plateau (confirmation) par imprimante
+	jobRefs   map[string]refImage    // image de référence (plateau vide) prise juste après la confirmation, par impression
 	mons      map[string]*monitor
 	last      map[string]lastAnalysis // par impression, conservé après la fin
 	final     map[string]*sync.Mutex
@@ -258,6 +259,7 @@ type Service struct {
 type refImage struct {
 	at   time.Time
 	jpeg []byte
+	job  bool // référence propre à une impression (prise juste après la confirmation) : valable pour toute sa durée
 }
 
 type lastAnalysis struct {
@@ -280,7 +282,7 @@ func New(c Config) (*Service, error) {
 	if c.Scan == 0 {
 		c.Scan = 5 * time.Second
 	}
-	return &Service{c: c, log: c.Log, hubs: map[string]*hub{}, snap: map[string]*sync.Mutex{}, refs: map[string]refImage{},
+	return &Service{c: c, log: c.Log, hubs: map[string]*hub{}, snap: map[string]*sync.Mutex{}, refs: map[string]refImage{}, jobRefs: map[string]refImage{},
 		mons: map[string]*monitor{}, last: map[string]lastAnalysis{}, final: map[string]*sync.Mutex{}, nonce: map[string]nonceEntry{}, lastFrame: map[string]Frame{}}, nil
 }
 

@@ -224,9 +224,9 @@ Déjà amélioré : rapport d'étapes avec mise à niveau prouvée et horodatée
 
 | Code | Prio | Problème | À faire |
 |---|---|---|---|
-| FB1 | P0 | Spaghetti non détecté (tronc de support couché vers 100 mm, buse dans le vide) ; `analyze_print_frame` : « pas d'image de référence » | Capturer automatiquement l'image de référence du plateau vide juste après la confirmation humaine ; détection visuelle active par défaut |
-| FB2 | P0 | Fausse alerte « bloquée » pendant la mise à niveau du plateau | Pas d'alerte de blocage pendant chauffe, nettoyage, mise à niveau, calibrations (ou seuil par étape) |
-| FB3 | P0 | Codes d'erreur périmés dans `causes` (`0300_0D00_0002_0001` alors que `hms_count: 0`, `print_error: 0`) | Séparer codes actifs et historique, horodatés |
+| FB1 | P0 | Spaghetti non détecté (tronc de support couché vers 100 mm, buse dans le vide) ; `analyze_print_frame` : « pas d'image de référence » | Capturer automatiquement l'image de référence du plateau vide juste après la confirmation humaine ; détection visuelle active par défaut — **Fait (2026-11-10)**, détail plus bas |
+| FB2 | P0 | Fausse alerte « bloquée » pendant la mise à niveau du plateau | Pas d'alerte de blocage pendant chauffe, nettoyage, mise à niveau, calibrations (ou seuil par étape) — **Fait (2026-11-10)**, détail plus bas |
+| FB3 | P0 | Codes d'erreur périmés dans `causes` (`0300_0D00_0002_0001` alors que `hms_count: 0`, `print_error: 0`) | Séparer codes actifs et historique, horodatés — **Fait (2026-11-10)**, détail plus bas |
 | FB4 | P1 | Supports hauts et fins (élancement) non signalés par `validate_print_artifact` : cause de l'échec du 9/11 | Contrôle « tronc plus haut que N × sa section » avec avertissement à acquitter — **Fait (2026-11-10)** : `validate_print_artifact` analyse les colonnes du G-code (hauteur / section, N = 10 réglable) ; avertissement à acquitter sur carte, `/confirm` et texte (UTILISATION). |
 | FB5 | P1 | Accroche analysée sur le maillage (7 îlots, 2 685 mm², « ajouter une bordure ») alors que bordure et bases sont dans le G-code (réel : 14 îlots, 10 331 mm²) | Baser l'avertissement d'accroche sur la couche 1 réelle du G-code — **Fait (2026-11-10)** : risque mesuré sur la couche 1 réelle (îlots, bordure et bases comprises), plus de « ajouter une bordure » si elle est dans le G-code. |
 | FB6 | P1 | Liste blanche des clés trop courte : refus de `slow_down_layer_time`, `tree_support_branch_diameter`, `tree_support_wall_count`, `curr_bed_type` | Les ajouter (bornes de sécurité) — **Fait (2026-11-10)** : `slow_down_layer_time`, `tree_support_branch_diameter`, `tree_support_wall_count` ajoutées avec bornes (`curr_bed_type` y était déjà) ; `*_gcode` toujours refusés. |
@@ -241,3 +241,12 @@ Déjà amélioré : rapport d'étapes avec mise à niveau prouvée et horodatée
 
 Critère d'acceptation : rejouer l'impression du 9/11 — troncs élancés signalés avant la confirmation, pas de « bloquée » pendant la mise à niveau, alerte spontanée à l'apparition du spaghetti.
 
+## Retours d'usage du 2026-11-09 : P0 FB1 à FB3 faits (2026-11-10)
+
+Détail des trois P0 du tableau « Retours d'usage du 2026-11-09 » ci-dessus :
+
+| Code | État | Ce qui a été fait |
+|---|---|---|
+| FB1 | ✅ fait | Image de référence du plateau vide prise automatiquement juste après la confirmation humaine (passage à `START_REQUESTED`), rangée avec l'impression (photo « reference », relue après redémarrage) et utilisée par la détection visuelle de cette impression ; détection active par défaut ; `analyze_print_frame` analyse l'image fraîche contre cette référence (plus de « pas d'image de référence » quand elle existe, message explicite sinon). Le lancement et l'arrêt restent un geste humain. Tests : `TestReferenceIsCapturedRightAfterConfirmationAndUsedByDetection`, `TestReferenceSurvivesRestartAndIsTakenOnce`. |
+| FB2 | ✅ fait | Plus d'alerte « bloquée » pendant les étapes de préparation et de calibration (chauffes, nettoyage de la buse, mise à niveau, scans, calibrations, changements de filament) : seuil propre aux préparations (`PrepStallAfter`, 20 min), au-delà la règle ordinaire reprend. Tests : `TestNoStalledAlertDuringBedLevelingOrOtherPreparationStages`, `TestRealStallIsStillFlagged`, `TestUnknownStageKeepsOrdinaryStallRule`. |
+| FB3 | ✅ fait | `causes` = codes ACTIFS horodatés (`first_seen_at`, `last_seen_at`) ; `causes_history` = codes périmés (`hms_count` 0 et `print_error` 0), horodatés. Journal borné à 20 codes par impression, sans migration (stocké dans la progression de l'impression). Tests : `TestNoteErrorsSeparatesActiveFromHistory`, `TestStaleErrorCodesMoveToHistoryWhenPrinterReportsNone`. |

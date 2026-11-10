@@ -144,9 +144,7 @@ func (s *Service) reconcileForReprint(ctx context.Context, j Job) (string, error
 	}
 	pg := copyProgress(j.Print)
 	pg.PrinterState, pg.ObservedAt, pg.MatchesFile = string(st.State), s.now(), m
-	if es := decodeErrors(st); len(es) > 0 {
-		pg.ErrorDetails = es
-	}
+	pg.noteErrors(decodeErrors(st), s.now())
 	why := fmt.Sprintf("constaté à la demande de relance : l'imprimante est en état %s et ne montre plus cette impression (fichier courant : %q)", st.State, st.SubtaskName)
 	s.closeFromPrinter(ctx, j.ID, contracts.EvFail, &pg, why)
 	return why, nil
