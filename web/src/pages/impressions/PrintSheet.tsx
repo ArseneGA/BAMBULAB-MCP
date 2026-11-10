@@ -86,15 +86,15 @@ function SheetBody({ sheet, reload }: { sheet: PrintSheet; reload: () => void })
           <p className="sub">{sheet.profile.frozen_note}</p>
         </Panel>
         <Panel title="Matière" actions={lvl(sheet.material.level)}>
-          <p>{sheet.material.family ?? 'Matière non renseignée'} · {sheet.material.actual_grams !== undefined ? `${fmtNum(sheet.material.actual_grams, 0)} g` : sheet.material.estimated_grams !== undefined ? `~${fmtNum(sheet.material.estimated_grams, 0)} g (estimé)` : na(sheet, 'material.grams')}</p>
+          <p>{sheet.material.family ?? 'Matière non renseignée'} · {sheet.material.actual_grams !== undefined ? `${fmtNum(sheet.material.actual_grams, 0)} g` : sheet.material.estimated_grams !== undefined ? `~${fmtNum(sheet.material.estimated_grams, 0)} g (estimé)` : na(sheet, 'actual_grams')}</p>
           {sheet.material.spools.length > 0 ? (
             <ul className="rowlist">{sheet.material.spools.map((s) => <li key={`${s.spool_id}-${s.filament_slot}`}><div className="grow"><b>{s.label ?? s.spool_id}</b><small>Filament {s.filament_slot} · {fmtNum(s.grams, 0)} g{s.estimated ? ' (estimé)' : ''}{s.cost !== undefined ? ` · ${money(s.cost, sheet.cost.currency)}` : ''}</small></div></li>)}</ul>
           ) : <p className="sub">Aucune bobine rattachée à cette impression.</p>}
         </Panel>
         <Panel title="Temps et coût" actions={lvl(sheet.duration.level)}>
           <dl className="dl">
-            <div className="ps-row"><dt>Temps prévu</dt><dd>{hms(sheet.duration.planned_seconds) ?? na(sheet, 'duration.planned_seconds')}</dd></div>
-            <div className="ps-row"><dt>Temps réel</dt><dd>{hms(sheet.duration.actual_seconds) ?? na(sheet, 'duration.actual_seconds')}</dd></div>
+            <div className="ps-row"><dt>Temps prévu</dt><dd>{hms(sheet.duration.planned_seconds) ?? na(sheet, 'planned_seconds')}</dd></div>
+            <div className="ps-row"><dt>Temps réel</dt><dd>{hms(sheet.duration.actual_seconds) ?? na(sheet, 'actual_seconds')}</dd></div>
             <div className="ps-row"><dt>Coût prévu</dt><dd>{money(sheet.cost.planned, sheet.cost.currency) ?? 'non disponible'}</dd></div>
             <div className="ps-row"><dt>Coût réel</dt><dd>{money(sheet.cost.actual, sheet.cost.currency) ?? 'non disponible'} {lvl(sheet.cost.level)}</dd></div>
           </dl>
