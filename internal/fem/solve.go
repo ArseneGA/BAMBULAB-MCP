@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // BC fixe un degré de liberté (0 = x, 1 = y, 2 = z) d'un nœud (index de grille complète) à zéro.
@@ -29,6 +30,14 @@ type Problem struct {
 	MaxIter  int     // défaut 20000
 	Progress func(iter int, rel float64)
 	Ctx      context.Context
+	// Deadline : borne de temps (zéro = aucune). À l'échéance le calcul s'arrête SANS erreur : la solution rendue
+	// porte Converged=false et TimedOut=true, elle ne doit pas être présentée comme fiable.
+	Deadline time.Time
+	// Hold : nœuds (grille complète) comptés comme appuis pour la connexité sans être bloqués (contact unilatéral :
+	// appui relâché dont la pièce ne doit pas devenir « flottante »).
+	Hold []int
+	// Warm : solution précédente (même grille) dont les déplacements servent de point de départ.
+	Warm *Solution
 }
 
 // Solution : déplacements et contraintes aux nœuds actifs.
@@ -44,6 +53,9 @@ type Solution struct {
 	Converged  bool
 	Dropped    int // éléments flottants (sans appui) écartés
 	Elements   int
+	TimedOut   bool   // arrêt à l'échéance de Problem.Deadline
+	Stagnated  bool   // arrêt car le résidu n'avançait plus
+	Precond    string // préconditionneur utilisé
 }
 
 // Compact renvoie l'index compact d'un nœud de grille complète (-1 si hors pièce).
@@ -252,7 +264,7 @@ func Solve(p Problem) (*Solution, error) {
 	if g == nil || p.E <= 0 || p.Nu <= -1 || p.Nu >= 0.5 {
 		return nil, errors.New("fem : problème invalide (grille, E > 0, 0 ≤ ν < 0,5)")
 	}
-	if len(p.Fixed) == 0 {
+	if len(p.Fixed) == 0 && len(p.Hold) == 0 {
 		return nil, errors.New("fem : aucun appui")
 	}
 	if len(p.Loads) == 0 {
@@ -289,6 +301,11 @@ func Solve(p Problem) (*Solution, error) {
 		}
 		supported[ds.find(m.nodeOf[b.Node])] = true
 	}
+	for _, n := range p.Hold {
+		if n >= 0 && n < len(m.nodeOf) && m.nodeOf[n] >= 0 {
+			supported[ds.find(m.nodeOf[n])] = true
+		}
+	}
 	dropped := 0
 	elemOK := make(map[int32]bool, len(m.elems))
 	for i, c := range m.elems {
@@ -321,20 +338,45 @@ func Solve(p Problem) (*Solution, error) {
 	}
 	em := NewElementMatrices(p.Nu)
 	scale := p.E * g.H
-	// préconditionneur de Jacobi
-	diag := make([]float64, nd)
+	// préconditionneur de Jacobi par blocs 3×3 (les trois degrés de liberté d'un nœud sont inversés ensemble : le
+	// couplage entre directions, fort avec ν proche de 0,4, est pris en compte) ; degrés bloqués : identité
+	blk := make([]float64, nn*9)
 	for _, cn := range m.conn {
 		for n := 0; n < 8; n++ {
-			b := int(cn[n]) * 3
-			for d := 0; d < 3; d++ {
-				diag[b+d] += em.K0[(n*3+d)*24+n*3+d] * scale
+			b := int(cn[n]) * 9
+			for d1 := 0; d1 < 3; d1++ {
+				for d2 := 0; d2 < 3; d2++ {
+					blk[b+d1*3+d2] += em.K0[(n*3+d1)*24+n*3+d2] * scale
+				}
 			}
 		}
 	}
-	inv := make([]float64, nd)
-	for i := range inv {
-		if !fixed[i] && diag[i] > 0 {
-			inv[i] = 1 / diag[i]
+	for i := 0; i < nn; i++ {
+		B := blk[i*9 : i*9+9]
+		for d := 0; d < 3; d++ {
+			if fixed[i*3+d] {
+				for k := 0; k < 3; k++ {
+					B[d*3+k], B[k*3+d] = 0, 0
+				}
+				B[d*3+d] = 1
+			}
+		}
+		if !invert3(B) { // bloc dégénéré : repli sur la diagonale
+			for k := range B {
+				B[k] = 0
+			}
+			for d := 0; d < 3; d++ {
+				B[d*3+d] = 1
+			}
+		}
+	}
+	applyPrec := func(r, z []float64, lo, hi int) {
+		for i := lo; i < hi; i++ {
+			B := blk[i*9 : i*9+9]
+			r0, r1, r2 := r[i*3], r[i*3+1], r[i*3+2]
+			z[i*3] = B[0]*r0 + B[1]*r1 + B[2]*r2
+			z[i*3+1] = B[3]*r0 + B[4]*r1 + B[5]*r2
+			z[i*3+2] = B[6]*r0 + B[7]*r1 + B[8]*r2
 		}
 	}
 	x := make([]float64, nd)
@@ -351,21 +393,37 @@ func Solve(p Problem) (*Solution, error) {
 	if fn == 0 {
 		return nil, errors.New("fem : charge nulle sur les degrés de liberté libres (charges entièrement sur les appuis ?)")
 	}
-	for i := range z {
-		z[i] = r[i] * inv[i]
-	}
-	copy(pv, z)
-	rz := dot(r, z)
-	sol := &Solution{Grid: g, NodeOf: m.nodeOf, Nodes: m.nodes, U: x, Dropped: dropped, Elements: len(m.elems)}
-	rel := 1.0
-	it := 0
 	free := make([]float64, nd) // 1 pour un degré de liberté libre, 0 pour un bloqué
 	for i := range free {
 		if !fixed[i] {
 			free[i] = 1
 		}
 	}
-	for it = 0; it < p.MaxIter; it++ {
+	sol := &Solution{Grid: g, NodeOf: m.nodeOf, Nodes: m.nodes, U: x, Dropped: dropped, Elements: len(m.elems), Precond: "Jacobi par blocs 3×3"}
+	if w := p.Warm; w != nil && w.Grid == g {
+		for c, full := range m.nodes {
+			if oc := w.Compact(int(full)); oc >= 0 {
+				for d := 0; d < 3; d++ {
+					if !fixed[c*3+d] {
+						x[c*3+d] = w.U[oc*3+d]
+					}
+				}
+			}
+		}
+		m.matvec(em, scale, x, q)
+		for i := range r {
+			if !fixed[i] {
+				r[i] = f[i] - q[i]
+			}
+		}
+	}
+	parFor(nn, func(lo, hi int) { applyPrec(r, z, lo, hi) })
+	copy(pv, z)
+	rz := dot(r, z)
+	rel := math.Sqrt(dot(r, r)) / fn
+	it := 0
+	var hist [4]float64 // résidu relatif tous les 500 itérations : détection de stagnation
+	for it = 0; it < p.MaxIter && rel >= p.Tol; it++ {
 		m.matvec(em, scale, pv, q)
 		pq, _ := parReduce2(nd, func(lo, hi int) (float64, float64) {
 			s := 0.0
@@ -378,17 +436,22 @@ func Solve(p Problem) (*Solution, error) {
 			return nil, errors.New("fem : matrice non définie positive (pièce sous-contrainte ?)")
 		}
 		alpha := rz / pq
-		rr, rzNew := parReduce2(nd, func(lo, hi int) (float64, float64) {
-			var a, b float64
+		rr, _ := parReduce2(nd, func(lo, hi int) (float64, float64) {
+			var a float64
 			for i := lo; i < hi; i++ {
 				x[i] += alpha * pv[i]
 				r[i] -= alpha * q[i] * free[i]
-				zi := r[i] * inv[i]
-				z[i] = zi
 				a += r[i] * r[i]
-				b += r[i] * zi
 			}
-			return a, b
+			return a, 0
+		})
+		_, rzNew := parReduce2(nn, func(lo, hi int) (float64, float64) {
+			applyPrec(r, z, lo, hi)
+			var b float64
+			for i := lo * 3; i < hi*3; i++ {
+				b += r[i] * z[i]
+			}
+			return 0, b
 		})
 		rel = math.Sqrt(rr) / fn
 		if p.Progress != nil && it%25 == 0 {
@@ -402,6 +465,20 @@ func Solve(p Problem) (*Solution, error) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			if !p.Deadline.IsZero() && time.Now().After(p.Deadline) {
+				sol.TimedOut = true
+				it++
+				break
+			}
+		}
+		if it > 0 && it%500 == 0 {
+			k := (it / 500) % 4
+			if it >= 2000 && hist[k] > 0 && rel > 0.8*hist[k] { // moins de 20 % de gain en 2000 itérations
+				sol.Stagnated = true
+				it++
+				break
+			}
+			hist[k] = rel
 		}
 		beta := rzNew / rz
 		rz = rzNew
@@ -459,6 +536,20 @@ func Solve(p Problem) (*Solution, error) {
 	}
 	sol.Stress = sum
 	return sol, nil
+}
+
+// invert3 inverse en place une matrice 3×3 (ligne par ligne) ; faux si singulière.
+func invert3(m []float64) bool {
+	a, b, c, d, e, f, g, h, i := m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]
+	det := a*(e*i-f*h) - b*(d*i-f*g) + c*(d*h-e*g)
+	if math.Abs(det) < 1e-300 || math.IsNaN(det) {
+		return false
+	}
+	id := 1 / det
+	m[0], m[1], m[2] = (e*i-f*h)*id, (c*h-b*i)*id, (b*f-c*e)*id
+	m[3], m[4], m[5] = (f*g-d*i)*id, (a*i-c*g)*id, (c*d-a*f)*id
+	m[6], m[7], m[8] = (d*h-e*g)*id, (b*g-a*h)*id, (a*e-b*d)*id
+	return true
 }
 
 func dot(a, b []float64) float64 {

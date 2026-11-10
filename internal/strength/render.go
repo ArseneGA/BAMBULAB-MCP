@@ -32,6 +32,7 @@ var (
 	colGreen = color.RGBA{0x4c, 0xc3, 0x6b, 255}
 	colAmber = color.RGBA{0xf0, 0xa8, 0x30, 255}
 	colRed   = color.RGBA{0xf0, 0x55, 0x4c, 255}
+	colGrey  = color.RGBA{0xa0, 0xa4, 0xad, 255}
 )
 
 var zonePalette = []color.RGBA{{0xd6, 0x28, 0x28, 255}, {0x1f, 0x77, 0xb4, 255}, {0x2c, 0xa0, 0x2c, 255}, {0xff, 0x7f, 0x0e, 255},
@@ -511,6 +512,8 @@ func verdictColor(v string) color.RGBA {
 		return colGreen
 	case "a_surveiller":
 		return colAmber
+	case "non_converge":
+		return colGrey
 	}
 	return colRed
 }
@@ -521,6 +524,8 @@ func verdictShort(v string) string {
 		return "TIENT"
 	case "a_surveiller":
 		return "A SURVEILLER"
+	case "non_converge":
+		return "NON CONVERGE - NON FIABLE"
 	}
 	return "RISQUE DE CASSE"
 }
@@ -540,6 +545,9 @@ func StressImage(an *Analysis, title string) ([]byte, error) {
 		fmt.Sprintf("Marge obtenue x%.1f (visee x%.1f) - deplacement max %.2f mm - cubes de %.2f mm, %d iterations", r.SafetyAchieved, r.SafetyRequired, r.MaxDisplacementMM, r.Mesh.VoxelMM, r.Solver.Iterations),
 		"Calcul simplifie (elements finis lineaires, matiere isotrope) : il ne remplace pas un essai reel.",
 		"MESURE: geometrie, charges donnees. CALCULE: contraintes, deplacement. ESTIME: matiere, couches, remplissage, fluage.",
+	}
+	if r.NotConverged {
+		lines = append([]string{fmt.Sprintf("CALCUL NON CONVERGE : resultat NON FIABLE (residu %.1e, ecart d'equilibre des reactions %.0f %%). Les couleurs ci-dessous sont indicatives, ne pas en tirer de verdict.", r.Solver.Residual, r.EquilibriumGapPct)}, lines...)
 	}
 	if r.BasedOnAssumed {
 		lines = append(lines, "RESULTAT BASE SUR DES HYPOTHESES (charges, appuis ou reglages supposes) - a confirmer.")

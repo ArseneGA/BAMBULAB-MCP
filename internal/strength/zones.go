@@ -41,6 +41,8 @@ type Zone struct {
 	Normal     [3]float64 `json:"normal"`
 	Candidates []string   `json:"candidates" jsonschema:"rôles plausibles : support_pose (posée dessus), support_fixe (vissée / collée), charge"`
 	Extremity  bool       `json:"extremity,omitempty" jsonschema:"extrémité éloignée des appuis probables (bout de bras, crochet)"`
+	Ground     bool       `json:"ground_plane,omitempty" jsonschema:"plan de pose détecté automatiquement : surface de contact avec le sol (ou la table), regroupée en une seule zone même si elle est morcelée"`
+	GroundZMM  float64    `json:"ground_z_mm,omitempty" jsonschema:"altitude Z du plan de pose (mm)"`
 	NormalAxis int        `json:"-"`
 	tris       []int      // triangles du maillage d'analyse
 }
@@ -107,6 +109,57 @@ type triInfo struct {
 	class int
 }
 
+const classGround = 9 // triangles du plan de pose
+
+// groundPlane cherche le plan de pose : parmi les faces tournées vers le bas (≈ -Z), le plan le plus bas dont l'aire
+// compte (au moins 25 % de celle du plus grand plan horizontal tourné vers le bas, et un minimum absolu). Une base
+// coupée à Z = 2 mm est ainsi trouvée même si de petits détails descendent plus bas ou si la face est morcelée.
+// Sans plan strictement horizontal, repli sur la matière tournée vers le bas la plus basse (appui approximatif).
+func groundPlane(m *mesh.Mesh, info []triInfo, total float64) (z, tol float64, ok bool) {
+	bb := m.Bounds()
+	tol = math.Max(0.25, 0.005*bb.Size.Z)
+	minArea := math.Max(2, 0.002*total)
+	areaAt := map[int]float64{}
+	sumZ := map[int]float64{}
+	for i, t := range m.T {
+		if info[i].class != 1 {
+			continue
+		}
+		hi := math.Max(m.V[t[0]].Z, math.Max(m.V[t[1]].Z, m.V[t[2]].Z))
+		lo := math.Min(m.V[t[0]].Z, math.Min(m.V[t[1]].Z, m.V[t[2]].Z))
+		if hi-lo > tol { // face inclinée ou à cheval sur plusieurs plans
+			continue
+		}
+		k := int(math.Floor((lo + hi) / 2 / tol))
+		areaAt[k] += info[i].area
+		sumZ[k] += info[i].area * (lo + hi) / 2
+	}
+	maxA := 0.0
+	for _, a := range areaAt {
+		maxA = math.Max(maxA, a)
+	}
+	best, found := 0, false
+	for k, a := range areaAt {
+		if a >= math.Max(minArea, 0.25*maxA) && (!found || k < best) {
+			best, found = k, true
+		}
+	}
+	if found {
+		return sumZ[best] / areaAt[best], tol * 1.5, true
+	}
+	slab := math.Max(1, 0.02*bb.Size.Z) // repli : faces tournées vers le bas dans la tranche la plus basse
+	a := 0.0
+	for i, t := range m.T {
+		if info[i].n.Z <= -0.5 && math.Max(m.V[t[0]].Z, math.Max(m.V[t[1]].Z, m.V[t[2]].Z)) <= bb.Min.Z+slab {
+			a += info[i].area
+		}
+	}
+	if a >= minArea {
+		return bb.Min.Z + slab/2, slab, true
+	}
+	return 0, 0, false
+}
+
 func classOf(n mesh.Vec3) int {
 	ax, ay, az := math.Abs(n.X), math.Abs(n.Y), math.Abs(n.Z)
 	const tol = 0.94
@@ -152,6 +205,17 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 		info[i] = triInfo{n, a, classOf(n)}
 		zs.TotalArea += a
 	}
+	// plan de pose : surface de contact avec le sol, détectée avant le découpage général (voir groundPlane)
+	gz, gTol, groundOK := groundPlane(m, info, zs.TotalArea)
+	if groundOK {
+		for i, t := range m.T {
+			hi := math.Max(m.V[t[0]].Z, math.Max(m.V[t[1]].Z, m.V[t[2]].Z))
+			lo := math.Min(m.V[t[0]].Z, math.Min(m.V[t[1]].Z, m.V[t[2]].Z))
+			if info[i].n.Z <= -0.5 && hi <= gz+gTol && lo >= gz-gTol {
+				info[i].class = classGround
+			}
+		}
+	}
 	// adjacence par arêtes (même classe) -> composantes
 	parent := make([]int32, nt)
 	for i := range parent {
@@ -189,6 +253,9 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 	comps := map[int32][]int{}
 	for i := 0; i < nt; i++ {
 		r := find(int32(i))
+		if info[i].class == classGround { // toutes les facettes du plan de pose forment UNE zone, même morcelée
+			r = -1
+		}
 		comps[r] = append(comps[r], i)
 	}
 	bb := m.Bounds()
@@ -212,7 +279,7 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 				hi = mesh.Vec3{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
 			}
 		}
-		if area < minArea {
+		if area < minArea && info[tris[0]].class != classGround {
 			continue
 		}
 		c = c.Scale(1 / area)
@@ -221,6 +288,8 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 			Normal: [3]float64{nsum.Norm().X, nsum.Norm().Y, nsum.Norm().Z}, tris: tris}
 		nearBottom := lo.Z-bb.Min.Z <= math.Max(0.6, 0.02*bb.Size.Z)
 		switch cls {
+		case classGround:
+			z.Kind, z.NormalAxis, z.Ground, z.GroundZMM = KindBase, 2, true, math.Round(c.Z*100)/100
 		case 0:
 			z.Kind, z.NormalAxis = KindDessus, 2
 		case 1:
@@ -271,7 +340,15 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 		}
 		sort.SliceStable(bySize, func(a, b int) bool { return zones[bySize[a]].AreaMM2 > zones[bySize[b]].AreaMM2 })
 		keep := map[int]bool{}
+		for i, z := range zones { // le plan de pose est toujours conservé
+			if z.Ground {
+				keep[i] = true
+			}
+		}
 		for _, i := range bySize[:maxZones] {
+			if len(keep) >= maxZones {
+				break
+			}
 			keep[i] = true
 		}
 		var kept []Zone
@@ -310,6 +387,9 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 		switch z.Kind {
 		case KindBase:
 			z.Label = "face basse au niveau du plan le plus bas (appui au sol probable)"
+			if z.Ground {
+				z.Label = fmt.Sprintf("plan de pose détecté automatiquement (surface de contact avec le sol à Z = %.1f mm, %.0f mm²) : appui posé probable", z.GroundZMM, z.AreaMM2)
+			}
 			z.Candidates = []string{"support_pose", "support_fixe"}
 		case KindDessus:
 			z.Label = "face plane tournée vers le haut"
@@ -348,6 +428,16 @@ func DetectZones(src *mesh.Mesh) *ZoneSet {
 func (zs *ZoneSet) ByID(id int) (*Zone, bool) {
 	for i := range zs.Zones {
 		if zs.Zones[i].ID == id {
+			return &zs.Zones[i], true
+		}
+	}
+	return nil, false
+}
+
+// Ground : le plan de pose détecté automatiquement (surface de contact avec le sol), s'il existe.
+func (zs *ZoneSet) Ground() (*Zone, bool) {
+	for i := range zs.Zones {
+		if zs.Zones[i].Ground {
 			return &zs.Zones[i], true
 		}
 	}

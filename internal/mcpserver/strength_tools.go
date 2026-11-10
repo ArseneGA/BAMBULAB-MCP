@@ -59,8 +59,8 @@ func AddStrengthTools(s *mcp.Server, c *core.Core) {
 
 	addTool(s, &mcp.Tool{
 		Name: "assess_strength", Title: "Test de résistance",
-		Description: "VRAI calcul par éléments finis (élasticité linéaire, Go pur) d'une pièce sous charge : voxélisation du maillage (≤ 150 000 cubes), contraintes de von Mises, déplacement, coefficient de sécurité, avec les propriétés réduites pour la matière (PLA, PETG, ABS, ASA, PA, TPU), les parois, le remplissage, la liaison entre couches (direction d'impression) et le fluage. " +
-			"Entrées : loads (zone ou point, force_N ou mass_kg, direction), supports (zone, fixed | resting), material, infill, walls, layer_orientation, safety_factor (défaut 2), load_kind (static | impact), duration. " +
+		Description: "VRAI calcul par éléments finis (élasticité linéaire, Go pur) d'une pièce sous charge : voxélisation du maillage (≈ 60 000 cubes par défaut, resolution=fine pour 150 000 ; max_seconds, défaut 150 s : sans convergence dans ce temps le verdict est « non_converge » avec l'écart d'équilibre des réactions, jamais présenté comme fiable), contraintes de von Mises, déplacement, coefficient de sécurité, avec les propriétés réduites pour la matière (PLA, PETG, ABS, ASA, PA, TPU), les parois, le remplissage, la liaison entre couches (direction d'impression) et le fluage. " +
+			"Entrées : loads (zone ou point, force_N ou mass_kg, direction), supports (zone, fixed | resting ; zone 0 + resting = plan de pose détecté automatiquement ; un appui posé ne retient pas vers le haut : contact unilatéral), material, infill, walls, layer_orientation, safety_factor (défaut 2), load_kind (static | impact), duration. " +
 			"Chaque charge et chaque appui porte `source` : user (donné par l'humain) ou assumed (hypothèse que tu as ANNONCÉE à l'humain) ; le verdict dit alors qu'il repose sur des hypothèses. Refuse sans charge ni appui : appeler d'abord plan_strength_test. " +
 			"Renvoie une carte de contraintes PNG (MPa, charges et appuis annotés), le verdict (« tient avec une marge de ×3,2 » / « risque de casse »), le point critique, le déplacement max et des recommandations. " +
 			"Peut durer jusqu'à quelques minutes : un job_id est alors rendu (wait_for_job), le résultat se relit avec get_strength_report. Calcul simplifié : ne remplace pas un essai réel.",
@@ -151,7 +151,19 @@ func assessText(r *strength.Result, testID string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "TEST DE RÉSISTANCE %s — modèle %s, version %s, matière %s (remplissage %s, %s parois, couches perpendiculaires à l'axe %s).\n", testID, r.ModelID, r.VersionID, r.Material.Label,
 		inputOf(r, "remplissage"), inputOf(r, "parois"), r.LayerAxisName)
+	if r.NotConverged {
+		b.WriteString("⚠ CALCUL NON CONVERGÉ — RÉSULTAT NON FIABLE : ne pas annoncer « ça tient » ni « ça casse » à l'humain. Dis-lui que le calcul n'a pas abouti, avec l'écart d'équilibre ci-dessous, et relance (resolution=standard, max_seconds plus grand, appuis simplifiés).\n")
+	}
 	b.WriteString("VERDICT : " + r.VerdictTxt + "\n")
+	conv := "NON convergé"
+	if r.Solver.Converged {
+		conv = "convergé"
+	}
+	fmt.Fprintf(&b, "Équilibre des réactions : %.1f N de réaction pour %.1f N appliqués (écart %.1f N, %.1f %%). Solveur : %s, résidu %.1e après %d itérations (%s), %.1f s sur %.0f s autorisées.\n",
+		r.ReactionN, r.AppliedN, r.EquilibriumGapN, r.EquilibriumGapPct, conv, r.Solver.Residual, r.Solver.Iterations, r.Solver.StopReason, r.Solver.Seconds, r.Solver.BudgetSec)
+	if c := r.Contact; c != nil {
+		fmt.Fprintf(&b, "Appui posé (contact unilatéral) : %.0f %% de la surface d'appui porte réellement la pièce ; réaction en traction %.0f %% au premier calcul, %.0f %% après relâchement des points qui tiraient (%d reprise(s)).\n", c.ContactAreaPct, c.TensionBeforePct, c.TensionAfterPct, c.Passes)
+	}
 	fmt.Fprintf(&b, "Contrainte maximale (von Mises) %.1f MPa au point (%.0f ; %.0f ; %.0f) mm. Point critique (contrainte / résistance la plus élevée, %.0f %% de la limite) %s, von Mises %.1f MPa ; limite admissible estimée %.1f MPa dans le plan, %.1f MPa entre couches ; critère limitant : %s ; coefficient de sécurité obtenu ×%.2f pour ×%.1f visé.\n",
 		r.MaxVonMisesMPa, r.MaxVMPoint[0], r.MaxVMPoint[1], r.MaxVMPoint[2], 100*r.MaxUtilization, r.CriticalNote, r.CriticalStressMPa, r.AllowableXYMPa, r.AllowableZMPa,
 		strings.ReplaceAll(r.LimitingCriteria, "_", " "), r.SafetyAchieved, r.SafetyRequired)

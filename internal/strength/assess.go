@@ -21,9 +21,14 @@ const (
 
 // Plafonds de taille du calcul.
 const (
-	MaxSolidVoxels = 150_000
-	MaxGridCells   = 3_000_000
-	MaxForceN      = 100_000
+	MaxSolidVoxels = 60_000 // maillage « standard » : rapide, converge en quelques secondes (FB9)
+	// MaxSolidVoxelsFine : maillage « fin » (resolution = fine), à demander explicitement : plus lent, parfois non convergé.
+	MaxSolidVoxelsFine = 150_000
+	MaxGridCells       = 3_000_000
+	// DefaultSolveSeconds : temps maximal du calcul (voxélisation, résolution, reprises) avant de rendre un résultat « non convergé ».
+	DefaultSolveSeconds = 150.0
+	MaxSolveSeconds     = 1800.0
+	MaxForceN           = 100_000
 )
 
 // LoadIn : une charge.
@@ -41,7 +46,7 @@ type LoadIn struct {
 
 // SupportIn : un appui.
 type SupportIn struct {
-	Zone   int    `json:"zone" jsonschema:"numéro de zone qui tient la pièce"`
+	Zone   int    `json:"zone" jsonschema:"numéro de zone qui tient la pièce ; 0 avec type resting = plan de pose (surface de contact au sol) détecté automatiquement"`
 	Type   string `json:"type" jsonschema:"fixed (vissée, collée, encastrée) | resting (posée dessus : ne retient que dans un sens)"`
 	Source string `json:"source" jsonschema:"user | assumed"`
 	Note   string `json:"note,omitempty"`
@@ -60,6 +65,9 @@ type AssessInput struct {
 	SafetyFactor     float64     `json:"safety_factor,omitempty" jsonschema:"coefficient de sécurité visé (défaut 2)"`
 	LoadKind         string      `json:"load_kind,omitempty" jsonschema:"static (défaut) | impact (charge lâchée : forces doublées)"`
 	Duration         string      `json:"duration,omitempty" jsonschema:"permanent (défaut : fluage pris en compte) | occasional"`
+	Resolution       string      `json:"resolution,omitempty" jsonschema:"standard (défaut : ≈ 60 000 cubes, rapide) | fine (≈ 150 000 cubes, plus lent, risque de ne pas converger dans le temps imparti)"`
+	MaxSeconds       float64     `json:"max_seconds,omitempty" jsonschema:"temps maximal du calcul en secondes (défaut 150, max 1800) ; à l'échéance le résultat est rendu « non convergé », jamais présenté comme fiable"`
+	maxSolidOverride int         `json:"-"` // tests : cible de cubes pleins plus basse (calculs rapides)
 }
 
 // Marked : valeur avec sa provenance (pour les entrées enregistrées et affichées).
@@ -73,7 +81,7 @@ type Marked struct {
 type Result struct {
 	ModelID    string `json:"model_id"`
 	VersionID  string `json:"version_id"`
-	Verdict    string `json:"verdict" jsonschema:"ok | a_surveiller | risque"`
+	Verdict    string `json:"verdict" jsonschema:"ok | a_surveiller | risque | non_converge (le solveur n'a pas convergé : le résultat n'est PAS fiable)"`
 	VerdictTxt string `json:"verdict_text"`
 
 	SafetyAchieved    float64    `json:"safety_factor_achieved"`
@@ -108,13 +116,19 @@ type Result struct {
 	Mesh   MeshInfo `json:"mesh"`
 	Solver Solver   `json:"solver"`
 
-	Material      Material  `json:"material"`
-	Effective     Effective `json:"effective"`
-	ReactionN     float64   `json:"reaction_total_n"`
-	AppliedN      float64   `json:"applied_total_n"`
-	Disclaimer    string    `json:"disclaimer"`
-	TotalSeconds  float64   `json:"total_seconds"`
-	LayerAxisName string    `json:"layer_axis"`
+	Material  Material  `json:"material"`
+	Effective Effective `json:"effective"`
+	ReactionN float64   `json:"reaction_total_n"`
+	AppliedN  float64   `json:"applied_total_n"`
+	// Écart d'équilibre : les réactions aux appuis doivent reprendre exactement les charges ; un écart important
+	// signale un calcul non convergé (ou des appuis mal posés).
+	EquilibriumGapN   float64      `json:"equilibrium_gap_n"`
+	EquilibriumGapPct float64      `json:"equilibrium_gap_pct"`
+	NotConverged      bool         `json:"not_converged,omitempty" jsonschema:"vrai : le résultat n'est pas fiable, ne pas en tirer de verdict"`
+	Contact           *ContactInfo `json:"contact,omitempty" jsonschema:"appui posé unilatéral : décollement et surface qui porte réellement"`
+	Disclaimer        string       `json:"disclaimer"`
+	TotalSeconds      float64      `json:"total_seconds"`
+	LayerAxisName     string       `json:"layer_axis"`
 }
 
 // MeshInfo : discrétisation.
@@ -138,6 +152,23 @@ type Solver struct {
 	Residual   float64 `json:"relative_residual"`
 	Converged  bool    `json:"converged"`
 	Seconds    float64 `json:"solve_seconds"`
+	StopReason string  `json:"stop_reason,omitempty" jsonschema:"converged | time_limit | stagnation | max_iterations"`
+	TimedOut   bool    `json:"timed_out,omitempty"`
+	Precond    string  `json:"preconditioner,omitempty"`
+	BudgetSec  float64 `json:"time_budget_seconds,omitempty"`
+	Retried    bool    `json:"retried_coarser,omitempty" jsonschema:"premier calcul non convergé : repris avec un maillage plus grossier"`
+	Passes     int     `json:"solve_passes,omitempty"`
+}
+
+// ContactInfo : bilan du contact unilatéral des appuis posés (une pièce posée ne peut pas être tirée vers le bas :
+// les points d'appui qui tireraient sont relâchés et le calcul repris).
+type ContactInfo struct {
+	Passes           int     `json:"passes"`
+	ReleasedNodes    int     `json:"released_nodes"`
+	TensionBeforePct float64 `json:"tension_before_pct" jsonschema:"part de la réaction qui tirait sur la pièce au premier calcul (appui bilatéral, irréaliste)"`
+	TensionAfterPct  float64 `json:"tension_after_pct" jsonschema:"même part après relâchement des points qui tiraient"`
+	ContactAreaPct   float64 `json:"contact_area_pct" jsonschema:"part de la surface d'appui posé qui porte réellement la pièce"`
+	TippingSuspected bool    `json:"tipping_suspected,omitempty" jsonschema:"plus des trois quarts de la surface d'appui décollent : la pièce bascule ou n'est pas assez stable posée"`
 }
 
 // Disclaimer : mention obligatoire.
@@ -239,13 +270,13 @@ func (in *AssessInput) Validate() error {
 		if s.Source != SourceUser && s.Source != SourceAssumed {
 			return fmt.Errorf("appui %d : source obligatoire (user | assumed)", i+1)
 		}
-		if s.Zone <= 0 {
-			return fmt.Errorf("appui %d : zone obligatoire", i+1)
-		}
 		switch s.Type {
 		case "fixed", "resting":
 		default:
 			return fmt.Errorf("appui %d : type fixed ou resting", i+1)
+		}
+		if s.Zone < 0 || (s.Zone == 0 && s.Type != "resting") {
+			return fmt.Errorf("appui %d : zone obligatoire (0 n'est permis qu'avec type resting : plan de pose détecté automatiquement)", i+1)
 		}
 	}
 	switch in.LayerOrientation {
@@ -262,6 +293,14 @@ func (in *AssessInput) Validate() error {
 	case "", "permanent", "occasional":
 	default:
 		return errors.New("duration : permanent ou occasional")
+	}
+	switch in.Resolution {
+	case "", "standard", "fine":
+	default:
+		return errors.New("resolution : standard ou fine")
+	}
+	if in.MaxSeconds < 0 || in.MaxSeconds > MaxSolveSeconds || math.IsNaN(in.MaxSeconds) {
+		return fmt.Errorf("max_seconds hors plage (0 à %.0f)", MaxSolveSeconds)
 	}
 	if in.SafetyFactor < 0 || in.SafetyFactor > 20 {
 		return errors.New("safety_factor hors plage (0 à 20)")
@@ -487,8 +526,21 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 	}
 	eff := EffectiveProps(mat, in.Infill, in.Walls, vol, area, permanent)
 
+	budget := in.MaxSeconds
+	if budget <= 0 {
+		budget = DefaultSolveSeconds
+	}
+	secs := func(f float64) time.Duration { return time.Duration(f * float64(time.Second)) }
+	deadline := t0.Add(secs(budget))
+	maxSolid := MaxSolidVoxels
+	if in.Resolution == "fine" {
+		maxSolid = MaxSolidVoxelsFine
+	}
+	if in.maxSolidOverride > 0 {
+		maxSolid = in.maxSolidOverride
+	}
 	progress(0.03, "voxélisation du maillage")
-	pl := fem.ChoosePitch(src, MaxSolidVoxels, MaxGridCells)
+	pl := fem.ChoosePitch(src, maxSolid, MaxGridCells)
 	if hmin := eff.ThickMM / 8; hmin > pl.H && eff.ThickMM < 1e8 { // 8 cubes dans l'épaisseur suffisent (voir fem_test) : inutile d'aller plus fin
 		pl.H = hmin
 	}
@@ -500,37 +552,7 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 			pl.H = minDim / n
 		}
 	}
-	grid, leaky, err := fem.Voxelize(src, pl.H)
-	if err != nil {
-		return nil, err
-	}
-	// plafond effectif : le volume du maillage peut être faux (normales inversées, coques recouvrantes) : on compte
-	// les cubes réellement pleins et on agrandit le pas jusqu'à respecter le plafond
-	var capNote string
-	for try := 0; try < 4 && grid.SolidCount() > MaxSolidVoxels*115/100; try++ {
-		pl.H *= math.Cbrt(float64(grid.SolidCount())/float64(MaxSolidVoxels)) * 1.03
-		pl.Capped, capNote = true, fmt.Sprintf("plafond de %d cubes pleins", MaxSolidVoxels)
-		if grid, leaky, err = fem.Voxelize(src, pl.H); err != nil {
-			return nil, err
-		}
-	}
-	if capNote != "" && pl.CapReason == "" {
-		pl.CapReason = capNote
-	}
-	nsolid := grid.SolidCount()
-	if nsolid < 20 {
-		return nil, fmt.Errorf("pièce trop petite ou maillage non fermé (%d cubes pleins) : réparer le maillage (repair_mesh)", nsolid)
-	}
 	var warnings []string
-	if leaky > 0 {
-		warnings = append(warnings, fmt.Sprintf("%d colonne(s) de voxélisation avec un nombre impair de croisements : maillage possiblement non fermé, résultat à prendre avec prudence (repair_mesh)", leaky))
-	}
-	if pl.Capped {
-		warnings = append(warnings, "pas de calcul agrandi : "+pl.CapReason)
-	}
-	if eff.ThickMM < 3*grid.H {
-		warnings = append(warnings, fmt.Sprintf("épaisseur caractéristique ≈ %.1f mm pour un cube de %.2f mm : moins de 3 cubes dans l'épaisseur, les contraintes de flexion sont mal résolues (sous-estimées)", eff.ThickMM, grid.H))
-	}
 	type bcSet struct {
 		fixedBC      []fem.BC
 		loads        []fem.Load
@@ -541,6 +563,7 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 		assumptions  []string
 		warnings     []string
 		totalApplied float64
+		soft         map[[2]int]bool // degrés de liberté d'appui posé seul (relâchables par le contact unilatéral)
 	}
 	resolve := func(grid *fem.Grid) (*bcSet, error) {
 		var inputs []Marked
@@ -550,11 +573,19 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 		// supports
 		var fixedBC []fem.BC
 		fixedSet := map[[2]int]bool{}
+		soft := map[[2]int]bool{}
 		addBC := func(n, d int) {
 			k := [2]int{n, d}
+			delete(soft, k)
 			if !fixedSet[k] {
 				fixedSet[k] = true
 				fixedBC = append(fixedBC, fem.BC{Node: n, Dof: d})
+			}
+		}
+		addSoft := func(n, d int) {
+			if !fixedSet[[2]int{n, d}] {
+				addBC(n, d)
+				soft[[2]int{n, d}] = true
 			}
 		}
 		var supp []resolvedSupport
@@ -563,9 +594,21 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 		var rests []restInfo
 		usedSupportZones := map[int]bool{}
 		for _, s := range in.Supports {
-			z, ok := zs.ByID(s.Zone)
-			if !ok {
+			var z *Zone
+			var ok bool
+			if s.Zone == 0 { // appui posé sur le plan de pose détecté automatiquement
+				if z, ok = zs.Ground(); !ok {
+					return nil, errors.New("appui : aucun plan de pose détecté sur cette pièce (aucune face plate tournée vers le bas) : désigner une zone")
+				}
+				s.Zone = z.ID
+				s.Note = strings.TrimSpace("plan de pose détecté automatiquement. " + s.Note)
+			} else if z, ok = zs.ByID(s.Zone); !ok {
 				return nil, fmt.Errorf("appui : zone %d inexistante (zones 1 à %d ; relancer plan_strength_test pour la carte)", s.Zone, len(zs.Zones))
+			}
+			if s.Type == "resting" && !z.Ground {
+				if gz, has := zs.Ground(); has {
+					warnings = append(warnings, fmt.Sprintf("appui posé sur la zone %d, qui n'est pas le plan de pose détecté (zone %d, Z = %.1f mm) : vérifier que la pièce repose bien sur cette zone", z.ID, gz.ID, gz.GroundZMM))
+				}
 			}
 			usedSupportZones[z.ID] = true
 			w := zoneNodes(grid, bnd, zs, z)
@@ -584,7 +627,7 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 			} else {
 				resting++
 				for _, n := range nodes {
-					addBC(n, z.NormalAxis)
+					addSoft(n, z.NormalAxis)
 				}
 				rests = append(rests, restInfo{z, nodes, z.NormalAxis, w})
 			}
@@ -670,35 +713,115 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 			}
 		}
 
-		return &bcSet{fixedBC: fixedBC, loads: loads, supp: supp, rl: rl, rests: rests, inputs: inputs, assumptions: assumptions, warnings: warnings, totalApplied: totalApplied}, nil
+		return &bcSet{fixedBC: fixedBC, loads: loads, supp: supp, rl: rl, rests: rests, inputs: inputs, assumptions: assumptions, warnings: warnings, totalApplied: totalApplied, soft: soft}, nil
 	}
-	bcFine, err := resolve(grid)
-	if err != nil {
-		return nil, err
+	// Un calcul : voxélisation au pas h, appuis et charges, résolution avec contact unilatéral. Si le calcul ne converge
+	// pas dans le temps imparti, il est repris UNE fois avec des cubes plus gros (jamais présenté comme fiable s'il
+	// échoue encore).
+	type attemptOut struct {
+		grid     *fem.Grid
+		leaky    int
+		pl       fem.PitchPlan
+		bc       *bcSet
+		sol      *fem.Solution
+		secs     float64
+		contact  *ContactInfo
+		passes   int
+		warnings []string
 	}
-	inputs = append(inputs, bcFine.inputs...)
-	assumptions = append(assumptions, bcFine.assumptions...)
-	warnings = append(warnings, bcFine.warnings...)
-	fixedBC, loads, supp, rl, rests, totalApplied := bcFine.fixedBC, bcFine.loads, bcFine.supp, bcFine.rl, bcFine.rests, bcFine.totalApplied
-
-	progress(0.08, "résolution par éléments finis")
-	t1 := time.Now()
-	sol, err := fem.Solve(fem.Problem{Grid: grid, E: eff.EMPa, Nu: eff.Nu, Fixed: fixedBC, Loads: loads, Ctx: ctx, Tol: 1e-6,
-		Progress: func(it int, rel float64) {
-			f := math.Min(1, math.Log10(1/math.Max(rel, 1e-12))/7)
-			progress(0.08+0.8*f, fmt.Sprintf("résolution : itération %d, résidu %.1e", it, rel))
-		}})
-	if err != nil {
-		return nil, err
+	attempt := func(h float64, dl time.Time) (*attemptOut, error) {
+		a := &attemptOut{pl: pl}
+		a.pl.H = h
+		var err error
+		if a.grid, a.leaky, err = fem.Voxelize(src, a.pl.H); err != nil {
+			return nil, err
+		}
+		// plafond effectif : le volume du maillage peut être faux (normales inversées, coques recouvrantes) : on compte
+		// les cubes réellement pleins et on agrandit le pas jusqu'à respecter le plafond
+		var capNote string
+		for try := 0; try < 4 && a.grid.SolidCount() > maxSolid*115/100; try++ {
+			a.pl.H *= math.Cbrt(float64(a.grid.SolidCount())/float64(maxSolid)) * 1.03
+			a.pl.Capped, capNote = true, fmt.Sprintf("plafond de %d cubes pleins", maxSolid)
+			if a.grid, a.leaky, err = fem.Voxelize(src, a.pl.H); err != nil {
+				return nil, err
+			}
+		}
+		if capNote != "" && a.pl.CapReason == "" {
+			a.pl.CapReason = capNote
+		}
+		if ns := a.grid.SolidCount(); ns < 20 {
+			return nil, fmt.Errorf("pièce trop petite ou maillage non fermé (%d cubes pleins) : réparer le maillage (repair_mesh)", ns)
+		}
+		if a.leaky > 0 {
+			a.warnings = append(a.warnings, fmt.Sprintf("%d colonne(s) de voxélisation avec un nombre impair de croisements : maillage possiblement non fermé, résultat à prendre avec prudence (repair_mesh)", a.leaky))
+		}
+		if a.pl.Capped {
+			a.warnings = append(a.warnings, "pas de calcul agrandi : "+a.pl.CapReason)
+		}
+		if eff.ThickMM < 3*a.grid.H {
+			a.warnings = append(a.warnings, fmt.Sprintf("épaisseur caractéristique ≈ %.1f mm pour un cube de %.2f mm : moins de 3 cubes dans l'épaisseur, les contraintes de flexion sont mal résolues (sous-estimées)", eff.ThickMM, a.grid.H))
+		}
+		if a.bc, err = resolve(a.grid); err != nil {
+			return nil, err
+		}
+		progress(0.08, "résolution par éléments finis")
+		t1 := time.Now()
+		a.sol, a.contact, a.passes, err = solveWithContact(ctx, a.grid, eff, a.bc.fixedBC, a.bc.loads, a.bc.rests, a.bc.soft, a.bc.totalApplied, dl,
+			func(it int, rel float64) {
+				f := math.Min(1, math.Log10(1/math.Max(rel, 1e-12))/6)
+				progress(0.08+0.8*f, fmt.Sprintf("résolution : itération %d, résidu %.1e", it, rel))
+			})
+		a.secs = time.Since(t1).Seconds()
+		return a, err
 	}
-	solveSec := time.Since(t1).Seconds()
+	var out *attemptOut
+	retried := false
+	tryH := pl.H
+	for att := 0; att < 2; att++ {
+		dl := deadline
+		if att == 0 {
+			dl = t0.Add(secs(0.6 * budget)) // le reste sert à la reprise
+		}
+		var err error
+		if out, err = attempt(tryH, dl); err != nil {
+			return nil, err
+		}
+		if out.sol.Converged || att == 1 || time.Until(deadline) < secs(0.1*budget) {
+			break
+		}
+		retried = true
+		tryH *= 1.45
+		progress(0.5, fmt.Sprintf("non convergé : reprise avec des cubes plus gros (%.2f mm)", tryH))
+	}
+	if retried && out.sol.Converged {
+		warnings = append(warnings, fmt.Sprintf("le premier calcul n'a pas convergé dans le temps imparti : repris avec des cubes plus gros (%.2f mm au lieu de %.2f mm), résultat moins détaillé", out.grid.H, pl.H))
+	}
+	grid, pl, leaky := out.grid, out.pl, out.leaky
+	warnings = append(warnings, out.warnings...)
+	inputs = append(inputs, out.bc.inputs...)
+	assumptions = append(assumptions, out.bc.assumptions...)
+	warnings = append(warnings, out.bc.warnings...)
+	fixedBC, loads, supp, rl, totalApplied := out.bc.fixedBC, out.bc.loads, out.bc.supp, out.bc.rl, out.bc.totalApplied
+	sol, solveSec := out.sol, out.secs
 	progress(0.9, "contraintes et verdict")
 	if sol.Dropped > 0 {
 		warnings = append(warnings, fmt.Sprintf("%d cube(s) non reliés à un appui (pièce séparée ou flottante) ignorés dans le calcul", sol.Dropped))
 	}
-	if !sol.Converged {
-		warnings = append(warnings, fmt.Sprintf("le solveur n'a pas atteint la précision visée (résidu %.1e après %d itérations) : résultat moins fiable", sol.Residual, sol.Iterations))
+	if out.contact != nil {
+		c := out.contact
+		if c.ReleasedNodes > 0 {
+			warnings = append(warnings, fmt.Sprintf("appui posé : le premier calcul (appui supposé retenir dans les deux sens) tirait sur la pièce à hauteur de %.0f %% de la réaction, ce qui est irréaliste pour une pièce simplement posée ; contact unilatéral appliqué (%d point(s) d'appui relâchés en %d reprise(s)) : %.0f %% de la surface d'appui porte réellement, réaction en traction restante %.0f %%", c.TensionBeforePct, c.ReleasedNodes, c.Passes, c.ContactAreaPct, c.TensionAfterPct))
+		}
+		if c.TippingSuspected {
+			warnings = append(warnings, "appui posé : moins du quart de la surface d'appui reste en contact, la pièce a tendance à basculer ou à se décoller : la fixer (vis, colle) ou élargir/reculer la base")
+		}
+		if c.TensionAfterPct > 5 {
+			warnings = append(warnings, fmt.Sprintf("appui posé : %.0f %% de la réaction tirerait encore sur la pièce après les reprises de contact : appui trop favorable, vérifier la fixation ou le type d'appui", c.TensionAfterPct))
+		}
 	}
+	rests := out.bc.rests
+	_ = rests
+	_ = leaky
 
 	nn := len(sol.Nodes)
 	// zone de singularité : nœuds voisins des appuis et des charges (concentrations artificielles)
@@ -845,31 +968,40 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 	}
 	res.ReactionN = math.Sqrt(rx*rx + ry*ry + rz*rz)
 	res.AppliedN = totalApplied
-	// appuis posés : décollement
-	for _, r := range rests {
-		neg, pos := 0.0, 0.0
-		for _, n := range r.nodes {
-			c := sol.Compact(n)
-			if c < 0 {
-				continue
-			}
-			// réaction sur la pièce ; pousser = dans le sens -normale sortante
-			v := -sol.Reaction[c*3+r.axis] * math.Copysign(1, r.z.Normal[r.axis])
-			if v >= 0 {
-				pos += v
-			} else {
-				neg += -v
-			}
-		}
-		if pos+neg > 0 && neg/(pos+neg) > 0.05 {
-			warnings = append(warnings, fmt.Sprintf("appui posé zone %d : %.0f %% de la réaction tirerait sur la pièce (elle se décollerait de son support) : appui retenu trop favorable, vérifier la fixation ou le type d'appui", r.z.ID, 100*neg/(pos+neg)))
-		}
+	// écart d'équilibre : les réactions doivent exactement s'opposer aux charges (R + F = 0)
+	var fx, fy, fz float64
+	for _, l := range loads {
+		fx, fy, fz = fx+l.F[0], fy+l.F[1], fz+l.F[2]
+	}
+	res.EquilibriumGapN = math.Sqrt((rx+fx)*(rx+fx) + (ry+fy)*(ry+fy) + (rz+fz)*(rz+fz))
+	if totalApplied > 0 {
+		res.EquilibriumGapPct = 100 * res.EquilibriumGapN / totalApplied
+	}
+	res.Contact = out.contact
+	// fiabilité : convergé, ou résidu faible ET équilibre quasi parfait
+	notConv := !sol.Converged && !(sol.Residual < 1e-4 && res.EquilibriumGapPct < 2)
+	stop := "converged"
+	switch {
+	case sol.Converged:
+	case sol.TimedOut:
+		stop = "time_limit"
+	case sol.Stagnated:
+		stop = "stagnation"
+	default:
+		stop = "max_iterations"
+	}
+	if !sol.Converged {
+		warnings = append(warnings, fmt.Sprintf("le solveur n'a pas atteint la précision visée (résidu %.1e après %d itérations, arrêt : %s) ; équilibre des réactions : %.1f N de réaction pour %.1f N appliqués, écart %.0f %%", sol.Residual, sol.Iterations, stopText(stop), res.ReactionN, totalApplied, res.EquilibriumGapPct))
+	} else if res.EquilibriumGapPct > 5 {
+		warnings = append(warnings, fmt.Sprintf("équilibre des réactions imparfait (écart %.0f %%) : résultat à prendre avec prudence", res.EquilibriumGapPct))
 	}
 
 	// verdict
 	res.Mesh = MeshInfo{VoxelMM: grid.H, Elements: sol.Elements, Nodes: nn, GridCells: grid.NX * grid.NY * grid.NZ, Capped: pl.Capped, CapReason: pl.CapReason,
 		SourceTris: len(src.T), VolumeMM3: vol, AreaMM2: area, BBoxMM: [3]float64{bb.Size.X, bb.Size.Y, bb.Size.Z}, LeakyColumn: leaky}
-	res.Solver = Solver{Iterations: sol.Iterations, Residual: sol.Residual, Converged: sol.Converged, Seconds: solveSec}
+	res.Solver = Solver{Iterations: sol.Iterations, Residual: sol.Residual, Converged: sol.Converged, Seconds: solveSec, StopReason: stop,
+		TimedOut: sol.TimedOut, Precond: sol.Precond, BudgetSec: budget, Retried: retried, Passes: out.passes}
+	res.NotConverged = notConv
 	res.Inputs = inputs
 	for _, m := range inputs {
 		if m.Source != SourceUser {
@@ -880,6 +1012,10 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 	res.Warnings = warnings
 	where := res.CriticalNote
 	switch {
+	case notConv:
+		res.Verdict = "non_converge"
+		res.VerdictTxt = fmt.Sprintf("NON CONVERGÉ : le calcul n'a pas abouti (arrêt : %s, résidu %.1e après %d itérations) ; les réactions aux appuis (%.1f N) ne reprennent pas la charge appliquée (%.1f N), écart d'équilibre %.0f %% (%.1f N). CE RÉSULTAT N'EST PAS FIABLE : aucun verdict « tient » ou « casse » ne peut en être tiré (valeur purement indicative : marge ×%.2f, contrainte %.1f MPa, déplacement %.2f mm)",
+			stopText(stop), sol.Residual, sol.Iterations, res.ReactionN, totalApplied, res.EquilibriumGapPct, res.EquilibriumGapN, sf, maxVM, maxU)
 	case sf >= in.SafetyFactor:
 		res.Verdict = "ok"
 		res.VerdictTxt = fmt.Sprintf("tient avec une marge de ×%.1f (visé ×%.1f) ; point le plus sollicité %s (%s), déplacement max %.2f mm", sf, in.SafetyFactor, where, fmtMPa(res.CriticalStressMPa), maxU)
@@ -893,7 +1029,14 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 	if res.BasedOnAssumed {
 		res.VerdictTxt += " — RÉSULTAT BASÉ SUR DES HYPOTHÈSES : " + strings.Join(shortAssumptions(assumptions), " ; ")
 	}
-	res.Recommendations = recommend(res, in, mat, eff, vol, area, permanent, bb)
+	if notConv {
+		res.Recommendations = []string{
+			"Ne pas utiliser ce résultat. Relancer avec resolution=standard (cubes plus gros), ou un temps plus long (max_seconds), ou en simplifiant les appuis (un appui fixed sur une grande face plane converge bien mieux qu'un appui posé étroit).",
+			"Vérifier que les appuis empêchent tout mouvement de la pièce et que la charge est appliquée sur la matière (zone ou point valides).",
+		}
+	} else {
+		res.Recommendations = recommend(res, in, mat, eff, vol, area, permanent, bb)
+	}
 	res.Measured = []string{
 		fmt.Sprintf("géométrie du maillage : %.1f × %.1f × %.1f mm, volume %.0f mm³, aire %.0f mm²", bb.Size.X, bb.Size.Y, bb.Size.Z, vol, area),
 	}
@@ -904,7 +1047,7 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 	}
 	res.Calculated = []string{
 		fmt.Sprintf("champ de contraintes et de déplacements par éléments finis hexaédriques (%d cubes de %.2f mm, %d itérations, résidu %.0e)", sol.Elements, grid.H, sol.Iterations, sol.Residual),
-		fmt.Sprintf("équilibre : somme des réactions %.1f N pour %.1f N appliqués", res.ReactionN, totalApplied),
+		fmt.Sprintf("équilibre : somme des réactions %.1f N pour %.1f N appliqués (écart %.1f N, %.1f %%)", res.ReactionN, totalApplied, res.EquilibriumGapN, res.EquilibriumGapPct),
 	}
 	res.Estimated = []string{
 		"propriétés de la matière (table « estimation », ±20 % ou plus)",
@@ -926,6 +1069,18 @@ func Run(ctx context.Context, src *mesh.Mesh, in AssessInput, progress func(p fl
 	an := &Analysis{Result: res, Grid: grid, Sol: sol, Zones: zs, VM: vm, Util: util, Loads: rl, Supp: supp, Mesh: src}
 	an.Scale = math.Max(maxVM, 1e-9)
 	return an, nil
+}
+
+func stopText(r string) string {
+	switch r {
+	case "time_limit":
+		return "temps imparti épuisé"
+	case "stagnation":
+		return "le résidu n'avance plus"
+	case "max_iterations":
+		return "nombre maximal d'itérations atteint"
+	}
+	return "convergé"
 }
 
 func noteSuffix(n string) string {
