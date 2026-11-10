@@ -83,6 +83,9 @@ type Deps struct {
 	CommandWait time.Duration
 	// CameraPort : port de la caméra sondé par diagnose_connection (0 = 6000).
 	CameraPort int
+	// SlenderRatio : seuil d'élancement (hauteur / section) de validate_print_artifact pour les troncs de supports et
+	// les piliers de la pièce ; 0 = variable BAMBU_SLENDER_RATIO puis DefaultSlenderRatio (10). Voir gcode_checks.go.
+	SlenderRatio float64
 	// AgentHub : côté serveur du protocole /agent/v2 (transport « via agent »). nil : seules les imprimantes en
 	// transport direct (défaut) sont utilisables ; rien ne change pour elles.
 	AgentHub *agentv2.Hub

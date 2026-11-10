@@ -83,6 +83,7 @@ function Summary({ c }: { c: ConfirmationView }) {
       {(b.alerts ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> Alerte matière : {a}</p>)}
       {(b.adhesion_warnings ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> <strong>Risque de décollement.</strong> {a}</p>)}
       {(b.overhang_warnings ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> <strong>Surplombs sans supports.</strong> {a}</p>)}
+      {(b.slender_warnings ?? []).map((a) => <p key={a} className="small msg-err" role="alert"><AlertTriangle size={14} aria-hidden /> <strong>Troncs ou piliers trop élancés.</strong> {a}</p>)}
     </>
   );
 }

@@ -82,6 +82,11 @@ func TestConfirmationTextModes(t *testing.T) {
 	if !strings.Contains(ok, "s'affiche dans la conversation") || strings.Contains(ok, "Ce client n'a pas annoncé") {
 		t.Errorf("texte avec vues : %s", ok)
 	}
+	// FB4 : l'élancement est dit à l'utilisateur AVANT le lancement et doit être acquitté
+	v.Binding.Slender = []string{"Élancement : 2 tronc(s) de support plus haut(s) que 10 × leur section"}
+	if tx := confirmationText(v, "", true); !strings.Contains(tx, "Élancement : 2 tronc(s)") || !strings.Contains(tx, "l'acquitter") {
+		t.Errorf("avertissement d'élancement absent du texte : %s", tx)
+	}
 	v.Binding.BedLeveling = false
 	if !strings.Contains(confirmationText(v, "", true), "mise à niveau du plateau : NON") {
 		t.Error("la désactivation de la mise à niveau doit être dite")

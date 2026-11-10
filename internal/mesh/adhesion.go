@@ -56,6 +56,11 @@ type AdhesionReport struct {
 	VolumeCM3         float64   `json:"volume_cm3,omitempty"`
 	Reasons           []string  `json:"reasons,omitempty"`
 	Recommendation    string    `json:"recommendation,omitempty"`
+	// Source : d'où vient la surface de contact. « mesh » = estimation sur le maillage seul (avant découpe) ;
+	// « gcode » = couche 1 RÉELLE du G-code (filets de la pièce, bordure et bases de supports comprises).
+	Source string `json:"source,omitempty" jsonschema:"mesh = estimation d'après le maillage seul | gcode = couche 1 réelle du G-code (bordure et bases comprises)"`
+	// BrimInGcode : la couche 1 du G-code contient des filets de bordure (brim) : déjà comptée dans la surface.
+	BrimInGcode bool `json:"brim_in_gcode,omitempty"`
 }
 
 // Risky dit si un avertissement doit être émis.
@@ -70,11 +75,20 @@ func (r *AdhesionReport) Summary() string {
 	if r.Level == AdhesionHigh {
 		lv = "ÉLEVÉ"
 	}
-	return fmt.Sprintf("Risque de décollement %s : pièce de %.0f mm de haut posée sur %.0f mm² de contact (%d îlot(s)). %s",
-		lv, r.HeightMM, r.ContactAreaMM2, r.Islands, r.Recommendation)
+	src := ""
+	if r.Source == "gcode" {
+		src = " d'après la couche 1 réelle du G-code"
+		if r.BrimInGcode {
+			src += ", bordure comprise"
+		}
+	}
+	return fmt.Sprintf("Risque de décollement %s : pièce de %.0f mm de haut posée sur %.0f mm² de contact (%d îlot(s))%s. %s",
+		lv, r.HeightMM, r.ContactAreaMM2, r.Islands, src, r.Recommendation)
 }
 
 const adhesionAdvice = "Ajouter une bordure : brim_type outer_only, brim_width 5 à 8 mm (surcharges de découpe) — ou un radeau (raft_layers ≥ 1) —, et chauffer/fermer la chambre pour les matières qui voilent (PETG, ABS, ASA)."
+
+const adhesionAdviceBrim = "La bordure est déjà dans le G-code (comptée dans la surface de contact ci-dessus) : ne pas en ajouter une autre. Si le risque reste jugé trop fort, l'élargir (brim_width), ajouter un radeau (raft_layers ≥ 1), et chauffer/fermer la chambre pour les matières qui voilent (PETG, ABS, ASA)."
 
 // Adhesion estime le risque de décollement de la pièce posée telle quelle (Z vers le haut, plan Z = min sur le plateau).
 func Adhesion(m *Mesh) *AdhesionReport {
@@ -165,6 +179,47 @@ func Adhesion(m *Mesh) *AdhesionReport {
 	if r.FootprintAreaMM2 > 0 {
 		r.ContactRatio = round3(math.Min(1, r.ContactAreaMM2/r.FootprintAreaMM2))
 	}
+	r.Source = "mesh"
+	r.assess()
+	return r
+}
+
+// AdhesionFromContact évalue le risque de décollement d'après la couche 1 RÉELLE du G-code : areasMM2 = aire de chaque
+// îlot de contact (filets de la pièce, bordure et bases de supports comprises), heightMM = hauteur de la pièce,
+// footprintMM2 = aire du rectangle englobant au sol (0 si inconnue), brim = la couche 1 contient une bordure.
+// Mêmes seuils que Adhesion ; la recommandation ne propose plus d'ajouter une bordure déjà présente.
+func AdhesionFromContact(heightMM, footprintMM2 float64, areasMM2 []float64, brim bool) *AdhesionReport {
+	r := &AdhesionReport{HeightMM: heightMM, FootprintAreaMM2: footprintMM2, Source: "gcode", BrimInGcode: brim}
+	for _, a := range areasMM2 {
+		r.ContactAreaMM2 += a
+		r.IslandAreasMM2 = append(r.IslandAreasMM2, round1(a))
+		if a < smallIslandMM2 {
+			r.SmallIslands++
+		}
+		if r.SmallestIslandMM2 == 0 || round1(a) < r.SmallestIslandMM2 {
+			r.SmallestIslandMM2 = round1(a)
+		}
+		if a < tinyIslandMM2 {
+			r.TinyIslands++
+		}
+	}
+	sort.Sort(sort.Reverse(sort.Float64Slice(r.IslandAreasMM2)))
+	r.Islands = len(r.IslandAreasMM2)
+	if len(r.IslandAreasMM2) > 10 {
+		r.IslandAreasMM2 = r.IslandAreasMM2[:10]
+	}
+	r.ContactAreaMM2 = round1(r.ContactAreaMM2)
+	if r.FootprintAreaMM2 > 0 {
+		r.ContactRatio = round3(math.Min(1, r.ContactAreaMM2/r.FootprintAreaMM2))
+	} else {
+		r.ContactRatio = 1 // emprise inconnue : pas de critère « contact épars »
+	}
+	r.assess()
+	return r
+}
+
+// assess calcule élancement, niveau de risque et raisons à partir des îlots déjà comptés.
+func (r *AdhesionReport) assess() {
 	if r.ContactAreaMM2 > 0 {
 		r.Slenderness = round1(math.Min(999, r.HeightMM/math.Sqrt(r.ContactAreaMM2)))
 	} else {
@@ -203,8 +258,10 @@ func Adhesion(m *Mesh) *AdhesionReport {
 	r.Level = lv
 	if lv != AdhesionOK {
 		r.Recommendation = adhesionAdvice
+		if r.BrimInGcode {
+			r.Recommendation = adhesionAdviceBrim
+		}
 	}
-	return r
 }
 
 func round1(v float64) float64 { return math.Round(v*10) / 10 }

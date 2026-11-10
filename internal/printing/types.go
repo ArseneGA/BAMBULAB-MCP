@@ -259,6 +259,8 @@ type ValidationReport struct {
 	SupportType   string `json:"support_type,omitempty"`
 	// Overhang : surplombs de la pièce au seuil d'angle du profil, croisés avec le réglage de supports.
 	Overhang *mesh.OverhangSupportCheck `json:"overhang,omitempty"`
+	// Slender : colonnes élancées du G-code réel (troncs de supports, piliers), au-dessus du seuil d'élancement.
+	Slender *SlenderReport `json:"slender,omitempty"`
 }
 
 // brimPresent dit si la bordure du procédé est une vraie bordure extérieure/intérieure d'au moins 3 mm.
@@ -287,7 +289,8 @@ func brimLabel(brimType, width string) string {
 // adhesionNotes : avertissements à montrer à l'humain avant le lancement (jamais bloquants).
 func (j Job) adhesionNotes() []string {
 	a := j.Adhesion
-	if a == nil && j.Validation != nil {
+	// Après validation, le risque mesuré sur la couche 1 RÉELLE du G-code prime sur l'estimation du maillage (FB5).
+	if j.Validation != nil && j.Validation.Adhesion != nil && (a == nil || j.Validation.Adhesion.Source == "gcode") {
 		a = j.Validation.Adhesion
 	}
 	if !a.Risky() {
@@ -327,6 +330,16 @@ func (v *ValidationReport) OverhangWarning() string {
 		return ""
 	}
 	return v.Overhang.UnsupportedSummary(v.EnableSupport != nil && *v.EnableSupport)
+}
+
+// slenderNotes : avertissement « tronc ou pilier trop élancé » du G-code réel, à montrer à l'humain avant le lancement
+// et à acquitter (il le lit sur la carte ou la page de confirmation avant d'approuver). Non bloquant.
+func (j Job) slenderNotes() []string {
+	v := j.Validation
+	if v == nil || !v.Slender.Flagged() {
+		return nil
+	}
+	return []string{v.Slender.Summary() + " Non bloquant : à toi de décider de lancer ou de redécouper."}
 }
 
 // overhangNotes : avertissement FORT « surplombs sans supports », à montrer à l'humain avant le lancement.

@@ -16,11 +16,12 @@ import (
 
 // ValidateInput est l'entrée de validate_print_artifact.
 type ValidateInput struct {
-	ArtifactID  string               `json:"artifact_id,omitempty" jsonschema:"empreinte sha256 d'un .gcode.3mf du stockage (ex. artefact d'une variante) ; ou print_job_id"`
-	PrintJobID  string               `json:"print_job_id,omitempty"`
-	PrinterID   string               `json:"printer_id" jsonschema:"imprimante réelle visée"`
-	Plate       int                  `json:"plate,omitempty" jsonschema:"plaque à imprimer (défaut : celle de l'impression, sinon 1)"`
-	Assignments []FilamentAssignment `json:"assignments,omitempty" jsonschema:"matières chargées : filament du fichier -> emplacement -> matière"`
+	ArtifactID   string               `json:"artifact_id,omitempty" jsonschema:"empreinte sha256 d'un .gcode.3mf du stockage (ex. artefact d'une variante) ; ou print_job_id"`
+	PrintJobID   string               `json:"print_job_id,omitempty"`
+	PrinterID    string               `json:"printer_id" jsonschema:"imprimante réelle visée"`
+	Plate        int                  `json:"plate,omitempty" jsonschema:"plaque à imprimer (défaut : celle de l'impression, sinon 1)"`
+	Assignments  []FilamentAssignment `json:"assignments,omitempty" jsonschema:"matières chargées : filament du fichier -> emplacement -> matière"`
+	SlenderRatio float64              `json:"slender_ratio,omitempty" jsonschema:"seuil d'élancement (hauteur / section) au-delà duquel un tronc de support ou un pilier de la pièce est signalé ; défaut 10 (réglage du service ou BAMBU_SLENDER_RATIO), minimum 2"`
 }
 
 // ValidateOutput : rapport et impression.
@@ -278,10 +279,31 @@ func (s *Service) ValidateArtifact(ctx context.Context, in ValidateInput) (*Vali
 	if adh == nil && pm != nil {
 		adh = mesh.Adhesion(pm)
 	}
+	// FB5 : quand le G-code est lisible, le risque se mesure sur la couche 1 RÉELLE (îlots et surface posés sur le
+	// plateau, bordure et bases de supports comprises), pas sur le maillage seul ; l'estimation du maillage ne sert
+	// que de repli (archive illisible).
+	if adh != nil {
+		height, foot := adh.HeightMM, adh.FootprintAreaMM2
+		if pm != nil {
+			bb := pm.Bounds()
+			height, foot = bb.Size.Z, bb.Size.X*bb.Size.Y
+		}
+		if real := realAdhesion(path, plate, height, foot); real != nil {
+			adh = real
+		}
+	}
 	if adh != nil {
 		rep.Adhesion = adh
 		if adh.Risky() && !adhesionCovered(rep.BrimType, rep.BrimWidth, rep.RaftLayers) {
 			rep.Warnings = append(rep.Warnings, "adhesion_risk : "+adh.Summary()+" Profil actuel : "+brimLabel(rep.BrimType, rep.BrimWidth)+raftLabel(rep.RaftLayers)+".")
+		}
+	}
+	// FB4 : élancement des troncs de supports et des piliers (G-code réel) : avertissement à acquitter avant la
+	// confirmation, jamais bloquant. Silencieux si le G-code n'est pas lisible.
+	if sl, serr := analyzeSlenderness(path, plate, s.slenderRatio(in.SlenderRatio)); serr == nil {
+		rep.Slender = sl
+		if sl.Flagged() {
+			rep.Warnings = append(rep.Warnings, "slenderness : "+sl.Summary())
 		}
 	}
 	// Surplombs sans supports : avertissement FORT, jamais bloquant mais affiché à l'humain avant le lancement.

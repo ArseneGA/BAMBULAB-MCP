@@ -144,6 +144,8 @@ func init() {
 	enumP("support_style", "style de supports", "default", "grid", "snug", "tree_slim", "tree_strong", "tree_hybrid", "tree_organic")
 	enumP("support_base_pattern", "motif de base des supports", "default", "rectilinear", "rectilinear-grid", "honeycomb", "lightning", "hollow")
 	intP("support_threshold_angle", 0, 90, "angle de surplomb à soutenir (°)")
+	numP("tree_support_branch_diameter", 1, 20, "diamètre des branches des supports en arbre (mm) : des troncs plus gros résistent mieux à l'élancement")
+	intP("tree_support_wall_count", 0, 5, "nombre de parois des branches des supports en arbre (0 = automatique)")
 	boolK("support_on_build_plate_only", TargetProcess, "supports sur le plateau seulement")
 	numP("support_base_pattern_spacing", 0, 50, "espacement du motif de supports (mm)")
 	numP("support_top_z_distance", 0, 2, "distance Z dessus des supports (mm)")
@@ -191,6 +193,7 @@ func init() {
 	}
 	add(KeySpec{Key: "close_fan_the_first_x_layers", Target: TargetFilament, Kind: kInt, Min: 0, Max: 50, Doc: "couches sans ventilateur"})
 	add(KeySpec{Key: "full_fan_speed_layer", Target: TargetFilament, Kind: kInt, Min: 0, Max: 200, Doc: "couche de ventilation maximale"})
+	add(KeySpec{Key: "slow_down_layer_time", Target: TargetFilament, Kind: kInt, Min: 0, Max: 100, Doc: "durée minimale d'une couche avant ralentissement (s) : ralentit les petites couches pour qu'elles refroidissent"})
 	add(KeySpec{Key: "fan_cooling_layer_time", Target: TargetFilament, Kind: kNum, Min: 0, Max: 1000, Doc: "temps de couche déclenchant le ventilateur (s)"})
 	add(KeySpec{Key: "slow_down_min_speed", Target: TargetFilament, Kind: kNum, Min: 0, Max: absSpeedCap, Bound: bndSpeed, Doc: "vitesse minimale de ralentissement (mm/s)"})
 	boolK("slow_down_for_layer_cooling", TargetFilament, "ralentir pour refroidir la couche")
