@@ -29,21 +29,22 @@ type PlanColorsInput struct {
 
 // ColorSlotPlan est la proposition pour un filament du fichier.
 type ColorSlotPlan struct {
-	FilamentSlot int      `json:"filament_slot"`
-	Parts        string   `json:"parts,omitempty"`
-	WantedColor  string   `json:"wanted_color,omitempty"`
-	WantedType   string   `json:"wanted_type,omitempty"`
-	Tray         string   `json:"tray,omitempty" jsonschema:"emplacement proposé ; vide si aucune bobine ne convient"`
-	SpoolID      string   `json:"spool_id,omitempty"`
-	SpoolLabel   string   `json:"spool_label,omitempty"`
-	LoadedColor  string   `json:"loaded_color,omitempty" jsonschema:"couleur de la bobine proposée (lue par l'AMS, sinon inventaire)"`
-	DeltaE       float64  `json:"delta_e" jsonschema:"écart de couleur ΔE (CIE76) entre la couleur voulue et la bobine : < 12 exact, < 30 proche, < 55 approximatif"`
-	Quality      string   `json:"quality" jsonschema:"exact | proche | approximatif | aucune"`
-	Pinned       bool     `json:"pinned,omitempty" jsonschema:"vrai si imposé par l'utilisateur"`
-	NeededG      float64  `json:"needed_g" jsonschema:"masse extrudée pour ce filament (pièce + purge)"`
-	PurgeG       float64  `json:"purge_g" jsonschema:"dont matière jetée (purge de buse + tour)"`
-	PurgeCost    *float64 `json:"purge_cost,omitempty" jsonschema:"coût de la matière jetée pour ce filament"`
-	Note         string   `json:"note,omitempty"`
+	FilamentSlot   int            `json:"filament_slot"`
+	Parts          string         `json:"parts,omitempty"`
+	WantedColor    string         `json:"wanted_color,omitempty"`
+	WantedType     string         `json:"wanted_type,omitempty"`
+	WantedOfficial *OfficialColor `json:"wanted_official,omitempty" jsonschema:"couleur officielle Bambu la plus proche de la couleur voulue (catalogue embarqué) : à charger ou acheter si aucune bobine ne convient"`
+	Tray           string         `json:"tray,omitempty" jsonschema:"emplacement proposé ; vide si aucune bobine ne convient"`
+	SpoolID        string         `json:"spool_id,omitempty"`
+	SpoolLabel     string         `json:"spool_label,omitempty"`
+	LoadedColor    string         `json:"loaded_color,omitempty" jsonschema:"couleur de la bobine proposée (lue par l'AMS, sinon inventaire)"`
+	DeltaE         float64        `json:"delta_e" jsonschema:"écart de couleur ΔE (CIE76) entre la couleur voulue et la bobine : < 12 exact, < 30 proche, < 55 approximatif"`
+	Quality        string         `json:"quality" jsonschema:"exact | proche | approximatif | aucune"`
+	Pinned         bool           `json:"pinned,omitempty" jsonschema:"vrai si imposé par l'utilisateur"`
+	NeededG        float64        `json:"needed_g" jsonschema:"masse extrudée pour ce filament (pièce + purge)"`
+	PurgeG         float64        `json:"purge_g" jsonschema:"dont matière jetée (purge de buse + tour)"`
+	PurgeCost      *float64       `json:"purge_cost,omitempty" jsonschema:"coût de la matière jetée pour ce filament"`
+	Note           string         `json:"note,omitempty"`
 }
 
 // PurgeCost résume le coût de la purge.
@@ -227,6 +228,9 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 		w := wishes[f.Slot]
 		sl := ColorSlotPlan{FilamentSlot: f.Slot, Parts: w.Part, WantedColor: orStr(normHex(w.ColorHex), normHex(f.WantedColor())), WantedType: orStr(w.Material, f.Type),
 			NeededG: round2(f.Grams), PurgeG: round2(purgeOf(f.Slot)), Quality: "aucune", DeltaE: 999}
+		if sl.WantedColor != "" {
+			sl.WantedOfficial = nearestOfficial(sl.WantedColor, sl.WantedType, 30)
+		}
 		if tray, ok := pinned[f.Slot]; ok {
 			sl.Pinned = true
 			if _, ok := chosen[f.Slot]; !ok {
@@ -251,6 +255,9 @@ func (s *Service) PlanColors(ctx context.Context, in PlanColorsInput) (*ColorPla
 		if sl.Tray == "" {
 			plan.Unmatched = append(plan.Unmatched, f.Slot)
 			sl.Note = fmt.Sprintf("Aucune bobine %s %s chargée : charger cette couleur dans un emplacement libre, ou choisir une autre couleur.", sl.WantedType, sl.WantedColor)
+			if o := sl.WantedOfficial; o != nil {
+				sl.Note += fmt.Sprintf(" Couleur officielle Bambu la plus proche : %s %s (%s, ΔE %.0f).", o.Family, o.Name, o.Hex, o.DeltaE)
+			}
 		} else {
 			plan.Assignments = append(plan.Assignments, printing.FilamentAssignment{FilamentSlot: f.Slot, Tray: sl.Tray, MaterialID: orStr(sl.SpoolLabel, orStr(sl.WantedType, "filament")+" "+sl.LoadedColor)})
 			if sl.Quality == "approximatif" {

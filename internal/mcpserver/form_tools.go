@@ -420,20 +420,21 @@ func applyNotifications(ctx context.Context, ns *notify.Service, in ConfigureNot
 
 // SpoolFormInput : champs de la carte bobine (sous-ensemble de filament.UpdateInput, sans emplacement ni imprimante).
 type SpoolFormInput struct {
-	SpoolID     string   `json:"spool_id,omitempty" jsonschema:"bobine à modifier ; vide = créer"`
-	Material    string   `json:"material,omitempty"`
-	Brand       string   `json:"brand,omitempty"`
-	Name        string   `json:"name,omitempty" jsonschema:"nom de la couleur"`
-	ColorHex    string   `json:"color_hex,omitempty" jsonschema:"#RRGGBB"`
-	Translucent *bool    `json:"translucent,omitempty"`
-	DiameterMM  *float64 `json:"diameter_mm,omitempty"`
-	NetWeightG  *float64 `json:"net_weight_g,omitempty"`
-	RemainingG  *float64 `json:"remaining_g,omitempty"`
-	PricePerKg  *float64 `json:"price_per_kg,omitempty"`
+	SpoolID        string   `json:"spool_id,omitempty" jsonschema:"bobine à modifier ; vide = créer"`
+	Material       string   `json:"material,omitempty"`
+	Brand          string   `json:"brand,omitempty"`
+	Name           string   `json:"name,omitempty" jsonschema:"nom de la couleur"`
+	ColorHex       string   `json:"color_hex,omitempty" jsonschema:"#RRGGBB"`
+	CatalogColorID string   `json:"catalog_color_id,omitempty" jsonschema:"couleur du catalogue officiel Bambu (search_filament_catalog)"`
+	Translucent    *bool    `json:"translucent,omitempty"`
+	DiameterMM     *float64 `json:"diameter_mm,omitempty"`
+	NetWeightG     *float64 `json:"net_weight_g,omitempty"`
+	RemainingG     *float64 `json:"remaining_g,omitempty"`
+	PricePerKg     *float64 `json:"price_per_kg,omitempty"`
 }
 
 func (in SpoolFormInput) update() filament.UpdateInput {
-	return filament.UpdateInput{SpoolID: in.SpoolID, Material: in.Material, Brand: in.Brand, Name: in.Name, ColorHex: in.ColorHex, Translucent: in.Translucent,
+	return filament.UpdateInput{SpoolID: in.SpoolID, Material: in.Material, Brand: in.Brand, Name: in.Name, ColorHex: in.ColorHex, CatalogColorID: in.CatalogColorID, Translucent: in.Translucent,
 		DiameterMM: in.DiameterMM, NetWeightG: in.NetWeightG, RemainingG: in.RemainingG, PricePerKg: in.PricePerKg}
 }
 
@@ -447,7 +448,7 @@ var colorPresets = []FormOption{
 
 // spoolEmpty : aucun champ utile (seul spool_id peut être donné).
 func spoolEmpty(in filament.UpdateInput) bool {
-	return in.Material == "" && in.Brand == "" && in.Name == "" && in.ColorHex == "" && in.Translucent == nil && in.DiameterMM == nil && in.NetWeightG == nil &&
+	return in.Material == "" && in.Brand == "" && in.Name == "" && in.ColorHex == "" && in.CatalogColorID == "" && in.Translucent == nil && in.DiameterMM == nil && in.NetWeightG == nil &&
 		in.RemainingG == nil && in.PricePerKg == nil && in.OpenedAt == "" && in.LastDriedAt == "" && in.DryingNote == "" && in.Notes == "" && in.PrinterID == "" &&
 		in.Slot == "" && !in.Unassign && !in.ReplaceExisting && in.Archived == nil
 }
@@ -533,7 +534,7 @@ func applySpool(ctx context.Context, fs *filament.Service, in filament.UpdateInp
 }
 
 func handleSpool(ctx context.Context, fs *filament.Service, in filament.UpdateInput) (*mcp.CallToolResult, SpoolOut, error) {
-	if (in.SpoolID == "" && in.Material == "") || (in.SpoolID != "" && spoolEmpty(in)) {
+	if (in.SpoolID == "" && in.Material == "" && in.CatalogColorID == "") || (in.SpoolID != "" && spoolEmpty(in)) {
 		f, err := spoolForm(ctx, fs, in)
 		if err != nil {
 			return nil, SpoolOut{}, err

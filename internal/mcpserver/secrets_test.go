@@ -12,6 +12,27 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/mcpserver"
 )
 
+// B3 : le catalogue de filaments est une donnée publique embarquée : ses réponses ne portent aucun secret.
+func TestFilamentCatalogToolsCarryNoSecret(t *testing.T) {
+	c := startCore(t)
+	cs := connectClient(t, mcpserver.New(c))
+	for name, args := range map[string]map[string]any{
+		"search_filament_catalog":    {"family": "PETG", "limit": 100},
+		"get_filament_catalog_entry": {"id": "GFG00"},
+	} {
+		raw, _ := json.Marshal(call(t, cs, name, args))
+		low := strings.ToLower(string(raw))
+		for _, bad := range []string{"access_code", "secret", "password", "token", "bearer"} {
+			if strings.Contains(low, bad) {
+				t.Fatalf("%s : %q dans la réponse", name, bad)
+			}
+		}
+		if !strings.Contains(low, "official_profile") {
+			t.Fatalf("%s : niveau de confiance absent", name)
+		}
+	}
+}
+
 func TestGetJobStatusRedactsSecrets(t *testing.T) {
 	ctx := context.Background()
 	c := startCore(t)

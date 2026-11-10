@@ -43,6 +43,7 @@ type Spool struct {
 	Notes           string         `json:"notes,omitempty"`
 	PrinterID       string         `json:"printer_id,omitempty" jsonschema:"imprimante où la bobine est chargée"`
 	Slot            string         `json:"slot,omitempty" jsonschema:"emplacement ams1:1..ams4:4 ou ext, vide si rangée"`
+	CatalogColorID  string         `json:"catalog_color_id,omitempty" jsonschema:"entrée du catalogue officiel Bambu à laquelle la bobine est rattachée (search_filament_catalog), ex. GFA00-10300"`
 	RFIDUUID        string         `json:"rfid_uuid,omitempty" jsonschema:"identifiant RFID lu par l'AMS (bobines Bambu)"`
 	Archived        bool           `json:"archived"`
 	HumanFields     []string       `json:"human_fields,omitempty" jsonschema:"champs saisis par l'utilisateur : la lecture de l'AMS ne les modifie jamais"`
@@ -53,6 +54,8 @@ type Spool struct {
 	// Calculés à la lecture.
 	RemainingPercent int    `json:"remaining_percent" jsonschema:"restant en % du poids net, -1 si le poids net est inconnu"`
 	Status           string `json:"status" jsonschema:"ok | low (moins de 10 % ou 50 g) | empty | archived"`
+	// Official : couleur officielle Bambu rattachée, sinon la plus proche (suggestion) ; absente si rien de proche.
+	Official *OfficialColor `json:"official_color,omitempty"`
 }
 
 func (sp *Spool) isHuman(f string) bool { return slices.Contains(sp.HumanFields, f) }
@@ -64,6 +67,7 @@ func (sp *Spool) markHuman(f string) {
 }
 
 func (sp *Spool) compute() {
+	sp.attachOfficial()
 	sp.RemainingPercent = -1
 	if sp.NetWeightG > 0 {
 		sp.RemainingPercent = int(sp.RemainingG / sp.NetWeightG * 100)
@@ -228,6 +232,7 @@ type UpdateInput struct {
 	Brand           string   `json:"brand,omitempty"`
 	Name            string   `json:"name,omitempty" jsonschema:"nom de la couleur"`
 	ColorHex        string   `json:"color_hex,omitempty" jsonschema:"#RRGGBB"`
+	CatalogColorID  string   `json:"catalog_color_id,omitempty" jsonschema:"rattache la bobine à une couleur du catalogue officiel Bambu (search_filament_catalog) : préremplit marque, nom, couleur et diamètre encore vides ; « - » détache"`
 	Translucent     *bool    `json:"translucent,omitempty" jsonschema:"bobine translucide/transparente. Pour déclarer la bobine externe : slot=ext, material, color_hex, translucent"`
 	DiameterMM      *float64 `json:"diameter_mm,omitempty" jsonschema:"1.75 (défaut) ou 2.85"`
 	NetWeightG      *float64 `json:"net_weight_g,omitempty" jsonschema:"poids net d'une bobine neuve (défaut 1000)"`
@@ -274,8 +279,8 @@ func (s *Service) UpdateSpool(ctx context.Context, in UpdateInput) (*Spool, erro
 		var sp *Spool
 		var rev int64
 		if create {
-			if strings.TrimSpace(in.Material) == "" {
-				return invalidf("material requis pour créer une bobine")
+			if strings.TrimSpace(in.Material) == "" && in.CatalogColorID == "" {
+				return invalidf("material (ou catalog_color_id) requis pour créer une bobine")
 			}
 			now := s.now()
 			sp = &Spool{ID: contracts.NewID("sp"), DiameterMM: 1.75, NetWeightG: 1000, RemainingSource: "default", CreatedAt: now}
@@ -291,7 +296,9 @@ func (s *Service) UpdateSpool(ctx context.Context, in UpdateInput) (*Spool, erro
 		}
 		sp.UpdatedAt = s.now()
 		sp.compute()
-		raw, _ := json.Marshal(sp)
+		stored := *sp
+		stored.Official = nil // calculé à la lecture : jamais stocké
+		raw, _ := json.Marshal(&stored)
 		key := slotKey(sp.PrinterID, sp.Slot)
 		if sp.Archived {
 			key = ""
@@ -348,6 +355,11 @@ func (s *Service) apply(ctx context.Context, tx *sql.Tx, sp *Spool, in UpdateInp
 		}
 		sp.ColorHex = h
 		sp.markHuman("color_hex")
+	}
+	if in.CatalogColorID != "" {
+		if err := sp.applyCatalogColor(in.CatalogColorID); err != nil {
+			return err
+		}
 	}
 	if in.Translucent != nil {
 		sp.Translucent = *in.Translucent

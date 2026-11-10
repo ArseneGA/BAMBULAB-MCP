@@ -2,15 +2,17 @@ import { ApiError, BASE, CSRF_HEADER } from './client';
 
 /** Types et appels de l'API bobines / AMS / multicolore / file d'attente (internal/httpapi/ams.go). */
 
+export interface OfficialColor { id: string; name: string; name_en?: string; hex: string; family: string; finish: string; linked: boolean; delta_e: number; quality: string; confidence: string }
 export interface SpoolObserved { type?: string; color?: string; remain_percent: number; slot?: string; at: string }
 export interface Spool {
   id: string; material: string; brand?: string; name?: string; color_hex?: string; diameter_mm: number; net_weight_g: number; remaining_g: number;
   remaining_source: 'human' | 'ams' | 'consumption' | 'default'; price_per_kg?: number; opened_at?: string; last_dried_at?: string; drying_note?: string; notes?: string;
   printer_id?: string; slot?: string; rfid_uuid?: string; archived: boolean; human_fields?: string[]; observed?: SpoolObserved;
+  catalog_color_id?: string; official_color?: OfficialColor;
   remaining_percent: number; status: 'ok' | 'low' | 'empty' | 'archived';
 }
 export interface SpoolInput {
-  material?: string; brand?: string; name?: string; color_hex?: string; net_weight_g?: number; remaining_g?: number; price_per_kg?: number;
+  material?: string; brand?: string; name?: string; color_hex?: string; catalog_color_id?: string; net_weight_g?: number; remaining_g?: number; price_per_kg?: number;
   opened_at?: string; last_dried_at?: string; drying_note?: string; notes?: string; printer_id?: string; slot?: string; unassign?: boolean; replace_existing?: boolean; archived?: boolean;
 }
 export interface AlertMargin { margin_percent: number; margin_grams: number }
