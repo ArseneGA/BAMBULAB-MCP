@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Camera, Check, OctagonX, Pause, Play, RefreshCw } from 'lucide-react';
 import { BrowserLink, CodeForm, StopConfirm, Warning, outcomeMessage, type AppLike, type CodeApproval } from './launch';
+import { VerdictBanner } from './cards/verdict';
 
 /**
  * Carte de suivi en direct (ui://bambu/print-live.html), liée à get_print_status et wait_for_print_change.
@@ -396,6 +397,7 @@ export function LiveCard({ app, first, pollMs = 5000, frameMs = 2500, frameErrMs
           </dl>
           {L.final?.photoSrc ? <figure className="live-cam"><img src={L.final.photoSrc} alt="Photo de fin d'impression" /><figcaption className="small dim">Photo de fin.</figcaption></figure>
             : L.final?.photoNote ? <p className="small dim">{L.final.photoNote}</p> : null}
+          {(L.state === 'COMPLETED' || L.state === 'FAILED') && L.jobId ? <VerdictBanner app={app} jobId={L.jobId} /> : null}
         </div>
       )}
 

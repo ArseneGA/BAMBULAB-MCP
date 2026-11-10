@@ -5,7 +5,9 @@ import { IssuesCard, normalizeIssues, type IssuesData } from './issues';
 import { LibraryCard, normalizeLibrary, type LibraryData } from './library';
 import { PrintersCard, normalizePrinters, type PrintersData } from './printers';
 import { PrintsCard, normalizePrints, type PrintsData } from './prints';
+import { ProjectCard, normalizeProject, type ProjectData } from './project';
 import { SpoolsCard, normalizeSpools, type SpoolsData } from './spools';
+import { VerdictCard, normalizeVerdict, type VerdictData } from './verdict';
 import type { CompareOutput } from '../../src/api/goalTypes';
 
 /**
@@ -20,10 +22,14 @@ export type CardData =
   | { card: 'spools'; data: SpoolsData }
   | { card: 'prints'; data: PrintsData }
   | { card: 'printers'; data: PrintersData }
-  | { card: 'issues'; data: IssuesData };
+  | { card: 'issues'; data: IssuesData }
+  | { card: 'project'; data: ProjectData }
+  | { card: 'verdict'; data: VerdictData };
 
 export function classifyCard(s: unknown): CardData | undefined {
   let d: unknown;
+  if ((d = normalizeProject(s))) return { card: 'project', data: d as ProjectData }; // avant les coûts : list_projects a aussi une clé `projects`
+  if ((d = normalizeVerdict(s))) return { card: 'verdict', data: d as VerdictData };
   if ((d = normalizeCompare(s))) return { card: 'compare', data: d as CompareOutput };
   if ((d = normalizeLibrary(s))) return { card: 'library', data: d as LibraryData };
   if ((d = normalizeCosts(s))) return { card: 'costs', data: d as CostsData };
@@ -43,6 +49,8 @@ export function CardView({ app, card, onOpen }: { app: CardApp; card: CardData; 
     case 'prints': return <PrintsCard app={app} data={card.data} onOpen={onOpen} />;
     case 'printers': return <PrintersCard app={app} data={card.data} onOpen={onOpen} />;
     case 'issues': return <IssuesCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'project': return <ProjectCard app={app} data={card.data} onOpen={onOpen} />;
+    case 'verdict': return <VerdictCard app={app} data={card.data} onOpen={onOpen} />;
   }
 }
 
