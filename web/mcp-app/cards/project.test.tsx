@@ -50,7 +50,7 @@ describe('carte Projet', () => {
     const app = mockApp({
       submit_project_status: (a) => { calls.push(['submit_project_status', a]); return ok(PROJECT_DETAIL); },
       submit_project_part: (a) => { calls.push(['submit_project_part', a]); return ok(PROJECT_DETAIL); },
-      get_model_details: (a) => { calls.push(['get_model_details', a]); return ok({}); },
+      get_part_sheet: (a) => { calls.push(['get_part_sheet', a]); return ok({}); },
     });
     await m.render(<ProjectCard app={app} data={normalizeProject(PROJECT_DETAIL)!} onOpen={() => {}} />);
     await m.click(/^Conception$/);
@@ -61,7 +61,7 @@ describe('carte Projet', () => {
       ['submit_project_status', { project_id: 'prj_aaaa', status: 'design' }],
       ['submit_project_status', { project_id: 'prj_aaaa', status: 'printing' }],
       ['submit_project_part', { project_id: 'prj_aaaa', model_id: 'mod_1', quantity: 3 }],
-      ['get_model_details', { model_id: 'mod_1' }],
+      ['get_part_sheet', { model_id: 'mod_1' }],
     ]);
   });
 
