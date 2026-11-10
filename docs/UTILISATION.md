@@ -641,7 +641,7 @@ Avec Claude : « crée un projet Étagère », « ajoute 4 clips au projet », �
 
 **Verdict.** Quand une impression est terminée, dites comment elle s'est passée : **réussie**, **ratée** (avec la raison : fils, décollement, spaghetti, décalage de couches…) ou **à refaire**. Claude peut vous lister les impressions à juger (« qu'est-ce que je dois juger ? »), la page Projets les liste aussi, et la carte de suivi affiche trois gros boutons en fin d'impression. Le verdict est votre jugement : il nourrit les taux de réussite mais n'a aucun effet sur l'imprimante ni sur un lancement.
 
-À savoir : la fiche pièce et la fiche impression complètes ne sont pas encore livrées ; le tableau de bord, le fil chronologique et la recherche non plus. Ne mettez aucun secret dans les notes d'un verdict.
+À savoir : la fiche pièce et la fiche d'impression existent (§ 26) ; le fil chronologique et les filtres de recherche ne sont pas encore livrés. Ne mettez aucun secret dans les notes d'un verdict.
 
 Détails : `docs/SUIVI-PROJET.md`.
 
@@ -655,7 +655,7 @@ Pendant une impression, Printalk prend **une photo avec la caméra chaque fois q
 - les photos sont réduites (1280 px de large) pour économiser l'espace ; les paliers intermédiaires sont purgés au bout de 90 jours ou quand le plafond de 2 Go est dépassé ; les photos de fin, celles des impressions jugées réussies et celles déjà utilisées ailleurs ne sont jamais supprimées ;
 - réglages (`progress_photos`, `progress_photo_width`, `progress_photo_quality`, `progress_retention_days`, `progress_cap_mb`) : actif par défaut, indépendant de la détection d'échec.
 
-Vérifié avec la caméra simulée seulement : le comportement sur une vraie caméra Bambu n'est pas éprouvé. L'affichage en galerie sur la fiche d'impression viendra avec la fiche impression (G9). Détails : `docs/SUIVI-PROJET-D8.md`.
+Vérifié avec la caméra simulée seulement : le comportement sur une vraie caméra Bambu n'est pas éprouvé. Les photos s'affichent sur la fiche d'impression et la fiche pièce (§ 26). Détails : `docs/SUIVI-PROJET-D8.md`.
 
 ## 25. Le menu a changé : où est passé quoi (G10)
 
@@ -675,4 +675,38 @@ Le menu n'a plus que **7 entrées** : Accueil, Projets, Bibliothèque, Impressio
 
 Aucune ancienne adresse n'est cassée : elles redirigent vers la nouvelle page. Les pages du serveur (confirmation, arrêt, enrôlement, réglages de sécurité) gardent leurs adresses. Les mots ont aussi changé (« découpe » devient « préparation de l'impression », « G-code » devient « fichier d'impression »…). Aucun bouton du site ne lance une impression : « Vérifier et lancer » mène seulement à la page de confirmation.
 
-Pas encore faits : Accueil refondu, fiche d'impression adressable, recherche globale, fiche modèle à onglets. Guide complet : `docs/UX.md`.
+Depuis, l'Accueil refondu, la fiche d'impression, la recherche et la fiche modèle à onglets sont faits (§§ 26 à 28). Guide complet : `docs/UX.md`.
+
+## 26. La fiche pièce et la fiche d'impression (G9)
+
+**Fiche pièce.** Une pièce est un modèle de votre bibliothèque. Sa fiche dit tout ce que Printalk sait d'elle : « imprimée 5 fois, 4 réussies, 1 ratée », ses versions (avec le dernier test de résistance de chacune, ou « jamais testée »), ses **profils testés** (les réglages réellement utilisés, avec le temps, les grammes et le coût habituels), ses impressions récentes avec leurs photos, le coût cumulé et les projets qui l'utilisent. Une pièce jamais imprimée affiche simplement « jamais imprimée ».
+
+Comment l'ouvrir : demandez à Claude « montre-moi la fiche de la pièce X » ; dans le site, ouvrez le modèle puis l'onglet **Impressions** ; dans la carte Projet, cliquez une pièce.
+
+**Fiche d'impression.** Pour une impression **terminée** : votre verdict (modifiable), les réglages tels qu'ils étaient au moment de l'impression (changer un profil plus tard ne les modifie pas), les bobines et les grammes consommés, la durée prévue et la durée réelle avec l'écart, le coût, les **photos prises tous les 10 %**, les alertes de la caméra et l'accord de lancement donné. Dites à Claude « montre-moi la fiche de l'impression X » ; dans le site : **Impressions**, puis la ligne voulue (adresse `/impressions/` suivie de l'identifiant).
+
+**« Non disponible ».** Quand une information manque, la fiche l'écrit et dit pourquoi, au lieu d'inventer un zéro : « photo non disponible » (caméra éteinte à ce moment-là, palier sauté), « caméra non disponible » (on ne peut pas affirmer qu'il n'y a eu aucune alerte), durée réelle inconnue. Une impression faite hors Printalk (déclarée) n'a ni coût mesuré ni caméra ni accord de lancement. Une impression encore en cours n'a pas de fiche : attendez la fin.
+
+À savoir : ces fiches **lisent** seulement ; elles ne lancent, n'arrêtent ni ne reprennent aucune impression. Les boutons « Réimprimer » et « Comparer avec… » n'existent pas encore. Vérifié avec la caméra simulée seulement ; pas encore sur une vraie caméra Bambu. Détails : `docs/SUIVI-PROJET.md`.
+
+## 27. Le nouvel Accueil et le verdict en un tap (G10)
+
+La page **Accueil** est maintenant un tableau de bord, dans cet ordre : un résumé d'une phrase (« 1 impression en cours, fin vers 18:08 » ou « Tout est calme. »), **À faire**, **En direct**, **Projets en cours**, **Dernières impressions**, **Chiffres du mois**, **Bobines basses** et des raccourcis. Les blocs vides disparaissent. Au tout premier lancement, trois étapes vous guident (ajouter une imprimante, importer un modèle…).
+
+- **À faire** : ce qui attend un geste de votre part (une impression à confirmer, une alerte de la caméra, un verdict à donner, une bobine trop basse pour une impression en file, un projet qui dort). « Vérifier et lancer » est seulement un lien vers la page de confirmation ; rien ne démarre depuis l'Accueil.
+- **Verdict en un tap** : sur une impression terminée, touchez **Réussi**, **Raté** (puis la raison) ou **À refaire**. Une barre « Verdict enregistré » apparaît pendant **8 secondes** avec **Annuler** : l'impression redevient non jugée (la note est conservée). Cela ne change rien à l'imprimante.
+- **En direct** : progression, couche, temps restant, températures. La photo du plateau se prend avec le bouton **Photo** ; le rafraîchissement automatique de la photo (30 s) est **désactivé par défaut** et se règle sur la carte. L'affichage se met en pause quand l'onglet est caché.
+- **Chiffres du mois** : « 7/8 jugées · 2 non jugées » ; les impressions non jugées sont dites, jamais comptées dans le taux. Les chiffres portent sur les 200 dernières fiches du journal.
+- Hors ligne, chaque bloc garde sa dernière valeur avec l'heure de mise à jour.
+
+Guide complet : `docs/UX.md` § 8.
+
+## 28. Rechercher partout, et Réglages › Suivi (G10)
+
+**Recherche.** Appuyez sur **`/`** (hors d'un champ de saisie) ou sur **Ctrl+K** (Cmd+K sur Mac), ou touchez « Rechercher » dans le menu (la loupe sur téléphone). Tapez quelques lettres : les résultats sont rangés par famille (modèles, projets, impressions, imprimantes, matières, pages). Flèches pour choisir, Entrée pour ouvrir, Échap pour fermer. Sans saisie, vous voyez vos derniers éléments ouverts. La recherche est du texte simple : elle ne comprend pas une phrase, et les listes sont limitées à 200 éléments (« résultats limités » est alors affiché).
+
+**Réglages › Suivi.** Deux réglages :
+- **Projet dormant** : nombre de jours sans activité (de 1 à 3650, 14 par défaut) au bout duquel un projet apparaît dans « À faire ». Ce réglage est **mémorisé dans ce navigateur** seulement, pas sur le serveur ;
+- **Photos de paliers** : activer ou non la photo tous les 10 %, durée de conservation (jours) et plafond d'espace (Mo), comme au § 24.
+
+Une valeur hors limites est refusée avec un message ; l'enregistrement est confirmé. Plusieurs de ces écrans n'ont pas encore été vus dans un navigateur réel (voir `docs/ETAT.md` § 9).
