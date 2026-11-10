@@ -341,7 +341,7 @@ func TestValidationStatusAndArchive(t *testing.T) {
 		t.Errorf("liste : %+v", l.Projects)
 	}
 	l, _ = e.svc.List(ctx, ListQuery{IncludeArchived: true})
-	if l.Total != 1 || l.Projects[0].Project.ID != p.ID || len(l.Projects[0].Children) != 1 {
+	if l.Total != 1 || l.Projects[0].Project.ID != p.ID || len(l.Projects) != 2 || l.Projects[1].Depth != 1 || l.Projects[1].Project.ParentID != p.ID {
 		t.Errorf("liste avec archivés : %+v", l)
 	}
 	if _, err := e.svc.Get(ctx, p.ID); err != nil {
@@ -413,9 +413,11 @@ func TestPartsAndListTree(t *testing.T) {
 	}
 	var nested int
 	for _, it := range l.Projects {
-		nested += len(it.Children)
+		if it.Depth == 1 {
+			nested++
+		}
 	}
-	if nested != 1 {
+	if nested != 1 || len(l.Projects) != 3 {
 		t.Errorf("arbre : %d sous-projets imbriqués", nested)
 	}
 	sub, _ := e.svc.List(ctx, ListQuery{ParentID: p1.ID})

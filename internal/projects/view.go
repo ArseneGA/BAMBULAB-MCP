@@ -227,22 +227,25 @@ func r2(v float64) float64 {
 
 // SubProject : un sous-projet avec son avancement propre (ses pièces et celles de ses sous-projets).
 type SubProject struct {
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	Status     string       `json:"status"`
-	Archived   bool         `json:"archived,omitempty"`
-	Own        Progress     `json:"own" jsonschema:"avancement de ses seules pièces"`
-	Progress   Progress     `json:"progress" jsonschema:"avancement de ses pièces et de ses sous-projets"`
-	PartsCount int          `json:"parts_count"`
-	Children   []SubProject `json:"children,omitempty"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Status     string   `json:"status"`
+	Archived   bool     `json:"archived,omitempty"`
+	Own        Progress `json:"own" jsonschema:"avancement de ses seules pièces"`
+	Progress   Progress `json:"progress" jsonschema:"avancement de ses pièces et de ses sous-projets"`
+	PartsCount int      `json:"parts_count"`
+	ParentID   string   `json:"parent_id" jsonschema:"projet parent (le projet de la fiche pour un sous-projet direct)"`
+	Depth      int      `json:"depth" jsonschema:"1 = sous-projet direct, 2 = son propre sous-projet..."`
 }
 
-func subProjectOf(n *treeNode) SubProject {
-	sp := SubProject{ID: n.p.ID, Name: n.p.Name, Status: n.p.Status, Archived: n.p.Archived, Own: n.own, Progress: n.agg, PartsCount: len(n.parts)}
+// flattenSubs range les descendants en liste à plat, dans l'ordre de l'arbre (parent avant ses enfants) : un schéma
+// d'outil ne peut pas être récursif, la carte reconstruit l'arbre avec parent_id.
+func flattenSubs(n *treeNode, depth int, out *[]SubProject) {
 	for _, k := range n.kids {
-		sp.Children = append(sp.Children, subProjectOf(k))
+		*out = append(*out, SubProject{ID: k.p.ID, Name: k.p.Name, Status: k.p.Status, Archived: k.p.Archived, Own: k.own, Progress: k.agg,
+			PartsCount: len(k.parts), ParentID: n.p.ID, Depth: depth})
+		flattenSubs(k, depth+1, out)
 	}
-	return sp
 }
 
 // VariantRef : une déclinaison du projet (PJ13, vague 3) ; la liste est vide tant que PJ13 n'est pas livré.
@@ -293,9 +296,7 @@ func (s *Service) Get(ctx context.Context, id string) (*Detail, error) {
 	if d.Parts == nil {
 		d.Parts = []PartProgress{}
 	}
-	for _, k := range n.kids {
-		d.SubProjects = append(d.SubProjects, subProjectOf(k))
-	}
+	flattenSubs(n, 1, &d.SubProjects)
 	d.Level = 1
 	var anc []ProjectRef
 	for cur, i := n.p.ParentID, 0; cur != "" && i <= maxTraversal; i++ {
@@ -373,16 +374,17 @@ type ListQuery struct {
 	Limit           int    `json:"limit,omitempty" jsonschema:"nombre maximal de projets de premier niveau (défaut 50, max 200)"`
 }
 
-// ListItem : un projet de la liste avec son avancement agrégé et ses sous-projets imbriqués.
+// ListItem : un projet de la liste avec son avancement agrégé. La liste est à plat dans l'ordre de l'arbre (un projet
+// avant ses sous-projets) ; depth 0 = premier niveau, la carte reconstruit l'arbre avec project.parent_id.
 type ListItem struct {
-	Project         Project    `json:"project"`
-	Progress        Progress   `json:"progress"`
-	PartsCount      int        `json:"parts_count"`
-	SuggestedStatus string     `json:"suggested_status,omitempty"`
-	Children        []ListItem `json:"children,omitempty"`
+	Project         Project  `json:"project"`
+	Depth           int      `json:"depth" jsonschema:"0 = premier niveau de la liste, 1 = ses sous-projets..."`
+	Progress        Progress `json:"progress"`
+	PartsCount      int      `json:"parts_count"`
+	SuggestedStatus string   `json:"suggested_status,omitempty"`
 }
 
-// ListOutput : l'arbre des projets.
+// ListOutput : l'arbre des projets, à plat.
 type ListOutput struct {
 	Projects []ListItem        `json:"projects"`
 	Total    int               `json:"total" jsonschema:"nombre de projets de premier niveau correspondant aux filtres"`
@@ -468,7 +470,7 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListOutput, error) {
 	}
 	for _, id := range tops {
 		n := s.build(sn, counts, id, 0, q.IncludeArchived, map[string]bool{})
-		out.Projects = append(out.Projects, s.listItem(n, counts, q.Status != ""))
+		out.Projects = s.listItems(out.Projects, n, counts, 0, q.Status != "")
 	}
 	switch {
 	case out.Total == 0:
@@ -481,16 +483,16 @@ func (s *Service) List(ctx context.Context, q ListQuery) (*ListOutput, error) {
 	return out, nil
 }
 
-func (s *Service) listItem(n *treeNode, counts map[string]*insights.PrintCounts, flat bool) ListItem {
+func (s *Service) listItems(out []ListItem, n *treeNode, counts map[string]*insights.PrintCounts, depth int, flat bool) []ListItem {
 	_, attempts, inProgress := totalsOf(n.models, counts)
 	sug, _ := SuggestStatus(n.p.Status, n.p.Archived, n.agg, attempts, inProgress)
-	it := ListItem{Project: n.p, Progress: n.agg, PartsCount: len(n.parts), SuggestedStatus: sug}
+	out = append(out, ListItem{Project: n.p, Depth: depth, Progress: n.agg, PartsCount: len(n.parts), SuggestedStatus: sug})
 	if !flat {
 		for _, k := range n.kids {
-			it.Children = append(it.Children, s.listItem(k, counts, false))
+			out = s.listItems(out, k, counts, depth+1, false)
 		}
 	}
-	return it
+	return out
 }
 
 var _ = sql.ErrNoRows

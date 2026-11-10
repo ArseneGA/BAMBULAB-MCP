@@ -37,6 +37,24 @@ func TestNoMCPToolCanApproveAConfirmation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Outils G9 (suivi de projet, verdict) : exercés ci-dessous avec les autres ; aucun nom ne parle d'approbation, de
+	// lancement, d'arrêt, de reprise ou d'annulation, et aucun ne peut donc produire l'accord de lancement.
+	g9 := map[string]bool{"create_project": false, "update_project": false, "add_project_part": false, "remove_project_part": false, "get_project": false,
+		"list_projects": false, "set_print_verdict": false, "submit_print_verdict": false, "get_pending_verdicts": false, "submit_project_status": false, "submit_project_part": false}
+	for _, tl := range tools.Tools {
+		if _, ok := g9[tl.Name]; ok {
+			g9[tl.Name] = true
+			if n := strings.ToLower(tl.Name); strings.Contains(n, "approve") || strings.Contains(n, "start") || strings.Contains(n, "launch") ||
+				strings.Contains(n, "stop") || strings.Contains(n, "resume") || strings.Contains(n, "cancel") {
+				t.Fatalf("nom d'outil G9 interdit : %s", tl.Name)
+			}
+		}
+	}
+	for n, seen := range g9 {
+		if !seen {
+			t.Fatalf("outil G9 %s absent de tools/list", n)
+		}
+	}
 	forbidden := []string{"plate_clear", "approved", "approve", "nonce", "token", "confirm_token", "human"}
 	called := 0
 	for _, tl := range tools.Tools {
