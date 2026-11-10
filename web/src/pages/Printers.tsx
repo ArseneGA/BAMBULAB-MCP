@@ -7,6 +7,7 @@ import type { PrinterStatus, PrinterView } from '../api/printTypes';
 import { Async, Notice, fmtDate } from './common';
 import { AddPrinter } from './Print';
 import { CameraPanel } from './CameraPanel';
+import { AccessoriesPanel } from './AccessoriesPanel';
 import './screens.css';
 
 /** Vrai tant que l'imprimante est en train d'imprimer (ou en pause) : la barre d'avancement s'affiche alors. */
@@ -52,6 +53,7 @@ function PrinterPanel({ p }: { p: PrinterView }) {
       {!p.access_code_set && p.setup_url && <Notice title="Code d'accès non saisi" actions={<a className="btn btn-secondary btn-sm" href={assetUrl(p.setup_url)} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Ouvrir la page de saisie</a>}>La page locale du serveur affiche l'empreinte du certificat présenté par l'imprimante et recueille le code d'accès ; il n'est jamais renvoyé ni affiché dans cette interface. Tant que rien n'est épinglé, aucune connexion n'est tentée (navigateur enregistré requis).</Notice>}
       {isPrinting(d) && d && <div className="prn-live"><ProgressBar large label={`Impression en cours sur ${p.name}`} source={{ state: 'running', percent: d.progress_percent, remaining_minutes: d.remaining_minutes, phase_label: d.total_layers > 0 ? `${d.current_file ? d.current_file + ' · ' : ''}couche ${d.layer} sur ${d.total_layers}` : d.current_file }} /></div>}
       {p.access_code_set && <CameraPanel printerId={p.id} />}
+      {p.access_code_set && <AccessoriesPanel printerId={p.id} status={d} onChanged={st.reload} />}
       <div className="prn-status" role="status">
         {st.error && !d ? <span className="hint">Statut indisponible : {st.error.message}</span> : !d ? <span className="hint">Lecture de l'état…</span> : (
           <>

@@ -141,6 +141,7 @@ type Sim struct {
 	lastBeat  time.Time
 	starts    []StartRecord
 	cmds      []string // commandes d'impression reçues (scenarios.go)
+	gcodes    []string // paramètres des gcode_line reçus (accessories.go)
 	reportSeq int
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
@@ -436,6 +437,10 @@ func (s *Sim) handleRequest(payload []byte) {
 			}}})
 		return
 	}
+	if sys, ok := top["system"]; ok {
+		s.onSystem(sys)
+		return
+	}
 	p, ok := top["print"]
 	if !ok {
 		return
@@ -443,6 +448,9 @@ func (s *Sim) handleRequest(payload []byte) {
 	cmd := fmt.Sprint(p["command"])
 	seq := fmt.Sprint(p["sequence_id"])
 	s.noteCommand(cmd)
+	if s.onAccessoryPrint(cmd, seq, p) {
+		return
+	}
 	switch cmd {
 	case "ams_change_filament", "ams_control":
 		s.onFilamentCommand(cmd, seq)

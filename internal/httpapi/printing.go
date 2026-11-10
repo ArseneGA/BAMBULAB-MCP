@@ -19,6 +19,7 @@ import (
 //
 //	GET  /api/printer-models                    GET  /api/printers            POST /api/printers
 //	GET  /api/printers/{id}                     GET  /api/printers/{id}/status
+//	POST /api/printers/{id}/accessories/light|fan|speed   (N4 : lumières, ventilateurs, vitesse en cours ; jamais de lancement ni d'arrêt)
 //	GET  /api/print-jobs?state=&limit=          POST /api/print-jobs          (execute_headless_slice)
 //	GET  /api/print-jobs/{id}                   (get_print_status)
 //	POST /api/print-jobs/validate               POST /api/print-jobs/upload
@@ -56,6 +57,40 @@ func registerPrinting(mux *http.ServeMux, c *core.Core, human *humanauth.Service
 	})
 	mux.HandleFunc("GET /api/printers/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		v, err := p.GetPrinterStatus(r.Context(), r.PathValue("id"))
+		printingReply(c, w, v, err, http.StatusOK)
+	})
+	// Accessoires (N4) : lumières, ventilateurs, vitesse de l'impression en cours. Aucune de ces routes ne lance, n'arrête
+	// ni ne reprend une impression ; chacune ne publie qu'une commande de la liste blanche (internal/printer/accessories.go).
+	mux.HandleFunc("POST /api/printers/{id}/accessories/light", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Light string `json:"light"`
+			On    bool   `json:"on"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		v, err := p.SetPrinterLight(r.Context(), r.PathValue("id"), in.Light, in.On, "web")
+		printingReply(c, w, v, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/printers/{id}/accessories/fan", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Fan     string `json:"fan"`
+			Percent int    `json:"percent"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		v, err := p.SetPrinterFan(r.Context(), r.PathValue("id"), in.Fan, in.Percent, "web")
+		printingReply(c, w, v, err, http.StatusOK)
+	})
+	mux.HandleFunc("POST /api/printers/{id}/accessories/speed", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Level string `json:"level"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		v, err := p.SetPrintSpeedLevel(r.Context(), r.PathValue("id"), in.Level, "web")
 		printingReply(c, w, v, err, http.StatusOK)
 	})
 	mux.HandleFunc("GET /api/print-jobs", func(w http.ResponseWriter, r *http.Request) {

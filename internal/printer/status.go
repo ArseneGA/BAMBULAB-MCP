@@ -80,6 +80,7 @@ func (m *reportMerger) toStatus() Status {
 		TaskID:         str(d["task_id"]),
 		FullReportSeen: m.full,
 		AMS:            parseAMS(d),
+		Accessories:    parseAccessories(d),
 	}
 	s.Temps = Temps{
 		Nozzle:       num(d["nozzle_temper"]),

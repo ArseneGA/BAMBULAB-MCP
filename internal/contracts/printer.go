@@ -25,8 +25,24 @@ type PrinterModel struct {
 	AMSSupported         *bool    `json:"ams_supported,omitempty"`
 	AMSUnitsMax          *int     `json:"ams_units_max,omitempty"`
 	Camera               *bool    `json:"camera,omitempty"`
+	// Accessories : accessoires pilotables (lumières, ventilateurs) du modèle ; absent si le modèle est inconnu de la
+	// table des accessoires. Calculé à la lecture (jamais stocké), voir internal/printer/accessories.go.
+	Accessories *AccessoryCaps `json:"accessories,omitempty"`
 	// Source dit d'où viennent les valeurs renseignées.
 	Source string `json:"source,omitempty"`
+}
+
+// AccessoryCaps dit quels accessoires un modèle possède réellement (N4). Un accessoire absent est refusé par
+// set_printer_light / set_printer_fan avec « non disponible sur ce modèle ». La vitesse d'impression existe sur tous les
+// modèles (pendant une impression seulement).
+type AccessoryCaps struct {
+	ChamberLight bool   `json:"chamber_light" jsonschema:"lumière de chambre (ledctrl chamber_light)"`
+	WorkLight    bool   `json:"work_light" jsonschema:"lumière de la tête / de travail (ledctrl work_light)"`
+	PartFan      bool   `json:"part_fan" jsonschema:"ventilateur de refroidissement de la pièce (M106 P1)"`
+	AuxFan       bool   `json:"aux_fan" jsonschema:"ventilateur auxiliaire (M106 P2)"`
+	ChamberFan   bool   `json:"chamber_fan" jsonschema:"ventilateur de chambre (M106 P3)"`
+	SpeedLevels  bool   `json:"speed_levels" jsonschema:"niveaux de vitesse (silent, normal, sport, ludicrous), pendant une impression seulement"`
+	Note         string `json:"note,omitempty"`
 }
 
 // Printer est une imprimante concrète du parc. Aucun secret (code d'accès LAN)
