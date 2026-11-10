@@ -126,7 +126,7 @@ describe('Accueil : « À faire » (CA-T1, CA-T2)', () => {
     expect(link.getAttribute('href')).toBe('/confirm/conf1');
     expect(link.tagName).toBe('A');
     expect(todo.textContent).toContain('requise par Support');
-    expect(todo.textContent).toContain('Verdict à donner');
+    expect(todo.textContent).toContain('Terminée, pas encore jugée');
     // le projet apparaît aussi en « Projets en cours », avec son avancement et la prochaine action
     expect(text()).toContain('4/6 pièces imprimées');
     expect(text()).toContain('Prochaine action : Imprimer 2 × support');

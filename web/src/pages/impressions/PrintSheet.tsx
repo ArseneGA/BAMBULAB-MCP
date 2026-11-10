@@ -51,7 +51,7 @@ function SettingsList({ s }: { s: PrintSheet['profile']['settings'] }) {
   const shown = rows.filter(([, v]) => v);
   return (
     <>
-      <dl className="dl">{shown.map(([k, v]) => <div key={k} className="ps-row"><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+      <dl className="ps-dl">{shown.map(([k, v]) => <div key={k} className="ps-row"><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
       {(s.overrides?.length ?? 0) > 0 && <details><summary>Réglages modifiés ({s.overrides!.length})</summary><ul className="audit">{s.overrides!.map((o, i) => <li key={i}><span className="mono">{o.key}</span><span>{String(o.value)}</span></li>)}</ul></details>}
     </>
   );
@@ -92,7 +92,7 @@ function SheetBody({ sheet, reload }: { sheet: PrintSheet; reload: () => void })
           ) : <p className="sub">Aucune bobine rattachée à cette impression.</p>}
         </Panel>
         <Panel title="Temps et coût" actions={lvl(sheet.duration.level)}>
-          <dl className="dl">
+          <dl className="ps-dl">
             <div className="ps-row"><dt>Temps prévu</dt><dd>{hms(sheet.duration.planned_seconds) ?? na(sheet, 'planned_seconds')}</dd></div>
             <div className="ps-row"><dt>Temps réel</dt><dd>{hms(sheet.duration.actual_seconds) ?? na(sheet, 'actual_seconds')}</dd></div>
             <div className="ps-row"><dt>Coût prévu</dt><dd>{money(sheet.cost.planned, sheet.cost.currency) ?? 'non disponible'}</dd></div>

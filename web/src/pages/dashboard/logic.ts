@@ -78,13 +78,13 @@ export interface TodoInput {
 export function buildTodo(i: TodoInput): TodoItem[] {
   const out: TodoItem[] = [];
   for (const j of i.jobs.filter((x) => ['UPLOADED', 'AWAITING_PRINT_CONFIRMATION'].includes(x.state))) {
-    out.push({ kind: 'confirm', key: `c-${j.id}`, title: j.name ?? j.id, detail: dot('À confirmer', ageText(j.updated_at, i.now)),
+    out.push({ kind: 'confirm', key: `c-${j.id}`, title: j.name ?? j.id, detail: dot('Prête à vérifier', ageText(j.updated_at, i.now)),
       href: j.confirmation_id ? `/confirm/${encodeURIComponent(j.confirmation_id)}` : `/impressions/${encodeURIComponent(j.id)}`, server: !!j.confirmation_id, at: j.updated_at });
   }
   for (const a of i.alerts) out.push({ kind: 'alert', key: `a-${a.job.id}`, title: a.job.name ?? a.job.id, detail: a.summary, href: `/impressions/${encodeURIComponent(a.job.id)}`, at: a.at });
-  for (const p of i.pending) out.push({ kind: 'verdict', key: `v-${p.print_job_id}`, title: p.model_name || p.name || p.print_job_id, detail: dot('Verdict à donner', ageText(p.finished_at, i.now)), verdict: p, at: p.finished_at });
-  for (const s of i.spoolsNeeded) out.push({ kind: 'spool', key: `s-${s.spool.id}`, title: s.spool.name || s.spool.material, detail: `Bobine basse (~${Math.round(s.spool.remaining_g)} g) · requise par ${s.name}`, href: '/matieres' });
-  for (const d of i.dormant) out.push({ kind: 'dormant', key: `d-${d.project.id}`, title: d.project.name, detail: dot('Projet dormant', ageText(d.project.updated_at, i.now).replace('il y a ', 'sans activité depuis ')), href: '/projets' });
+  for (const p of i.pending) out.push({ kind: 'verdict', key: `v-${p.print_job_id}`, title: p.model_name || p.name || p.print_job_id, detail: dot('Terminée, pas encore jugée', ageText(p.finished_at, i.now)), verdict: p, at: p.finished_at });
+  for (const s of i.spoolsNeeded) out.push({ kind: 'spool', key: `s-${s.spool.id}`, title: s.spool.name || s.spool.material, detail: `il reste ~${Math.round(s.spool.remaining_g)} g · requise par ${s.name}`, href: '/matieres' });
+  for (const d of i.dormant) out.push({ kind: 'dormant', key: `d-${d.project.id}`, title: d.project.name, detail: ageText(d.project.updated_at, i.now).replace('il y a ', 'sans activité depuis '), href: '/projets' });
   return out;
 }
 
