@@ -13,6 +13,7 @@ import "github.com/modelcontextprotocol/go-sdk/mcp"
 //	ui://bambu/spools.html    list_spools, get_ams_state
 //	ui://bambu/prints.html    list_print_history, list_print_queue, get_print_log, list_print_log   (clic : get_print_status)
 //	ui://bambu/printers.html  list_printers                                                (clic : get_printer_status)
+//	ui://bambu/issues.html    list_issues                                                  (lecture seule, déclarée dans issue_tools.go)
 const (
 	LibraryViewURI  = "ui://bambu/library.html"
 	CompareViewURI  = "ui://bambu/compare.html"

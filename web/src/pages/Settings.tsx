@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Monitor, Palette, Shapes, Trash2, Layers, KeyRound } from 'lucide-react';
+import { ArrowUpRight, Bug, Monitor, Palette, Shapes, Trash2, Layers, KeyRound } from 'lucide-react';
 import { Segmented, StatusDot } from '../components';
 import type { Status } from '../components';
 import { useTheme } from '@shared/theme';
@@ -13,6 +13,7 @@ const LINKS = [
   { to: '/corbeille', icon: Trash2, title: 'Corbeille et doublons', text: 'Modèles supprimés récupérables, doublons exacts du catalogue.' },
   { to: '/materiaux', icon: Layers, title: 'Matériaux et machines', text: 'Modèles d\'imprimantes Bambu connus et fiches de matières.' },
   { to: '/gabarits', icon: Shapes, title: 'Gabarits et calibration', text: 'Pièces paramétriques, variantes, jeux de calibration.' },
+  { to: '/dysfonctionnements', icon: Bug, title: 'Dysfonctionnements', text: 'Carnet de bord tenu par Claude : ce qui a mal fonctionné, à corriger.' },
   { to: '/design', icon: Palette, title: 'Système de design', text: 'Jetons, composants et états de l\'interface, clair et sombre.' },
 ] as const;
 

@@ -1,0 +1,15 @@
+.iss-filters { margin-bottom: var(--sp-3); }
+.iss-counts { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-3); }
+.iss-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+.iss-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-3); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-2); background: var(--surface); }
+.iss-main { min-width: 0; display: grid; gap: var(--sp-1); align-content: start; }
+.iss-title { overflow-wrap: anywhere; }
+.iss-meta { overflow-wrap: anywhere; }
+.iss-text { margin: 0; font-size: var(--fs-sm); overflow-wrap: anywhere; white-space: pre-wrap; }
+.iss-side { display: grid; gap: var(--sp-2); justify-items: end; align-content: start; }
+.iss-acts, .iss-ask { display: flex; gap: var(--sp-2); flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .iss-row { grid-template-columns: minmax(0, 1fr); }
+  .iss-side { justify-items: start; }
+  .iss-acts, .iss-ask { justify-content: flex-start; }
+}

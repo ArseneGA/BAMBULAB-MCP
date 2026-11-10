@@ -156,6 +156,23 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 | B11 ✅ retenue | **Publication MakerWorld assistée** : fiche, photos de la galerie (N22), profils testés, sans publication automatique : tout ce qui peut être fait et simplifié passe par le MCP, l'humain ne fait que le geste final minimal | Partager ses créations proprement |
 | B12 ✅ retenue | **Calibrations natives Bambu** déclenchées et relues (débit dynamique, vibrations) avec historique par buse et par matière | Lien avec S10 |
 
+## ★ FB0. Carnet de bord des dysfonctionnements — fait (2026-11-10)
+
+Claude consigne spontanément ce qu'il constate d'anormal (`report_issue`), le serveur range, dédoublonne et masque les secrets, l'humain trie sur la page Réglages > Dysfonctionnements et copie l'export Markdown à l'agent qui code. Aucune API d'IA.
+
+| Élément | Où |
+|---|---|
+| Migration additive 0290 (table `issues`) | `internal/store/migrations/0290_issues.sql` |
+| Service (dédoublonnage par outil + titre normalisé, états new → seen → fixed avec commit / dismissed, régressions, export Markdown) | `internal/issues` |
+| Filtre de secrets pour texte libre (`RedactText`, pendant de `RedactJSON`) | `internal/contracts/secrets_text.go` |
+| Outils MCP `report_issue`, `list_issues`, `update_issue`, `export_issues` + carte lecture seule `ui://bambu/issues.html` | `internal/mcpserver/issue_tools.go`, `web/mcp-app/cards/issues.tsx` |
+| Instruction serveur « signale spontanément » | `issues.InstructionText`, `internal/mcpserver/server.go` |
+| API HTTP `/api/issues` | `internal/httpapi/issues.go` |
+| Page web `/dysfonctionnements` (lien dans Réglages) | `web/src/pages/Issues.tsx` |
+| Mode d'emploi | `docs/UTILISATION.md` § 18 |
+
+Reste : lien dans Accueil > À faire (cette zone n'existe pas encore) ; vérification visuelle de la page dans un navigateur ; essai avec un vrai Claude Desktop pour voir si l'agent appelle bien `report_issue` de lui-même.
+
 ## Règle d'architecture (2026-11-09)
 **Aucune API d'IA dans Printalk.** Tout ce que fait le serveur est du calcul déterministe (géométrie, découpe Bambu Studio, éléments finis, statistiques). L'intelligence conversationnelle vient uniquement du Claude (ou autre client MCP) de l'utilisateur, avec son propre abonnement. Les résumés produits par le serveur sont des textes construits à partir de chiffres, que Claude présente.
 

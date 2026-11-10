@@ -30,6 +30,14 @@ Les huit besoins que `web/src/api/pending.ts` déclarait ont été traités ; l'
 
 **Parcours vérifié dans le navigateur** (`web/scripts/e2e.mjs`, Edge via Playwright, vrai `bambud` sur un dossier de données temporaire, vrai Bambu Studio, `printer-sim` en loopback) : import (inventaire puis import), étiquettes avec aperçu, corbeille et restauration, objectif, sous-parties et réglage manuel (un réglage invalide est refusé par le serveur), comparaison de 3 découpes réelles, application d'une variante, matériaux, agent Windows (état vide réel), unité confirmée et fabricabilité, téléchargement d'un original (sha256 vérifié) et export zip, liste des expériences, navigateur enregistré par `bambud enroll`, ajout du simulateur et saisie du code d'accès sur la page locale, découpe, validation, dépôt, page `/confirm` (aucun bouton de lancement avant l'accord), lancement, suivi jusqu'à la fin, retour d'expérience retrouvé dans la mémoire. **23 étapes, `E2E OK`.** Captures : `docs/J3/captures/` (matrice 800 / 1440 px × clair / sombre pour les écrans principaux, et `parcours-*.png`). **Limites** : simulateur seulement, aucune imprimante réelle ; l'arrêt via `/stop` n'est pas rejoué par l'e2e (couvert côté serveur) ; les captures de la vue MCP App n'ont pas été régénérées (aucune modification de cette vue) ; pas d'accès depuis un autre appareil.
 
+## 0 bis. Carnet de bord des dysfonctionnements (FB0, 2026-11-10)
+
+| | |
+|---|---|
+| Implémenté | Migration 0290 (`issues`), service `internal/issues`, outils `report_issue` / `list_issues` / `update_issue` / `export_issues`, carte lecture seule, API `/api/issues`, page Réglages > Dysfonctionnements, instruction serveur, filtre de secrets `contracts.RedactText` |
+| Testé | `internal/issues` (stockage, dédoublonnage, régression, filtres, export), `TestRedactText`, `TestIssueToolsFlow` (MCP de bout en bout), `TestIssuesEndpoints` (HTTP), `TestGuardCoversCatalogRoutes`, tests Vitest de l'API web et de la carte |
+| Restant | pas de zone « À faire » dans Accueil ; page non vérifiée visuellement dans un navigateur ; comportement réel de Claude (appel spontané de `report_issue`) non éprouvé |
+
 ## 1. Vérifications de ce jalon (résultats)
 
 | Vérification | Résultat |

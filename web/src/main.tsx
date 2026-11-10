@@ -22,6 +22,7 @@ import { GabaritsPage } from './pages/Gabarits';
 import './pages/screens.css'; // en dernier : ses règles d'écran priment sur celles des composants
 const PreparePage = lazy(() => import('./pages/Prepare').then((m) => ({ default: m.PreparePage })));
 const ComparePage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ComparePage })));
+const IssuesPage = lazy(() => import('./pages/Issues').then((m) => ({ default: m.IssuesPage })));
 const InsightsPage = lazy(() => import('./pages/Insights').then((m) => ({ default: m.InsightsPage })));
 
 /** Évite la page blanche si un écran ou un chunk différé échoue au chargement. */
@@ -55,6 +56,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="couts" element={<InsightsPage />} />
               <Route path="tableau-de-bord" element={<Navigate to="/couts" replace />} />
               <Route path="reglages" element={<SettingsPage />} />
+              <Route path="dysfonctionnements" element={<IssuesPage />} />
               <Route path="bobines" element={<FilamentPage />} />
               <Route path="file" element={<FilamentPage initial="file" />} />
               <Route path="gabarits" element={<GabaritsPage />} />

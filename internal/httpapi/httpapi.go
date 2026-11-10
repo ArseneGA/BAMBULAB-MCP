@@ -110,6 +110,7 @@ func buildHandlers(c *core.Core, opts Options, withPublic bool) (mainH, publicH 
 	registerGoals(mux, c)
 	registerLibrary(mux, c)
 	registerMaterials(mux, c)
+	registerIssues(mux, c)          // carnet de bord des dysfonctionnements (issues.go)
 	registerInsights(mux, c)        // coût, journal, tableau de bord, post-traitement (insights.go)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
 	registerGcode(mux, c)           // trajectoires 3D du G-code pour la visionneuse couche par couche (gcode.go)

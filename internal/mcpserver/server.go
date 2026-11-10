@@ -14,6 +14,7 @@ import (
 
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/contracts"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/core"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/issues"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/printing"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/strength"
@@ -45,7 +46,8 @@ func New(c *core.Core) *mcp.Server {
 				"Pour montrer une pièce importée ou envoyée : get_model_details (viewer 3D) ; ne fabrique pas tes propres rendus. " +
 				"Pour envoyer un fichier créé dans ton espace de code : create_upload_link (une commande curl à exécuter) de préférence, sinon upload_file par morceaux de 75000 octets ; l'utilisateur peut aussi le déposer lui-même avec show_file_drop. " +
 				"Pour toute question d'avancement (où en est l'impression, combien de temps, progression), appeler get_print_status ou get_printer_status : la carte de suivi s'affiche. " +
-				strength.InstructionText,
+				strength.InstructionText + " " +
+				issues.InstructionText,
 		})
 	if mw := mcpLogMiddleware(c.Log); mw != nil {
 		s.AddReceivingMiddleware(mw) // journal INFO des requêtes MCP (mcplog.go) ; BAMBU_LOG_MCP=off pour le couper
@@ -120,7 +122,8 @@ func New(c *core.Core) *mcp.Server {
 	if c.Filament != nil {
 		registerAMSTools(s, c.Filament) // bobines, AMS, multicolore, file d'attente (ams_tools.go)
 	}
-	AddFormTools(s, c) // cartes-formulaires : vue ui://bambu/form.html et outils de soumission réservés à l'application (form_tools.go)
+	AddFormTools(s, c)  // cartes-formulaires : vue ui://bambu/form.html et outils de soumission réservés à l'application (form_tools.go)
+	AddIssueTools(s, c) // carnet de bord des dysfonctionnements : report_issue, list_issues, update_issue, export_issues (issue_tools.go)
 	if c.Export != nil {
 		AddExportTools(s, c) // export de projet : archive zip partageable (export_tools.go)
 	}

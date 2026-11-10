@@ -11,6 +11,7 @@ func TestGuardCoversCatalogRoutes(t *testing.T) {
 		{"POST", "/api/import"}, {"POST", "/api/scan"}, {"POST", "/api/operations/apply"}, {"GET", "/api/trash"},
 		{"GET", "/api/materials"}, {"GET", "/api/materials/PLA"}, {"POST", "/api/models/x/analyze"}, {"GET", "/api/models/x/parts"},
 		{"GET", "/api/files/x/download"}, {"POST", "/api/export"}, {"GET", "/api/experiments"}, {"GET", "/api/print-memory"}, {"GET", "/api/profiles/filaments"},
+		{"GET", "/api/issues"}, {"POST", "/api/issues"}, {"GET", "/api/issues/export"},
 	}
 	for _, r := range routes {
 		if got := do(h, r[0], r[1], "evil.example.com", map[string]string{"Authorization": "Bearer " + tok}); got != 403 {
