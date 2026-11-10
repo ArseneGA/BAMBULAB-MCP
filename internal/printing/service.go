@@ -104,6 +104,10 @@ type Service struct {
 	mu       sync.Mutex
 	adapters map[string]*adapterEntry
 	tracking map[string]context.CancelFunc
+
+	// ownResume : impression -> instant de SA commande de reprise (une reprise vue ensuite n'est pas « hors Printalk », FB14).
+	ownResume map[string]time.Time
+
 	approv   map[string]*approval // par identifiant de confirmation
 	pages    map[string]pageNonce
 	stopping map[string]bool     // impressions dont l'arrêt humain est en cours (le suivi ne les passe pas en FAILED avant le CANCELLED)

@@ -302,6 +302,7 @@ func (s *Service) doResume(ctx context.Context, req actionReq, who string) (*Act
 	s.journal(ctx, j.ID, "resume_sent", "commande de reprise envoyée (une seule, jamais renvoyée automatiquement)")
 	rctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	s.noteOwnResume(j.ID) // FB14 : la reprise qui suit est la nôtre, pas un geste « hors Printalk »
 	serr := ad.Resume(rctx)
 	switch {
 	case serr == nil:

@@ -37,7 +37,7 @@ func TestStageTableAndFallback(t *testing.T) {
 			t.Fatalf("étape %d : %q, attendu %q", id, got, want)
 		}
 	}
-	if got := printer.StageName(99); got != "étape 99 (inconnue)" {
+	if got := printer.StageName(99); got != "étape 99 (non documentée par Bambu)" {
 		t.Fatalf("étape inconnue : %q", got)
 	}
 }

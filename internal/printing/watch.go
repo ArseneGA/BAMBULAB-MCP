@@ -296,6 +296,7 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 	m := matches(st, j.Remote.Name)
 	active := st.State == printer.StatePreparing || st.State == printer.StatePrinting || st.State == printer.StatePaused
 	terminal := st.State == printer.StateFinished || st.State == printer.StateFailed
+	oldProg := j.Print // état enregistré AVANT ce relevé (FB14 : détecter les changements d'état hors Printalk)
 	pg.PrinterState, pg.Percent, pg.Layer, pg.TotalLayers, pg.RemainingMin = string(st.State), st.Progress, st.Layer, st.TotalLayers, st.RemainingMin
 	pg.ObservedAt, pg.MatchesFile, pg.PrinterReason = now, m, st.FailReason
 	stageNew := pg.noteErrors(decodeErrors(st), now) // FB3 : actifs (error_details) séparés de l'historique horodaté (error_log)
@@ -315,6 +316,13 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 	s.mu.Lock()
 	stopping := s.stopping[id]
 	s.mu.Unlock()
+	if m {
+		before := pg.TaskID
+		s.detectExternal(ctx, id, oldProg, &pg, st, now, stopping)
+		if pg.TaskID != before {
+			stageNew = true // force l'enregistrement du nouveau task_id
+		}
+	}
 
 	// 2. FINISH / FAILED d'un fichier vu avant toute activité : non attribuable (état d'une impression antérieure).
 	if m && !pg.SeenActive && terminal {
@@ -338,6 +346,7 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 			if pg.WasGone {
 				why = "l'imprimante a redémarré (liaison coupée puis rétablie) et est au repos (IDLE) : l'impression est perdue"
 			}
+			s.journalExternalClose(ctx, id, &pg, st, map[bool]string{true: "restart", false: "stop"}[pg.WasGone])
 			s.closeFromPrinter(ctx, id, contracts.EvFail, &pg, why)
 			return
 		}
@@ -366,6 +375,7 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 				cur = "(aucun fichier)"
 			}
 			why := fmt.Sprintf("l'imprimante ne désigne plus ce fichier (état %s, fichier courant : %s) : l'impression n'est plus la sienne", st.State, cur)
+			s.journalExternalClose(ctx, id, &pg, st, "relaunch")
 			s.closeFromPrinter(ctx, id, contracts.EvFail, &pg, why)
 			return
 		}
@@ -386,6 +396,7 @@ func (s *Service) observe(ctx context.Context, id string, st printer.Status) {
 			return // arrêt humain en cours : l'arrêt enregistre CANCELLED (sinon le relevé suivant verra FAILED)
 		}
 		why := fmt.Sprintf("l'imprimante rapporte un échec (%s, print_error=%d)", st.FailReason, st.PrintError)
+		s.journalExternalClose(ctx, id, &pg, st, "stop")
 		s.closeFromPrinter(ctx, id, contracts.EvFail, &pg, why)
 	case printer.StatePaused:
 		pg.Blocked, pg.InconsistAt = "", time.Time{}
@@ -427,7 +438,7 @@ func (s *Service) checkStall(ctx context.Context, j Job, pg *PrintProgress, st p
 	// l'imprimante rapporte « running » sans que couche, % ni temps restant bougent, et les consignes de chauffe se
 	// succèdent : ce n'est pas un blocage (FB2, fausse alerte pendant la mise à niveau du 9/11). Les horloges repartent à
 	// zéro tant que l'étape dure ; au-delà de PrepStallAfter l'étape est réellement anormale et la règle habituelle reprend.
-	if st.StageSeen && printer.IsPreparationStage(st.Stage) {
+	if st.StageSeen && (printer.IsPreparationStage(st.Stage) || (!printer.StageDocumented(st.Stage) && st.Layer == 0)) { // étape non documentée avant la 1re couche : traitée comme une préparation (FB7)
 		since := now
 		if n := len(pg.Stages); n > 0 && pg.Stages[n-1].ID == st.Stage && !pg.Stages[n-1].FirstSeen.IsZero() {
 			since = pg.Stages[n-1].FirstSeen
