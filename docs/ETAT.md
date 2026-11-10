@@ -166,3 +166,18 @@ Limites assumées : processus local avec les droits de l'utilisateur hors périm
 5. **Qualification Linux/Windows des sorties de slicing** sur corpus commun.
 6. **Modification en direct du projet ouvert dans Studio** : exige une passerelle C++ (hors périmètre) ; l'alternative « copie + ouverture » est livrée.
 7. Similarité géométrique ; supports et coutures peints ; format `.tar.zst` ; chiffrement de l'archive de sauvegarde ; rotation du jeton d'API ; TLS natif ; mises à jour automatiques (aujourd'hui : relancer `install.sh`).
+
+
+## 9. Avancement du 2026-11-10 (bloc ajouté ; le reste de ce fichier n'a pas été remis à jour)
+
+Ce bloc ne décrit que ce qui a été fusionné dans `main` ce jour. **Tout a été vérifié contre le simulateur, les tests automatiques et la construction seulement ; aucune imprimante réelle n'a été contactée.**
+
+| Chantier | Livré | Preuve | Restant / non vérifié |
+|---|---|---|---|
+| D8 : photo à chaque 10 % | une photo de caméra par palier (10 à 90 %), palier 100 % = photo de fin ; migration 0310 ; réglages `progress_*` ; rétention 90 jours et plafond 2 Go (`docs/SUIVI-PROJET-D8.md`) | tests avec la caméra simulée | **non vérifié sur une vraie caméra Bambu** (latence, caméra occupée) ; `PhotoReferenced` pas encore branché (galerie, projets) ; pas d'affichage sur une fiche d'impression (PJ10) |
+| N4 : accessoires de l'imprimante | outils `set_printer_light`, `set_printer_fan`, `set_print_speed_level` ; liste blanche stricte des commandes ; panneau « Accessoires » ; audit (`docs/ACCESSOIRES.md`) | tests contre le simulateur (aucune commande de lancement, d'arrêt, de pause ni de reprise) | **non vérifié sur la vraie P1S** : formats `ledctrl`, `M106 P1/P2/P3`, `print_speed`, table des modèles (d'après la documentation communautaire) |
+| B3 : catalogue des filaments Bambu | 48 gammes, 342 couleurs embarquées, outils `search_filament_catalog` et `get_filament_catalog_entry`, `catalog_color_id` sur les bobines, onglet « Filaments Bambu » (`docs/CATALOGUE-FILAMENTS.md`, `docs/CATALOGUES-BAMBU.md`) | tests du paquet, données lues dans Bambu Studio 02.09.00.74 | wiki et boutique non lus (HTTP 402/403) ; poids de bobine, prix, compatibilité AMS « non disponible » ; pas d'essai d'usage réel |
+| G9 PJ2 et PJ11 | projets, sous-projets, avancement ; verdict en un geste ; migration 0300 ; 7 outils MCP, cartes `project` et `verdict`, page Projets (`docs/SUIVI-PROJET.md`) | tests Go, garde-fous (aucun outil ne lance, n'arrête ni ne reprend) | PJ5 et PJ10 (fiches pièce et impression) pas faits ; PJ1, PJ3, PJ4, PJ6 à PJ9, PJ12, PJ13 pas faits ; rendu des cartes dans Claude Desktop non qualifié |
+| G10 vague U1 | 7 entrées de menu (`web/src/nav.ts`), anciennes URL redirigées, barre basse mobile, table de libellés unique, début des états vides et erreurs (`docs/UX.md`) | tests vitest et Go de la navigation | U2 à U4 : Accueil refondu, `/impressions/:id`, recherche, fiche modèle à 4 onglets, pages serveur alignées, accessibilité et captures clair/sombre ; pas de recette visuelle dans un navigateur |
+
+Suite et priorités : `docs/BACKLOG.md`, section « Reste à faire (état au 2026-11-10) » ; mode d'emploi : `docs/UTILISATION.md` §§ 21 à 25. La liste « Ce qui reste » du § 8 ci-dessus reste valable, en premier lieu l'essai matériel sur la vraie P1S.

@@ -397,7 +397,7 @@ La bibliothèque propose des **pièces prêtes à paramétrer** : chacune a un s
 
 Chaque appel renvoie `auto` (paramètres calculés : valeur nominale, valeur utilisée, niveau de confiance, origine), `calcs` (calculs détaillés), `calibration` (appliquée ou non) et `warnings`. Les gabarits sont **versionnés** : la version du gabarit et les paramètres exacts sont conservés avec chaque version de modèle. Interface web : écran **Gabarits** (formulaire généré depuis le schéma, vignettes, résultat détaillé, enregistrement en variante).
 
-## 13. Calibration d'une machine (pièces de test et mesures)
+## 12 bis. Calibration d'une machine (pièces de test et mesures)
 
 Les valeurs génériques (jeu glissant 0,25 mm, trou −0,15 mm...) sont des ordres de grandeur. Pour un couple **imprimante + buse + matériau (+ bobine)** précis, on imprime des pièces de calibration et on **mesure** :
 
@@ -496,7 +496,7 @@ La structure (`files/`, `images/`, `README.md`) correspond à ce que demandent l
 - Les réglages **par pièce** d'un plan multi-pièces (`plan_plate`) sont limités à : densité, motif de remplissage, parois, hauteur de couche, couches du dessus/dessous, bordure (type, largeur) et supports ; mêmes bornes (hauteur de couche ≤ buse, vérifiée au tranchage).
 - Ce que ça change pour vous : Claude ne peut plus, même involontairement, changer ce que l'imprimante exécute au démarrage ou à la fin, ni demander une température que le matériau ou la machine ne supporte pas. Le résumé de confirmation (`/confirm`) affiche les températures réellement lues dans le G-code (voir `docs/SECURITY.md` § 11).
 
-## 14. Retours des premiers essais sur la P1S (ce qui a changé)
+## 14 bis. Retours des premiers essais sur la P1S (ce qui a changé)
 
 - **Pièces larges.** La P1S exclut un coin (0-18 × 0-28 mm) : la zone sûre est **238 × 228 mm**. Claude refuse tout de suite une pièce trop grande (« pièce hors zone imprimable : dimensions…, zone utile… »), tourne seul de 90° une pièce qui n'y tient que dans l'autre sens, et signale une pièce à la limite. Le message d'erreur anglais de Bambu Studio (-50) n'apparaît plus tel quel.
 - **Opérations longues.** Découper, envoyer un gros fichier ou importer peut durer des minutes : Claude reçoit un `job_id` au bout de ~20 s et suit avec `get_job_status` (pourcentage, phase, octets envoyés, temps restant, position dans la file). Un appel qui rend un `job_id` n'a pas échoué. Pour la découpe, le pourcentage est une estimation par le temps.
@@ -594,3 +594,85 @@ Printalk tient un carnet de tout ce qui a mal fonctionné, et c'est **Claude qui
 - **Garde-fous inchangés.** C'est un avertissement à lire et acquitter, jamais un blocage seul. Le restant déclaré est une information de l'utilisateur, pas une preuve : il est enregistré sur l'impression (événement `filament_declared`) mais ne fait pas partie de la liaison approuvée et ne débloque rien. Une nouvelle demande de confirmation émet une nouvelle confirmation, non approuvée. Le lancement reste un geste humain (case « plateau vide » + code, ou passkey).
 - Pas de migration : tout est rangé dans l'impression existante.
 - **Limites.** Le restant se déclare par Claude (conversation), pas par un champ sur la carte ou `/confirm` ; l'acquittement n'est pas imposé par le serveur (comme les avertissements d'élancement et de surplombs).
+
+## 21. Allumer la lumière, régler les ventilateurs et la vitesse (accessoires, N4)
+
+Claude peut piloter les « petits réglages » de l'imprimante, sans jamais lancer, arrêter, mettre en pause ni reprendre une impression :
+- **la lumière** : « allume la lumière de la chambre », « éteins-la » ;
+- **les ventilateurs** : « mets le ventilateur auxiliaire à 50 % » (pièce, auxiliaire, chambre ; de 0 à 100 %) ;
+- **la vitesse d'une impression en cours** : silencieux, normal, sport ou ludicrous.
+
+Dans l'interface web, la carte de chaque imprimante (page **Imprimantes**) a un panneau « Accessoires » avec les mêmes gestes. Il n'apparaît que si l'imprimante est joignable.
+
+À savoir :
+- Un accessoire que votre modèle n'a pas est refusé avec un message clair (par exemple pas de lumière de chambre sur une P1P).
+- La vitesse ne se change que pendant une impression ; les ventilateurs ne se règlent pas pendant la préparation (mise à niveau, calibration).
+- Pendant une impression, le fichier d'impression peut reprendre la main sur un ventilateur à la couche suivante : c'est normal.
+- Chaque commande envoyée est inscrite au journal d'audit ; ces gestes ne demandent pas d'accord humain car ils sont sans risque et réversibles.
+- **Non vérifié sur la vraie imprimante** : tout a été essayé contre le simulateur seulement. Si une commande ne fait rien sur votre machine, dites-le à Claude : il le consigne (§ 18).
+
+Détails et liste de ce qui reste à prouver : `docs/ACCESSOIRES.md`.
+
+## 22. Le catalogue des filaments Bambu (B3)
+
+Printalk embarque la liste officielle des filaments Bambu : **48 gammes** (PLA Basic, PETG HF, ABS, TPU, PA-CF…) et **342 couleurs**, avec leurs finitions, les températures conseillées, le ventilateur, la densité et le besoin d'une buse en acier trempé. Aucune connexion internet n'est nécessaire.
+
+Ce que vous pouvez demander à Claude :
+- « Quelle couleur Bambu est la plus proche de ce bleu (#1E5AA8) ? » ;
+- « Quelles finitions existent en PETG ? » ;
+- « Ce filament passe-t-il sur ma buse de 0,4 mm en laiton ? » ;
+- « À quelle température imprimer ce PLA Silk ? ».
+
+Dans l'interface web :
+- page **Matières** > **Bobines et AMS** : en créant une bobine, choisissez la couleur et la finition officielles, ce qui préremplit marque, nom, couleur et diamètre ;
+- page **Matières** > **Fiches matières**, onglet « Filaments Bambu » : une fiche par gamme.
+
+Une bobine peut être rattachée à une couleur officielle ; sinon Claude propose la plus proche, sans l'enregistrer.
+
+Limites : les couleurs sont les couleurs nominales des profils de Bambu Studio (version 02.09.00.74), pas une mesure du filament imprimé. Poids de bobine, prix et compatibilité AMS par gamme ne sont pas dans les données : l'interface écrit « non disponible ». Les marques tierces n'y sont pas. Non éprouvé en usage réel.
+
+Détails : `docs/CATALOGUE-FILAMENTS.md` ; autres catalogues Bambu envisagés : `docs/CATALOGUES-BAMBU.md`.
+
+## 23. Projets, sous-projets et verdict d'impression (G9)
+
+**Projets.** Un projet regroupe des pièces de votre bibliothèque avec une quantité voulue (« étagère : 6 pièces »). Il peut contenir des sous-projets (un assemblage). Il a un statut (idée, conception, en impression, fini, en usage, abandonné), un avancement (« 4 pièces sur 6 imprimées ») et un coût et un temps cumulés.
+
+Avec Claude : « crée un projet Étagère », « ajoute 4 clips au projet », « où en est le projet Étagère ? ». Dans l'interface web : entrée **Projets** du menu. Printalk **propose** un statut (par exemple « fini » quand toutes les pièces sont imprimées) mais ne le change jamais seul ; supprimer un projet n'existe pas, on l'archive.
+
+**Verdict.** Quand une impression est terminée, dites comment elle s'est passée : **réussie**, **ratée** (avec la raison : fils, décollement, spaghetti, décalage de couches…) ou **à refaire**. Claude peut vous lister les impressions à juger (« qu'est-ce que je dois juger ? »), la page Projets les liste aussi, et la carte de suivi affiche trois gros boutons en fin d'impression. Le verdict est votre jugement : il nourrit les taux de réussite mais n'a aucun effet sur l'imprimante ni sur un lancement.
+
+À savoir : la fiche pièce et la fiche impression complètes ne sont pas encore livrées ; le tableau de bord, le fil chronologique et la recherche non plus. Ne mettez aucun secret dans les notes d'un verdict.
+
+Détails : `docs/SUIVI-PROJET.md`.
+
+## 24. Photos de l'impression à chaque palier de 10 % (D8)
+
+Pendant une impression, Printalk prend **une photo avec la caméra chaque fois que la progression passe 10, 20, … 90 %**, et la range avec l'impression ; le palier 100 % est la photo de fin habituelle. Vous gardez ainsi la trace de l'évolution de la pièce, sans rien faire. Printalk ne fait que lire la caméra, il n'envoie aucune commande à l'imprimante.
+
+À savoir :
+- si la caméra n'est pas disponible à un palier, ce palier est noté « photo non disponible » avec la raison et l'impression continue ;
+- un palier sauté (la progression passe de 38 à 52 %) ne donne que la photo du palier le plus récent ;
+- les photos sont réduites (1280 px de large) pour économiser l'espace ; les paliers intermédiaires sont purgés au bout de 90 jours ou quand le plafond de 2 Go est dépassé ; les photos de fin, celles des impressions jugées réussies et celles déjà utilisées ailleurs ne sont jamais supprimées ;
+- réglages (`progress_photos`, `progress_photo_width`, `progress_photo_quality`, `progress_retention_days`, `progress_cap_mb`) : actif par défaut, indépendant de la détection d'échec.
+
+Vérifié avec la caméra simulée seulement : le comportement sur une vraie caméra Bambu n'est pas éprouvé. L'affichage en galerie sur la fiche d'impression viendra avec la fiche impression (G9). Détails : `docs/SUIVI-PROJET-D8.md`.
+
+## 25. Le menu a changé : où est passé quoi (G10)
+
+Le menu n'a plus que **7 entrées** : Accueil, Projets, Bibliothèque, Impressions, Imprimantes, Matières, Réglages. Sur téléphone, une barre en bas montre les quatre premières et « Plus » (Imprimantes, Matières, Réglages). Un bandeau fermable vous le rappelle à la première visite.
+
+| Avant | Maintenant |
+|---|---|
+| Coûts | **Impressions** > Bilan (chiffres) ; **Réglages** > Tarifs (prix) ; **Matières** > Après impression (finition) |
+| Matériaux, Bobines | **Matières** (Bobines et AMS, Multicolore, Fiches matières) |
+| Gabarits | **Bibliothèque** > Pièces sur mesure |
+| Journal | **Impressions** > Terminées |
+| File d'attente | **Impressions** > En cours et en file |
+| Préparer, Comparaison | boutons « Préparer » et « Essais de réglages » sur la fiche d'un modèle |
+| Calibration | **Imprimantes** > Calibration |
+| Corbeille | **Bibliothèque** > Corbeille et doublons |
+| Agent Windows | **Réglages** |
+
+Aucune ancienne adresse n'est cassée : elles redirigent vers la nouvelle page. Les pages du serveur (confirmation, arrêt, enrôlement, réglages de sécurité) gardent leurs adresses. Les mots ont aussi changé (« découpe » devient « préparation de l'impression », « G-code » devient « fichier d'impression »…). Aucun bouton du site ne lance une impression : « Vérifier et lancer » mène seulement à la page de confirmation.
+
+Pas encore faits : Accueil refondu, fiche d'impression adressable, recherche globale, fiche modèle à onglets. Guide complet : `docs/UX.md`.

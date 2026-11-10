@@ -96,7 +96,7 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 | N1 | **Diagnostic d'échec** : « pourquoi ça a raté ? » à partir de la photo, des codes HMS, des étapes et des réglages ; propose la correction et la redécoupe | Les deux échecs du porte-guitare auraient été expliqués en une réponse |
 | N2 ✅ retenue | **Rendu réaliste avant impression** dans la vraie matière et couleur (translucide, soie, mat) | Choisir une variante sur l'aspect, pas seulement sur les chiffres |
 | N3 ✅ retenue | **Pièces de rechange / impression en série** : « imprime 12 fois ce clip » → remplissage optimal des plaques, répartition par lots, suivi du compte | Gain de temps énorme, déjà presque possible avec plan_plate |
-| N4 ✅ retenue | **Pilotage des accessoires de l'imprimante** : éclairage de la chambre, ventilateurs, vitesse d'impression en cours (silencieux / normal / sport), sans jamais lancer ni arrêter | Commandes Bambu classiques, sans risque |
+| N4 ✅ retenue — **fait (2026-11-10)** | **Pilotage des accessoires de l'imprimante** : éclairage de la chambre, ventilateurs, vitesse d'impression en cours (silencieux / normal / sport), sans jamais lancer ni arrêter | Commandes Bambu classiques, sans risque. Outils `set_printer_light`, `set_printer_fan`, `set_print_speed_level`, panneau « Accessoires » de la page Imprimantes (docs/ACCESSOIRES.md). **Validé contre le simulateur seulement : non vérifié sur la vraie P1S.** |
 | N5 ✅ retenue | **Insertion d'éléments** : logements prêts pour inserts filetés, aimants, écrous captifs, avec la pause automatique au bon moment (lien S4) | Pièces fonctionnelles sans post-traitement |
 | N6 ✅ retenue | **Assistant d'assemblage** : génère la notice d'assemblage (ordre, vis, photos annotées) d'un projet multi-pièces | Projets comme le porte-guitare découpé (S1) |
 | N7 ✅ retenue | **Bobine bientôt vide** : coupe l'impression en deux avec pause de changement de bobine au bon moment si le poids restant ne suffit pas | Évite une impression ratée à 90 % |
@@ -125,7 +125,7 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 |---|---|---|
 | N17 | **Explique-moi ce réglage** : Claude explique chaque option en contexte, avec l'effet visuel dans la visionneuse (avant/après) | Apprendre en imprimant |
 | N18 ✅ retenue | **Profil maître par matière** qui apprend de chaque impression réussie ou ratée (journal + photos) et propose ses propres réglages | Le mémoire d'impression devient un vrai réglage |
-| N19 ✅ retenue | **Journal photo automatique** : photo à 0 %, 25 %, 50 %, 100 %, rangées avec l'impression, en galerie | Garder la trace, documenter un projet |
+| N19 ✅ retenue — **socle fait (D8, 2026-11-10)** | **Journal photo automatique** : photo à 0 %, 25 %, 50 %, 100 %, rangées avec l'impression, en galerie | Garder la trace, documenter un projet. D8 : une photo à chaque 10 % (docs/SUIVI-PROJET-D8.md). Reste la galerie (N22) et l'affichage sur la fiche impression (PJ10). |
 
 **Au-delà de la P1S**
 | # | Idée | Pourquoi |
@@ -145,7 +145,7 @@ Principe : **toutes les options classiques de Bambu Studio doivent être pilotab
 |---|---|---|
 | B1 ✅ retenue | **MakerWorld complet** : chercher, importer un modèle avec ses profils d'impression, comparer avec nos réglages, suivre les remixes | La bibliothèque Bambu à portée de phrase |
 | B2 ✅ retenue | **Lecture des puces RFID des bobines Bambu** (via AMS) : inventaire automatique (matière, couleur exacte, lot, poids restant) | Plus aucune saisie de bobine |
-| B3 ✅ retenue | **Catalogue officiel des filaments Bambu** (couleurs hex, finitions, températures) pour l'aperçu réaliste et le choix de couleur | Couleurs justes partout |
+| B3 ✅ retenue — **fait (2026-11-10)** | **Catalogue officiel des filaments Bambu** (couleurs hex, finitions, températures) pour l'aperçu réaliste et le choix de couleur | Couleurs justes partout. 48 gammes, 342 couleurs embarquées, outils `search_filament_catalog` et `get_filament_catalog_entry`, `catalog_color_id` sur les bobines (docs/CATALOGUE-FILAMENTS.md). Données lues dans les profils de Bambu Studio 02.09.00.74 ; wiki et boutique non lus (HTTP 402/403) ; non vérifié sur matériel. |
 | B4 | **Plan d'entretien** : graissage des tiges, nettoyage carbone, buse à changer, courroies, selon les heures réelles d'impression ; rappels et guides pas à pas | Une P1S qui dure |
 | B5 | **Buses et plaques** : détection/déclaration de la buse (0,2/0,4/0,6/0,8, acier trempé), refus des matières abrasives sur buse laiton, plaque conseillée par matière | Éviter les erreurs coûteuses |
 | B6 | **Résultats des inspections natives** (lidar X1, première couche, caméra) remontés dans le journal et le diagnostic d'échec | Exploiter tous les capteurs Bambu |
@@ -190,18 +190,20 @@ Spec complète : [docs/specs/G9-suivi-de-projet.md](specs/G9-suivi-de-projet.md)
 | Code | Nom | Contenu court | Vague |
 |---|---|---|---|
 | PJ1 (M1) | Tableau de bord atelier | projets par statut, chiffres du mois (impressions, taux de réussite, heures machine, grammes, €), « ce qui attend un geste » | 3 |
-| PJ2 (M2) | Projet de premier rang | nouvelle table `projects` + `project_parts` (pas d'extension de `collections`), statut idée → conception → en impression → fini → en usage / abandonné, avancement « 4/6 pièces », coût et temps totaux ; socle de N13 | 1 |
+| PJ2 (M2) | Projet de premier rang | nouvelle table `projects` + `project_parts` (pas d'extension de `collections`), statut idée → conception → en impression → fini → en usage / abandonné, avancement « 4/6 pièces », coût et temps totaux ; socle de N13 | 1 — **fait (2026-11-10)** |
 | PJ3 (M3) | Fil chronologique | ligne de temps filtrable par projet, pièce, bobine (vue calculée, sans table) | 3 |
 | PJ4 (M4) | Recherche filtrable | filtres typés (« PETG imprimées > 2 fois », « ratées ce mois ») ; Claude traduit la phrase | 4 |
-| PJ5 (P1) | Fiche pièce | aperçu 3D, versions, profils, impressions (date, profil, résultat, raison, photo), « imprimée 5 fois, 4 réussies », coût cumulé, lien test de résistance | 1 |
+| PJ5 (P1) | Fiche pièce | aperçu 3D, versions, profils, impressions (date, profil, résultat, raison, photo), « imprimée 5 fois, 4 réussies », coût cumulé, lien test de résistance | 1 — à faire (le journal photo D8 est son socle) |
 | PJ6 (P2) | Rechoisir un profil et relancer | **prépare** découpe + demande de confirmation (« comme la dernière réussie ») ; jamais de lancement | 2 |
 | PJ7 (P3) | Comparateur de profils | « ton meilleur » d'après les résultats réels, avec effectif (n ≥ 3) | 2 |
 | PJ8 (P4) | Arbre version → profils → impressions | histoire d'une pièce | 4 |
 | PJ9 (P5) | Différence entre deux impressions | profil, bobine, version, durée… (pur calcul) | 4 |
-| PJ10 (I1) | Fiche d'impression | profil figé, bobine et grammes réels, durée prévue vs réelle, photos, alertes caméra, verdict | 1 |
-| PJ11 (I2) | Verdict en un geste | réussi / raté + raison / à refaire en fin d'impression : clé de toutes les stats | 1 |
+| PJ10 (I1) | Fiche d'impression | profil figé, bobine et grammes réels, durée prévue vs réelle, photos, alertes caméra, verdict | 1 — à faire (le journal photo D8 est son socle) |
+| PJ11 (I2) | Verdict en un geste | réussi / raté + raison / à refaire en fin d'impression : clé de toutes les stats | 1 — **fait (2026-11-10)** |
 | PJ12 (I3 + I4) | Notes, étiquettes ; impression hors Printalk | notes libres sur pièce et impression ; rattacher après coup une impression faite ailleurs (niveau « déclaré ») | 4 |
 | PJ13 | Déclinaisons d'un assemblage par objectif | rapide / solide / équilibrée… : un profil par pièce selon l'objectif, totaux (temps, g, €, solidité) comparés côte à côte, « préparer tout l'assemblage » jusqu'à la confirmation humaine | 3 |
+
+**État au 2026-11-10 (vague 1 partielle).** **Faits** : PJ2 (projets, sous-projets, avancement ; migration 0300 ; outils `create_project`, `update_project`, `add_project_part`, `remove_project_part`, `get_project`, `list_projects` ; carte `project` ; page Projets) et PJ11 (verdict en un geste ; outils `set_print_verdict`, `get_pending_verdicts` ; carte `verdict` et bandeau de la carte de suivi) : voir docs/SUIVI-PROJET.md. **D8 fait** : photo à chaque 10 % de progression, migration 0310, réglages `progress_*` (docs/SUIVI-PROJET-D8.md). **Pas encore faits** : PJ5 (fiche pièce) et PJ10 (fiche impression), dont D8 est le socle ; puis PJ1, PJ3, PJ4, PJ6, PJ7, PJ8, PJ9, PJ12, PJ13 (vagues 2 à 4). Tout ce qui est livré est vérifié contre le simulateur et les tests seulement ; photos de paliers non éprouvées sur une vraie caméra Bambu.
 
 ## Refonte de la navigation (demande du 2026-11-09)
 
@@ -209,11 +211,11 @@ Spec complète : [docs/specs/G10-refonte-navigation-tableau-de-bord.md](specs/G1
 
 | Code | Nom | Contenu court | Vague |
 |---|---|---|---|
-| UX1 | Socle de navigation | table unique `web/src/nav.ts`, en-tête de page, fil d'Ariane, barre de chargement, page « Introuvable » | U1 |
-| UX2 | Nouvelle arborescence et redirections | 7 entrées, regroupement en onglets (≤ 4), table ancien → nouveau testée, URL serveur inchangées | U1 |
-| UX3 | Navigation mobile | barre basse 5 emplacements avec libellés, feuille « Plus », cibles ≥ 44 px | U1 |
-| UX4 | Vocabulaire sans jargon | glossaire appliqué, table de libellés unique `labels.ts` (site, pages serveur, cartes) | U1 (continu) |
-| UX5 | États vides, chargements, erreurs | squelettes, barre de progression, états vides en 3 éléments, erreurs en 3 parties | U1, U2 |
+| UX1 | Socle de navigation | table unique `web/src/nav.ts`, en-tête de page, fil d'Ariane, barre de chargement, page « Introuvable » | U1 — **fait (2026-11-10)** |
+| UX2 | Nouvelle arborescence et redirections | 7 entrées, regroupement en onglets (≤ 4), table ancien → nouveau testée, URL serveur inchangées | U1 — **fait (2026-11-10)** |
+| UX3 | Navigation mobile | barre basse 5 emplacements avec libellés, feuille « Plus », cibles ≥ 44 px | U1 — **fait (2026-11-10)** |
+| UX4 | Vocabulaire sans jargon | glossaire appliqué, table de libellés unique `labels.ts` (site, pages serveur, cartes) | U1 (continu) — **fait pour le site (2026-11-10)** ; pages serveur et cartes en U3 |
+| UX5 | États vides, chargements, erreurs | squelettes, barre de progression, états vides en 3 éléments, erreurs en 3 parties | U1, U2 — **commencé en U1 (2026-11-10)**, suite en U2 |
 | UX6 | Tableau de bord « Accueil » | À faire, imprimante en direct + caméra, projets en cours, dernières impressions + verdict en un geste, chiffres du mois, bobines basses | U2 (v1), U3 (complet, avec PJ1) |
 | UX7 | Impressions | vues À faire / En cours et en file / Terminées / Bilan, fiche impression adressable (PJ10) | U2 |
 | UX8 | Regroupements | Matières, Imprimantes (modèles connus, calibration), Bibliothèque (gabarits, corbeille), Réglages (tarifs, suivi, sécurité, agent Windows) | U2 |
@@ -221,6 +223,8 @@ Spec complète : [docs/specs/G10-refonte-navigation-tableau-de-bord.md](specs/G1
 | UX10 | Pages serveur alignées | `/confirm`, `/stop`, `/enroll`, `/setup/*`, OAuth : mêmes jetons (test de parité), vocabulaire, lien de retour ; aucun élément de sécurité retiré | U3 |
 | UX11 | Cartes MCP ↔ pages web | composants partagés `@shared`, mêmes libellés, carte `workshop` = Accueil compact | U3 |
 | UX12 | Accessibilité et mode sombre | AA, clavier, focus, mouvement réduit, captures clair/sombre 375/768/1440, recette | transversal, U4 |
+
+**État au 2026-11-10 : vague U1 faite** (UX1 à UX4, début d'UX5 ; guide docs/UX.md ; 7 entrées dans `web/src/nav.ts`, anciennes URL redirigées, barre basse mobile, table de libellés unique). **Restent U2, U3 et U4** : Accueil refondu (UX6), fiche impression adressable `/impressions/:id` (UX7), regroupements restants (UX8), recherche globale (UX9), fiche modèle à 4 onglets, pages serveur alignées (UX10), cartes MCP alignées (UX11), accessibilité et captures clair/sombre (UX12). Vérifié par les tests et la construction ; pas de recette visuelle dans un navigateur au 2026-11-10.
 
 ## Idées du 2026-11-09 (soir)
 
@@ -267,3 +271,32 @@ Détail des trois P0 du tableau « Retours d'usage du 2026-11-09 » ci-dessus :
 | FB1 | ✅ fait | Image de référence du plateau vide prise automatiquement juste après la confirmation humaine (passage à `START_REQUESTED`), rangée avec l'impression (photo « reference », relue après redémarrage) et utilisée par la détection visuelle de cette impression ; détection active par défaut ; `analyze_print_frame` analyse l'image fraîche contre cette référence (plus de « pas d'image de référence » quand elle existe, message explicite sinon). Le lancement et l'arrêt restent un geste humain. Tests : `TestReferenceIsCapturedRightAfterConfirmationAndUsedByDetection`, `TestReferenceSurvivesRestartAndIsTakenOnce`. |
 | FB2 | ✅ fait | Plus d'alerte « bloquée » pendant les étapes de préparation et de calibration (chauffes, nettoyage de la buse, mise à niveau, scans, calibrations, changements de filament) : seuil propre aux préparations (`PrepStallAfter`, 20 min), au-delà la règle ordinaire reprend. Tests : `TestNoStalledAlertDuringBedLevelingOrOtherPreparationStages`, `TestRealStallIsStillFlagged`, `TestUnknownStageKeepsOrdinaryStallRule`. |
 | FB3 | ✅ fait | `causes` = codes ACTIFS horodatés (`first_seen_at`, `last_seen_at`) ; `causes_history` = codes périmés (`hms_count` 0 et `print_error` 0), horodatés. Journal borné à 20 codes par impression, sans migration (stocké dans la progression de l'impression). Tests : `TestNoteErrorsSeparatesActiveFromHistory`, `TestStaleErrorCodesMoveToHistoryWhenPrinterReportsNone`. |
+
+## Catalogues Bambu supplémentaires — à arbitrer (recensement du 2026-11-10)
+
+Source : docs/CATALOGUES-BAMBU.md (classement valeur / effort). C1 (filaments) est fait (B3). Règles communes : données embarquées, aucun appel réseau au runtime, aucune IA, source et date par entrée ; wiki, boutique et MakerWorld non lus en direct (HTTP 402/403), donc « à vérifier ». Aucun n'est lancé.
+
+| Rang | Catalogue | En une ligne | Valeur / effort |
+|---|---|---|---|
+| 1 | C2 + C3 : capacités par modèle et buses | embarquer les fiches machine (`printers/*.json`) et les duretés de buse pour un verdict de compatibilité par imprimante ; débloque B5 | haute / faible |
+| 2 | C9 : volumes de purge et recettes de couleurs | estimer la purge d'un multicolore avant la découpe (matrices `flush_data_*`) | moyenne à haute / moyen |
+| 3 | C5 : modules AMS et compatibilité | table « quel module sur quelle machine » ; séchage seulement après vérification du sens des tableaux ; prérequis de B8 et N10 | moyenne / moyen |
+| 4 | C4 : plaque conseillée par matière | s'appuie sur les températures de plateau déjà reprises, règles écrites par nous | moyenne / faible |
+| 5 | C6 : références d'accessoires et pièces de rechange | utile à l'entretien (B4) ; contenu boutique à relever à la main, risque de péremption | moyenne / moyen |
+| 6 | C7 : couleurs des filaments tiers | pas de source officielle Bambu ; dépend des marques | faible / moyen |
+| 7 | C8 : MakerWorld | déjà retenu (B1, B10, B11) ; conditions d'usage à vérifier d'abord, intégration en ligne | haute / élevé |
+| 8 | C10 : firmware et notes de version | lien avec B9 ; lecture réseau par nature, non embarquable | moyenne / moyen |
+
+## Reste à faire (état au 2026-11-10)
+
+Fait ce jour (fusionné dans `main`) : D8, N4, B3, UX1 à UX4 (vague U1), PJ2, PJ11. Tout le reste est ouvert.
+
+- **Vérifications sur la vraie P1S** (rien de ce qui suit n'a touché le matériel) : accessoires N4 (`ledctrl`, `M106 P1/P2/P3`, `print_speed`, table des modèles : docs/ACCESSOIRES.md § 8), photos de paliers D8 sur la vraie caméra, catalogue de filaments en usage réel, essai de bout en bout avec un vrai Claude Desktop ; et toute la liste de docs/BRANCHEMENT.md.
+- **G9** : PJ5 (fiche pièce) et PJ10 (fiche impression), puis vagues 2 à 4 (PJ6, PJ7 ; PJ1, PJ3, PJ13 ; PJ4, PJ8, PJ9, PJ12) ; brancher `PhotoReferenced` (rétention D8) avec N22 et les projets.
+- **G10** : U2 (Accueil refondu, `/impressions/:id`, regroupements, recherche v1, fiche modèle à 4 onglets, états vides et chargements), U3 (pages serveur et cartes alignées, tableau de bord complet), U4 (recherche filtrée, accessibilité, captures clair/sombre).
+- **Lot G (game changers)** : G1 à G8, à valider d'abord par entretiens clients (docs/strategie/ETUDE-MARCHE.md).
+- **Lot S (parité Bambu Studio)** : S1 à S10.
+- **Idées retenues** : N2, N3, N5, N6, N7, N13, N15, N16, N18, N22 ; B1, B2, B9, B10, B11, B12 ; W1, W2 ; R1, R2 (non commencées ; N19 : galerie restante).
+- **Idées à arbitrer** : N1, N8 à N12, N14, N17, N20, N21 ; B4 à B8 ; catalogues Bambu supplémentaires (tableau ci-dessus).
+- **Extension Blender** (module .zip côté PC, jamais de Blender sur le serveur) ; R1 en dépend.
+- **Ponts Windows signés** (`bambu-mcp.exe`, `bambu-agent.exe`) et **licence du dépôt** (choix de l'utilisateur).
