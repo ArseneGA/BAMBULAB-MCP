@@ -226,6 +226,20 @@ Spec complète : [docs/specs/G10-refonte-navigation-tableau-de-bord.md](specs/G1
 
 **État au 2026-11-10 : vagues U1 et U2 faites** (guide docs/UX.md, § 8 pour U2). U1 : UX1 à UX4, début d'UX5, 7 entrées dans `web/src/nav.ts`, anciennes URL redirigées, barre basse mobile, table de libellés unique. U2 : Accueil refondu (« À faire », « En direct », projets en cours, dernières impressions avec verdict en un tap et « Annuler » 8 s, chiffres du mois, bobines basses, raccourcis, premier lancement), `/impressions/:id` adressable, fiche modèle à 4 onglets (Aperçu, Fichiers et versions [Infos y est fusionné], Impressions, Profils), recherche globale (`/` et Ctrl/Cmd+K), Réglages › Suivi (seuil « projet dormant » mémorisé par navigateur ; photos de paliers via `/api/camera/settings`), route `DELETE /api/prints/{id}/verdict` (annule un verdict : auditée, sans effet sur l'imprimante). **Écarts et limites de U2** : CA-P1 (arbre repliable et onglet Déclinaisons de la page Projets) non livré ; pas de test de comptage des couleurs codées en dur ni de captures (U4) ; `min_sample_size` laissé à PJ7 ; chiffres du mois calculés sur les 200 dernières fiches du journal. **Restent U3** (UX6 complet avec PJ1, UX10 pages serveur alignées, UX11 cartes MCP alignées, PJ13 dans la fiche projet, CA-P1) **et U4** (UX9 v2 avec filtres typés, UX12 accessibilité, captures clair/sombre 375/768/1440). Vérifié par les tests et la construction ; **non vu dans un navigateur** : fiche impression à 375 et 768 px, fiche modèle à 375 et 1440 px, Réglages › Suivi, cas d'alerte de la caméra.
 
+## Ignorer un objet raté en cours d'impression (idée du 2026-11-10)
+
+Spec complète : [docs/specs/SK-ignorer-un-objet.md](specs/SK-ignorer-un-objet.md). Sur une plaque de plusieurs objets, ne plus imprimer celui qui rate et laisser les autres finir, par la **commande native de l'imprimante** (`skip_objects`, identifiants de `slice_info.config`, confirmation par `s_obj`) : jamais par pause + réécriture du G-code. **Geste humain comme l'arrêt** (page serveur, code personnel ou passkey ; le modèle peut demander, jamais approuver) ; irréversible et dit ; jamais automatique. **Risque n°1** : la P1S en réseau local n'est pas confirmée par Bambu (Studio ne montre pas le bouton en LAN) : l'étape A se termine par un **essai humain sur la vraie P1S** avant tout le reste.
+
+| Code | Nom | Étape |
+|---|---|---|
+| SK0 | Essai sur la vraie P1S : lecture de `s_obj`, commande validée, sous-commande humaine `bambud skip-objects`, simulateur | A |
+| SK1 | Objets de chaque impression (identifiants, noms, emprises), étiquetage garanti à la découpe | B |
+| SK2 | Capacité honnête par modèle, firmware, fichier et état | B |
+| SK3 | Demande humaine : outil `request_skip_objects`, page `/action/{id}`, carte avec code personnel | B |
+| SK4 | Exécution unique, vérification par `s_obj`, audit, événements « hors Printalk » | B |
+| SK5 | Suivi : unités imprimées, grammes et temps économisés (estimés) | C |
+| SK6 | Plateau numéroté à côté de la photo pour désigner l'objet | C |
+
 ## Idées du 2026-11-09 (soir)
 
 | Code | Idée | Contenu | Dépend de |
