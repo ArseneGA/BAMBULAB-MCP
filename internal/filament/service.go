@@ -91,6 +91,7 @@ func New(d Deps) (*Service, error) {
 	s := &Service{d: d, log: d.Log}
 	if d.Printing != nil {
 		d.Printing.SetFilamentCheck(s.validationWarnings)
+		d.Printing.SetFilamentPreview(s.previewLines)
 		d.Printing.AddJobEndHook(s.onJobEnd)
 		d.Printing.SetSpoolSource(s.loadedForPrinting)
 	}

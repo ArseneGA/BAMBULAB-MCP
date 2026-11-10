@@ -183,7 +183,7 @@ func TestRealStudioPlatePlan(t *testing.T) {
 		if st := r.waitState(id, 240*time.Second, "VALIDATED", "FAILED"); st != "VALIDATED" {
 			t.Fatalf("plaque %d : %s %s", i+1, st, str(r.call("get_print_status", map[string]any{"print_job_id": id}), "job", "last_error"))
 		}
-		job := r.call("get_print_status", map[string]any{"print_job_id": id})["job"].(map[string]any)
+		job := r.call("get_print_status", map[string]any{"print_job_id": id, "detail": true})["job"].(map[string]any)
 		if int(job["plate"].(float64)) != i+1 {
 			t.Fatalf("numéro de plaque : %v", job["plate"])
 		}

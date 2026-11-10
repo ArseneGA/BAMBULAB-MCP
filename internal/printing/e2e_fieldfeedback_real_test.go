@@ -99,7 +99,7 @@ func TestRealStudioBigPartsAndMaterialNames(t *testing.T) {
 	if st := r.waitState(jid, 120*time.Second, "VALIDATED", "FAILED"); st != "VALIDATED" {
 		t.Fatalf("PETG transparent : %s", st)
 	}
-	g4 := r.call("get_print_status", map[string]any{"print_job_id": jid})
+	g4 := r.call("get_print_status", map[string]any{"print_job_id": jid, "detail": true})
 	fp := g4["job"].(map[string]any)["summary"].(map[string]any)["filament_presets"].([]any)
 	if len(fp) != 1 || !strings.Contains(fp[0].(string), "PETG Translucent") {
 		t.Fatalf("préset choisi : %v", fp)

@@ -39,6 +39,7 @@ type PromptDetails struct {
 	FlowCali      bool                 `json:"flow_cali" jsonschema:"calibration du débit au démarrage (oui par défaut) ; fait partie de ce que l'humain approuve"`
 	VibrationCali bool                 `json:"vibration_cali" jsonschema:"calibration des vibrations au démarrage (oui par défaut) ; fait partie de ce que l'humain approuve"`
 	Timelapse     bool                 `json:"timelapse" jsonschema:"timelapse enregistré pendant l'impression (non par défaut) ; fait partie de ce que l'humain approuve"`
+	Filament      []FilamentLine       `json:"filament,omitempty" jsonschema:"contrôle matière par filament (besoin, restant, marge, verdict) ; un restant inconnu est un avertissement à acquitter, jamais un blocage"`
 	Adhesion      []string             `json:"adhesion_warnings,omitempty" jsonschema:"avertissements de risque de décollement (pièce élancée sur peu de surface, sans bordure) : non bloquants, à lire avant de lancer"`
 	Slender       []string             `json:"slender_warnings,omitempty" jsonschema:"avertissement : troncs de supports ou piliers de la pièce plus hauts que N × leur section (G-code réel ; N = 10 par défaut) : risque de flexion, de chute et de spaghettis ; non bloquant mais à lire et acquitter avant de lancer"`
 	Overhang      []string             `json:"overhang_warnings,omitempty" jsonschema:"avertissement FORT : surplombs significatifs (> 200 mm² cumulés ou une zone > 100 mm²) alors que les supports sont désactivés ; non bloquant mais à lire et accepter avant de lancer"`
@@ -75,6 +76,12 @@ func (s *Service) promptFor(j Job) (string, *PromptDetails) {
 			if strings.HasPrefix(w, "filament_") {
 				d.Alerts = append(d.Alerts, w)
 			}
+		}
+	}
+	d.Filament = s.filamentLines(context.Background(), j)
+	for _, l := range d.Filament {
+		if l.NeedsRemaining { // FB12 : restant inconnu = avertissement clair, à acquitter ; jamais bloquant seul
+			d.Alerts = append(d.Alerts, fmt.Sprintf("filament_unknown_%d : %s", l.FilamentSlot, l.Detail))
 		}
 	}
 	if j.Summary != nil {

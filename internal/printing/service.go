@@ -118,11 +118,12 @@ type Service struct {
 	consumedBy map[string]consumedEntry
 
 	// Observateurs et alerte de matière (ams.go) : n'ont aucun pouvoir sur le lancement.
-	hookMu        sync.Mutex
-	hooksClosed   bool // porte fermée avant wg.Wait : plus aucun observateur n'est lancé
-	endHooks      []JobEndHook
-	filamentCheck FilamentCheck
-	spoolSource   SpoolSource
+	hookMu          sync.Mutex
+	hooksClosed     bool // porte fermée avant wg.Wait : plus aucun observateur n'est lancé
+	endHooks        []JobEndHook
+	filamentCheck   FilamentCheck
+	filamentPreview FilamentPreview
+	spoolSource     SpoolSource
 
 	planLocks sync.Map // plan_id -> *sync.Mutex : une seule découpe de plaques à la fois par plan
 

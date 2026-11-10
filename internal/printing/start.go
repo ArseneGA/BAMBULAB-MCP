@@ -370,6 +370,9 @@ type PrintStatus struct {
 	Causes        []Cause `json:"causes,omitempty" jsonschema:"codes d'erreur ACTIFS maintenant, décodés (texte, gravité, consigne, lien wiki) avec première et dernière observation ; vide si hms_count et print_error sont à 0"`
 	CausesHistory []Cause `json:"causes_history,omitempty" jsonschema:"historique : codes d'erreur vus pendant l'impression mais plus rapportés par l'imprimante (périmés), horodatés ; pas une cause en cours"`
 	Note          string  `json:"note,omitempty"`
+	// Compact / ValidationBrief : mode compact de get_print_status (FB11), voir status_compact.go.
+	Compact         bool             `json:"compact,omitempty" jsonschema:"vrai : réponse compacte (rapport de validation, résumé de découpe et réglages figés retirés) ; rappeler avec detail=true pour la version complète"`
+	ValidationBrief *ValidationBrief `json:"validation_brief,omitempty" jsonschema:"mode compact : verdict, blocages et avertissements de la validation (sans les contrôles détaillés)"`
 }
 
 // GetPrintStatus relit l'impression et, si elle est active, rafraîchit depuis l'imprimante.

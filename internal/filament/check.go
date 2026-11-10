@@ -18,6 +18,7 @@ type CheckInput struct {
 	Assignments   []printing.FilamentAssignment `json:"assignments,omitempty" jsonschema:"affectation filament -> emplacement (défaut : celle déjà enregistrée sur l'impression)"`
 	MarginPercent *float64                      `json:"margin_percent,omitempty" jsonschema:"marge d'alerte en % du besoin (défaut : réglage enregistré, 10 %)"`
 	MarginGrams   *float64                      `json:"margin_grams,omitempty" jsonschema:"marge fixe en grammes (défaut : réglage enregistré, 5 g)"`
+	RemainingG    []printing.RemainingDecl      `json:"remaining_g,omitempty" jsonschema:"restant déclaré par l'utilisateur (grammes) pour une bobine non inventoriée ; s'ajoute à ceux déjà donnés à request_print_confirmation ; comparé à la masse prévue + marge"`
 }
 
 // CheckSlot est le verdict pour un filament de l'impression.
@@ -28,7 +29,7 @@ type CheckSlot struct {
 	SpoolLabel   string   `json:"spool_label,omitempty"`
 	NeededG      float64  `json:"needed_g" jsonschema:"masse que l'impression va extruder pour ce filament (pièce + purge)"`
 	RemainingG   float64  `json:"remaining_g" jsonschema:"restant retenu (inventaire, sinon estimation de l'AMS) ; 0 si inconnu"`
-	RemainSource string   `json:"remaining_source" jsonschema:"inventory | ams_estimate | unknown"`
+	RemainSource string   `json:"remaining_source" jsonschema:"inventory | ams_estimate | declared (restant donné par l'utilisateur) | unknown"`
 	RequiredG    float64  `json:"required_with_margin_g"`
 	ShortfallG   float64  `json:"shortfall_g,omitempty"`
 	Verdict      string   `json:"verdict" jsonschema:"ok | marginal (suffisant mais sous la marge) | insufficient (manque) | unknown (restant inconnu) | no_spool"`
@@ -47,6 +48,8 @@ type CheckOutput struct {
 	MarginGrams   float64     `json:"margin_grams"`
 	Slots         []CheckSlot `json:"slots"`
 	Summary       string      `json:"summary"`
+	// Warning : avertissement clair quand le restant d'une bobine est inconnu (FB12). À acquitter par l'humain ; ne bloque jamais seul.
+	Warning string `json:"warning,omitempty" jsonschema:"présent quand un restant est inconnu : quoi demander à l'utilisateur ; avertissement à acquitter, jamais un blocage"`
 }
 
 var verdictRank = map[string]int{"ok": 0, "no_spool": 1, "unknown": 1, "marginal": 2, "insufficient": 3}
@@ -99,7 +102,7 @@ func (s *Service) CheckFilament(ctx context.Context, in CheckInput) (*CheckOutpu
 	if st.MarginPercent < 0 || st.MarginGrams < 0 {
 		return nil, invalidf("marges négatives")
 	}
-	out := &CheckOutput{PrintJobID: j.ID, PrinterID: pid, Plate: j.Plate, MarginPercent: st.MarginPercent, MarginGrams: st.MarginGrams, Slots: s.checkSlots(ctx, pid, p, as, st)}
+	out := &CheckOutput{PrintJobID: j.ID, PrinterID: pid, Plate: j.Plate, MarginPercent: st.MarginPercent, MarginGrams: st.MarginGrams, Slots: s.checkSlots(ctx, pid, p, as, st, declaredMap(j.DeclaredRemaining, in.RemainingG, as))}
 	out.Verdict = "ok"
 	for _, c := range out.Slots {
 		if verdictRank[c.Verdict] > verdictRank[out.Verdict] {
@@ -120,14 +123,63 @@ func (s *Service) CheckFilament(ctx context.Context, in CheckInput) (*CheckOutpu
 	case "ok":
 		out.Summary = fmt.Sprintf("Toutes les bobines suffisent (marge %.0f %% + %.0f g).", st.MarginPercent, st.MarginGrams)
 	case "unknown":
-		out.Summary = "Impossible de conclure pour au moins un filament : restant inconnu (bobine non inventoriée). Inscrire la bobine avec update_spool."
+		out.Warning = unknownWarning(out.Slots)
+		out.Summary = out.Warning
 	default:
 		out.Summary = strings.Join(bad, " ; ")
 	}
 	return out, nil
 }
 
-func (s *Service) checkSlots(ctx context.Context, printerID string, p *slicer.PlateResult, as []printing.FilamentAssignment, st Settings) []CheckSlot {
+// declaredMap fusionne les restants déclarés (enregistrés sur l'impression, puis ceux de l'appel) par numéro de filament.
+func declaredMap(saved, extra []printing.RemainingDecl, as []printing.FilamentAssignment) map[int]float64 {
+	m := map[int]float64{}
+	for _, d := range append(append([]printing.RemainingDecl(nil), saved...), extra...) {
+		slot := d.FilamentSlot
+		if slot == 0 {
+			for _, a := range as {
+				if d.Tray != "" && a.Tray == d.Tray {
+					slot = a.FilamentSlot
+				}
+			}
+		}
+		if slot != 0 && d.Grams >= 0 {
+			m[slot] = d.Grams
+		}
+	}
+	return m
+}
+
+// unknownWarning : avertissement explicite pour les filaments dont le restant est inconnu (FB12).
+func unknownWarning(slots []CheckSlot) string {
+	var parts []string
+	for _, c := range slots {
+		if c.Verdict == "no_spool" || c.Verdict == "unknown" {
+			parts = append(parts, fmt.Sprintf("filament %d (%s) : il faut au moins %s (besoin %s + marge) mais la bobine n'est pas déclarée et l'AMS ne donne pas de restant", c.FilamentSlot, c.Tray, fmtG(c.RequiredG), fmtG(c.NeededG)))
+		}
+	}
+	return "Restant inconnu, impossible de conclure : " + strings.Join(parts, " ; ") + ". Demander à l'utilisateur combien de grammes restent (à passer en remaining_g à request_print_confirmation ou check_filament_for_print), ou inscrire la bobine (update_spool). Avertissement à acquitter ; il ne bloque pas le lancement."
+}
+
+// judge fixe verdict et détail d'un emplacement d'après le besoin, le restant et la marge.
+func judge(cs *CheckSlot, need float64, a printing.FilamentAssignment) {
+	switch {
+	case cs.RemainSource == "unknown":
+		cs.Verdict = "no_spool"
+		cs.Detail = fmt.Sprintf("aucune bobine inscrite à %s et l'AMS ne donne pas de restant : besoin %s (%s avec marge), restant inconnu ; indiquer le restant en grammes ou inscrire la bobine", a.Tray, fmtG(need), fmtG(cs.RequiredG))
+	case cs.RemainingG < need:
+		cs.Verdict, cs.ShortfallG = "insufficient", round2(need-cs.RemainingG)
+		cs.Detail = fmt.Sprintf("il reste %s sur %s mais l'impression en demande %s : il manque %s", fmtG(cs.RemainingG), nameOf(*cs), fmtG(need), fmtG(cs.ShortfallG))
+	case cs.RemainingG < cs.RequiredG:
+		cs.Verdict, cs.ShortfallG = "marginal", round2(cs.RequiredG-cs.RemainingG)
+		cs.Detail = fmt.Sprintf("il reste %s sur %s pour un besoin de %s : sous la marge de sécurité (%s requis)", fmtG(cs.RemainingG), nameOf(*cs), fmtG(need), fmtG(cs.RequiredG))
+	default:
+		cs.Verdict = "ok"
+		cs.Detail = fmt.Sprintf("%s restant sur %s pour %s", fmtG(cs.RemainingG), nameOf(*cs), fmtG(need))
+	}
+}
+
+func (s *Service) checkSlots(ctx context.Context, printerID string, p *slicer.PlateResult, as []printing.FilamentAssignment, st Settings, declared map[int]float64) []CheckSlot {
 	var ams map[string]float64 // restant estimé par l'AMS pour les emplacements sans bobine inscrite
 	slots := append([]printing.FilamentAssignment(nil), as...)
 	sort.Slice(slots, func(i, j int) bool { return slots[i].FilamentSlot < slots[j].FilamentSlot })
@@ -153,20 +205,13 @@ func (s *Service) checkSlots(ctx context.Context, printerID string, p *slicer.Pl
 				cs.RemainingG, cs.RemainSource = round2(g), "ams_estimate"
 			}
 		}
-		switch {
-		case cs.RemainSource == "unknown":
-			cs.Verdict = "no_spool"
-			cs.Detail = fmt.Sprintf("aucune bobine inscrite à %s et l'AMS ne donne pas de restant : besoin %s, restant inconnu", a.Tray, fmtG(need))
-		case cs.RemainingG < need:
-			cs.Verdict, cs.ShortfallG = "insufficient", round2(need-cs.RemainingG)
-			cs.Detail = fmt.Sprintf("il reste %s sur %s mais l'impression en demande %s : il manque %s", fmtG(cs.RemainingG), nameOf(cs), fmtG(need), fmtG(cs.ShortfallG))
-		case cs.RemainingG < cs.RequiredG:
-			cs.Verdict, cs.ShortfallG = "marginal", round2(cs.RequiredG-cs.RemainingG)
-			cs.Detail = fmt.Sprintf("il reste %s sur %s pour un besoin de %s : sous la marge de sécurité (%s requis)", fmtG(cs.RemainingG), nameOf(cs), fmtG(need), fmtG(cs.RequiredG))
-		default:
-			cs.Verdict = "ok"
-			cs.Detail = fmt.Sprintf("%s restant sur %s pour %s", fmtG(cs.RemainingG), nameOf(cs), fmtG(need))
+		if cs.RemainSource == "unknown" { // restant déclaré par l'utilisateur (information, pas une preuve)
+			if g, ok := declared[a.FilamentSlot]; ok {
+				cs.RemainingG, cs.RemainSource = round2(g), "declared"
+				cs.SpoolLabel = fmt.Sprintf("déclarée (%s)", fmtG(g))
+			}
 		}
+		judge(&cs, need, a)
 		if cs.Verdict == "insufficient" || cs.Verdict == "marginal" {
 			cs.Alternatives = s.alternatives(ctx, sp, cs, p, a)
 		}
@@ -244,7 +289,7 @@ func (s *Service) validationWarnings(ctx context.Context, printerID string, plat
 		return nil
 	}
 	var out []printing.FilamentWarning
-	for _, c := range s.checkSlots(ctx, printerID, plate, as, s.GetSettings(ctx)) {
+	for _, c := range s.checkSlots(ctx, printerID, plate, as, s.GetSettings(ctx), nil) {
 		switch c.Verdict {
 		case "insufficient":
 			out = append(out, printing.FilamentWarning{Name: fmt.Sprintf("filament_short_%d", c.FilamentSlot), Level: "warn",
@@ -261,4 +306,23 @@ func altText(c CheckSlot) string {
 		return ""
 	}
 	return ". Alternatives : " + strings.Join(c.Alternatives, " ; ")
+}
+
+// previewLines : contrôle de matière montré à la confirmation (FB12), avec les restants déclarés sur l'impression.
+// Informatif : ni erreur ni blocage ; sans mesures par plaque ou sans affectation, rien.
+func (s *Service) previewLines(ctx context.Context, j printing.Job) []printing.FilamentLine {
+	p := plateUse(j)
+	if p == nil || len(j.Assignments) == 0 || j.PrinterID == "" {
+		return nil
+	}
+	var out []printing.FilamentLine
+	for _, c := range s.checkSlots(ctx, j.PrinterID, p, j.Assignments, s.GetSettings(ctx), declaredMap(j.DeclaredRemaining, nil, j.Assignments)) {
+		v := c.Verdict
+		if v == "no_spool" {
+			v = "unknown"
+		}
+		out = append(out, printing.FilamentLine{FilamentSlot: c.FilamentSlot, Tray: c.Tray, NeededG: c.NeededG, RequiredG: c.RequiredG, RemainingG: c.RemainingG,
+			Source: c.RemainSource, Verdict: v, Detail: c.Detail, NeedsRemaining: v == "unknown"})
+	}
+	return out
 }

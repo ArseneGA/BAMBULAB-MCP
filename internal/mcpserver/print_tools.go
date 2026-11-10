@@ -285,6 +285,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 		Name: "request_print_confirmation", Title: "Demander la confirmation de lancement",
 		Description: "À appeler SEULEMENT si l'utilisateur a répondu oui à la question. Crée une confirmation liée (imprimante, empreinte, plateau, matières), à durée courte, et renvoie confirmation_id, " +
 			"l'URL de la page locale que l'HUMAIN ouvre pour cocher « plateau vide » et cliquer Lancer, et les éléments liés. Le jeton secret n'est jamais rendu au modèle : un booléen fourni par un agent n'est pas une preuve. bed_leveling (défaut true) règle la mise à niveau automatique du plateau au démarrage : elle est affichée à l'humain et fait partie de ce qu'il approuve ; ne la désactive que si l'utilisateur le demande. flow_cali (calibration du débit, défaut true), vibration_cali (calibration des vibrations, défaut true) et timelapse (défaut false) sont aussi affichées à l'humain et font partie de ce qu'il approuve ; les valeurs par défaut sont celles envoyées jusqu'ici. " +
+			"remaining_g (facultatif) : restant en GRAMMES d'une bobine non déclarée ({filament_slot ou tray, grams}) que l'utilisateur t'a donné ; comparé à la masse prévue + marge et montré à l'humain (information, jamais un blocage, jamais une preuve). Si la réponse signale un restant inconnu, demande-le à l'utilisateur puis rappelle cet outil avec remaining_g. " +
 			"L'appel est REFUSÉ (avec la consigne précise) si l'imprimante n'est pas lançable : occupée, injoignable, alerte HMS active ou erreur en cours. Un état FINISH ou FAILED (reliquat d'annulation) ne bloque pas : Bambu Studio lance aussi depuis ces états. " +
 			"Dans Claude Desktop la vue de confirmation permet à l'humain de lancer avec son CODE DE LANCEMENT PERSONNEL (6 à 8 chiffres, défini sur /setup/launch-code) ; sans code défini elle affiche le lien du navigateur, toujours disponible. " +
 			"Ne demande JAMAIS ce code à l'utilisateur dans la conversation et ne l'utilise jamais s'il l'écrit : il ne se saisit que dans le champ de la vue.",
@@ -324,6 +325,7 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 			"stage_report : ce que l'imprimante a RÉELLEMENT exécuté pour cette impression d'après son étape courante (mise à niveau du plateau, chauffe, nettoyage de la buse, calibrations) avec l'heure de chaque étape ; " +
 			"printer.error_details : print_error et HMS décodés. wait_seconds (1 à 60) : attend qu'un état ou une étape change avant de répondre. " +
 			"with_photo (défaut vrai pendant l'impression) joint un instantané de la caméra comme IMAGE : regarde-la et dis ce que tu y vois (pièce, buse, spaghetti, décollement) ; with_photo=false pour du texte seul. " +
+			"RÉPONSE COMPACTE par défaut (progression, étape, causes actives, alertes, verdict de validation en bref `validation_brief`) ; detail=true rend la version complète (validation détaillée, résumé de découpe, réglages figés, historique complet). L'état, l'empreinte et la confirmation sont toujours présents. " +
 			"À appeler pour toute question d'avancement (où en est, combien de temps, progression). Dans Claude Desktop une carte de suivi en direct (caméra, progression, températures, boutons Arrêter/Reprendre validés par l'humain) s'affiche ; sinon ce texte et cette image suffisent. " +
 			"Effet de bord local : relit l'imprimante et met à jour l'impression (pas en lecture seule au sens strict).",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: &f, IdempotentHint: true},
@@ -341,6 +343,9 @@ func AddPrintTools(s *mcp.Server, p *printing.Service, cam ...*camera.Service) {
 		res := textResult(printStatusText(st))
 		if live != nil && wantStatusPhoto(in.WithPhoto, st) {
 			res.Content = append(res.Content, live.photoContent(ctx, st.Job.PrinterID)...)
+		}
+		if !in.Detail { // FB11 : compact par défaut ; detail=true rend le suivi complet
+			return res, *st.AsCompact(), nil
 		}
 		return res, *st, nil
 	})
