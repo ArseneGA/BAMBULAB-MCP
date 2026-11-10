@@ -89,6 +89,9 @@ type JobEvent struct {
 	From  contracts.PrintState `json:"from"`
 	To    contracts.PrintState `json:"to"`
 	Note  string               `json:"note,omitempty"`
+	// External : fait HORS Printalk (écran de l'imprimante, application Bambu, panne), détecté par le changement d'état de
+	// l'imprimante. Printalk n'en est pas l'auteur et n'a rien commandé (FB14).
+	External bool `json:"external,omitempty"`
 }
 
 // Cause : un code d'erreur (print_error ou HMS) vu pour une impression, avec sa première et sa dernière observation.
@@ -130,6 +133,7 @@ type PrintProgress struct {
 	Sig          string              `json:"sig,omitempty"`
 	SigAt        time.Time           `json:"sig_at,omitzero"`
 	Alerted      []string            `json:"alerted,omitempty"`
+	TaskID       string              `json:"task_id,omitempty" jsonschema:"task_id rapporté par l'imprimante pour cette impression (détecte une relance faite hors Printalk)"`
 }
 
 // ArtifactSummary résume l'artefact découpé (mesures lues dans l'archive).
@@ -241,7 +245,7 @@ func bindingSlot(a FilamentAssignment) string { return fmt.Sprintf("f%d>%s", a.F
 
 func (j *Job) event(ev contracts.PrintEvent, from, to contracts.PrintState, note string, now time.Time) {
 	j.Events = append(j.Events, JobEvent{At: now, Event: string(ev), From: from, To: to, Note: note})
-	if over := len(j.Events) - 60; over > 0 {
+	if over := len(j.Events) - 150; over > 0 {
 		j.Events = j.Events[over:]
 	}
 }

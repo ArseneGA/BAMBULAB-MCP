@@ -114,6 +114,24 @@ func stageSummary(j Job, cur *printer.Status) *StageSummary {
 	if out.BedLeveling == "not_observed" {
 		notes = append(notes, "la mise à niveau était demandée mais l'imprimante n'a transmis aucune étape de mise à niveau (étape trop brève pour être vue, ou non exécutée par cette machine) : ne pas la considérer comme prouvée")
 	}
+	// FB7 : une calibration demandée (et envoyée) mais non vue n'est pas une preuve d'absence. Si une étape NON DOCUMENTÉE
+	// a été vue pendant la préparation, elle est citée : elle pourrait en être une, ce n'est pas prouvé.
+	var unknown []string
+	for _, s := range st {
+		if !printer.StageDocumented(s.ID) {
+			unknown = append(unknown, fmt.Sprintf("%d", s.ID))
+		}
+	}
+	for _, c := range []struct{ label, v string }{{"la calibration du débit", out.FlowCali}, {"la calibration des vibrations", out.VibrationCali}} {
+		if c.v != "not_observed" {
+			continue
+		}
+		n := c.label + " était demandée (et envoyée à l'imprimante) mais aucune étape correspondante n'a été relevée : pas une preuve d'absence (étape trop brève pour le relevé)"
+		if len(unknown) > 0 {
+			n += " ; étape(s) non documentée(s) vue(s) à la place : " + strings.Join(unknown, ", ") + " (rôle inconnu, non prouvé)"
+		}
+		notes = append(notes, n)
+	}
 	if len(notes) > 0 {
 		out.Note = strings.Join(notes, " ; ") + "."
 	}

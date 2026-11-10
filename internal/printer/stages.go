@@ -66,7 +66,10 @@ var stageNames = map[int]string{
 	35: "Pause : buse bouchée",
 }
 
-// StageName donne le libellé français d'une étape ; « étape N (inconnue) » si absente de la table.
+// StageName donne le libellé français d'une étape ; « étape N (non documentée par Bambu) » si absente de la table publiée.
+// FB7 : l'étape 54 vue sur la P1S pendant la préparation (retour du 9/11) n'existe dans aucune table publiée
+// (ha-bambulab, OpenBambuAPI : 0 à 35). Elle est nommée « non documentée » : on ne sait ni son rôle ni son firmware ;
+// on sait seulement que l'imprimante l'a rapportée (stg_cur) pendant la préparation. Jamais rapprochée à tort d'une calibration.
 func StageName(id int) string {
 	if StageIdle(id) {
 		return "Repos"
@@ -74,7 +77,13 @@ func StageName(id int) string {
 	if n, ok := stageNames[id]; ok {
 		return n
 	}
-	return "étape " + strconv.Itoa(id) + " (inconnue)"
+	return "étape " + strconv.Itoa(id) + " (non documentée par Bambu)"
+}
+
+// StageDocumented dit si l'étape figure dans la table publiée par les projets open source.
+func StageDocumented(id int) bool {
+	_, ok := stageNames[id]
+	return ok || StageIdle(id)
 }
 
 // StageIdle dit si l'étape est « repos » (à ne pas historiser).

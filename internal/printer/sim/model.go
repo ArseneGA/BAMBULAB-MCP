@@ -18,6 +18,7 @@ type model struct {
 
 	prepareUntil time.Time
 	prepareStart time.Time
+	extraStage   int   // étape supplémentaire (non documentée, ex. 54) insérée avant l'impression ; 0 = aucune (FB7)
 	stageSeq     []int // étapes de préparation (stg_cur) selon les options reçues ; voir setStages
 	runStarted   time.Time
 	pausedAt     time.Time
@@ -255,6 +256,9 @@ func (m *model) setStages(p map[string]any) {
 	}
 	if on("vibration_cali", true) {
 		seq = append(seq, 25)
+	}
+	if m.extraStage > 0 {
+		seq = append(seq, m.extraStage)
 	}
 	m.stageSeq = seq
 }
