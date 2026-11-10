@@ -116,3 +116,47 @@ export const PRINTER_STATUS = {
   printer_id: 'pr_1', reachable: true, state: 'printing', progress_percent: 42, layer: 80, total_layers: 190, remaining_minutes: 75, temps: { nozzle: 220, nozzle_target: 220, bed: 60, bed_target: 60, chamber: 30 },
   print_error: 0, hms_count: 0, current_file: 'support-cables.3mf', firmware: '01.08.02.00', last_job: { print_job_id: 'pj_2', name: 'Boîte à épices', state: 'COMPLETED', at: '2026-11-08T10:40:00Z' },
 };
+
+// ---- Suivi de projet (G9) : formes réelles de get_project, list_projects, get_pending_verdicts, set_print_verdict ----
+const PROG = (done: number, total: number, printed: number, units: number, text: string, over: Record<string, unknown> = {}) => ({
+  parts_done: done, parts_total: total, units_printed: printed, units_total: units, units_judged_success: 0, units_judged_failed: 0, units_judged_redo: 0, units_unjudged: 0,
+  complete: total > 0 && done === total, text, ...over,
+});
+export const PROJECT_DETAIL = {
+  project: { id: 'prj_aaaa', name: 'Étagère', description: 'salon', status: 'idea', due_date: '2026-12-24', rev: 3, created_at: 'x', updated_at: 'x' },
+  level: 1, path: [],
+  parts: [
+    { model_id: 'mod_1', model_name: 'Équerre', quantity: 2, role: 'support', printed: 2, judged_success: 1, judged_failed: 1, judged_redo: 0, unjudged: 0, attempts: 2, in_progress: 0, satisfied: true, text: '2/2 imprimées (1 jugée réussie, 1 jugée ratée)' },
+    { model_id: 'mod_2', model_name: 'Capot', quantity: 1, printed: 0, judged_success: 0, judged_failed: 0, judged_redo: 0, unjudged: 0, attempts: 0, in_progress: 0, satisfied: false, text: '0/1 imprimée : jamais imprimée' },
+    { model_id: 'mod_3', model_name: 'Vis', quantity: 1, implicit: true, printed: 0, judged_success: 0, judged_failed: 0, judged_redo: 0, unjudged: 0, attempts: 0, in_progress: 0, satisfied: false, text: '0/1 imprimée : jamais imprimée' },
+  ],
+  own: PROG(1, 3, 2, 4, '1/3 pièces imprimées, 2/4 unités'),
+  progress: PROG(2, 4, 4, 6, '2/4 pièces imprimées, 4/6 unités (dont 1 jugée réussie, 1 jugée ratée ou à refaire)', { units_judged_success: 1, units_judged_failed: 1 }),
+  sub_projects: [
+    { id: 'prj_bbbb', name: 'Pieds', status: 'design', own: PROG(1, 1, 1, 1, '1/1 pièce imprimée, 1/1 unité'), progress: PROG(1, 1, 1, 1, '1/1 pièce imprimée, 1/1 unité'), parts_count: 1, parent_id: 'prj_aaaa', depth: 1 },
+    { id: 'prj_cccc', name: 'Embouts', status: 'idea', own: PROG(0, 1, 0, 2, '0/1 pièce imprimée, 0/2 unités'), progress: PROG(0, 1, 0, 2, '0/1 pièce imprimée, 0/2 unités'), parts_count: 1, parent_id: 'prj_bbbb', depth: 2 },
+  ],
+  totals: { available: true, actual_cost: 1.84, currency: 'EUR', actual_seconds: 28800, actual_grams: 400, planned_cost: 0.5, in_progress: 1, attempts: 4, basis: 'x' },
+  variants: [], suggested_status: 'printing', suggested_reason: 'au moins une impression est liée aux pièces du projet',
+  next_action: 'Imprimer « Capot » : 0/1.', levels: { avancement: 'calculé', verdict: 'déclaré' }, note: 'Projet « Étagère »',
+};
+export const PROJECT_LIST = {
+  projects: [
+    { project: { id: 'prj_aaaa', name: 'Étagère', status: 'printing', rev: 1 }, depth: 0, progress: PROG(2, 4, 4, 6, '2/4 pièces imprimées, 4/6 unités'), parts_count: 2, suggested_status: '' },
+    { project: { id: 'prj_bbbb', name: 'Pieds', status: 'design', parent_id: 'prj_aaaa', rev: 1 }, depth: 1, progress: PROG(1, 1, 1, 1, '1/1 pièce imprimée, 1/1 unité'), parts_count: 1 },
+    { project: { id: 'prj_dddd', name: 'Lampe', status: 'idea', archived: true, rev: 1 }, depth: 0, progress: PROG(0, 0, 0, 0, 'aucune pièce'), parts_count: 0 },
+  ],
+  total: 2, applied_filters: { include_archived: 'true' }, counts_by_status: { idea: 1, printing: 1, design: 1, done: 0 }, note: '2 projet(s).',
+};
+export const FAIL_REASONS = [{ id: 'stringing', label: 'Fils' }, { id: 'warping', label: 'Gauchissement' }, { id: 'other', label: 'Autre' }];
+export const PENDING = {
+  pending: [
+    { print_job_id: 'pj_1', log_id: 'log_1', name: 'equerre.gcode.3mf', model_name: 'Équerre', state: 'COMPLETED', reached_100: true, material_family: 'PLA', finished_at: '2026-11-09T21:05:00Z' },
+    { print_job_id: 'pj_2', log_id: 'log_2', name: 'capot.gcode.3mf', state: 'FAILED', reached_100: false, material_family: 'PETG', finished_at: '2026-11-08T10:00:00Z' },
+  ],
+  total: 2, fail_reasons: FAIL_REASONS, note: '2 impression(s) terminée(s) sans verdict.',
+};
+export const VERDICT_RESULT = {
+  print_job_id: 'pj_1', log_id: 'log_1', verdict: 'failed', fail_reason: 'warping', verdict_at: '2026-11-10T08:00:00Z', verdict_source: 'human_card', previous_verdict: '',
+  changed: true, note: 'Verdict enregistré : ratée (warping). Il n\'a aucun effet sur l\'imprimante ni sur la file.', fail_reasons: FAIL_REASONS,
+};

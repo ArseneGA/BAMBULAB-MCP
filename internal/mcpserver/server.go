@@ -126,6 +126,7 @@ func New(c *core.Core) *mcp.Server {
 	registerFilamentCatalogTools(s) // catalogue officiel des filaments Bambu, embarqué, lecture seule (filcatalog_tools.go)
 	AddFormTools(s, c)              // cartes-formulaires : vue ui://bambu/form.html et outils de soumission réservés à l'application (form_tools.go)
 	AddIssueTools(s, c)             // carnet de bord des dysfonctionnements : report_issue, list_issues, update_issue, export_issues (issue_tools.go)
+	registerProjectTools(s, c)      // suivi de projet et verdict en un geste : create_project, get_project, set_print_verdict... (project_tools.go)
 	if c.Export != nil {
 		AddExportTools(s, c) // export de projet : archive zip partageable (export_tools.go)
 	}

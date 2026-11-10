@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
 import { CardView, classifyCard } from './index';
-import { AMS, COLLECTION, COMPARE, DASHBOARD, ESTIMATE, HISTORY, PRINTERS, PRINT_LOG, PROJECTS, QUEUE, SEARCH, SPOOLS } from './fixtures';
+import { AMS, COLLECTION, COMPARE, DASHBOARD, ESTIMATE, HISTORY, PENDING, PRINTERS, PRINT_LOG, PROJECTS, PROJECT_DETAIL, PROJECT_LIST, QUEUE, SEARCH, SPOOLS, VERDICT_RESULT } from './fixtures';
 import { mockApp, mount } from './testkit';
 
 let m: ReturnType<typeof mount>;
@@ -13,6 +13,8 @@ describe('classifyCard : une forme de résultat = une carte', () => {
     ['estimate_cost', ESTIMATE, 'costs'], ['get_project_costs', PROJECTS, 'costs'], ['get_usage_dashboard', DASHBOARD, 'costs'],
     ['list_spools', SPOOLS, 'spools'], ['get_ams_state', AMS, 'spools'], ['list_print_history', HISTORY, 'prints'], ['list_print_queue', QUEUE, 'prints'],
     ['get_print_log', PRINT_LOG, 'prints'], ['list_printers', PRINTERS, 'printers'],
+    ['get_project', PROJECT_DETAIL, 'project'], ['list_projects', PROJECT_LIST, 'project'],
+    ['get_pending_verdicts', PENDING, 'verdict'], ['set_print_verdict', VERDICT_RESULT, 'verdict'],
   ];
   it.each(cases)('%s -> %s', (_t, data, card) => { expect(classifyCard(data)?.card).toBe(card); });
 

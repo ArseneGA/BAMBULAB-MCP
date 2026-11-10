@@ -26,6 +26,7 @@ import (
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/goals"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/insights"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/issues"
+	"github.com/ArseneGA/BAMBULAB-MCP/internal/projects"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/jobs"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/library"
 	"github.com/ArseneGA/BAMBULAB-MCP/internal/notify"
@@ -103,6 +104,8 @@ type Core struct {
 	Strength *strength.Service
 	// Issues : carnet de bord des dysfonctionnements (report_issue, list_issues, update_issue, export ; internal/issues).
 	Issues *issues.Service
+	// Projects : suivi de projet de premier rang (projets, sous-projets, avancement ; G9, internal/projects). Ne lance jamais d'impression.
+	Projects *projects.Service
 	// StudioErr est non nil quand Bambu Studio n'a pas été localisé.
 	StudioErr error
 
@@ -250,7 +253,12 @@ func Open(ctx context.Context, cfg Config) (*Core, error) {
 		lock.release()
 		return nil, fmt.Errorf("carnet des dysfonctionnements : %w", err)
 	}
-	c.Insights.SetSpools(c.Filament)                            // prix/kg réel des bobines inventoriées et consommation décomptée
+	if c.Projects, err = projects.New(projects.Config{Store: st, Counts: c.Insights}); err != nil {
+		st.Close()
+		lock.release()
+		return nil, fmt.Errorf("suivi de projet : %w", err)
+	}
+	c.Insights.SetSpools(c.Filament)                           // prix/kg réel des bobines inventoriées et consommation décomptée
 	c.Filament.SetCostFunc(c.Insights.MaterialCost)             // le coût de purge (plan_colors) suit les réglages de prix
 	c.AddRunHook(c.Filament.Run)                                // préparation de la file d'attente (ne lance jamais d'impression)
 	c.AddRunHook(func(context.Context) { c.Catalog.WarmCAD() }) // vérifie CadQuery (ping) dès le démarrage, sans bloquer

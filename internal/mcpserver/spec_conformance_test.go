@@ -65,7 +65,7 @@ func TestToolsListConformsToMCPSpec(t *testing.T) {
 
 	// structuredContent doit être un objet quand l'outil a un outputSchema.
 	checked := 0
-	for _, name := range []string{"get_capabilities", "inspect_environment", "list_printers", "list_filaments", "list_spools", "search_filament_catalog", "list_print_queue", "list_printer_models", "list_goal_criteria", "get_cost_settings"} {
+	for _, name := range []string{"get_capabilities", "inspect_environment", "list_printers", "list_filaments", "list_spools", "search_filament_catalog", "list_print_queue", "list_printer_models", "list_goal_criteria", "get_cost_settings", "list_projects", "get_pending_verdicts"} {
 		if !withOut[name] {
 			continue
 		}

@@ -228,9 +228,13 @@ func TestProgressRetentionKeepsFinalSuccessAndReferenced(t *testing.T) {
 		c.PhotoReferenced = func(_ context.Context, sha string) bool { return sha == ref }
 	})
 	ctx := context.Background()
-	// la colonne verdict est posée par G9 PJ11 (migration 0300) : simulée ici
-	if _, err := r.st.DB().Exec(`ALTER TABLE print_logs ADD COLUMN verdict TEXT NOT NULL DEFAULT ''`); err != nil {
-		t.Fatal(err)
+	// la colonne verdict est posée par G9 PJ11 (migration 0300) ; elle n'est ajoutée ici que si la migration est absente
+	var hasVerdict int
+	_ = r.st.DB().QueryRow(`SELECT COUNT(*) FROM pragma_table_info('print_logs') WHERE name='verdict'`).Scan(&hasVerdict)
+	if hasVerdict == 0 {
+		if _, err := r.st.DB().Exec(`ALTER TABLE print_logs ADD COLUMN verdict TEXT NOT NULL DEFAULT ''`); err != nil {
+			t.Fatal(err)
+		}
 	}
 	now := store.FormatTime(time.Now())
 	if _, err := r.st.DB().Exec(`INSERT INTO print_logs(id,print_job_id,outcome,finished_at,doc,created_at,updated_at,verdict) VALUES('pl1','pj_ok','success',?,'{}',?,?,'success')`, now, now, now); err != nil {

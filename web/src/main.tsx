@@ -21,7 +21,6 @@ import { AgentsPage } from './pages/Agents';
 import { MatieresPage } from './pages/Matieres';
 import { DesignPage } from './pages/Design';
 import { GabaritsPage } from './pages/Gabarits';
-import { ProjectsPlaceholder } from './pages/ProjectsPlaceholder';
 import { NotFoundPage } from './pages/NotFound';
 import { LegacyRedirect } from './pages/LegacyRedirects';
 import { LEGACY } from './redirects';
@@ -29,6 +28,7 @@ import './pages/screens.css'; // en dernier : ses règles d'écran priment sur c
 const PreparePage = lazy(() => import('./pages/Prepare').then((m) => ({ default: m.PreparePage })));
 const ComparePage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ComparePage })));
 const ExperimentsPage = lazy(() => import('./pages/Compare').then((m) => ({ default: m.ExperimentsPage })));
+const ProjectsPage = lazy(() => import('./pages/Projects').then((m) => ({ default: m.ProjectsPage })));
 const IssuesPage = lazy(() => import('./pages/Issues').then((m) => ({ default: m.IssuesPage })));
 
 /** Évite la page blanche si un écran ou un chunk différé échoue au chargement. */
@@ -53,7 +53,7 @@ createRoot(document.getElementById('root')!).render(
         <Routes>
             <Route element={<Shell />}>
               <Route index element={<Home />} />
-              <Route path="projets" element={<ProjectsPlaceholder />} />
+              <Route path="projets" element={<ProjectsPage />} />
               <Route path="bibliotheque" element={<Library />} />
               <Route path="bibliotheque/gabarits" element={<GabaritsPage />} />
               <Route path="bibliotheque/corbeille" element={<TrashPage />} />

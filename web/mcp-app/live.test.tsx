@@ -196,6 +196,29 @@ describe('LiveCard', () => {
     expect(txt()).toContain('Impression échouée');
   });
 
+  it('bandeau de verdict en fin d\'impression : trois gestes, submit_print_verdict, jamais pendant l\'impression ni après une annulation', async () => {
+    const calls: Calls[] = [];
+    const verdictReply = { structuredContent: { print_job_id: 'pj_1', log_id: 'log_1', verdict: 'success', verdict_source: 'human_card', changed: true, note: 'Verdict enregistré : réussie.', fail_reasons: [{ id: 'other', label: 'Autre' }] } };
+    const app = mk({ get_live_state: () => ({ structuredContent: { ...LIVE(STATUS({ state: 'COMPLETED' })), terminal: true, final: { outcome: 'completed' } } }), submit_print_verdict: (a) => { calls.push(a); return verdictReply; } });
+    await render(<LiveCard app={app} first={first(STATUS({ state: 'COMPLETED' }))} />);
+    await tick(100);
+    expect(host.querySelector('.live-verdict')).not.toBeNull();
+    expect(txt()).toContain("Comment s'est passée l'impression");
+    await click(/^Réussi$/);
+    expect(calls).toEqual([{ print_job_id: 'pj_1', verdict: 'success' }]);
+    expect(txt()).toContain('Verdict enregistré : réussie');
+    expect(host.querySelector('.live-actions')).toBeNull(); // le bandeau n'ajoute aucun geste d'impression
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<LiveCard app={mk()} first={first()} />); // en cours
+    expect(host.querySelector('.live-verdict')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(host);
+    await render(<LiveCard app={mk({ get_live_state: () => ({ structuredContent: { ...LIVE(STATUS({ state: 'CANCELLED' })), terminal: true } }) })} first={first(STATUS({ state: 'CANCELLED' }))} />);
+    await tick(100);
+    expect(host.querySelector('.live-verdict')).toBeNull();
+  });
+
   it('« Arrêter » appelle cancel_print et n\'affiche que la demande à valider : aucun arrêt direct', async () => {
     const app = mk({
       cancel_print: () => ({ structuredContent: { print_job_id: 'pj_1', outcome: 'stop_requested', stop_url: 'http://127.0.0.1:7878/stop/stp_abc', question: 'Arrêter la boîte ?', note: 'n' } }),

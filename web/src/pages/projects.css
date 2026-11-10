@@ -1,0 +1,20 @@
+/* Page Projets (G9) : arbre, fiche, impressions à juger. Jetons du socle partagé uniquement (aucune couleur codée en dur). */
+.prj-grid { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); gap: 16px; margin-bottom: 16px; }
+@media (max-width: 860px) { .prj-grid { grid-template-columns: 1fr; } }
+.prj-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.prj-list a { color: var(--text-1); text-decoration: none; display: inline-flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.prj-list a:hover { text-decoration: underline; }
+.prj-sel > a { font-weight: 600; }
+.prj-name { font-weight: 600; }
+.prj-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.prj-head h2 { margin: 0; font-size: 18px; }
+.prj-bar { display: grid; gap: 4px; margin: 8px 0; }
+.prj-track { height: 8px; border-radius: 999px; background: var(--well-strong); overflow: hidden; }
+.prj-track > span { display: block; height: 100%; border-radius: 999px; background: var(--primary); }
+.prj-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 8px 0; }
+.prj-stats > div { background: var(--well); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.prj-stats dt { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); }
+.prj-stats dd { margin: 0; font-size: 18px; font-weight: 600; }
+.prj-stats small { color: var(--text-3); }
+.prj-verdict { display: grid; gap: 8px; padding: 10px 12px; background: var(--well); border-radius: 12px; }
+.prj-acts, .prj-ask { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

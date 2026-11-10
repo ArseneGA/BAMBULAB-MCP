@@ -115,8 +115,16 @@ type LogEntry struct {
 	ExperimentID   string            `json:"experiment_id,omitempty"`
 	CandidateID    string            `json:"candidate_id,omitempty"`
 	ResultIDs      []string          `json:"result_ids,omitempty" jsonschema:"retours d'expérience (record_print_result) rattachés : ils alimentent get_print_memory"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
+	// Suivi de projet (G9) : colonnes de print_logs relues à la volée (jamais écrites dans doc), toutes facultatives.
+	Verdict       string    `json:"verdict,omitempty" jsonschema:"jugement de l'humain : success | failed | redo ; vide = pas encore jugé (set_print_verdict)"`
+	FailReason    string    `json:"fail_reason,omitempty" jsonschema:"raison de l'échec (vocabulaire fermé de set_print_verdict)"`
+	VerdictAt     time.Time `json:"verdict_at,omitzero"`
+	VerdictSource string    `json:"verdict_source,omitempty" jsonschema:"human_card | human_web | claude_on_request"`
+	Origin        string    `json:"origin,omitempty" jsonschema:"printalk | external (déclarée hors Printalk)"`
+	PartCount     int       `json:"part_count,omitempty" jsonschema:"exemplaires de la pièce sur la plaque (défaut 1)"`
+	Reached100    bool      `json:"reached_100,omitempty" jsonschema:"l'impression est allée jusqu'à 100 % (la pièce compte imprimée, verdict ou pas)"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 func outcomeOf(state string) string {
@@ -143,6 +151,8 @@ func (s *Service) buildEntry(ctx context.Context, j *jobDoc, set Settings) *LogE
 	now := s.now()
 	e := &LogEntry{ID: contracts.NewID("log"), PrintJobID: j.ID, Name: j.Name, PrinterID: j.PrinterID, ModelID: j.ModelID,
 		State: j.State, Outcome: outcomeOf(j.State), CreatedAt: now, UpdatedAt: now}
+	// D7 : « imprimée » = l'impression a atteint 100 % (fin normale, ou progression relevée à 100 %), verdict ou pas.
+	e.Reached100 = j.State == "COMPLETED" || (j.Print != nil && j.Print.Percent >= 100)
 	hint := s.printerModelHint(ctx, j)
 	if k := modelKey(hint); k != "" {
 		e.PrinterModel = loadPower().Models[k].Name
@@ -230,12 +240,18 @@ func dominantFamily(cp costPlan) string {
 }
 
 func (s *Service) insertEntry(ctx context.Context, e *LogEntry) (bool, error) {
-	doc, _ := json.Marshal(e)
+	stored := *e
+	stored.clearTracking()
+	doc, _ := json.Marshal(&stored)
 	inserted := false
 	err := s.cfg.Store.Tx(ctx, func(tx *sql.Tx) error {
-		res, err := tx.ExecContext(ctx, `INSERT INTO print_logs(id,print_job_id,printer_id,model_id,material_family,outcome,finished_at,doc,created_at,updated_at)
-			VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(print_job_id) DO NOTHING`,
-			e.ID, e.PrintJobID, e.PrinterID, e.ModelID, e.MaterialFamily, e.Outcome, store.FormatTime(e.FinishedAt), string(doc), store.FormatTime(e.CreatedAt), store.FormatTime(e.UpdatedAt))
+		reached := 0
+		if e.Reached100 {
+			reached = 1
+		}
+		res, err := tx.ExecContext(ctx, `INSERT INTO print_logs(id,print_job_id,printer_id,model_id,material_family,outcome,finished_at,doc,created_at,updated_at,reached_100)
+			VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(print_job_id) DO NOTHING`,
+			e.ID, e.PrintJobID, e.PrinterID, e.ModelID, e.MaterialFamily, e.Outcome, store.FormatTime(e.FinishedAt), string(doc), store.FormatTime(e.CreatedAt), store.FormatTime(e.UpdatedAt), reached)
 		if err != nil {
 			return err
 		}
@@ -252,6 +268,7 @@ func (s *Service) saveEntry(ctx context.Context, e *LogEntry, audit string, deta
 	e.UpdatedAt = s.now()
 	stored := *e
 	stored.CameraPhotos = nil // lues à la demande dans camera_photos, jamais copiées
+	stored.clearTracking()    // verdict, origine, 100 % : colonnes de print_logs (G9), jamais copiées dans doc
 	doc, _ := json.Marshal(&stored)
 	return s.cfg.Store.Tx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `UPDATE print_logs SET printer_id=?, model_id=?, material_family=?, outcome=?, finished_at=?, doc=?, updated_at=? WHERE id=?`,
@@ -489,6 +506,7 @@ func (s *Service) ListLogs(ctx context.Context, q ListQuery) (*ListOutput, error
 	rows.Close()
 	for i := range out.Entries {
 		s.attachCamera(ctx, &out.Entries[i])
+		s.attachTracking(ctx, &out.Entries[i])
 	}
 	return out, nil
 }
@@ -514,6 +532,7 @@ func (s *Service) findEntry(ctx context.Context, id string) (*LogEntry, error) {
 	}
 	if err == nil {
 		s.attachCamera(ctx, e)
+		s.attachTracking(ctx, e)
 	}
 	return e, err
 }
