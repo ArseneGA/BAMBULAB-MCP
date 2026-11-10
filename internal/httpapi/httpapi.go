@@ -115,6 +115,7 @@ func buildHandlers(c *core.Core, opts Options, withPublic bool) (mainH, publicH 
 	registerSheets(mux, c)          // fiche pièce et fiche d'impression, lecture seule (sheets.go)
 	registerInsights(mux, c)        // coût, journal, tableau de bord, post-traitement (insights.go)
 	registerPrinting(mux, c, human) // chaîne d'impression + pages /setup /confirm /stop (printing.go)
+	registerSkipLocal(mux, c, opts) // ignorer un objet : routes locales réservées à la sous-commande humaine (skip_local.go)
 	registerGcode(mux, c)           // trajectoires 3D du G-code pour la visionneuse couche par couche (gcode.go)
 	registerCamera(mux, c, human)   // caméra, détection d'échec, notifications (camera.go)
 	registerAMS(mux, c)             // bobines, AMS, multicolore, file d'attente (ams.go)

@@ -114,6 +114,8 @@ type PrintProgress struct {
 	SeenActive    bool      `json:"seen_active" jsonschema:"vrai une fois qu'un état préparation/impression/pause de CE fichier a été observé : seul un FINISH/FAILED vu après peut être attribué à cette impression"`
 	MatchesFile   bool      `json:"matches_file" jsonschema:"vrai si le rapport de l'imprimante désigne bien le fichier de cette impression"`
 	PrinterReason string    `json:"printer_reason,omitempty"`
+	// SkippedObjects : objets déjà ignorés d'après print.s_obj de l'imprimante (champ facultatif, SK0).
+	SkippedObjects []int `json:"skipped_objects,omitempty" jsonschema:"identifiants des objets déjà ignorés pendant l'impression (print.s_obj) ; absent si aucun"`
 	// Stage / Stages : étape courante de l'imprimante (stg_cur) et historique des étapes vues pour CETTE impression.
 	Stage     int         `json:"stage,omitempty"`
 	StageName string      `json:"stage_name,omitempty"`

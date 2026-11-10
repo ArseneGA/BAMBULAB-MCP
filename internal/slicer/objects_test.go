@@ -29,6 +29,26 @@ func fakeArchive(t *testing.T, entries map[string]string) string {
 	return p
 }
 
+// PlateObjects lit slice_info.config seul : identifiants et noms de la plaque demandée, rien du G-code.
+func TestPlateObjectsReadsSliceInfoOnly(t *testing.T) {
+	si := `<config><plate><metadata key="index" value="1"/><object identify_id="130" name="Cube 1"/><object identify_id=" 174 " name="Cube 2"/></plate>` +
+		`<plate><metadata key="index" value="2"/><object identify_id="9" name="Autre"/></plate></config>`
+	p := fakeArchive(t, map[string]string{"Metadata/slice_info.config": si})
+	refs, err := PlateObjects(p, 1)
+	if err != nil || len(refs) != 2 || refs[0].IdentifyID != "130" || refs[1].IdentifyID != "174" || refs[1].Name != "Cube 2" {
+		t.Fatalf("%+v %v", refs, err)
+	}
+	if refs, _ := PlateObjects(p, 2); len(refs) != 1 || refs[0].IdentifyID != "9" {
+		t.Fatalf("plaque 2 : %+v", refs)
+	}
+	if refs, err := PlateObjects(p, 3); err != nil || len(refs) != 0 {
+		t.Fatalf("plaque 3 : %+v %v", refs, err)
+	}
+	if _, err := PlateObjects(fakeArchive(t, map[string]string{"x": "y"}), 1); err == nil {
+		t.Fatal("slice_info.config absent : erreur attendue")
+	}
+}
+
 func TestObjectReportSplitsByLabel(t *testing.T) {
 	g := strings.Join([]string{
 		"; HEADER", "G1 X1 Y1 E5", // démarrage : hors objet

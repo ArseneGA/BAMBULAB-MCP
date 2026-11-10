@@ -45,6 +45,9 @@ type model struct {
 	taskSeq          int
 	ams              *amsModel     // AMS simulé (ams.go) ; nil = aucun
 	acc              accModelState // éclairage, ventilateurs, vitesse (accessories.go)
+	objects          []Object      // objets de la plaque (skip.go) ; vide = tout identifiant accepté
+	skipped          []int         // print.s_obj
+	skipFrac         map[int]float64
 }
 
 func newModel(c Config) *model {
@@ -211,6 +214,7 @@ func (m *model) report(c Config) map[string]any {
 		"nozzle_diameter":      "0.4",
 		"spd_lvl":              m.acc.speed,
 		"stg_cur":              m.stageNow(time.Now()),
+		"s_obj":                m.skippedList(),
 		"print_type":           "local",
 		"hw_switch_state":      0,
 		"sdcard":               true,
@@ -222,6 +226,11 @@ func (m *model) report(c Config) map[string]any {
 	m.addAMS(r)
 	m.addAccessories(r)
 	return r
+}
+
+// skippedList : print.s_obj (liste non nulle : une P1S transmet « [] »).
+func (m *model) skippedList() []int {
+	return append([]int{}, m.skipped...)
 }
 
 func orZero(s string) string {

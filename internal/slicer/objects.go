@@ -198,3 +198,53 @@ func ObjectReport(archivePath string, plate int) ([]ObjectUse, error) {
 	}
 	return out, nil
 }
+
+// ObjectRef est un objet d'une plaque tel que Bambu Studio le désigne : identify_id et nom de slice_info.config.
+type ObjectRef struct {
+	IdentifyID string `json:"identify_id"`
+	Name       string `json:"name"`
+}
+
+// PlateObjects liste les objets d'une plaque d'après Metadata/slice_info.config SEUL (c'est ce fichier qui fait foi
+// pour les identifiants envoyés à skip_objects : Bambu Studio y lit les mêmes). Liste vide = plaque sans objets
+// étiquetés : il n'y a rien à ignorer. Aucune lecture du G-code.
+func PlateObjects(archivePath string, plate int) ([]ObjectRef, error) {
+	if plate <= 0 {
+		plate = 1
+	}
+	zr, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	for _, f := range zr.File {
+		if f.Name != "Metadata/slice_info.config" {
+			continue
+		}
+		b, err := readEntry(f, maxMetaBytes)
+		if err != nil {
+			return nil, err
+		}
+		var si siObjects
+		if err := xml.Unmarshal(b, &si); err != nil {
+			return nil, fmt.Errorf("slice_info.config illisible : %w", err)
+		}
+		var out []ObjectRef
+		for _, p := range si.Plates {
+			idx := 0
+			for _, m := range p.Meta {
+				if m.Key == "index" {
+					idx, _ = strconv.Atoi(m.Value)
+				}
+			}
+			if idx != plate {
+				continue
+			}
+			for _, o := range p.Objects {
+				out = append(out, ObjectRef{IdentifyID: strings.TrimSpace(o.IdentifyID), Name: o.Name})
+			}
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("Metadata/slice_info.config absent de l'archive")
+}
