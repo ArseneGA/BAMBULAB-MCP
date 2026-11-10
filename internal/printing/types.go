@@ -175,6 +175,9 @@ type Job struct {
 	Summary         *ArtifactSummary     `json:"summary,omitempty"`
 	Validation      *ValidationReport    `json:"validation,omitempty"`
 	ConfirmationID  string               `json:"confirmation_id,omitempty"`
+	// DeclaredRemaining : restant (grammes) déclaré par l'utilisateur pour une bobine absente de l'inventaire (FB12). Information
+	// seulement : ne fait PAS partie de la liaison approuvée et n'a aucun pouvoir sur le lancement.
+	DeclaredRemaining []RemainingDecl `json:"declared_remaining,omitempty" jsonschema:"restant déclaré (grammes) pour les bobines non inventoriées ; sert au contrôle filament, jamais à autoriser un lancement"`
 	// NoBedLeveling : l'humain a approuvé un lancement SANS mise à niveau du plateau (défaut : mise à niveau activée).
 	// Fait partie de la liaison approuvée (contracts.ConfirmationBinding.NoBedLeveling).
 	NoBedLeveling bool `json:"no_bed_leveling,omitempty" jsonschema:"vrai si le lancement approuvé désactive la mise à niveau du plateau (défaut : elle est activée)"`

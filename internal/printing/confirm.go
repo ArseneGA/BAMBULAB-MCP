@@ -102,6 +102,9 @@ type RequestConfirmationInput struct {
 	FlowCali      *bool `json:"flow_cali,omitempty" jsonschema:"calibration du débit au démarrage (défaut true) ; affichée à l'humain et incluse dans ce qu'il approuve"`
 	VibrationCali *bool `json:"vibration_cali,omitempty" jsonschema:"calibration des vibrations au démarrage (défaut true ; imprimantes qui la gèrent) ; affichée à l'humain et incluse dans ce qu'il approuve"`
 	Timelapse     *bool `json:"timelapse,omitempty" jsonschema:"enregistrer un timelapse (défaut false) ; affiché à l'humain et inclus dans ce qu'il approuve"`
+	// RemainingG : restant (grammes) déclaré par l'utilisateur pour une bobine non inventoriée (FB12). Comparé à la masse prévue + marge
+	// et affiché à l'humain ; information seulement (hors liaison approuvée, aucun pouvoir sur le lancement).
+	RemainingG []RemainingDecl `json:"remaining_g,omitempty" jsonschema:"restant en grammes déclaré par l'utilisateur pour une bobine non déclarée (filament_slot ou tray + grams) ; comparé à la masse prévue + marge ; non bloquant"`
 }
 
 func newBinding(j Job) contracts.ConfirmationBinding {
@@ -132,6 +135,10 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 	if rec, rerr := s.GetPrinterRecord(ctx, j.PrinterID); rerr == nil && in.VibrationCali != nil && *in.VibrationCali != true && !vibrationCaliSupported(rec.ModelID) {
 		return nil, invalidf("la calibration des vibrations n'est pas réglable sur le modèle %q", rec.ModelID)
 	}
+	decl, derr := cleanDeclared(in.RemainingG, j.Assignments)
+	if derr != nil {
+		return nil, derr
+	}
 	// AVANT toute confirmation : l'imprimante doit être lançable (sinon l'humain approuverait un lancement voué à l'échec).
 	if err := s.ensureLaunchable(ctx, j.PrinterID); err != nil {
 		return nil, err
@@ -157,6 +164,10 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 		}
 		old, x.ConfirmationID = x.ConfirmationID, id
 		x.NoBedLeveling, x.NoFlowCali, x.NoVibrationCali, x.Timelapse = noBL, noFlow, noVib, timelapse
+		if len(decl) > 0 {
+			x.DeclaredRemaining = mergeDeclared(x.DeclaredRemaining, decl)
+			x.event("filament_declared", x.State, x.State, "restant déclaré par l'utilisateur : "+declaredText(decl), s.now())
+		}
 		x.event("confirmation_issued", x.State, x.State, "confirmation "+id+" émise (jeton non transmis au modèle)", s.now())
 		return nil
 	})
@@ -171,6 +182,52 @@ func (s *Service) RequestConfirmation(ctx context.Context, in RequestConfirmatio
 	s.mu.Unlock()
 	_ = s.d.Store.Audit(ctx, actor, "print.confirmation_requested", "print_job", j.ID, map[string]any{"confirmation": id, "expires": conf.ExpiresAt})
 	return s.confirmationView(j, conf), nil
+}
+
+// cleanDeclared valide les restants déclarés : chacun vise un filament de l'impression (numéro ou emplacement), 0 à 10 000 g.
+// Normalise en numéro de filament (une déclaration par filament, la dernière l'emporte).
+func cleanDeclared(in []RemainingDecl, as []FilamentAssignment) ([]RemainingDecl, error) {
+	var out []RemainingDecl
+	for _, d := range in {
+		if d.Grams < 0 || d.Grams > 10000 || d.Grams != d.Grams {
+			return nil, invalidf("remaining_g : %.1f g hors de 0 à 10 000", d.Grams)
+		}
+		slot := 0
+		for _, a := range as {
+			if (d.FilamentSlot != 0 && a.FilamentSlot == d.FilamentSlot) || (d.FilamentSlot == 0 && d.Tray != "" && a.Tray == d.Tray) {
+				slot = a.FilamentSlot
+			}
+		}
+		if slot == 0 {
+			return nil, invalidf("remaining_g : filament_slot %d / tray %q ne correspond à aucun filament de l'impression", d.FilamentSlot, d.Tray)
+		}
+		out = mergeDeclared(out, []RemainingDecl{{FilamentSlot: slot, Grams: d.Grams}})
+	}
+	return out, nil
+}
+
+func mergeDeclared(old, add []RemainingDecl) []RemainingDecl {
+	out := append([]RemainingDecl(nil), old...)
+	for _, a := range add {
+		found := false
+		for i := range out {
+			if out[i].FilamentSlot == a.FilamentSlot {
+				out[i], found = a, true
+			}
+		}
+		if !found {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func declaredText(ds []RemainingDecl) string {
+	var parts []string
+	for _, d := range ds {
+		parts = append(parts, fmt.Sprintf("filament %d : %.0f g", d.FilamentSlot, d.Grams))
+	}
+	return strings.Join(parts, " ; ")
 }
 
 func (s *Service) confirmationView(j Job, conf contracts.PrintConfirmation) *ConfirmationView {

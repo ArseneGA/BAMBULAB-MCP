@@ -97,6 +97,14 @@ func confirmationText(v *printing.ConfirmationView, baseURL string, views bool) 
 	for _, a := range b.Slender {
 		sb.WriteString("AVERTISSEMENT (non bloquant, à dire à l'utilisateur AVANT qu'il lance, il doit l'acquitter) : " + a + "\n")
 	}
+	for _, l := range b.Filament {
+		switch {
+		case l.NeedsRemaining:
+			sb.WriteString(fmt.Sprintf("AVERTISSEMENT MATIÈRE (non bloquant, à acquitter) : filament %d (%s) : besoin %.0f g (%.0f g avec marge), restant INCONNU (bobine non déclarée). DEMANDE à l'utilisateur combien de grammes restent sur cette bobine, puis rappelle request_print_confirmation avec remaining_g=[{\"filament_slot\": %d, \"grams\": <restant>}].\n", l.FilamentSlot, l.Tray, l.NeededG, l.RequiredG, l.FilamentSlot))
+		case l.Verdict == "insufficient" || l.Verdict == "marginal":
+			sb.WriteString("AVERTISSEMENT MATIÈRE (non bloquant, à dire à l'utilisateur) : " + l.Detail + "\n")
+		}
+	}
 	if views {
 		sb.WriteString("La confirmation s'affiche dans la conversation (carte avec photo du plateau et températures) : dis à l'utilisateur de la compléter (cocher « plateau vide », saisir son code de lancement personnel DANS LA CARTE, Lancer). ")
 		sb.WriteString("Ne lui demande JAMAIS son code dans la conversation. Lien de secours, seulement s'il ne voit aucune carte : " + v.ConfirmURL + " .\n")

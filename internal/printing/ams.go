@@ -22,6 +22,47 @@ type FilamentWarning struct {
 	Detail string `json:"detail"`
 }
 
+// RemainingDecl : restant déclaré (grammes) pour un filament de l'impression (par numéro de filament ou par emplacement).
+// Une déclaration est une information donnée par l'utilisateur, jamais une preuve : elle ne débloque rien.
+type RemainingDecl struct {
+	FilamentSlot int     `json:"filament_slot,omitempty" jsonschema:"numéro du filament de l'impression (1, 2…) ; ou tray"`
+	Tray         string  `json:"tray,omitempty" jsonschema:"emplacement (ex. ams0:0, ext) ; ou filament_slot"`
+	Grams        float64 `json:"grams" jsonschema:"restant déclaré en grammes (0 à 10000)"`
+}
+
+// FilamentLine : contrôle de matière d'un filament, montré à l'humain avec la confirmation (FB12).
+type FilamentLine struct {
+	FilamentSlot   int     `json:"filament_slot"`
+	Tray           string  `json:"tray"`
+	NeededG        float64 `json:"needed_g"`
+	RequiredG      float64 `json:"required_with_margin_g"`
+	RemainingG     float64 `json:"remaining_g,omitempty"`
+	Source         string  `json:"remaining_source" jsonschema:"inventory | ams_estimate | declared | unknown"`
+	Verdict        string  `json:"verdict" jsonschema:"ok | marginal | insufficient | unknown"`
+	Detail         string  `json:"detail"`
+	NeedsRemaining bool    `json:"needs_remaining,omitempty" jsonschema:"vrai si le restant est inconnu : demander les grammes restants à l'utilisateur"`
+}
+
+// FilamentPreview calcule le contrôle de matière d'une impression (restants déclarés compris). Informatif : jamais bloquant.
+type FilamentPreview func(ctx context.Context, j Job) []FilamentLine
+
+// SetFilamentPreview branche le contrôle de matière affiché à la confirmation (nil le retire).
+func (s *Service) SetFilamentPreview(f FilamentPreview) {
+	s.hookMu.Lock()
+	s.filamentPreview = f
+	s.hookMu.Unlock()
+}
+
+func (s *Service) filamentLines(ctx context.Context, j Job) []FilamentLine {
+	s.hookMu.Lock()
+	f := s.filamentPreview
+	s.hookMu.Unlock()
+	if f == nil {
+		return nil
+	}
+	return f(ctx, j)
+}
+
 // FilamentCheck calcule les alertes de matière d'une impression prévue.
 type FilamentCheck func(ctx context.Context, printerID string, plate *slicer.PlateResult, as []FilamentAssignment) []FilamentWarning
 
