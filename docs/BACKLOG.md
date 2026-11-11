@@ -301,6 +301,18 @@ Source : docs/CATALOGUES-BAMBU.md (classement valeur / effort). C1 (filaments) e
 | 7 | C8 : MakerWorld | déjà retenu (B1, B10, B11) ; conditions d'usage à vérifier d'abord, intégration en ligne | haute / élevé |
 | 8 | C10 : firmware et notes de version | lien avec B9 ; lecture réseau par nature, non embarquable | moyenne / moyen |
 
+## Détection d'échec par IA préentraînée — Obico local (retenu le 2026-11-11)
+
+**État : à faire ; intégration et performances non validées.** Complète le chantier 19 et FB1 : ajouter le modèle préentraîné d'Obico / The Spaghetti Detective à la détection heuristique existante, sans entraîner un modèle de zéro.
+
+- **Intégration** : évaluer le service de détection `ml_api` auto-hébergé, dans un conteneur Docker séparé ; lui transmettre les instantanés P1S déjà récupérés par Printalk. Vérifier l'interface, les poids du modèle et leurs conditions de redistribution avant intégration. Pas d'envoi des images vers un cloud.
+- **Machine de départ** : essai sur le ThinkPad sous Zorin, sur CPU, pour une seule P1S. Vérifier sa RAM disponible (Obico annonce 4 Go minimum pour son serveur ; viser 8 Go pour cohabiter avec Printalk). Mesurer la latence, la RAM et la charge CPU, y compris pendant une découpe Bambu Studio. GPU facultatif ; envisager le PC RTX 4070 avec accélération Linux uniquement si les mesures le justifient. Aucune performance garantie avant essai ; la machine doit rester allumée pendant la surveillance.
+- **Comportement** : conserver les contrôles HMS et de progression ; distinguer dans les résultats les règles heuristiques et la détection par modèle appris. Lisser les détections sur plusieurs images, régler cadence et seuils, joindre photo et horodatage aux alertes et à l'historique, consultables depuis le MCP et le web.
+- **Garde-fous** : alerte uniquement ; aucun arrêt, pause, reprise ni lancement automatique. L'arrêt reste validé par l'humain selon le parcours existant. Si le détecteur est indisponible ou l'image périmée, le dire explicitement ; ne jamais assimiler l'absence d'analyse à une impression saine.
+- **Recette** : comparer heuristiques seules et détection Obico sur des séquences P1S normales et ratées, dont spaghetti, avec différents éclairages et filaments, notamment PETG transparent/translucide. Mesurer faux positifs, défauts manqués et délai d'alerte ; ne pas promettre une détection de tous les défauts ni de la résistance mécanique.
+
+Références : [serveur Obico](https://github.com/TheSpaghettiDetective/obico-server), [besoins matériels](https://www.obico.io/docs/server-guides/hardware-requirements/), [installation](https://www.obico.io/docs/server-guides/install/).
+
 ## Reste à faire (état au 2026-11-10)
 
 Fait ce jour (fusionné dans `main`) : D8, N4, B3, UX1 à UX4 (vague U1), PJ2, PJ11, PJ5, PJ10, UX5 à UX9 v1 (vague U2). Tout le reste est ouvert.
